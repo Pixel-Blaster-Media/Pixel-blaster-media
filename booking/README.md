@@ -5,12 +5,12 @@ Lives in this `/booking` subfolder so the main marketing site at the repo
 root stays untouched. Deploys independently — recommended at
 `book.pixelblastermedia.com`.
 
-> **Status: Phase 4 — iGuide integration is live.** Tag a booking with
-> its iGuide URL/ID, click Sync, and the virtual tour + floor plan PDF
-> get pulled into `deliverables` from the public RESO autofill endpoint.
-> A webhook receiver at `/api/integrations/iguide/webhook` does the same
-> automatically when iGuide fires `ready` on tour publish. Fotello sync
-> + realtor portal still to come.
+> **Status: Phase 6 — realtor portal is live.** Realtors sign in with a
+> magic link, see all their listings as cards, and drill into each one
+> to find the embedded virtual tour, floor plan PDF, and any gallery
+> links — everything that came through iGuide or was pasted manually.
+> Fotello auto-sync is the only piece left before the system is
+> end-to-end automated.
 
 ## Stack
 
@@ -28,9 +28,9 @@ root stays untouched. Deploys independently — recommended at
 | 1 | Next.js + Tailwind scaffold, Supabase schema, placeholder routes, deploy-ready | ✅ |
 | 2 | Public booking form → Supabase + Resend confirmation emails | ✅ |
 | 3 | Magic-link auth + admin inbox / job board / manual deliverable entry | ✅ |
-| 4 | iGuide RESO autofill sync + webhook (tour + floor plan) | ✅ this PR |
+| 4 | iGuide RESO autofill sync + webhook (tour + floor plan) | ✅ |
 | 5 | Fotello API integration (auto-pull gallery) | ⏳ |
-| 6 | Realtor magic-link portal with embedded gallery + tour per property | ⏳ |
+| 6 | Realtor portal: sign in, list of listings, tour + floor plan + gallery per property | ✅ this PR |
 
 ## Local development
 
@@ -60,7 +60,8 @@ App runs at <http://localhost:3000>. Health check: <http://localhost:3000/api/he
 | `/admin/bookings`       | Job board: confirmed bookings with status filters             |
 | `/admin/bookings/[id]`  | Booking detail; status pipeline + manual + iGuide deliverable |
 | `/api/integrations/iguide/webhook` | Receives iGuide `ready` events and triggers sync   |
-| `/portal`               | Realtor sign-in + property dashboard (Phase 6 — placeholder)  |
+| `/portal`               | Realtor property list (gated on sign-in; admins bounce to /admin) |
+| `/portal/[propertyId]`  | Property detail: tour iframe, floor plan PDF, gallery + copy-link |
 | `/api/health`           | Liveness probe — JSON `{ ok: true, ... }`                     |
 
 ## Provisioning Supabase
@@ -105,6 +106,26 @@ can't spin up empty profiles by submitting the sign-in form. To bootstrap:
 
 Realtor accounts get auto-provisioned the moment you click **Accept**
 on their booking request — no manual steps.
+
+### Realtor onboarding (Phase 6)
+
+Realtor sign-ups are deliberately gated to existing accounts only —
+`shouldCreateUser: false` on `signInWithOtp` means random visitors can't
+provision empty profiles. The intended flow:
+
+1. Realtor books a shoot via `/book` (public, no account needed).
+2. You accept the request from `/admin/inbox/[id]` — this silently
+   creates an auth user + profile + property + confirmed booking.
+3. Send them the portal URL (`https://book.pixelblastermedia.com/portal`)
+   and their email. They request a magic link, click it, and land on
+   their listings.
+4. Each listing shows status + embedded virtual tour + floor plan +
+   any manual/Fotello gallery links, with a "Copy link" button next to
+   every URL so they can forward them to buyers.
+
+A future enhancement worth building: auto-email the portal link on the
+"accepted" transition so you don't have to do it by hand. The plumbing
+(profile email + Resend) is already in place.
 
 ### Setting up iGuide (Phase 4 sync + webhook)
 
@@ -204,11 +225,17 @@ booking/
 │   │   └── bookings/
 │   │       ├── page.tsx                 # Job board
 │   │       └── [id]/{page,BookingActions}.tsx + actions.ts
-│   ├── portal/page.tsx                  # Realtor portal (Phase 6 stub)
+│   ├── portal/                          # Realtor-facing portal (Phase 6)
+│   │   ├── layout.tsx                   # Header + sign-out, bounces admins
+│   │   ├── page.tsx                     # Property card grid
+│   │   └── [propertyId]/
+│   │       ├── page.tsx                 # Tour + floor plan + gallery
+│   │       └── CopyLinkButton.tsx
 │   └── api/health/route.ts              # Liveness check
 ├── lib/
 │   ├── auth/
-│   │   ├── require-admin.ts             # Server-side role gate
+│   │   ├── require-user.ts              # Any signed-in user
+│   │   ├── require-admin.ts             # Admins only
 │   │   └── sign-out.ts                  # Server action
 │   ├── booking/
 │   │   ├── services.ts                  # Service / add-on catalog
