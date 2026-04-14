@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand: #1a7f8e;
+  --brand-light: #22a4b5;
+  --brand-dark: #0d5f6b;
+  --brand-glow: rgba(34, 164, 181, 0.12);
+  --brand-border: rgba(34, 164, 181, 0.3);
+  --ink: #0b0f10;
+  --ink-soft: #11181b;
+  --ink-muted: #8a979c;
+}
+
+html,
+body {
+  background: var(--ink);
+  color: #e8eef0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+a {
+  color: var(--brand-light);
+}
+
+/* Subtle page gradient so pages don't feel flat before real content lands. */
+.page-backdrop {
+  background:
+    radial-gradient(1200px 600px at 80% -10%, var(--brand-glow), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, var(--brand-glow), transparent 55%),
+    var(--ink);
+}
