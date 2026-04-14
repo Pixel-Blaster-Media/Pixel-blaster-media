@@ -6,6 +6,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 const NAV = [
   { href: "/admin/inbox", label: "Inbox" },
   { href: "/admin/bookings", label: "Bookings" },
+  { href: "/admin/calendar", label: "Calendar" },
+  { href: "/admin/settings/availability", label: "Availability" },
 ] as const;
 
 export default async function AdminLayout({

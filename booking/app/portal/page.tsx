@@ -69,7 +69,15 @@ export default async function PortalIndex() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-white">My listings</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-white">My listings</h1>
+        <Link
+          href="/portal/book"
+          className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light"
+        >
+          Book another shoot →
+        </Link>
+      </div>
 
       <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {properties.map((p) => {

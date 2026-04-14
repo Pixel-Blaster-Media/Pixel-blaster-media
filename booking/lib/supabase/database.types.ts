@@ -210,6 +210,43 @@ interface BookingRequestsTable {
   Relationships: [];
 }
 
+interface BusinessHoursTable {
+  Row: {
+    day_of_week: number; // 0 = Sunday, 6 = Saturday
+    start_time: string; // HH:MM:SS
+    end_time: string;
+    enabled: boolean;
+    updated_at: string;
+  };
+  Insert: {
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+    enabled?: boolean;
+  };
+  Update: Partial<BusinessHoursTable["Insert"]>;
+  Relationships: [];
+}
+
+interface CalendarBlocksTable {
+  Row: {
+    id: string;
+    starts_at: string;
+    ends_at: string;
+    label: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  Insert: {
+    id?: string;
+    starts_at: string;
+    ends_at: string;
+    label?: string | null;
+  };
+  Update: Partial<CalendarBlocksTable["Insert"]>;
+  Relationships: [];
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -218,6 +255,8 @@ export interface Database {
       bookings: BookingsTable;
       deliverables: DeliverablesTable;
       booking_requests: BookingRequestsTable;
+      business_hours: BusinessHoursTable;
+      calendar_blocks: CalendarBlocksTable;
     };
     Views: Record<string, never>;
     Functions: {

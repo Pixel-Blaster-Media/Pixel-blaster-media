@@ -5,12 +5,12 @@ Lives in this `/booking` subfolder so the main marketing site at the repo
 root stays untouched. Deploys independently — recommended at
 `book.pixelblastermedia.com`.
 
-> **Status: Phase 6 — realtor portal is live.** Realtors sign in with a
-> magic link, see all their listings as cards, and drill into each one
-> to find the embedded virtual tour, floor plan PDF, and any gallery
-> links — everything that came through iGuide or was pasted manually.
-> Fotello auto-sync is the only piece left before the system is
-> end-to-end automated.
+> **Status: Phase 8 — private calendar is live.** Realtors can now
+> self-serve repeat bookings: pick services, pick a slot, enter
+> property address, done. Admin has a /admin/calendar agenda view and
+> a /admin/settings/availability page to edit working hours and add
+> busy blocks. Auto-confirm on self-bookings (admin gets a heads-up
+> email). Fotello auto-sync is the only large piece still queued.
 
 ## Stack
 
@@ -30,7 +30,9 @@ root stays untouched. Deploys independently — recommended at
 | 3 | Magic-link auth + admin inbox / job board / manual deliverable entry | ✅ |
 | 4 | iGuide RESO autofill sync + webhook (tour + floor plan) | ✅ |
 | 5 | Fotello API integration (auto-pull gallery) | ⏳ |
-| 6 | Realtor portal: sign in, list of listings, tour + floor plan + gallery per property | ✅ this PR |
+| 6 | Realtor portal: sign in, list of listings, tour + floor plan + gallery per property | ✅ |
+| 7 | QuickBooks Online invoicing on delivery | ⏳ |
+| 8 | Private calendar: realtor self-serve booking + admin settings + agenda view | ✅ this PR |
 
 ## Local development
 
@@ -62,6 +64,9 @@ App runs at <http://localhost:3000>. Health check: <http://localhost:3000/api/he
 | `/api/integrations/iguide/webhook` | Receives iGuide `ready` events and triggers sync   |
 | `/portal`               | Realtor property list (gated on sign-in; admins bounce to /admin) |
 | `/portal/[propertyId]`  | Property detail: tour iframe, floor plan PDF, gallery + copy-link |
+| `/portal/book`          | Private calendar — realtor self-service booking                   |
+| `/admin/calendar`       | 60-day agenda view of bookings + blocks                            |
+| `/admin/settings/availability` | Edit weekly hours + add / remove busy blocks                |
 | `/api/health`           | Liveness probe — JSON `{ ok: true, ... }`                     |
 
 ## Provisioning Supabase
@@ -126,6 +131,24 @@ provision empty profiles. The intended flow:
 A future enhancement worth building: auto-email the portal link on the
 "accepted" transition so you don't have to do it by hand. The plumbing
 (profile email + Resend) is already in place.
+
+### Configuring the calendar (Phase 8)
+
+The migration seeds **Mon–Fri 9–5** as your working hours. Edit them in
+`/admin/settings/availability` once you're signed in as admin.
+
+Other knobs:
+
+- **Timezone** is hardcoded to `America/Toronto` in `lib/booking/availability.ts`.
+  If you move or travel, change that constant — one spot.
+- **Service durations** live in `lib/booking/services.ts` (`durationMinutes`
+  on each service / add-on). They bake in your drive + prep time per your
+  preference — the calendar does not add a cross-shoot buffer.
+- **Auto-confirm** is on for realtor self-bookings. Change this by editing
+  the `status: "confirmed"` line in `app/portal/book/actions.ts` if you
+  decide you'd rather approve them manually.
+- **Block labels are private.** Only admins see the "Vacation — Hawaii"
+  text on a block; realtors only see the slot as unavailable.
 
 ### Setting up iGuide (Phase 4 sync + webhook)
 
@@ -216,21 +239,29 @@ booking/
 │   │   ├── sign-in/{page,SignInForm}.tsx · sign-in/actions.ts
 │   │   ├── check-email/page.tsx
 │   │   └── callback/route.ts
-│   ├── admin/                           # Admin job board (Phase 3)
+│   ├── admin/                           # Admin job board (Phase 3+8)
 │   │   ├── layout.tsx                   # Role gate + sidebar + sign-out
 │   │   ├── page.tsx                     # Redirects to /admin/inbox
 │   │   ├── inbox/
 │   │   │   ├── page.tsx                 # Request list
 │   │   │   └── [id]/{page,RequestActions}.tsx + actions.ts
-│   │   └── bookings/
-│   │       ├── page.tsx                 # Job board
-│   │       └── [id]/{page,BookingActions}.tsx + actions.ts
-│   ├── portal/                          # Realtor-facing portal (Phase 6)
+│   │   ├── bookings/
+│   │   │   ├── page.tsx                 # Job board
+│   │   │   └── [id]/{page,BookingActions}.tsx + actions.ts
+│   │   ├── calendar/page.tsx            # 60-day agenda (Phase 8)
+│   │   └── settings/availability/
+│   │       ├── page.tsx                 # Hours + blocks (Phase 8)
+│   │       ├── HoursEditor.tsx · BlocksManager.tsx · actions.ts
+│   ├── portal/                          # Realtor-facing portal (Phase 6+8)
 │   │   ├── layout.tsx                   # Header + sign-out, bounces admins
 │   │   ├── page.tsx                     # Property card grid
-│   │   └── [propertyId]/
-│   │       ├── page.tsx                 # Tour + floor plan + gallery
-│   │       └── CopyLinkButton.tsx
+│   │   ├── [propertyId]/
+│   │   │   ├── page.tsx                 # Tour + floor plan + gallery
+│   │   │   └── CopyLinkButton.tsx
+│   │   └── book/                        # Self-serve calendar (Phase 8)
+│   │       ├── page.tsx                 # Service + slot picker + confirm
+│   │       ├── ServicePicker.tsx · SlotPicker.tsx · BookingConfirmForm.tsx
+│   │       ├── slot-types.ts · actions.ts
 │   └── api/health/route.ts              # Liveness check
 ├── lib/
 │   ├── auth/
@@ -238,9 +269,10 @@ booking/
 │   │   ├── require-admin.ts             # Admins only
 │   │   └── sign-out.ts                  # Server action
 │   ├── booking/
-│   │   ├── services.ts                  # Service / add-on catalog
+│   │   ├── services.ts                  # Service / add-on catalog + durations
 │   │   ├── schema.ts                    # Form validation
-│   │   └── booking-status.ts            # Status pipeline + visual meta
+│   │   ├── booking-status.ts            # Status pipeline + visual meta
+│   │   └── availability.ts              # Slot computation (Phase 8)
 │   ├── email/
 │   │   ├── resend.ts · templates.ts     # Transactional email
 │   ├── integrations/
@@ -255,7 +287,8 @@ booking/
 ├── supabase/migrations/
 │   ├── 0001_init.sql
 │   ├── 0002_booking_requests.sql
-│   └── 0003_iguide.sql                  # iguide_id on bookings + index
+│   ├── 0003_iguide.sql                  # iguide_id on bookings + index
+│   └── 0004_calendar.sql                # business_hours + calendar_blocks
 ├── .env.example · .eslintrc.json · next.config.mjs
 ├── package.json · postcss.config.mjs · tailwind.config.ts · tsconfig.json
 ```
