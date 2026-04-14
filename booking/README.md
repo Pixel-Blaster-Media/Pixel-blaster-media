@@ -5,12 +5,12 @@ Lives in this `/booking` subfolder so the main marketing site at the repo
 root stays untouched. Deploys independently — recommended at
 `book.pixelblastermedia.com`.
 
-> **Status: Phase 3 — admin job board is live.** Magic-link sign-in, an
-> inbox of incoming `booking_requests` with accept/decline, a job board
-> of confirmed bookings with status pipeline, and manual deliverable
-> entry (paste an iGuide / Fotello / arbitrary URL) as a fallback ahead
-> of the API integrations. Realtor portal + iGuide/Fotello sync still to
-> come.
+> **Status: Phase 4 — iGuide integration is live.** Tag a booking with
+> its iGuide URL/ID, click Sync, and the virtual tour + floor plan PDF
+> get pulled into `deliverables` from the public RESO autofill endpoint.
+> A webhook receiver at `/api/integrations/iguide/webhook` does the same
+> automatically when iGuide fires `ready` on tour publish. Fotello sync
+> + realtor portal still to come.
 
 ## Stack
 
@@ -27,8 +27,8 @@ root stays untouched. Deploys independently — recommended at
 |------:|-------|:------|
 | 1 | Next.js + Tailwind scaffold, Supabase schema, placeholder routes, deploy-ready | ✅ |
 | 2 | Public booking form → Supabase + Resend confirmation emails | ✅ |
-| 3 | Magic-link auth + admin inbox / job board / manual deliverable entry | ✅ this PR |
-| 4 | iGuide API integration (auto-pull tour + floor plan) | ⏳ |
+| 3 | Magic-link auth + admin inbox / job board / manual deliverable entry | ✅ |
+| 4 | iGuide RESO autofill sync + webhook (tour + floor plan) | ✅ this PR |
 | 5 | Fotello API integration (auto-pull gallery) | ⏳ |
 | 6 | Realtor magic-link portal with embedded gallery + tour per property | ⏳ |
 
@@ -58,7 +58,8 @@ App runs at <http://localhost:3000>. Health check: <http://localhost:3000/api/he
 | `/admin/inbox`          | Booking-request inbox with status filters                     |
 | `/admin/inbox/[id]`     | Single request detail; accept (creates booking) / decline     |
 | `/admin/bookings`       | Job board: confirmed bookings with status filters             |
-| `/admin/bookings/[id]`  | Booking detail; status pipeline + manual deliverable entry    |
+| `/admin/bookings/[id]`  | Booking detail; status pipeline + manual + iGuide deliverable |
+| `/api/integrations/iguide/webhook` | Receives iGuide `ready` events and triggers sync   |
 | `/portal`               | Realtor sign-in + property dashboard (Phase 6 — placeholder)  |
 | `/api/health`           | Liveness probe — JSON `{ ok: true, ... }`                     |
 
@@ -104,6 +105,45 @@ can't spin up empty profiles by submitting the sign-in form. To bootstrap:
 
 Realtor accounts get auto-provisioned the moment you click **Accept**
 on their booking request — no manual steps.
+
+### Setting up iGuide (Phase 4 sync + webhook)
+
+The Phase 4 integration only uses iGuide's **public RESO autofill endpoint**
+(`https://youriguide.com/{id}/reso/autofill`), which doesn't require an
+API key — every published view exposes its data publicly. Your iGuide API
+key + OAuth credentials aren't needed for the current flow; we leave the
+env vars in place for later phases that may want to list account-owned
+views or read drafts.
+
+**To use it:**
+
+1. After publishing a tour in iGuide, copy either the URL
+   (`https://youriguide.com/1044_rest_acres_rd_brant_on/`) or the bare
+   ID (`1044_rest_acres_rd_brant_on`).
+2. Open the matching booking in `/admin/bookings/[id]`, paste it into
+   the iGuide field, click **Save**, then **Sync from iGuide**.
+3. Two deliverables show up: a `virtual_tour` (with iframe embed snippet)
+   and a `floor_plan` (imperial PDF). Re-syncing is idempotent.
+
+**To wire up the webhook (so sync happens automatically on publish):**
+
+1. Generate a long random secret:
+   ```bash
+   openssl rand -hex 32
+   ```
+2. Set it as `IGUIDE_WEBHOOK_SECRET` in your env vars (Vercel + `.env.local`).
+3. In your iGuide portal, configure a webhook with URL:
+   ```
+   https://book.pixelblastermedia.com/api/integrations/iguide/webhook?secret=<that-same-secret>
+   ```
+4. Subscribe to the `ready` event.
+5. When you publish a tour that's already tagged on a booking, the
+   webhook fires, our handler runs the same sync, and the deliverables
+   appear without any clicking.
+
+If iGuide later documents HMAC signature signing on webhooks, swap
+`?secret=` for proper signature verification (the handler is small —
+about 100 lines).
 
 ### Setting up Resend (Phase 2 emails)
 
@@ -176,13 +216,19 @@ booking/
 │   │   └── booking-status.ts            # Status pipeline + visual meta
 │   ├── email/
 │   │   ├── resend.ts · templates.ts     # Transactional email
+│   ├── integrations/
+│   │   └── iguide/
+│   │       ├── client.ts                # RESO autofill fetch
+│   │       ├── parse-id.ts              # URL ↔ ID + viewer / embed URLs
+│   │       └── sync.ts                  # Upsert deliverables from RESO
 │   └── supabase/
 │       ├── client.ts · server.ts        # Browser + server + service clients
 │       └── database.types.ts            # Regenerate with `npm run db:types`
 ├── middleware.ts                        # Session refresh + /admin gate
 ├── supabase/migrations/
 │   ├── 0001_init.sql
-│   └── 0002_booking_requests.sql
+│   ├── 0002_booking_requests.sql
+│   └── 0003_iguide.sql                  # iguide_id on bookings + index
 ├── .env.example · .eslintrc.json · next.config.mjs
 ├── package.json · postcss.config.mjs · tailwind.config.ts · tsconfig.json
 ```

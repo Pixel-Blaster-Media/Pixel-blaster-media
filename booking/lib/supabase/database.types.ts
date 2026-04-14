@@ -107,6 +107,7 @@ interface BookingsTable {
     square_footage: number | null;
     internal_notes: string | null;
     client_notes: string | null;
+    iguide_id: string | null;
     created_at: string;
     updated_at: string;
   };
@@ -121,6 +122,7 @@ interface BookingsTable {
     square_footage?: number | null;
     internal_notes?: string | null;
     client_notes?: string | null;
+    iguide_id?: string | null;
   };
   Update: Partial<BookingsTable["Insert"]>;
   Relationships: [];

@@ -15,6 +15,7 @@ import type {
 } from "@/lib/supabase/database.types";
 
 import BookingActions from "./BookingActions";
+import IGuideSection from "./IGuideSection";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,7 @@ interface BookingDetail {
   square_footage: number | null;
   client_notes: string | null;
   internal_notes: string | null;
+  iguide_id: string | null;
   created_at: string;
   properties: {
     id: string;
@@ -64,7 +66,7 @@ export default async function BookingDetailPage({
       supabase
         .from("bookings")
         .select(
-          "id, status, scheduled_at, services, add_ons, square_footage, client_notes, internal_notes, created_at, properties(id, street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage)",
+          "id, status, scheduled_at, services, add_ons, square_footage, client_notes, internal_notes, iguide_id, created_at, properties(id, street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage)",
         )
         .eq("id", params.id)
         .single<BookingDetail>(),
@@ -166,6 +168,11 @@ export default async function BookingDetailPage({
         currentStatus={booking.status}
         transitions={transitions}
         deliverables={deliverables ?? []}
+      />
+
+      <IGuideSection
+        bookingId={booking.id}
+        initialIGuideId={booking.iguide_id}
       />
 
       <Panel title="Deliverables">
