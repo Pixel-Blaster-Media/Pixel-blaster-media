@@ -108,6 +108,12 @@ interface BookingsTable {
     internal_notes: string | null;
     client_notes: string | null;
     iguide_id: string | null;
+    quickbooks_invoice_id: string | null;
+    quickbooks_invoice_number: string | null;
+    quickbooks_invoice_url: string | null;
+    quickbooks_invoice_status: string | null;
+    quickbooks_invoice_total_cents: number | null;
+    quickbooks_invoice_synced_at: string | null;
     created_at: string;
     updated_at: string;
   };
@@ -123,6 +129,12 @@ interface BookingsTable {
     internal_notes?: string | null;
     client_notes?: string | null;
     iguide_id?: string | null;
+    quickbooks_invoice_id?: string | null;
+    quickbooks_invoice_number?: string | null;
+    quickbooks_invoice_url?: string | null;
+    quickbooks_invoice_status?: string | null;
+    quickbooks_invoice_total_cents?: number | null;
+    quickbooks_invoice_synced_at?: string | null;
   };
   Update: Partial<BookingsTable["Insert"]>;
   Relationships: [];
@@ -247,6 +259,51 @@ interface CalendarBlocksTable {
   Relationships: [];
 }
 
+interface QuickBooksConnectionTable {
+  Row: {
+    id: number;
+    environment: "sandbox" | "production";
+    realm_id: string;
+    refresh_token: string;
+    access_token: string | null;
+    access_token_expires_at: string | null;
+    default_item_id: string | null;
+    connected_at: string;
+    connected_by: string | null;
+    updated_at: string;
+  };
+  Insert: {
+    id?: number;
+    environment: "sandbox" | "production";
+    realm_id: string;
+    refresh_token: string;
+    access_token?: string | null;
+    access_token_expires_at?: string | null;
+    default_item_id?: string | null;
+    connected_by?: string | null;
+  };
+  Update: Partial<QuickBooksConnectionTable["Insert"]>;
+  Relationships: [];
+}
+
+interface ServicePricesTable {
+  Row: {
+    service_id: string;
+    price_cents: number;
+    taxable: boolean;
+    updated_at: string;
+    updated_by: string | null;
+  };
+  Insert: {
+    service_id: string;
+    price_cents?: number;
+    taxable?: boolean;
+    updated_by?: string | null;
+  };
+  Update: Partial<ServicePricesTable["Insert"]>;
+  Relationships: [];
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -257,6 +314,8 @@ export interface Database {
       booking_requests: BookingRequestsTable;
       business_hours: BusinessHoursTable;
       calendar_blocks: CalendarBlocksTable;
+      quickbooks_connection: QuickBooksConnectionTable;
+      service_prices: ServicePricesTable;
     };
     Views: Record<string, never>;
     Functions: {

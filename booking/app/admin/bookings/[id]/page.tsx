@@ -16,6 +16,7 @@ import type {
 
 import BookingActions from "./BookingActions";
 import IGuideSection from "./IGuideSection";
+import InvoiceSection from "./InvoiceSection";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,12 @@ interface BookingDetail {
   client_notes: string | null;
   internal_notes: string | null;
   iguide_id: string | null;
+  quickbooks_invoice_id: string | null;
+  quickbooks_invoice_number: string | null;
+  quickbooks_invoice_url: string | null;
+  quickbooks_invoice_status: string | null;
+  quickbooks_invoice_total_cents: number | null;
+  quickbooks_invoice_synced_at: string | null;
   created_at: string;
   properties: {
     id: string;
@@ -66,7 +73,7 @@ export default async function BookingDetailPage({
       supabase
         .from("bookings")
         .select(
-          "id, status, scheduled_at, services, add_ons, square_footage, client_notes, internal_notes, iguide_id, created_at, properties(id, street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage)",
+          "id, status, scheduled_at, services, add_ons, square_footage, client_notes, internal_notes, iguide_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage)",
         )
         .eq("id", params.id)
         .single<BookingDetail>(),
@@ -173,6 +180,18 @@ export default async function BookingDetailPage({
       <IGuideSection
         bookingId={booking.id}
         initialIGuideId={booking.iguide_id}
+      />
+
+      <InvoiceSection
+        bookingId={booking.id}
+        initial={{
+          id: booking.quickbooks_invoice_id,
+          number: booking.quickbooks_invoice_number,
+          url: booking.quickbooks_invoice_url,
+          status: booking.quickbooks_invoice_status,
+          totalCents: booking.quickbooks_invoice_total_cents,
+          syncedAt: booking.quickbooks_invoice_synced_at,
+        }}
       />
 
       <Panel title="Deliverables">

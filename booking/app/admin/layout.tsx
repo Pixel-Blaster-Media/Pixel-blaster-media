@@ -8,6 +8,8 @@ const NAV = [
   { href: "/admin/bookings", label: "Bookings" },
   { href: "/admin/calendar", label: "Calendar" },
   { href: "/admin/settings/availability", label: "Availability" },
+  { href: "/admin/settings/pricing", label: "Pricing" },
+  { href: "/admin/settings/integrations", label: "Integrations" },
 ] as const;
 
 export default async function AdminLayout({

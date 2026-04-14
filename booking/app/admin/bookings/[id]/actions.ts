@@ -6,6 +6,10 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { nextBookingStatuses } from "@/lib/booking/booking-status";
 import { parseIGuideId } from "@/lib/integrations/iguide/parse-id";
 import { syncIGuideForBooking } from "@/lib/integrations/iguide/sync";
+import {
+  createInvoiceForBooking,
+  refreshInvoiceStatus as refreshInvoiceInQBO,
+} from "@/lib/integrations/quickbooks/invoice";
 import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
 import type {
   BookingStatus,
@@ -25,6 +29,25 @@ interface BookingWithIGuideRow {
   id: string;
   property_id: string;
   iguide_id: string | null;
+}
+
+interface BookingForInvoiceRow {
+  id: string;
+  services: string[];
+  add_ons: string[];
+  property_id: string;
+  owner_id: string;
+  properties: {
+    street_address: string;
+    city: string | null;
+    postal_code: string | null;
+  } | null;
+  profiles: {
+    email: string;
+    full_name: string | null;
+    phone: string | null;
+    brokerage: string | null;
+  } | null;
 }
 
 const VALID_DELIVERABLE_TYPES: DeliverableType[] = [
@@ -222,4 +245,64 @@ export async function syncIGuide(
 
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true, upserts: result.upserts, address: result.address };
+}
+
+// ---------------------------------------------------------------------------
+// QuickBooks invoicing (Phase 7)
+// ---------------------------------------------------------------------------
+
+export async function createInvoice(
+  bookingId: string,
+): Promise<
+  ActionResult & {
+    invoiceUrl?: string;
+    invoiceNumber?: string;
+    totalCents?: number;
+  }
+> {
+  await requireAdmin();
+
+  const supabase = getServerSupabase();
+  const { data: booking, error } = await supabase
+    .from("bookings")
+    .select(
+      "id, services, add_ons, property_id, owner_id, properties(street_address, city, postal_code), profiles(email, full_name, phone, brokerage)",
+    )
+    .eq("id", bookingId)
+    .single<BookingForInvoiceRow>();
+
+  if (error || !booking) return { ok: false, error: "Booking not found." };
+  if (!booking.profiles) {
+    return { ok: false, error: "Booking has no realtor — can't invoice." };
+  }
+  if (!booking.properties) {
+    return { ok: false, error: "Booking has no property — can't invoice." };
+  }
+
+  const result = await createInvoiceForBooking({
+    bookingId: booking.id,
+    services: booking.services,
+    addOns: booking.add_ons,
+    realtor: booking.profiles,
+    property: booking.properties,
+  });
+
+  revalidatePath(`/admin/bookings/${bookingId}`);
+  if (!result.ok) return { ok: false, error: result.error };
+  return {
+    ok: true,
+    invoiceUrl: result.invoiceUrl,
+    invoiceNumber: result.invoiceNumber,
+    totalCents: result.totalCents,
+  };
+}
+
+export async function refreshInvoice(
+  bookingId: string,
+): Promise<ActionResult & { status?: string }> {
+  await requireAdmin();
+  const result = await refreshInvoiceInQBO(bookingId);
+  if (!result.ok) return { ok: false, error: result.error };
+  revalidatePath(`/admin/bookings/${bookingId}`);
+  return { ok: true, status: result.status };
 }

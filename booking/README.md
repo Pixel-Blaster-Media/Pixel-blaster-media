@@ -5,12 +5,11 @@ Lives in this `/booking` subfolder so the main marketing site at the repo
 root stays untouched. Deploys independently — recommended at
 `book.pixelblastermedia.com`.
 
-> **Status: Phase 8 — private calendar is live.** Realtors can now
-> self-serve repeat bookings: pick services, pick a slot, enter
-> property address, done. Admin has a /admin/calendar agenda view and
-> a /admin/settings/availability page to edit working hours and add
-> busy blocks. Auto-confirm on self-bookings (admin gets a heads-up
-> email). Fotello auto-sync is the only large piece still queued.
+> **Status: Phase 7 — QuickBooks invoicing is live.** Admin can connect
+> QBO via OAuth from /admin/settings/integrations, set per-service
+> prices in /admin/settings/pricing, and create invoices straight from
+> the booking detail page with one click. Fotello auto-sync is the only
+> large piece still queued.
 
 ## Stack
 
@@ -31,8 +30,8 @@ root stays untouched. Deploys independently — recommended at
 | 4 | iGuide RESO autofill sync + webhook (tour + floor plan) | ✅ |
 | 5 | Fotello API integration (auto-pull gallery) | ⏳ |
 | 6 | Realtor portal: sign in, list of listings, tour + floor plan + gallery per property | ✅ |
-| 7 | QuickBooks Online invoicing on delivery | ⏳ |
-| 8 | Private calendar: realtor self-serve booking + admin settings + agenda view | ✅ this PR |
+| 7 | QuickBooks Online invoicing on delivery | ✅ this PR |
+| 8 | Private calendar: realtor self-serve booking + admin settings + agenda view | ✅ |
 
 ## Local development
 
@@ -67,6 +66,9 @@ App runs at <http://localhost:3000>. Health check: <http://localhost:3000/api/he
 | `/portal/book`          | Private calendar — realtor self-service booking                   |
 | `/admin/calendar`       | 60-day agenda view of bookings + blocks                            |
 | `/admin/settings/availability` | Edit weekly hours + add / remove busy blocks                |
+| `/admin/settings/pricing`      | Edit per-service + add-on prices                            |
+| `/admin/settings/integrations` | Connect / disconnect QuickBooks + pick default service item |
+| `/api/integrations/quickbooks/callback` | OAuth callback for QuickBooks consent flow         |
 | `/api/health`           | Liveness probe — JSON `{ ok: true, ... }`                     |
 
 ## Provisioning Supabase
@@ -149,6 +151,53 @@ Other knobs:
   decide you'd rather approve them manually.
 - **Block labels are private.** Only admins see the "Vacation — Hawaii"
   text on a block; realtors only see the slot as unavailable.
+
+### Setting up QuickBooks Online (Phase 7 invoicing)
+
+One-time setup (takes ~5 min):
+
+1. Sign into <https://developer.intuit.com> with the same Intuit account
+   that owns your QBO company data.
+2. **Dashboard → Create an app → Scorekeeper / Platform app**, pick
+   **com.intuit.quickbooks.accounting** as the scope.
+3. In the app's **Keys & OAuth** tab:
+   - Copy the **Client ID** → env var `QUICKBOOKS_CLIENT_ID`.
+   - Copy the **Client Secret** → env var `QUICKBOOKS_CLIENT_SECRET`.
+   - Add a **Redirect URI** of exactly:
+     ```
+     ${NEXT_PUBLIC_APP_URL}/api/integrations/quickbooks/callback
+     ```
+     Whitespace and trailing slash matter — Intuit matches verbatim.
+4. Set `QUICKBOOKS_ENVIRONMENT` to `sandbox` (recommended for testing)
+   or `production` when you're ready to create real invoices.
+5. Redeploy so the new env vars take effect.
+6. Sign in to the admin site, open `/admin/settings/integrations`, click
+   **Connect QuickBooks**, grant consent. You're done.
+7. Pick a **default service item** (e.g. your existing "Services" item
+   in QB). All invoice lines reference this item — a QBO quirk; the
+   line descriptions carry the actual service name.
+8. Head to `/admin/settings/pricing` and set a real price for every
+   service + add-on. Any row still at $0 will block invoice creation.
+
+Per-booking flow once set up:
+
+- Open a booking → the **Invoice** section at the bottom has a
+  **Create invoice** button once the booking has a realtor + property.
+- Click it → we upsert the realtor as a QB Customer (matched by email),
+  build an invoice with one line per selected service + add-on, and POST
+  it to QuickBooks.
+- The invoice appears in QB exactly like a manually-created one; click
+  **Open in QuickBooks ↗** on the booking to jump there.
+- Mark it **paid** inside QB as usual. Back on the booking, click
+  **Refresh status** to pull the current balance / status.
+
+Failure modes that are handled gracefully:
+
+- Expired access tokens → auto-refreshed via the refresh token.
+- Expired refresh token (~100 days idle) → surface "reconnect" prompt.
+- Missing price → invoice creation is blocked with a useful error.
+- Duplicate create on the same booking → no-op, returns the existing
+  invoice id.
 
 ### Setting up iGuide (Phase 4 sync + webhook)
 
@@ -249,9 +298,14 @@ booking/
 │   │   │   ├── page.tsx                 # Job board
 │   │   │   └── [id]/{page,BookingActions}.tsx + actions.ts
 │   │   ├── calendar/page.tsx            # 60-day agenda (Phase 8)
-│   │   └── settings/availability/
-│   │       ├── page.tsx                 # Hours + blocks (Phase 8)
-│   │       ├── HoursEditor.tsx · BlocksManager.tsx · actions.ts
+│   │   └── settings/
+│   │       ├── availability/            # Hours + blocks (Phase 8)
+│   │       │   ├── page.tsx · HoursEditor.tsx · BlocksManager.tsx · actions.ts
+│   │       ├── pricing/                 # Per-service prices (Phase 7)
+│   │       │   ├── page.tsx · PriceRow.tsx · actions.ts
+│   │       └── integrations/            # QuickBooks connect + item picker (Phase 7)
+│   │           ├── page.tsx · ConnectButton.tsx · DisconnectButton.tsx
+│   │           ├── ItemPicker.tsx · actions.ts
 │   ├── portal/                          # Realtor-facing portal (Phase 6+8)
 │   │   ├── layout.tsx                   # Header + sign-out, bounces admins
 │   │   ├── page.tsx                     # Property card grid
@@ -276,10 +330,14 @@ booking/
 │   ├── email/
 │   │   ├── resend.ts · templates.ts     # Transactional email
 │   ├── integrations/
-│   │   └── iguide/
-│   │       ├── client.ts                # RESO autofill fetch
-│   │       ├── parse-id.ts              # URL ↔ ID + viewer / embed URLs
-│   │       └── sync.ts                  # Upsert deliverables from RESO
+│   │   ├── iguide/
+│   │   │   ├── client.ts                # RESO autofill fetch
+│   │   │   ├── parse-id.ts              # URL ↔ ID + viewer / embed URLs
+│   │   │   └── sync.ts                  # Upsert deliverables from RESO
+│   │   └── quickbooks/                  # QuickBooks Online (Phase 7)
+│   │       ├── oauth.ts                 # Authorize URL + token exchange + refresh
+│   │       ├── client.ts                # API client with auto-refresh
+│   │       └── invoice.ts               # Upsert customer + build + submit invoice
 │   └── supabase/
 │       ├── client.ts · server.ts        # Browser + server + service clients
 │       └── database.types.ts            # Regenerate with `npm run db:types`
@@ -288,7 +346,8 @@ booking/
 │   ├── 0001_init.sql
 │   ├── 0002_booking_requests.sql
 │   ├── 0003_iguide.sql                  # iguide_id on bookings + index
-│   └── 0004_calendar.sql                # business_hours + calendar_blocks
+│   ├── 0004_calendar.sql                # business_hours + calendar_blocks
+│   └── 0005_quickbooks.sql              # qb connection + service_prices + invoice cols
 ├── .env.example · .eslintrc.json · next.config.mjs
 ├── package.json · postcss.config.mjs · tailwind.config.ts · tsconfig.json
 ```
