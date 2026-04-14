@@ -5,10 +5,12 @@ Lives in this `/booking` subfolder so the main marketing site at the repo
 root stays untouched. Deploys independently — recommended at
 `book.pixelblastermedia.com`.
 
-> **Status: Phase 2 — public booking form is live.** Realtors can submit
-> a request from `/book`; submissions land in `booking_requests` and fire
-> confirmation + admin-notification emails via Resend. Auth, admin board,
-> and iGuide/Fotello integrations are still to come — see the roadmap.
+> **Status: Phase 3 — admin job board is live.** Magic-link sign-in, an
+> inbox of incoming `booking_requests` with accept/decline, a job board
+> of confirmed bookings with status pipeline, and manual deliverable
+> entry (paste an iGuide / Fotello / arbitrary URL) as a fallback ahead
+> of the API integrations. Realtor portal + iGuide/Fotello sync still to
+> come.
 
 ## Stack
 
@@ -24,8 +26,8 @@ root stays untouched. Deploys independently — recommended at
 | Phase | Scope | State |
 |------:|-------|:------|
 | 1 | Next.js + Tailwind scaffold, Supabase schema, placeholder routes, deploy-ready | ✅ |
-| 2 | Public booking form → Supabase + Resend confirmation emails | ✅ this PR |
-| 3 | Admin job board (status pipeline, manual deliverable URL paste) | ⏳ |
+| 2 | Public booking form → Supabase + Resend confirmation emails | ✅ |
+| 3 | Magic-link auth + admin inbox / job board / manual deliverable entry | ✅ this PR |
 | 4 | iGuide API integration (auto-pull tour + floor plan) | ⏳ |
 | 5 | Fotello API integration (auto-pull gallery) | ⏳ |
 | 6 | Realtor magic-link portal with embedded gallery + tour per property | ⏳ |
@@ -44,14 +46,21 @@ App runs at <http://localhost:3000>. Health check: <http://localhost:3000/api/he
 
 ### Routes
 
-| Path             | Purpose                                              |
-|------------------|------------------------------------------------------|
-| `/`              | Booking app landing page                             |
-| `/book`          | Public booking form (working — writes to Supabase)   |
-| `/book/success`  | Post-submit confirmation                             |
-| `/portal`        | Realtor sign-in + property dashboard (Phase 6)       |
-| `/admin`         | Admin job board (Phase 3)                            |
-| `/api/health`    | Liveness probe — JSON `{ ok: true, ... }`            |
+| Path                    | Purpose                                                       |
+|-------------------------|---------------------------------------------------------------|
+| `/`                     | Booking app landing page                                      |
+| `/book`                 | Public booking form (working — writes to Supabase)            |
+| `/book/success`         | Post-submit confirmation                                      |
+| `/auth/sign-in`         | Magic-link sign-in (admins + realtors share this)             |
+| `/auth/check-email`     | "We sent you a link" page                                     |
+| `/auth/callback`        | Code → session exchange (set by Supabase magic link)          |
+| `/admin`                | Redirects to `/admin/inbox`                                   |
+| `/admin/inbox`          | Booking-request inbox with status filters                     |
+| `/admin/inbox/[id]`     | Single request detail; accept (creates booking) / decline     |
+| `/admin/bookings`       | Job board: confirmed bookings with status filters             |
+| `/admin/bookings/[id]`  | Booking detail; status pipeline + manual deliverable entry    |
+| `/portal`               | Realtor sign-in + property dashboard (Phase 6 — placeholder)  |
+| `/api/health`           | Liveness probe — JSON `{ ok: true, ... }`                     |
 
 ## Provisioning Supabase
 
@@ -77,6 +86,24 @@ The migrations set up:
 - A trigger that auto-creates a `profiles` row on every Supabase Auth signup
 - An `is_admin()` helper + Row Level Security policies so realtors only ever
   see their own data, while admins see everything
+
+### Becoming the first admin (Phase 3)
+
+Magic-link sign-in is gated to existing accounts only — random visitors
+can't spin up empty profiles by submitting the sign-in form. To bootstrap:
+
+1. Open Supabase **Authentication → Users → Add user**, enter your email,
+   tick "Auto Confirm User," and create. The DB trigger inserts a matching
+   `profiles` row.
+2. Promote yourself in SQL:
+   ```sql
+   update public.profiles set role = 'admin' where email = 'you@example.com';
+   ```
+3. Visit `/auth/sign-in`, enter the same email, click the magic link,
+   land on `/admin/inbox`.
+
+Realtor accounts get auto-provisioned the moment you click **Accept**
+on their booking request — no manual steps.
 
 ### Setting up Resend (Phase 2 emails)
 
@@ -119,38 +146,45 @@ main site that this whole project needs.
 ```
 booking/
 ├── app/
-│   ├── layout.tsx                # Header / footer shell, Tailwind base
-│   ├── page.tsx                  # Booking app landing page
+│   ├── layout.tsx                       # Public site shell
+│   ├── page.tsx                         # Landing
 │   ├── globals.css
-│   ├── book/
-│   │   ├── page.tsx              # Public booking page (server)
-│   │   ├── BookingForm.tsx       # Form (client component)
-│   │   ├── actions.ts            # Server action: validate + insert + email
-│   │   └── success/page.tsx      # Confirmation page
-│   ├── portal/page.tsx           # Realtor portal (Phase 6)
-│   ├── admin/page.tsx            # Admin (Phase 3)
-│   └── api/health/route.ts       # Health check
+│   ├── book/                            # Public booking flow (Phase 2)
+│   │   ├── page.tsx · BookingForm.tsx · actions.ts · success/page.tsx
+│   ├── auth/                            # Magic-link auth (Phase 3)
+│   │   ├── sign-in/{page,SignInForm}.tsx · sign-in/actions.ts
+│   │   ├── check-email/page.tsx
+│   │   └── callback/route.ts
+│   ├── admin/                           # Admin job board (Phase 3)
+│   │   ├── layout.tsx                   # Role gate + sidebar + sign-out
+│   │   ├── page.tsx                     # Redirects to /admin/inbox
+│   │   ├── inbox/
+│   │   │   ├── page.tsx                 # Request list
+│   │   │   └── [id]/{page,RequestActions}.tsx + actions.ts
+│   │   └── bookings/
+│   │       ├── page.tsx                 # Job board
+│   │       └── [id]/{page,BookingActions}.tsx + actions.ts
+│   ├── portal/page.tsx                  # Realtor portal (Phase 6 stub)
+│   └── api/health/route.ts              # Liveness check
 ├── lib/
+│   ├── auth/
+│   │   ├── require-admin.ts             # Server-side role gate
+│   │   └── sign-out.ts                  # Server action
 │   ├── booking/
-│   │   ├── services.ts           # Service / add-on catalog (single source)
-│   │   └── schema.ts             # Form types + validation
+│   │   ├── services.ts                  # Service / add-on catalog
+│   │   ├── schema.ts                    # Form validation
+│   │   └── booking-status.ts            # Status pipeline + visual meta
 │   ├── email/
-│   │   ├── resend.ts             # Resend HTTP wrapper (no-op without key)
-│   │   └── templates.ts          # HTML email templates
+│   │   ├── resend.ts · templates.ts     # Transactional email
 │   └── supabase/
-│       ├── client.ts             # Browser client
-│       ├── server.ts             # Server + service-role clients
-│       └── database.types.ts     # Regenerate with `npm run db:types`
-├── supabase/
-│   └── migrations/
-│       ├── 0001_init.sql              # Profiles, properties, bookings, deliverables
-│       └── 0002_booking_requests.sql  # Public-form submissions
-├── .env.example
-├── next.config.mjs
-├── package.json
-├── postcss.config.mjs
-├── tailwind.config.ts
-└── tsconfig.json
+│       ├── client.ts · server.ts        # Browser + server + service clients
+│       └── database.types.ts            # Regenerate with `npm run db:types`
+├── middleware.ts                        # Session refresh + /admin gate
+├── supabase/migrations/
+│   ├── 0001_init.sql
+│   └── 0002_booking_requests.sql
+├── .env.example · .eslintrc.json · next.config.mjs
+├── package.json · postcss.config.mjs · tailwind.config.ts · tsconfig.json
 ```
 
 ## Security notes
