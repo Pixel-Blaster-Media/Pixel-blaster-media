@@ -109,6 +109,87 @@ export function adminNotificationEmail({ request, requestId }: TemplateArgs) {
   };
 }
 
+/**
+ * Sent to the realtor when an admin accepts their booking request.
+ *
+ * The `portalLink` is a Supabase-generated magic link so the realtor
+ * signs in with a single click — no need to type their email or
+ * wait for a separate sign-in email. Link typically lands them at
+ * `/portal` already authenticated.
+ */
+export function shootConfirmedEmail({
+  contactName,
+  streetAddress,
+  scheduledAt,
+  services,
+  portalLink,
+}: {
+  contactName: string;
+  streetAddress: string;
+  scheduledAt: string | null;
+  services: string[];
+  portalLink: string;
+}) {
+  const firstName = contactName.split(" ")[0] || contactName;
+  const when = scheduledAt
+    ? new Date(scheduledAt).toLocaleString(undefined, {
+        dateStyle: "full",
+        timeStyle: "short",
+      })
+    : null;
+  const serviceList = services.length
+    ? services.map(labelForService).join(", ")
+    : "—";
+
+  const html = `
+    <!doctype html>
+    <html><head><meta charset="utf-8"><style>${baseStyles}
+      .cta {
+        display: inline-block;
+        padding: 12px 20px;
+        margin: 20px 0;
+        background: ${BRAND_TEAL};
+        color: #fff !important;
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: 600;
+      }
+      .fallback {
+        word-break: break-all;
+        color: #8a979c;
+        font-size: 12px;
+      }
+    </style></head>
+    <body><div class="wrap">
+      <p><span class="pill">Booking confirmed</span></p>
+      <h1>You're all set, ${escape(firstName)}.</h1>
+      <p>Your shoot at <strong>${escape(streetAddress)}</strong> is confirmed${
+        when ? ` for <strong>${escape(when)}</strong>` : ""
+      }.</p>
+
+      <h2>Your new portal</h2>
+      <p>We've set up a private portal for you. As we work on your listing, your virtual tour, floor plan, and gallery will appear in one place — no more digging through emails for the right link.</p>
+
+      <p><a href="${escape(portalLink)}" class="cta">Open your portal →</a></p>
+
+      <p class="fallback">
+        If the button doesn't work, paste this link into your browser:<br>
+        ${escape(portalLink)}
+      </p>
+
+      <h2>What you booked</h2>
+      <p>${escape(serviceList)}</p>
+
+      <p class="meta">Reply to this email with anything you'd like to add or change. We'll be in touch as the shoot day approaches.</p>
+    </div></body></html>
+  `;
+
+  return {
+    subject: `Your Pixel Blaster shoot is confirmed — ${streetAddress}`,
+    html,
+  };
+}
+
 function escape(s: string): string {
   return s
     .replace(/&/g, "&amp;")
