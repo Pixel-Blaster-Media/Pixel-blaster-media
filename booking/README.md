@@ -5,9 +5,10 @@ Lives in this `/booking` subfolder so the main marketing site at the repo
 root stays untouched. Deploys independently — recommended at
 `book.pixelblastermedia.com`.
 
-> **Status: Phase 1 scaffold.** No real booking, auth, or API integrations
-> yet — this PR establishes the foundation (Next.js app, Supabase schema,
-> deploy-ready). See the roadmap below.
+> **Status: Phase 2 — public booking form is live.** Realtors can submit
+> a request from `/book`; submissions land in `booking_requests` and fire
+> confirmation + admin-notification emails via Resend. Auth, admin board,
+> and iGuide/Fotello integrations are still to come — see the roadmap.
 
 ## Stack
 
@@ -22,8 +23,8 @@ root stays untouched. Deploys independently — recommended at
 
 | Phase | Scope | State |
 |------:|-------|:------|
-| 1 | Next.js + Tailwind scaffold, Supabase schema, placeholder routes, deploy-ready | ✅ this PR |
-| 2 | Custom multi-step booking form → Supabase, transactional email confirmations | ⏳ |
+| 1 | Next.js + Tailwind scaffold, Supabase schema, placeholder routes, deploy-ready | ✅ |
+| 2 | Public booking form → Supabase + Resend confirmation emails | ✅ this PR |
 | 3 | Admin job board (status pipeline, manual deliverable URL paste) | ⏳ |
 | 4 | iGuide API integration (auto-pull tour + floor plan) | ⏳ |
 | 5 | Fotello API integration (auto-pull gallery) | ⏳ |
@@ -41,15 +42,16 @@ npm run dev
 
 App runs at <http://localhost:3000>. Health check: <http://localhost:3000/api/health>.
 
-### Routes (Phase 1)
+### Routes
 
-| Path           | Purpose                                         |
-|----------------|-------------------------------------------------|
-| `/`            | Booking app landing page                        |
-| `/book`        | Public booking form (scaffold)                  |
-| `/portal`      | Realtor sign-in + property dashboard (scaffold) |
-| `/admin`       | Admin job board (scaffold)                      |
-| `/api/health`  | Liveness probe — JSON `{ ok: true, ... }`       |
+| Path             | Purpose                                              |
+|------------------|------------------------------------------------------|
+| `/`              | Booking app landing page                             |
+| `/book`          | Public booking form (working — writes to Supabase)   |
+| `/book/success`  | Post-submit confirmation                             |
+| `/portal`        | Realtor sign-in + property dashboard (Phase 6)       |
+| `/admin`         | Admin job board (Phase 3)                            |
+| `/api/health`    | Liveness probe — JSON `{ ok: true, ... }`            |
 
 ## Provisioning Supabase
 
@@ -58,9 +60,9 @@ App runs at <http://localhost:3000>. Health check: <http://localhost:3000/api/he
    - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
    - `anon` public key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `service_role` secret key → `SUPABASE_SERVICE_ROLE_KEY` (server only — never expose)
-3. Apply the schema. Two options:
-   - **Easy:** open Supabase **SQL Editor**, paste the contents of
-     `supabase/migrations/0001_init.sql`, run.
+3. Apply the migrations in order. Two options:
+   - **Easy:** open Supabase **SQL Editor**, paste each file from
+     `supabase/migrations/` (in numeric order) and run them one at a time.
    - **CLI:** install `supabase` CLI, link the project, then
      `supabase db push`.
 4. (Optional, recommended) Promote yourself to admin once you've signed up:
@@ -68,12 +70,27 @@ App runs at <http://localhost:3000>. Health check: <http://localhost:3000/api/he
    update public.profiles set role = 'admin' where email = 'you@example.com';
    ```
 
-The migration sets up:
+The migrations set up:
 
-- `profiles`, `properties`, `bookings`, `deliverables` tables
+- `profiles`, `properties`, `bookings`, `deliverables` tables (0001)
+- `booking_requests` table for unauthenticated public submissions (0002)
 - A trigger that auto-creates a `profiles` row on every Supabase Auth signup
 - An `is_admin()` helper + Row Level Security policies so realtors only ever
   see their own data, while admins see everything
+
+### Setting up Resend (Phase 2 emails)
+
+Booking submissions trigger two emails — one to the realtor (confirmation) and
+one to you (heads-up). Both are sent via [Resend](https://resend.com).
+
+1. Create a Resend account, verify your sending domain (`pixelblastermedia.com`).
+2. Generate an API key, paste it into `RESEND_API_KEY` in `.env.local`.
+3. Set `EMAIL_FROM` to a verified address on that domain.
+4. Set `ADMIN_NOTIFICATION_EMAIL` to where you want booking heads-up emails.
+
+If you skip this, the form still works — sends are no-ops and you'll see
+warnings in the server logs. The submission still lands in `booking_requests`
+either way.
 
 ## Deploying to Vercel
 
@@ -102,21 +119,32 @@ main site that this whole project needs.
 ```
 booking/
 ├── app/
-│   ├── layout.tsx          # Header / footer shell, Tailwind base
-│   ├── page.tsx            # Booking app landing page
+│   ├── layout.tsx                # Header / footer shell, Tailwind base
+│   ├── page.tsx                  # Booking app landing page
 │   ├── globals.css
-│   ├── book/page.tsx       # Public booking form (scaffold)
-│   ├── portal/page.tsx     # Realtor portal (scaffold)
-│   ├── admin/page.tsx      # Admin (scaffold)
-│   └── api/health/route.ts # Health check
+│   ├── book/
+│   │   ├── page.tsx              # Public booking page (server)
+│   │   ├── BookingForm.tsx       # Form (client component)
+│   │   ├── actions.ts            # Server action: validate + insert + email
+│   │   └── success/page.tsx      # Confirmation page
+│   ├── portal/page.tsx           # Realtor portal (Phase 6)
+│   ├── admin/page.tsx            # Admin (Phase 3)
+│   └── api/health/route.ts       # Health check
 ├── lib/
+│   ├── booking/
+│   │   ├── services.ts           # Service / add-on catalog (single source)
+│   │   └── schema.ts             # Form types + validation
+│   ├── email/
+│   │   ├── resend.ts             # Resend HTTP wrapper (no-op without key)
+│   │   └── templates.ts          # HTML email templates
 │   └── supabase/
-│       ├── client.ts          # Browser client
-│       ├── server.ts          # Server + service-role clients
-│       └── database.types.ts  # Regenerate with `npm run db:types`
+│       ├── client.ts             # Browser client
+│       ├── server.ts             # Server + service-role clients
+│       └── database.types.ts     # Regenerate with `npm run db:types`
 ├── supabase/
 │   └── migrations/
-│       └── 0001_init.sql      # Schema + RLS + triggers
+│       ├── 0001_init.sql              # Profiles, properties, bookings, deliverables
+│       └── 0002_booking_requests.sql  # Public-form submissions
 ├── .env.example
 ├── next.config.mjs
 ├── package.json
