@@ -5,6 +5,10 @@ Lives in this `/booking` subfolder so the main marketing site at the repo
 root stays untouched. Deploys independently — recommended at
 `book.pixelblastermedia.com`.
 
+> **👉 First-time deploy? Use [DEPLOY.md](./DEPLOY.md) instead of this
+> file.** It's a step-by-step non-coder walkthrough. This README is for
+> the ongoing developer-level reference.
+
 > **Status: Phase 5 — Fotello auto-sync is live.** All eight roadmap
 > phases shipped. Photographer pastes Fotello listing_id + enhance_ids
 > into the admin booking page; our backend polls Fotello, and when an
@@ -81,9 +85,13 @@ App runs at <http://localhost:3000>. Health check: <http://localhost:3000/api/he
    - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
    - `anon` public key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `service_role` secret key → `SUPABASE_SERVICE_ROLE_KEY` (server only — never expose)
-3. Apply the migrations in order. Two options:
-   - **Easy:** open Supabase **SQL Editor**, paste each file from
-     `supabase/migrations/` (in numeric order) and run them one at a time.
+3. Apply the migrations. Three options (in order of ease):
+   - **Easiest:** paste `supabase/setup.sql` into the SQL Editor once
+     and click Run. That one file contains every migration plus an
+     admin-bootstrap at the bottom. (This is what [DEPLOY.md](./DEPLOY.md)
+     walks through.)
+   - **Manual per-migration:** paste each file from `supabase/migrations/`
+     in numeric order and run one at a time. Useful when debugging.
    - **CLI:** install `supabase` CLI, link the project, then
      `supabase db push`.
 4. (Optional, recommended) Promote yourself to admin once you've signed up:
