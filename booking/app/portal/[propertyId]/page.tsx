@@ -74,8 +74,10 @@ export default async function PropertyDetailPage({
 
   const tour = (deliverables ?? []).find((d) => d.type === "virtual_tour");
   const floorPlan = (deliverables ?? []).find((d) => d.type === "floor_plan");
+  // Only show galleries that have actually been published — in-progress
+  // Fotello enhances are tracked but not shown to the realtor yet.
   const gallery = (deliverables ?? []).filter(
-    (d) => d.type === "photo_gallery",
+    (d) => d.type === "photo_gallery" && d.ready_at,
   );
   const videos = (deliverables ?? []).filter(
     (d) => d.type === "video" || d.type === "aerial",
@@ -184,38 +186,15 @@ export default async function PropertyDetailPage({
       )}
 
       {gallery.length > 0 ? (
-        <section>
+        <section className="space-y-6">
           <SectionHeader title="Photos" />
-          <ul className="grid gap-3 md:grid-cols-2">
-            {gallery.map((g) => (
-              <li
-                key={g.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-ink-soft/50 p-4"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-white">
-                    {g.source === "fotello"
-                      ? "Fotello gallery"
-                      : "Photo gallery"}
-                  </p>
-                  <p className="mt-0.5 truncate text-xs text-ink-muted">
-                    {g.url}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <CopyLinkButton url={g.url} />
-                  <a
-                    href={g.url}
-                    target="_blank"
-                    rel="noopener"
-                    className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-light"
-                  >
-                    Open ↗
-                  </a>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {gallery.map((g) =>
+            g.source === "fotello" ? (
+              <FotelloGallery key={g.id} deliverable={g} />
+            ) : (
+              <ManualGallery key={g.id} deliverable={g} />
+            ),
+          )}
         </section>
       ) : null}
 
@@ -291,6 +270,71 @@ function EmptySection({
         {message}
       </p>
     </section>
+  );
+}
+
+/**
+ * Fotello-sourced gallery: iframe via our proxy route so we serve fresh
+ * signed URLs transparently. If the browser refuses to frame it (some
+ * hosts set X-Frame-Options / CSP), realtors still have the "Open in
+ * new tab" button to fall back on.
+ */
+function FotelloGallery({ deliverable }: { deliverable: DeliverableRow }) {
+  const embedSrc = `/api/fotello/embed/${deliverable.id}`;
+  return (
+    <div className="overflow-hidden rounded-xl border border-white/10 bg-ink-soft/50">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 px-4 py-2">
+        <p className="text-xs text-ink-muted">
+          via fotello
+        </p>
+        <div className="flex gap-2">
+          <CopyLinkButton url={embedSrc} label="Copy gallery link" />
+          <a
+            href={embedSrc}
+            target="_blank"
+            rel="noopener"
+            className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-light"
+          >
+            Open ↗
+          </a>
+        </div>
+      </div>
+      <div className="bg-black">
+        <div className="aspect-[16/10] w-full">
+          <iframe
+            src={embedSrc}
+            title="Photo gallery"
+            className="h-full w-full border-0"
+            loading="lazy"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Manually-pasted gallery URL — just a button row, no iframe. */
+function ManualGallery({ deliverable }: { deliverable: DeliverableRow }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-ink-soft/50 p-4">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-white">Photo gallery</p>
+        <p className="mt-0.5 truncate text-xs text-ink-muted">
+          {deliverable.url}
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <CopyLinkButton url={deliverable.url} />
+        <a
+          href={deliverable.url}
+          target="_blank"
+          rel="noopener"
+          className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-light"
+        >
+          Open ↗
+        </a>
+      </div>
+    </div>
   );
 }
 

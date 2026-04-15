@@ -5,11 +5,13 @@ Lives in this `/booking` subfolder so the main marketing site at the repo
 root stays untouched. Deploys independently — recommended at
 `book.pixelblastermedia.com`.
 
-> **Status: Phase 7 — QuickBooks invoicing is live.** Admin can connect
-> QBO via OAuth from /admin/settings/integrations, set per-service
-> prices in /admin/settings/pricing, and create invoices straight from
-> the booking detail page with one click. Fotello auto-sync is the only
-> large piece still queued.
+> **Status: Phase 5 — Fotello auto-sync is live.** All eight roadmap
+> phases shipped. Photographer pastes Fotello listing_id + enhance_ids
+> into the admin booking page; our backend polls Fotello, and when an
+> enhance completes the gallery shows up on the realtor portal as an
+> iframe (with a copy-link + open-in-new-tab fallback). Zero storage
+> on our side — galleries stay on Fotello via a server proxy that
+> refreshes expired signed URLs transparently.
 
 ## Stack
 
@@ -28,7 +30,7 @@ root stays untouched. Deploys independently — recommended at
 | 2 | Public booking form → Supabase + Resend confirmation emails | ✅ |
 | 3 | Magic-link auth + admin inbox / job board / manual deliverable entry | ✅ |
 | 4 | iGuide RESO autofill sync + webhook (tour + floor plan) | ✅ |
-| 5 | Fotello API integration (auto-pull gallery) | ⏳ |
+| 5 | Fotello API integration (auto-pull gallery) | ✅ this PR |
 | 6 | Realtor portal: sign in, list of listings, tour + floor plan + gallery per property | ✅ |
 | 7 | QuickBooks Online invoicing on delivery | ✅ this PR |
 | 8 | Private calendar: realtor self-serve booking + admin settings + agenda view | ✅ |
@@ -69,6 +71,7 @@ App runs at <http://localhost:3000>. Health check: <http://localhost:3000/api/he
 | `/admin/settings/pricing`      | Edit per-service + add-on prices                            |
 | `/admin/settings/integrations` | Connect / disconnect QuickBooks + pick default service item |
 | `/api/integrations/quickbooks/callback` | OAuth callback for QuickBooks consent flow         |
+| `/api/fotello/embed/[deliverableId]`   | Auth-gated proxy for Fotello gallery iframe src    |
 | `/api/health`           | Liveness probe — JSON `{ ok: true, ... }`                     |
 
 ## Provisioning Supabase
@@ -198,6 +201,52 @@ Failure modes that are handled gracefully:
 - Missing price → invoice creation is blocked with a useful error.
 - Duplicate create on the same booking → no-op, returns the existing
   invoice id.
+
+### Setting up Fotello (Phase 5 sync)
+
+Fotello hosts your enhanced photos for **one year**. We don't mirror —
+we just serve fresh gallery URLs through a server proxy. Much cleaner,
+zero storage cost on your side.
+
+**One-time setup:**
+
+1. Email Fotello support (`support@fotello.co`) asking for your API key.
+   Gavin on their team handles this — mention you're ready to integrate.
+2. When the key arrives in their secure chat, paste it straight into
+   Vercel env vars as `FOTELLO_API_KEY`. **Don't put it in email or
+   anywhere that syncs in plaintext.**
+3. Leave `FOTELLO_API_BASE` blank — the default points at their
+   production Firebase Functions endpoint.
+
+**Per-shoot workflow:**
+
+1. You do your normal Fotello UI flow: create a listing, upload photos,
+   submit them for enhancement (one batch or multiple, interior +
+   exterior, etc.).
+2. Copy the **listing id** and each **enhance id** out of Fotello's
+   dashboard.
+3. In our admin booking detail page, in the Fotello section:
+   - Paste the listing id → **Save**.
+   - For each enhance: paste the id, pick interior/exterior, click
+     **Track**. We poll Fotello. If the enhance is already
+     `completed`, the gallery shows up on the realtor portal
+     immediately; if it's still `in_progress`, click **Refresh**
+     later and it'll flip to ready.
+4. Realtor's portal property page renders each ready gallery as an
+   iframe embedded in-page. Expired signed URLs are auto-refreshed by
+   `/api/fotello/embed/[id]` on every view.
+
+**If Fotello blocks iframing:** the portal also renders a "Copy gallery
+link" and "Open ↗" button above each iframe, so realtors always have a
+way to get to the gallery even if the iframe renders blank.
+
+**Future polish (not in this phase):**
+
+- Vercel cron that auto-polls in-progress enhances every 5 min so you
+  never have to click Refresh manually.
+- A "drop raw photos into admin" UI that calls createUpload +
+  createEnhance for you, cutting out the step of opening Fotello's UI
+  at all. Only worth building if the copy-paste step gets annoying.
 
 ### Setting up iGuide (Phase 4 sync + webhook)
 
@@ -334,10 +383,13 @@ booking/
 │   │   │   ├── client.ts                # RESO autofill fetch
 │   │   │   ├── parse-id.ts              # URL ↔ ID + viewer / embed URLs
 │   │   │   └── sync.ts                  # Upsert deliverables from RESO
-│   │   └── quickbooks/                  # QuickBooks Online (Phase 7)
-│   │       ├── oauth.ts                 # Authorize URL + token exchange + refresh
-│   │       ├── client.ts                # API client with auto-refresh
-│   │       └── invoice.ts               # Upsert customer + build + submit invoice
+│   │   ├── quickbooks/                  # QuickBooks Online (Phase 7)
+│   │   │   ├── oauth.ts                 # Authorize URL + token exchange + refresh
+│   │   │   ├── client.ts                # API client with auto-refresh
+│   │   │   └── invoice.ts               # Upsert customer + build + submit invoice
+│   │   └── fotello/                     # Fotello photo gallery sync (Phase 5)
+│   │       ├── client.ts                # Typed API wrapper (Bearer auth)
+│   │       └── sync.ts                  # syncEnhance + getFreshGalleryUrl
 │   └── supabase/
 │       ├── client.ts · server.ts        # Browser + server + service clients
 │       └── database.types.ts            # Regenerate with `npm run db:types`
@@ -347,7 +399,8 @@ booking/
 │   ├── 0002_booking_requests.sql
 │   ├── 0003_iguide.sql                  # iguide_id on bookings + index
 │   ├── 0004_calendar.sql                # business_hours + calendar_blocks
-│   └── 0005_quickbooks.sql              # qb connection + service_prices + invoice cols
+│   ├── 0005_quickbooks.sql              # qb connection + service_prices + invoice cols
+│   └── 0006_fotello.sql                 # fotello_listing_id on bookings
 ├── .env.example · .eslintrc.json · next.config.mjs
 ├── package.json · postcss.config.mjs · tailwind.config.ts · tsconfig.json
 ```

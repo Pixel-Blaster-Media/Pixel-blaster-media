@@ -15,6 +15,7 @@ import type {
 } from "@/lib/supabase/database.types";
 
 import BookingActions from "./BookingActions";
+import FotelloSection from "./FotelloSection";
 import IGuideSection from "./IGuideSection";
 import InvoiceSection from "./InvoiceSection";
 
@@ -30,6 +31,7 @@ interface BookingDetail {
   client_notes: string | null;
   internal_notes: string | null;
   iguide_id: string | null;
+  fotello_listing_id: string | null;
   quickbooks_invoice_id: string | null;
   quickbooks_invoice_number: string | null;
   quickbooks_invoice_url: string | null;
@@ -56,8 +58,15 @@ interface DeliverableRow {
   id: string;
   type: DeliverableType;
   source: DeliverableSource;
+  external_id: string | null;
   url: string;
   thumbnail_url: string | null;
+  metadata: {
+    status?: string;
+    shot_type?: string;
+    last_synced_at?: string;
+  } | null;
+  ready_at: string | null;
   created_at: string;
 }
 
@@ -73,13 +82,15 @@ export default async function BookingDetailPage({
       supabase
         .from("bookings")
         .select(
-          "id, status, scheduled_at, services, add_ons, square_footage, client_notes, internal_notes, iguide_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage)",
+          "id, status, scheduled_at, services, add_ons, square_footage, client_notes, internal_notes, iguide_id, fotello_listing_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage)",
         )
         .eq("id", params.id)
         .single<BookingDetail>(),
       supabase
         .from("deliverables")
-        .select("id, type, source, url, thumbnail_url, created_at")
+        .select(
+          "id, type, source, external_id, url, thumbnail_url, metadata, ready_at, created_at",
+        )
         .eq("booking_id", params.id)
         .order("created_at", { ascending: false })
         .returns<DeliverableRow[]>(),
@@ -182,6 +193,20 @@ export default async function BookingDetailPage({
         initialIGuideId={booking.iguide_id}
       />
 
+      <FotelloSection
+        bookingId={booking.id}
+        initialListingId={booking.fotello_listing_id}
+        deliverables={(deliverables ?? [])
+          .filter((d) => d.source === "fotello")
+          .map((d) => ({
+            id: d.id,
+            external_id: d.external_id,
+            status: d.metadata?.status ?? null,
+            shotType: d.metadata?.shot_type ?? null,
+            syncedAt: d.metadata?.last_synced_at ?? d.created_at,
+          }))}
+      />
+
       <InvoiceSection
         bookingId={booking.id}
         initial={{
@@ -194,40 +219,47 @@ export default async function BookingDetailPage({
         }}
       />
 
-      <Panel title="Deliverables">
-        {deliverables && deliverables.length > 0 ? (
-          <ul className="divide-y divide-white/5">
-            {deliverables.map((d) => (
-              <li
-                key={d.id}
-                className="flex items-start justify-between gap-3 py-3"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-white">
-                    {deliverableTypeLabel(d.type)}
-                    <span className="ml-2 text-[10px] uppercase tracking-wider text-ink-muted">
-                      {d.source}
-                    </span>
-                  </p>
-                  <a
-                    href={d.url}
-                    target="_blank"
-                    rel="noopener"
-                    className="mt-0.5 block truncate text-xs text-brand-light underline"
+      {(() => {
+        const otherDeliverables = (deliverables ?? []).filter(
+          (d) => d.source !== "fotello",
+        );
+        return (
+          <Panel title="Deliverables">
+            {otherDeliverables.length > 0 ? (
+              <ul className="divide-y divide-white/5">
+                {otherDeliverables.map((d) => (
+                  <li
+                    key={d.id}
+                    className="flex items-start justify-between gap-3 py-3"
                   >
-                    {d.url}
-                  </a>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-ink-muted">
-            No deliverables yet. Use the form above to paste an iGuide tour
-            URL, a Fotello gallery URL, or any other delivery link.
-          </p>
-        )}
-      </Panel>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white">
+                        {deliverableTypeLabel(d.type)}
+                        <span className="ml-2 text-[10px] uppercase tracking-wider text-ink-muted">
+                          {d.source}
+                        </span>
+                      </p>
+                      <a
+                        href={d.url}
+                        target="_blank"
+                        rel="noopener"
+                        className="mt-0.5 block truncate text-xs text-brand-light underline"
+                      >
+                        {d.url}
+                      </a>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-ink-muted">
+                No non-Fotello deliverables yet. Fotello galleries are
+                managed in the Fotello section above.
+              </p>
+            )}
+          </Panel>
+        );
+      })()}
     </div>
   );
 }

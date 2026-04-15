@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { nextBookingStatuses } from "@/lib/booking/booking-status";
+import { syncEnhance } from "@/lib/integrations/fotello/sync";
+import type { FotelloShotType } from "@/lib/integrations/fotello/client";
 import { parseIGuideId } from "@/lib/integrations/iguide/parse-id";
 import { syncIGuideForBooking } from "@/lib/integrations/iguide/sync";
 import {
@@ -305,4 +307,87 @@ export async function refreshInvoice(
   if (!result.ok) return { ok: false, error: result.error };
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true, status: result.status };
+}
+
+// ---------------------------------------------------------------------------
+// Fotello (Phase 5)
+// ---------------------------------------------------------------------------
+
+export async function saveFotelloListingId(
+  bookingId: string,
+  rawInput: string,
+): Promise<ActionResult & { listingId?: string | null }> {
+  await requireAdmin();
+  const trimmed = rawInput.trim();
+  const listingId = trimmed === "" ? null : trimmed;
+  // Fotello listing ids are Firebase-style strings; we don't enforce a
+  // format beyond "not whitespace" — the API will reject bad ids when
+  // we use them, and surfacing that error is fine.
+
+  const service = getServiceSupabase();
+  const { error } = await service
+    .from("bookings")
+    .update({ fotello_listing_id: listingId })
+    .eq("id", bookingId);
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/admin/bookings/${bookingId}`);
+  return { ok: true, listingId };
+}
+
+/**
+ * Track (or refresh) a Fotello enhance against the booking. If the
+ * enhance is already `completed`, the sync run will upsert a
+ * photo_gallery deliverable immediately. If it's in progress, we still
+ * write a placeholder row so the admin can see it pending; the next
+ * refresh will flip it to ready.
+ */
+export async function trackFotelloEnhance(
+  bookingId: string,
+  enhanceId: string,
+  shotType: FotelloShotType,
+): Promise<ActionResult & { status?: string }> {
+  await requireAdmin();
+  const trimmed = enhanceId.trim();
+  if (!trimmed) return { ok: false, error: "Enhance ID is required." };
+
+  const supabase = getServerSupabase();
+  const { data: booking, error } = await supabase
+    .from("bookings")
+    .select("id, property_id, fotello_listing_id")
+    .eq("id", bookingId)
+    .single<{
+      id: string;
+      property_id: string;
+      fotello_listing_id: string | null;
+    }>();
+
+  if (error || !booking) return { ok: false, error: "Booking not found." };
+
+  const result = await syncEnhance({
+    enhanceId: trimmed,
+    booking,
+    shotType,
+  });
+
+  revalidatePath(`/admin/bookings/${bookingId}`);
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, status: result.status };
+}
+
+/** Untrack (delete) a Fotello-sourced deliverable row. */
+export async function untrackFotelloEnhance(
+  bookingId: string,
+  deliverableId: string,
+): Promise<ActionResult> {
+  await requireAdmin();
+  const service = getServiceSupabase();
+  const { error } = await service
+    .from("deliverables")
+    .delete()
+    .eq("id", deliverableId)
+    .eq("source", "fotello");
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/admin/bookings/${bookingId}`);
+  return { ok: true };
 }
