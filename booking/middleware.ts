@@ -9,10 +9,17 @@ interface CookieToSet {
 
 /**
  * Edge middleware that:
- *   1. Refreshes the Supabase auth session on every request (cookies
+ *   1. If the request carries a `?code=...` query param (a Supabase
+ *      PKCE auth code, typically from a magic link), forward it to
+ *      /auth/callback so the session can be established. This matters
+ *      when a magic link comes from the Supabase dashboard (which
+ *      hard-codes redirect_to to Site URL) rather than our own
+ *      /auth/sign-in flow.
+ *   2. Refreshes the Supabase auth session on every request (cookies
  *      have to be re-set on the response or they expire silently).
- *   2. Redirects unauthenticated visitors away from /admin to /auth/sign-in,
- *      preserving the originally-requested path in `?next=`.
+ *   3. Redirects unauthenticated visitors away from /admin and /portal
+ *      to /auth/sign-in, preserving the originally-requested path in
+ *      `?next=`.
  *
  * Role-level gating (admin vs realtor) happens later in the /admin
  * layout's Server Component — middleware can't do a DB query without
@@ -20,6 +27,27 @@ interface CookieToSet {
  * signed in?" check at the edge.
  */
 export async function middleware(request: NextRequest) {
+  const path = request.nextUrl.pathname;
+
+  // 1. Auth-code handoff. If any page carries `?code=`, trust it's a
+  // Supabase verify code and forward to the dedicated callback handler.
+  // Exempt /auth/callback itself (otherwise we'd bounce infinitely) and
+  // any API routes that might legitimately receive a `code` query param.
+  const authCode = request.nextUrl.searchParams.get("code");
+  if (
+    authCode &&
+    !path.startsWith("/auth/callback") &&
+    !path.startsWith("/api/")
+  ) {
+    const callback = request.nextUrl.clone();
+    callback.pathname = "/auth/callback";
+    // Preserve the original path as ?next= so we land the user back where
+    // they were heading (or on /admin if they came in at /).
+    const next = path === "/" ? "/admin" : path;
+    callback.searchParams.set("next", next);
+    return NextResponse.redirect(callback);
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -48,7 +76,6 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const path = request.nextUrl.pathname;
   const protectedPath =
     path.startsWith("/admin") || path.startsWith("/portal");
 
