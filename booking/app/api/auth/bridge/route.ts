@@ -112,11 +112,13 @@ export async function POST(request: NextRequest) {
     },
   };
 
-  // @supabase/ssr v0.5+ stores the session JSON base64-encoded with a
-  // `base64-` prefix. Long sessions are split across numbered cookies
-  // (`.0`, `.1`, ...); the server-side adapter re-assembles them.
+  // @supabase/ssr v0.5+ stores the session as `base64-` + base64url
+  // encoded JSON (note: base64URL, not standard base64 — it uses the
+  // URL-safe alphabet with `-` and `_` and no padding). Getting this
+  // wrong means the server client silently fails to parse and treats
+  // the user as signed out.
   const encoded =
-    "base64-" + Buffer.from(JSON.stringify(session)).toString("base64");
+    "base64-" + Buffer.from(JSON.stringify(session)).toString("base64url");
 
   const cookieBase = `sb-${projectRef}-auth-token`;
   const cookieStore = cookies();
@@ -131,12 +133,15 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Match @supabase/ssr's DEFAULT_COOKIE_OPTIONS exactly — notably
+  // httpOnly: false, because the browser client also reads these
+  // cookies to keep its in-memory session state in sync.
   const baseOptions = {
-    httpOnly: true,
+    httpOnly: false,
     secure: true,
     sameSite: "lax" as const,
     path: "/",
-    maxAge: 60 * 60 * 24 * 400, // matches @supabase/ssr default
+    maxAge: 60 * 60 * 24 * 400,
   };
 
   // Cookie value size ceiling is ~4 KB; leave headroom for the name +
