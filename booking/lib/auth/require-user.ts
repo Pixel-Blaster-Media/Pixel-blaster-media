@@ -24,21 +24,23 @@ interface ProfileRow {
  * authenticated and returns a small profile context. Does NOT enforce a
  * role — use `requireAdmin()` for that.
  *
- * Redirects to /auth/sign-in on missing session. Redirects to sign-in
- * again (this time unadorned) if the session exists but the profile row
- * is missing — that shouldn't happen in practice (trigger creates it),
- * but defending against it costs nothing.
- *
- * The `next` param preserves the originally-requested path so the user
- * lands where they intended after clicking the magic link.
+ * We resolve the user id from the session cookie (via getSession +
+ * JWT decode) rather than calling supabase.auth.getUser() — see
+ * require-admin.ts for the rationale. Summary: getUser() makes an
+ * outbound fetch that can fail intermittently from Vercel serverless,
+ * and a network blip must not log out a valid session.
  */
 export async function requireUser(nextPath?: string): Promise<UserContext> {
   const supabase = getServerSupabase();
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (!user) {
+  const userId = session?.access_token
+    ? decodeUserIdFromJwt(session.access_token)
+    : null;
+
+  if (!userId) {
     const suffix = nextPath ? `?next=${encodeURIComponent(nextPath)}` : "";
     redirect(`/auth/sign-in${suffix}`);
   }
@@ -46,11 +48,11 @@ export async function requireUser(nextPath?: string): Promise<UserContext> {
   const { data: profile, error } = await supabase
     .from("profiles")
     .select("id, email, full_name, role")
-    .eq("id", user.id)
+    .eq("id", userId)
     .single<ProfileRow>();
 
   if (error || !profile) {
-    console.warn("[auth] no profile for authed user", user.id, error?.message);
+    console.warn("[auth] no profile for authed user", userId, error?.message);
     redirect("/auth/sign-in");
   }
 
@@ -60,4 +62,19 @@ export async function requireUser(nextPath?: string): Promise<UserContext> {
     fullName: profile.full_name,
     role: profile.role,
   };
+}
+
+function decodeUserIdFromJwt(token: string): string | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const payload = JSON.parse(
+      Buffer.from(parts[1], "base64url").toString("utf8"),
+    ) as { sub?: string; exp?: number };
+    if (!payload.sub) return null;
+    if (payload.exp && payload.exp * 1000 < Date.now()) return null;
+    return payload.sub;
+  } catch {
+    return null;
+  }
 }

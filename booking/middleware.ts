@@ -71,15 +71,32 @@ export async function middleware(request: NextRequest) {
     },
   );
 
-  // Refreshes the access token if needed.
+  // Refreshes the access token cookies if they came in and are still
+  // fresh. We intentionally use getSession() rather than getUser() —
+  // getUser() would make an outbound fetch to /auth/v1/user which can
+  // fail intermittently from Vercel's runtime ("fetch failed") and
+  // would then falsely mark a valid session as signed-out.
+  //
+  // getSession() reads the cookie locally via our cookie adapter and
+  // only makes a network call to refresh if the access token is near
+  // expiry. For a magic link we just wrote, it's fresh for an hour.
+  //
+  // If the stored access token looks expired (exp claim < now), we
+  // treat the user as signed out without hitting the network at all.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const now = Math.floor(Date.now() / 1000);
+  const sessionIsValid =
+    !!session &&
+    typeof session.expires_at === "number" &&
+    session.expires_at > now;
 
   const protectedPath =
     path.startsWith("/admin") || path.startsWith("/portal");
 
-  if (protectedPath && !user) {
+  if (protectedPath && !sessionIsValid) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/sign-in";
     url.searchParams.set("next", path);
