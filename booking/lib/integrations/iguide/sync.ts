@@ -22,6 +22,8 @@ import {
   type IGuideReadyEvent,
 } from "./portal-client";
 
+type BookingUpdate = Database["public"]["Tables"]["bookings"]["Update"];
+
 type DeliverableInsert =
   Database["public"]["Tables"]["deliverables"]["Insert"];
 
@@ -124,7 +126,7 @@ export async function syncIGuideFromReadyEvent(
   const alias = event.iguideAlias ?? booking.iguide_id ?? portalId;
 
   // Backfill portal id / alias onto the booking row when we learn them.
-  const updates: Record<string, string> = {};
+  const updates: BookingUpdate = {};
   if (portalId && booking.iguide_portal_id !== portalId) {
     updates.iguide_portal_id = portalId;
   }
