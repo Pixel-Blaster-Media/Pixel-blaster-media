@@ -1,28 +1,50 @@
 /**
- * Normalize whatever the admin pasted into a clean iGuide ID.
+ * iGuide URL helpers.
  *
- * iGuide URLs look like:
+ * Two terms the API distinguishes that we also need to:
+ *
+ *   - **alias**   The mutable URL slug (e.g. `1044_rest_acres_rd_brant_on`).
+ *                 Appears in public-facing URLs. Can change over time if the
+ *                 tour is renamed. Stored on the booking as `iguide_id`.
+ *
+ *   - **portal id**  The immutable handle (e.g. `igYGFV5GG6V8DD1`). Issued
+ *                 by iGuide and never changes. Required for Portal REST API
+ *                 calls. Arrives on the ready-event webhook payload. Stored
+ *                 on the booking as `iguide_portal_id`.
+ *
+ * Everything below operates on the alias because that's what we can derive
+ * from a pasted URL. The portal id can only come from the webhook or the
+ * Portal API, not from parsing a URL.
+ */
+
+/**
+ * Normalize whatever the admin pasted into a clean alias.
+ *
+ * Accepted inputs:
  *   https://youriguide.com/1044_rest_acres_rd_brant_on/
  *   https://youriguide.com/1044_rest_acres_rd_brant_on/?page=tour
+ *   https://unbranded.youriguide.com/1044_rest_acres_rd_brant_on/
+ *   https://youriguide.com/embed/1044_rest_acres_rd_brant_on/
  *   youriguide.com/1044_rest_acres_rd_brant_on
  *   1044_rest_acres_rd_brant_on
  *
- * The iGuide ID is the first path segment after the host. We tolerate
- * trailing slashes, query strings, and bare IDs pasted on their own.
- *
- * Returns null when the input doesn't look like a valid iGuide
- * reference at all (so callers can surface a friendly error rather than
- * persisting garbage).
+ * Returns null when the input doesn't look like a valid iGuide reference
+ * (so callers can surface a friendly error rather than persisting garbage).
  */
 
-const ID_RE = /^[a-z0-9_\-]{3,128}$/i;
+const ALIAS_RE = /^[a-z0-9_\-]{3,128}$/i;
 
-export function parseIGuideId(input: string): string | null {
+// Matches the public-facing iGuide hosts — standard (youriguide.com) and
+// the unbranded subdomain. We don't currently route photos-only / radix
+// traffic to the booking site, so leave those out for now.
+const HOST_RE = /(^|\.)youriguide\.com$/i;
+
+export function parseIGuideAlias(input: string): string | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
 
-  // Bare ID — fast path.
-  if (ID_RE.test(trimmed)) return trimmed.toLowerCase();
+  // Bare alias — fast path.
+  if (ALIAS_RE.test(trimmed)) return trimmed.toLowerCase();
 
   let candidate = trimmed;
 
@@ -38,36 +60,62 @@ export function parseIGuideId(input: string): string | null {
     return null;
   }
 
-  if (!/youriguide\.com$/i.test(url.hostname)) return null;
+  if (!HOST_RE.test(url.hostname)) return null;
 
   const segments = url.pathname.split("/").filter(Boolean);
-  const first = segments[0];
-  if (!first || !ID_RE.test(first)) return null;
+  // youriguide.com/embed/<alias>/ — the embed URL tucks the alias behind
+  // an `embed` segment. Peel it off.
+  const first =
+    segments[0] === "embed" && segments.length >= 2 ? segments[1] : segments[0];
+  if (!first || !ALIAS_RE.test(first)) return null;
   return first.toLowerCase();
 }
 
-/** Public branded URL for the tour, given the ID. */
-export function iguideViewerUrl(id: string): string {
-  return `https://youriguide.com/${id}/`;
+/** Public branded viewer URL. */
+export function iguideViewerUrl(alias: string): string {
+  return `https://youriguide.com/${alias}/`;
 }
 
-/** Public unbranded viewer URL — preferred for embedding inside the realtor portal. */
-export function iguideUnbrandedUrl(id: string): string {
-  return `https://youriguide.com/${id}/?ub=1`;
+/**
+ * Unbranded viewer URL — preferred for embedding inside our realtor
+ * portal so the realtor sees no other agent's branding. Lives on a
+ * separate subdomain, not a `?ub=1` query param.
+ */
+export function iguideUnbrandedUrl(alias: string): string {
+  return `https://unbranded.youriguide.com/${alias}/`;
 }
 
-/** Imperial floor plan PDF URL (English). */
-export function iguideFloorplanPdfUrl(id: string): string {
-  return `https://youriguide.com/${id}/doc/floorplan_imperial_en.pdf`;
+/**
+ * iGuide's embed-optimized viewer URL — tuned for iframes (adjusts
+ * layout for constrained viewports, sets the embedded flag). Prefer
+ * this over the viewer URL when embedding.
+ */
+export function iguideEmbedUrl(alias: string): string {
+  return `https://youriguide.com/embed/${alias}/`;
 }
 
-/** RESO-compliant autofill endpoint — the source of truth we read on sync. */
-export function iguideRESOAutofillUrl(id: string): string {
-  return `https://youriguide.com/${id}/reso/autofill`;
+/** Imperial floor plan PDF URL — public, no token required. */
+export function iguideFloorplanPdfUrl(alias: string): string {
+  return `https://youriguide.com/${alias}/doc/floorplan_imperial_en.pdf`;
+}
+
+/** Metric floor plan PDF URL — public, no token required. */
+export function iguideFloorplanMetricPdfUrl(alias: string): string {
+  return `https://youriguide.com/${alias}/doc/floorplan_metric_en.pdf`;
+}
+
+/**
+ * RESO-compliant autofill endpoint. Publicly readable per-tour — useful
+ * as a fallback when we only know the alias (e.g. admin pasted a URL
+ * but the tour hasn't fired its ready webhook yet, so we don't have
+ * the Portal ID).
+ */
+export function iguideRESOAutofillUrl(alias: string): string {
+  return `https://youriguide.com/${alias}/reso/autofill`;
 }
 
 /** iframe embed snippet for a tour — drop into the realtor portal as-is. */
-export function iguideEmbedHtml(id: string): string {
-  const url = iguideUnbrandedUrl(id);
+export function iguideEmbedHtml(alias: string): string {
+  const url = iguideEmbedUrl(alias);
   return `<iframe src="${url}" width="100%" height="600" frameborder="0" allowfullscreen loading="lazy" title="iGuide virtual tour"></iframe>`;
 }
