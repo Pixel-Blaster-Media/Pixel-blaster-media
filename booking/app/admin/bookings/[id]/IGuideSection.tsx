@@ -7,12 +7,17 @@ import { saveIGuideId, syncIGuide } from "./actions";
 export default function IGuideSection({
   bookingId,
   initialIGuideId,
+  initialPortalId,
+  portalApiConfigured,
 }: {
   bookingId: string;
   initialIGuideId: string | null;
+  initialPortalId: string | null;
+  portalApiConfigured: boolean;
 }) {
   const [iguideId, setIGuideId] = useState(initialIGuideId ?? "");
   const [savedId, setSavedId] = useState(initialIGuideId);
+  const [portalId, setPortalId] = useState(initialPortalId);
   const [saving, startSaving] = useTransition();
   const [syncing, startSyncing] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +34,7 @@ export default function IGuideSection({
       }
       setSavedId(res.iguideId ?? null);
       setIGuideId(res.iguideId ?? "");
+      if (res.iguideId === null) setPortalId(null);
       setOkMessage(res.iguideId ? "Saved." : "Cleared.");
     });
   }
@@ -42,6 +48,7 @@ export default function IGuideSection({
         setError(res.error ?? "Sync failed.");
         return;
       }
+      if (res.portalId) setPortalId(res.portalId);
       setOkMessage(
         `Synced ${res.upserts ?? 0} deliverable(s)${
           res.address ? ` from ${res.address}` : ""
@@ -51,6 +58,7 @@ export default function IGuideSection({
   }
 
   const isDirty = (iguideId.trim() || null) !== savedId;
+  const hasLink = Boolean(savedId || portalId);
 
   return (
     <div className="space-y-4 rounded-lg border border-brand/20 bg-brand/5 p-4">
@@ -59,9 +67,13 @@ export default function IGuideSection({
           iGuide
         </h2>
         <p className="mt-1 text-xs text-ink-muted">
-          Paste the iGuide URL or ID after you publish the tour. Sync pulls
-          the tour viewer + floor plan PDF into deliverables. The webhook
-          (if configured) does this automatically when the tour goes live.
+          Paste the iGuide URL or alias after you publish the tour. Sync
+          pulls the tour + floor plan into deliverables.{" "}
+          {portalApiConfigured
+            ? "Portal API is configured — sync uses the authenticated API when a portal ID is known."
+            : "Portal API not configured — falls back to the public RESO autofill endpoint. Add IGUIDE_APP_ID / IGUIDE_APP_TOKEN in Vercel to enable."}{" "}
+          The webhook populates the portal ID automatically when a tour
+          goes live.
         </p>
       </div>
 
@@ -83,7 +95,7 @@ export default function IGuideSection({
         </button>
         <button
           type="button"
-          disabled={syncing || !savedId || isDirty}
+          disabled={syncing || !hasLink || isDirty}
           onClick={onSync}
           className="rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
         >
@@ -91,18 +103,38 @@ export default function IGuideSection({
         </button>
       </div>
 
-      {savedId ? (
-        <p className="text-xs text-ink-muted">
-          Linked to{" "}
-          <a
-            href={`https://youriguide.com/${savedId}/`}
-            target="_blank"
-            rel="noopener"
-            className="text-brand-light underline"
-          >
-            youriguide.com/{savedId}
-          </a>
-        </p>
+      {savedId || portalId ? (
+        <div className="space-y-1 text-xs text-ink-muted">
+          {savedId ? (
+            <p>
+              Alias:{" "}
+              <a
+                href={`https://youriguide.com/${savedId}/`}
+                target="_blank"
+                rel="noopener"
+                className="text-brand-light underline"
+              >
+                youriguide.com/{savedId}
+              </a>
+            </p>
+          ) : null}
+          {portalId ? (
+            <p>
+              Portal ID:{" "}
+              <code className="rounded bg-black/30 px-1 py-0.5 text-[11px] text-white/90">
+                {portalId}
+              </code>
+              <span className="ml-2 text-emerald-300">
+                · Portal API ready
+              </span>
+            </p>
+          ) : savedId ? (
+            <p className="text-amber-300/80">
+              No portal ID yet — sync will use the public RESO endpoint
+              until the ready webhook fires.
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       {error ? (

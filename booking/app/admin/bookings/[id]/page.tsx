@@ -7,6 +7,7 @@ import {
   nextBookingStatuses,
 } from "@/lib/booking/booking-status";
 import { labelForAddOn, labelForService } from "@/lib/booking/services";
+import { hasPortalCredentials } from "@/lib/integrations/iguide/portal-client";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type {
   BookingStatus,
@@ -31,6 +32,7 @@ interface BookingDetail {
   client_notes: string | null;
   internal_notes: string | null;
   iguide_id: string | null;
+  iguide_portal_id: string | null;
   fotello_listing_id: string | null;
   quickbooks_invoice_id: string | null;
   quickbooks_invoice_number: string | null;
@@ -82,7 +84,7 @@ export default async function BookingDetailPage({
       supabase
         .from("bookings")
         .select(
-          "id, status, scheduled_at, services, add_ons, square_footage, client_notes, internal_notes, iguide_id, fotello_listing_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage)",
+          "id, status, scheduled_at, services, add_ons, square_footage, client_notes, internal_notes, iguide_id, iguide_portal_id, fotello_listing_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage)",
         )
         .eq("id", params.id)
         .single<BookingDetail>(),
@@ -191,6 +193,8 @@ export default async function BookingDetailPage({
       <IGuideSection
         bookingId={booking.id}
         initialIGuideId={booking.iguide_id}
+        initialPortalId={booking.iguide_portal_id}
+        portalApiConfigured={hasPortalCredentials()}
       />
 
       <FotelloSection

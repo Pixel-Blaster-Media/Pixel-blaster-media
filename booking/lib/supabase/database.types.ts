@@ -108,6 +108,7 @@ interface BookingsTable {
     internal_notes: string | null;
     client_notes: string | null;
     iguide_id: string | null;
+    iguide_portal_id: string | null;
     fotello_listing_id: string | null;
     quickbooks_invoice_id: string | null;
     quickbooks_invoice_number: string | null;
@@ -130,6 +131,7 @@ interface BookingsTable {
     internal_notes?: string | null;
     client_notes?: string | null;
     iguide_id?: string | null;
+    iguide_portal_id?: string | null;
     fotello_listing_id?: string | null;
     quickbooks_invoice_id?: string | null;
     quickbooks_invoice_number?: string | null;

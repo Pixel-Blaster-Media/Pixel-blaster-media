@@ -6,7 +6,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { nextBookingStatuses } from "@/lib/booking/booking-status";
 import { syncEnhance } from "@/lib/integrations/fotello/sync";
 import type { FotelloShotType } from "@/lib/integrations/fotello/client";
-import { parseIGuideId } from "@/lib/integrations/iguide/parse-id";
+import { parseIGuideAlias } from "@/lib/integrations/iguide/parse-id";
 import { syncIGuideForBooking } from "@/lib/integrations/iguide/sync";
 import {
   createInvoiceForBooking,
@@ -31,6 +31,7 @@ interface BookingWithIGuideRow {
   id: string;
   property_id: string;
   iguide_id: string | null;
+  iguide_portal_id: string | null;
 }
 
 interface BookingForInvoiceRow {
@@ -182,8 +183,10 @@ export async function deleteDeliverable(
 }
 
 /**
- * Save (or clear) the iGuide ID on a booking. Accepts either a raw ID or
- * a pasted youriguide.com URL — `parseIGuideId` handles the normalization.
+ * Save (or clear) the iGuide alias on a booking. Accepts either a raw
+ * alias (URL slug) or a pasted youriguide.com URL — `parseIGuideAlias`
+ * handles normalization. Clearing also wipes the portal id so the two
+ * columns can't drift out of sync.
  */
 export async function saveIGuideId(
   bookingId: string,
@@ -192,61 +195,70 @@ export async function saveIGuideId(
   await requireAdmin();
 
   const trimmed = rawInput.trim();
-  const iguideId = trimmed === "" ? null : parseIGuideId(trimmed);
-  if (trimmed !== "" && !iguideId) {
+  const alias = trimmed === "" ? null : parseIGuideAlias(trimmed);
+  if (trimmed !== "" && !alias) {
     return {
       ok: false,
       error:
-        "Couldn't parse that as an iGuide URL or ID. Expected something like 1044_rest_acres_rd_brant_on or https://youriguide.com/1044_rest_acres_rd_brant_on/.",
+        "Couldn't parse that as an iGuide URL or alias. Expected something like 1044_rest_acres_rd_brant_on or https://youriguide.com/1044_rest_acres_rd_brant_on/.",
     };
   }
 
   const service = getServiceSupabase();
+  const update: { iguide_id: string | null; iguide_portal_id?: string | null } =
+    { iguide_id: alias };
+  // Clearing the alias also clears the portal id — they refer to the
+  // same tour and letting them drift apart would confuse the sync.
+  if (alias === null) update.iguide_portal_id = null;
+
   const { error } = await service
     .from("bookings")
-    .update({ iguide_id: iguideId })
+    .update(update)
     .eq("id", bookingId);
 
   if (error) return { ok: false, error: error.message };
 
   revalidatePath(`/admin/bookings/${bookingId}`);
-  return { ok: true, iguideId };
+  return { ok: true, iguideId: alias };
 }
 
 /**
- * Hit iGuide's RESO autofill endpoint for the booking's stored
- * iguide_id and upsert the resulting deliverables. Same code path as
- * the webhook handler.
+ * Sync deliverables for the iGuide tour tagged on this booking. Uses
+ * the authenticated Portal API when possible (requires the booking to
+ * carry an `iguide_portal_id`, which the webhook sets automatically);
+ * falls back to the public RESO autofill endpoint keyed by alias when
+ * the portal id isn't known yet.
  */
 export async function syncIGuide(
   bookingId: string,
-): Promise<ActionResult & { upserts?: number; address?: string }> {
+): Promise<ActionResult & { upserts?: number; address?: string; portalId?: string }> {
   await requireAdmin();
 
   const supabase = getServerSupabase();
   const { data: booking, error } = await supabase
     .from("bookings")
-    .select("id, property_id, iguide_id")
+    .select("id, property_id, iguide_id, iguide_portal_id")
     .eq("id", bookingId)
     .single<BookingWithIGuideRow>();
 
   if (error || !booking) return { ok: false, error: "Booking not found." };
-  if (!booking.iguide_id) {
+  if (!booking.iguide_id && !booking.iguide_portal_id) {
     return {
       ok: false,
-      error: "No iGuide ID set on this booking — paste one above first.",
+      error: "No iGuide alias or portal ID on this booking — paste a URL above first.",
     };
   }
 
-  const result = await syncIGuideForBooking(booking.iguide_id, {
-    id: booking.id,
-    property_id: booking.property_id,
-  });
-
+  const result = await syncIGuideForBooking(booking);
   if (!result.ok) return { ok: false, error: result.error };
 
   revalidatePath(`/admin/bookings/${bookingId}`);
-  return { ok: true, upserts: result.upserts, address: result.address };
+  return {
+    ok: true,
+    upserts: result.upserts,
+    address: result.address,
+    portalId: result.portalId,
+  };
 }
 
 // ---------------------------------------------------------------------------
