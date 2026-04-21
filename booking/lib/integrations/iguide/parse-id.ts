@@ -43,8 +43,10 @@ export function parseIGuideAlias(input: string): string | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
 
-  // Bare alias — fast path.
-  if (ALIAS_RE.test(trimmed)) return trimmed.toLowerCase();
+  // Bare alias — fast path. iGuide aliases are case-sensitive on their
+  // side (e.g. `9_212_stonehenge_dr_Ancaster_on` will 404 if you
+  // normalize to lowercase), so we preserve the exact case as given.
+  if (ALIAS_RE.test(trimmed)) return trimmed;
 
   let candidate = trimmed;
 
@@ -68,7 +70,7 @@ export function parseIGuideAlias(input: string): string | null {
   const first =
     segments[0] === "embed" && segments.length >= 2 ? segments[1] : segments[0];
   if (!first || !ALIAS_RE.test(first)) return null;
-  return first.toLowerCase();
+  return first;
 }
 
 /** Public branded viewer URL. */
