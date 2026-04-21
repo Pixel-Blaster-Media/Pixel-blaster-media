@@ -34,10 +34,49 @@
 
 const ALIAS_RE = /^[a-z0-9_\-]{3,128}$/i;
 
+// Portal IDs follow a stable shape: the literal prefix `ig` plus a
+// short base62-ish string. `igYGFV5GG6V8DD1` is a real one from the
+// docs. We match 4–32 trailing chars to leave headroom without being
+// so loose that an alias that happens to start with "ig" gets misread.
+const PORTAL_ID_RE = /^ig[A-Za-z0-9]{4,32}$/;
+
 // Matches the public-facing iGuide hosts — standard (youriguide.com) and
 // the unbranded subdomain. We don't currently route photos-only / radix
 // traffic to the booking site, so leave those out for now.
 const HOST_RE = /(^|\.)youriguide\.com$/i;
+
+/**
+ * Recognize an iGuide Portal ID — the immutable `igXXXXX` handle used
+ * by the REST API. Admins can grab this from the manage portal URL:
+ *   https://manage.youriguide.com/iguides/edit/igYGFV5GG6V8DD1
+ */
+export function parseIGuidePortalId(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  // Bare portal id.
+  if (PORTAL_ID_RE.test(trimmed)) return trimmed;
+
+  // URL containing `/iguides/edit/<id>` or `/iguides/<id>` or similar.
+  let candidate = trimmed;
+  if (!/^https?:\/\//i.test(candidate)) {
+    candidate = `https://${candidate}`;
+  }
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return null;
+  }
+  // Accept manage.youriguide.com and api/manage paths on the main
+  // domain. The relevant segment is always the last path segment that
+  // matches the portal-id shape.
+  const segments = url.pathname.split("/").filter(Boolean);
+  for (let i = segments.length - 1; i >= 0; i--) {
+    if (PORTAL_ID_RE.test(segments[i])) return segments[i];
+  }
+  return null;
+}
 
 export function parseIGuideAlias(input: string): string | null {
   const trimmed = input.trim();
