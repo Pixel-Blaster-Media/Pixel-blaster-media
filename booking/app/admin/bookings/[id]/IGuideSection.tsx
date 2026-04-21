@@ -15,7 +15,10 @@ export default function IGuideSection({
   initialPortalId: string | null;
   portalApiConfigured: boolean;
 }) {
-  const [iguideId, setIGuideId] = useState(initialIGuideId ?? "");
+  // The input is a free-form paste field — admin can type an alias, a
+  // youriguide.com URL, a portal id, or a manage.youriguide.com URL.
+  // The server action detects which and stores on the right column.
+  const [inputValue, setInputValue] = useState("");
   const [savedId, setSavedId] = useState(initialIGuideId);
   const [portalId, setPortalId] = useState(initialPortalId);
   const [saving, startSaving] = useTransition();
@@ -27,15 +30,43 @@ export default function IGuideSection({
     setError(null);
     setOkMessage(null);
     startSaving(async () => {
-      const res = await saveIGuideId(bookingId, iguideId);
+      const res = await saveIGuideId(bookingId, inputValue);
       if (!res.ok) {
         setError(res.error ?? "Save failed.");
         return;
       }
-      setSavedId(res.iguideId ?? null);
-      setIGuideId(res.iguideId ?? "");
-      if (res.iguideId === null) setPortalId(null);
-      setOkMessage(res.iguideId ? "Saved." : "Cleared.");
+      if (inputValue.trim() === "") {
+        // Cleared both — reset state.
+        setSavedId(null);
+        setPortalId(null);
+        setInputValue("");
+        setOkMessage("Cleared.");
+        return;
+      }
+      if (res.portalId !== undefined && res.portalId !== null) {
+        setPortalId(res.portalId);
+      }
+      if (res.iguideId !== undefined && res.iguideId !== null) {
+        setSavedId(res.iguideId);
+      }
+      setInputValue("");
+      setOkMessage(res.portalId ? "Portal ID saved." : "Alias saved.");
+    });
+  }
+
+  function onClear() {
+    setError(null);
+    setOkMessage(null);
+    startSaving(async () => {
+      const res = await saveIGuideId(bookingId, "");
+      if (!res.ok) {
+        setError(res.error ?? "Clear failed.");
+        return;
+      }
+      setSavedId(null);
+      setPortalId(null);
+      setInputValue("");
+      setOkMessage("Cleared.");
     });
   }
 
@@ -57,8 +88,8 @@ export default function IGuideSection({
     });
   }
 
-  const isDirty = (iguideId.trim() || null) !== savedId;
   const hasLink = Boolean(savedId || portalId);
+  const canSave = inputValue.trim() !== "";
 
   return (
     <div className="space-y-4 rounded-lg border border-brand/20 bg-brand/5 p-4">
@@ -67,8 +98,9 @@ export default function IGuideSection({
           iGuide
         </h2>
         <p className="mt-1 text-xs text-ink-muted">
-          Paste the iGuide URL or alias after you publish the tour. Sync
-          pulls the tour + floor plan into deliverables.{" "}
+          Paste any of: tour URL, alias, Portal ID (e.g. igYGFV5GG6V8DD1),
+          or a manage.youriguide.com edit URL. Sync pulls the tour + floor
+          plan into deliverables.{" "}
           {portalApiConfigured
             ? "Portal API is configured — sync uses the authenticated API when a portal ID is known."
             : "Portal API not configured — falls back to the public RESO autofill endpoint. Add IGUIDE_APP_ID / IGUIDE_APP_TOKEN in Vercel to enable."}{" "}
@@ -80,14 +112,14 @@ export default function IGuideSection({
       <div className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
         <input
           type="text"
-          value={iguideId}
-          onChange={(e) => setIGuideId(e.target.value)}
-          placeholder="1044_rest_acres_rd_brant_on  or  https://youriguide.com/..."
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          placeholder="Paste URL, alias, or Portal ID (igXXXXX)…"
           className="rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
         />
         <button
           type="button"
-          disabled={saving || !isDirty}
+          disabled={saving || !canSave}
           onClick={onSave}
           className="rounded-md border border-white/15 px-3 py-2 text-sm text-white/90 hover:border-brand-light hover:bg-brand/10 disabled:opacity-50"
         >
@@ -95,7 +127,7 @@ export default function IGuideSection({
         </button>
         <button
           type="button"
-          disabled={syncing || !hasLink || isDirty}
+          disabled={syncing || !hasLink || canSave}
           onClick={onSync}
           className="rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
         >
@@ -131,9 +163,18 @@ export default function IGuideSection({
           ) : savedId ? (
             <p className="text-amber-300/80">
               No portal ID yet — sync will use the public RESO endpoint
-              until the ready webhook fires.
+              until the ready webhook fires. If that 401s, paste the
+              Portal ID (igXXXXX) from manage.youriguide.com.
             </p>
           ) : null}
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={saving}
+            className="mt-1 text-[11px] text-ink-muted/80 underline hover:text-red-300 disabled:opacity-50"
+          >
+            Clear iGuide link
+          </button>
         </div>
       ) : null}
 

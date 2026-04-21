@@ -6,7 +6,10 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { nextBookingStatuses } from "@/lib/booking/booking-status";
 import { syncEnhance } from "@/lib/integrations/fotello/sync";
 import type { FotelloShotType } from "@/lib/integrations/fotello/client";
-import { parseIGuideAlias } from "@/lib/integrations/iguide/parse-id";
+import {
+  parseIGuideAlias,
+  parseIGuidePortalId,
+} from "@/lib/integrations/iguide/parse-id";
 import { syncIGuideForBooking } from "@/lib/integrations/iguide/sync";
 import {
   createInvoiceForBooking,
@@ -183,33 +186,60 @@ export async function deleteDeliverable(
 }
 
 /**
- * Save (or clear) the iGuide alias on a booking. Accepts either a raw
- * alias (URL slug) or a pasted youriguide.com URL — `parseIGuideAlias`
- * handles normalization. Clearing also wipes the portal id so the two
- * columns can't drift out of sync.
+ * Save (or clear) an iGuide reference on a booking. Auto-detects whether
+ * the pasted value is a Portal ID (`igXXXXX…` or a manage.youriguide.com
+ * URL) or a public alias/URL, and routes to the right column:
+ *
+ *   - Portal ID → iguide_portal_id (immutable; enables Portal API sync)
+ *   - Alias/URL → iguide_id (mutable slug; enables RESO fallback)
+ *
+ * Clearing the field wipes both columns so they can't drift.
  */
 export async function saveIGuideId(
   bookingId: string,
   rawInput: string,
-): Promise<ActionResult & { iguideId?: string | null }> {
+): Promise<
+  ActionResult & {
+    iguideId?: string | null;
+    portalId?: string | null;
+  }
+> {
   await requireAdmin();
 
   const trimmed = rawInput.trim();
-  const alias = trimmed === "" ? null : parseIGuideAlias(trimmed);
-  if (trimmed !== "" && !alias) {
+
+  if (trimmed === "") {
+    const service = getServiceSupabase();
+    const { error } = await service
+      .from("bookings")
+      .update({ iguide_id: null, iguide_portal_id: null })
+      .eq("id", bookingId);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath(`/admin/bookings/${bookingId}`);
+    return { ok: true, iguideId: null, portalId: null };
+  }
+
+  // Try portal id first — it's the higher-signal match ("igXXXXX" is
+  // unambiguous, whereas a bare alphanumeric string could be either).
+  const portalId = parseIGuidePortalId(trimmed);
+  const alias = portalId ? null : parseIGuideAlias(trimmed);
+
+  if (!portalId && !alias) {
     return {
       ok: false,
       error:
-        "Couldn't parse that as an iGuide URL or alias. Expected something like 1044_rest_acres_rd_brant_on or https://youriguide.com/1044_rest_acres_rd_brant_on/.",
+        "Couldn't parse that. Paste the tour's alias (e.g. 1044_rest_acres_rd_brant_on), a youriguide.com URL, or the Portal ID from manage.youriguide.com (e.g. igYGFV5GG6V8DD1).",
     };
   }
 
   const service = getServiceSupabase();
-  const update: { iguide_id: string | null; iguide_portal_id?: string | null } =
-    { iguide_id: alias };
-  // Clearing the alias also clears the portal id — they refer to the
-  // same tour and letting them drift apart would confuse the sync.
-  if (alias === null) update.iguide_portal_id = null;
+  const update: BookingUpdatePayload = {};
+  if (portalId) {
+    update.iguide_portal_id = portalId;
+  }
+  if (alias) {
+    update.iguide_id = alias;
+  }
 
   const { error } = await service
     .from("bookings")
@@ -219,8 +249,13 @@ export async function saveIGuideId(
   if (error) return { ok: false, error: error.message };
 
   revalidatePath(`/admin/bookings/${bookingId}`);
-  return { ok: true, iguideId: alias };
+  return { ok: true, iguideId: alias, portalId };
 }
+
+type BookingUpdatePayload = {
+  iguide_id?: string | null;
+  iguide_portal_id?: string | null;
+};
 
 /**
  * Sync deliverables for the iGuide tour tagged on this booking. Uses
