@@ -6,6 +6,7 @@ import type { Database } from "@/lib/supabase/database.types";
 
 import ConnectButton from "./ConnectButton";
 import DisconnectButton from "./DisconnectButton";
+import EmailTester from "./EmailTester";
 import ItemPicker from "./ItemPicker";
 
 export const metadata: Metadata = { title: "Integrations" };
@@ -57,6 +58,12 @@ export default async function IntegrationsPage({
   const flashError = searchParams.qbo_error;
   const flashOk = searchParams.qbo_connected === "1";
 
+  // Email/Resend configuration status — strictly server-side so we can show
+  // whether env vars are set without ever leaking the values.
+  const resendConfigured = Boolean(process.env.RESEND_API_KEY);
+  const emailFrom = process.env.EMAIL_FROM ?? null;
+  const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL ?? "";
+
   return (
     <div className="space-y-10">
       <header>
@@ -86,6 +93,75 @@ export default async function IntegrationsPage({
           ready to invoice.
         </p>
       ) : null}
+
+      <section className="rounded-lg border border-white/10 bg-ink-soft/50 p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-white">
+              Email (Resend)
+            </h2>
+            <p className="mt-1 text-sm text-ink-muted">
+              Sends booking confirmations, admin notifications, and the
+              &ldquo;shoot confirmed&rdquo; email with the portal magic link.
+              Supabase magic-link / signup emails are configured separately
+              in Supabase → Auth → Emails → SMTP Settings (use the same
+              Resend API key there).
+            </p>
+          </div>
+          {resendConfigured && emailFrom ? (
+            <span className="shrink-0 rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-emerald-200">
+              Configured
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-amber-200">
+              Not configured
+            </span>
+          )}
+        </div>
+
+        <div className="mt-5 space-y-4">
+          <dl className="grid gap-y-1 text-sm md:grid-cols-[180px_1fr]">
+            <dt className="text-ink-muted">RESEND_API_KEY</dt>
+            <dd className="text-white">
+              {resendConfigured ? (
+                <span className="text-emerald-200">set</span>
+              ) : (
+                <span className="text-amber-300">not set in Vercel env</span>
+              )}
+            </dd>
+            <dt className="text-ink-muted">EMAIL_FROM</dt>
+            <dd className="text-white">
+              {emailFrom ? (
+                <code className="text-xs">{emailFrom}</code>
+              ) : (
+                <span className="text-amber-300">not set in Vercel env</span>
+              )}
+            </dd>
+            <dt className="text-ink-muted">ADMIN_NOTIFICATION_EMAIL</dt>
+            <dd className="text-white">
+              {adminEmail ? (
+                <code className="text-xs">{adminEmail}</code>
+              ) : (
+                <span className="text-ink-muted">—</span>
+              )}
+            </dd>
+          </dl>
+
+          <div>
+            <p className="text-xs uppercase tracking-wider text-brand-light">
+              Send test email
+            </p>
+            <p className="mt-1 text-xs text-ink-muted">
+              Sends a plain test email via the same pipeline that powers
+              booking confirmations. The result below shows exactly what
+              Resend returned — no guesswork.
+            </p>
+            <div className="mt-3">
+              <EmailTester defaultTo={adminEmail} />
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section className="rounded-lg border border-white/10 bg-ink-soft/50 p-5">
         <div className="flex items-start justify-between gap-4">
