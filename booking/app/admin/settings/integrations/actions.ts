@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { sendEmail } from "@/lib/email/resend";
 import { buildAuthorizeUrl } from "@/lib/integrations/quickbooks/oauth";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
@@ -59,6 +60,62 @@ export async function disconnectQuickBooks(): Promise<void> {
   const supabase = getServiceSupabase();
   await supabase.from("quickbooks_connection").delete().eq("id", 1);
   revalidatePath("/admin/settings/integrations");
+}
+
+/**
+ * Send a diagnostic email via the Resend wrapper. Returns the exact
+ * outcome the wrapper reports — success ids, skip reasons, or the raw
+ * Resend error — so the admin can paste it into chat and diagnose
+ * without ever sharing the API key.
+ */
+export async function sendTestEmail(
+  to: string,
+): Promise<{
+  ok: boolean;
+  skipped?: boolean;
+  id?: string;
+  error?: string;
+  /** What the server saw in env — helps when "skipped" is the answer. */
+  config: {
+    resendApiKeyPresent: boolean;
+    emailFrom: string | null;
+  };
+}> {
+  await requireAdmin();
+
+  const trimmed = to.trim();
+  if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    return {
+      ok: false,
+      error: "Enter a valid email address.",
+      config: {
+        resendApiKeyPresent: !!process.env.RESEND_API_KEY,
+        emailFrom: process.env.EMAIL_FROM ?? null,
+      },
+    };
+  }
+
+  const res = await sendEmail({
+    to: trimmed,
+    subject: "Pixel Blaster — test email",
+    html: `
+      <!doctype html>
+      <html><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0b0f10;color:#e8eef0;padding:32px">
+        <h1 style="color:#fff;margin:0 0 12px">It works.</h1>
+        <p>This is a test email from your Pixel Blaster booking admin.</p>
+        <p>If you got this, Resend is wired up correctly.</p>
+        <p style="color:#8a979c;font-size:12px;margin-top:24px">Sent ${new Date().toISOString()}</p>
+      </body></html>
+    `,
+  });
+
+  return {
+    ...res,
+    config: {
+      resendApiKeyPresent: !!process.env.RESEND_API_KEY,
+      emailFrom: process.env.EMAIL_FROM ?? null,
+    },
+  };
 }
 
 /**
