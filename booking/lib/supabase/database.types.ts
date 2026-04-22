@@ -45,6 +45,8 @@ export type BookingRequestStatus =
   | "accepted"
   | "declined";
 
+export type CatalogItemKind = "bundle" | "a_la_carte" | "addon";
+
 interface ProfilesTable {
   Row: {
     id: string;
@@ -192,6 +194,7 @@ interface BookingRequestsTable {
     square_footage: number | null;
     services: string[];
     add_ons: string[];
+    cart: Json;
     preferred_date: string | null;
     preferred_time: string | null;
     notes: string | null;
@@ -215,6 +218,7 @@ interface BookingRequestsTable {
     square_footage?: number | null;
     services?: string[];
     add_ons?: string[];
+    cart?: Json;
     preferred_date?: string | null;
     preferred_time?: string | null;
     notes?: string | null;
@@ -308,6 +312,63 @@ interface ServicePricesTable {
   Relationships: [];
 }
 
+interface CatalogItemsTable {
+  Row: {
+    id: string;
+    kind: CatalogItemKind;
+    slug: string;
+    name: string;
+    description: string;
+    duration_minutes: number;
+    price_cents: number;
+    taxable: boolean;
+    active: boolean;
+    display_order: number;
+    is_video: boolean;
+    require_has_video: boolean;
+    created_at: string;
+    updated_at: string;
+  };
+  Insert: {
+    id?: string;
+    kind: CatalogItemKind;
+    slug: string;
+    name: string;
+    description?: string;
+    duration_minutes?: number;
+    price_cents?: number;
+    taxable?: boolean;
+    active?: boolean;
+    display_order?: number;
+    is_video?: boolean;
+    require_has_video?: boolean;
+  };
+  Update: Partial<CatalogItemsTable["Insert"]>;
+  Relationships: [];
+}
+
+interface BookingLineItemsTable {
+  Row: {
+    id: string;
+    booking_id: string;
+    catalog_item_id: string;
+    quantity: number;
+    unit_price_cents: number;
+    unit_duration_minutes: number;
+    created_at: string;
+  };
+  Insert: {
+    id?: string;
+    booking_id: string;
+    catalog_item_id: string;
+    quantity?: number;
+    unit_price_cents: number;
+    unit_duration_minutes: number;
+  };
+  Update: Partial<BookingLineItemsTable["Insert"]>;
+  Relationships: [];
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -320,6 +381,8 @@ export interface Database {
       calendar_blocks: CalendarBlocksTable;
       quickbooks_connection: QuickBooksConnectionTable;
       service_prices: ServicePricesTable;
+      catalog_items: CatalogItemsTable;
+      booking_line_items: BookingLineItemsTable;
     };
     Views: Record<string, never>;
     Functions: {
@@ -334,6 +397,7 @@ export interface Database {
       deliverable_type: DeliverableType;
       deliverable_source: DeliverableSource;
       booking_request_status: BookingRequestStatus;
+      catalog_item_kind: CatalogItemKind;
     };
     CompositeTypes: Record<string, never>;
   };

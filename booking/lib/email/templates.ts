@@ -5,10 +5,31 @@ import {
   labelForService,
   PREFERRED_TIMES,
 } from "@/lib/booking/services";
-import type { BookingRequestInput } from "@/lib/booking/schema";
+
+/**
+ * Subset of BookingRequestInput that email templates actually need.
+ * Kept narrow so we don't widen its shape when the request schema evolves
+ * (e.g. cart[] lives on the main input but templates only need rendered
+ * service/add-on slug arrays).
+ */
+interface TemplateRequest {
+  contact_name: string;
+  contact_email: string;
+  contact_phone?: string;
+  brokerage?: string;
+  street_address: string;
+  city?: string;
+  postal_code?: string;
+  square_footage?: number;
+  services: string[];
+  add_ons: string[];
+  preferred_date?: string;
+  preferred_time?: string;
+  notes?: string;
+}
 
 interface TemplateArgs {
-  request: BookingRequestInput;
+  request: TemplateRequest;
   requestId: string;
 }
 
@@ -32,7 +53,7 @@ function timeLabel(id?: string): string {
   return PREFERRED_TIMES.find((t) => t.id === id)?.label ?? id;
 }
 
-function summary(request: BookingRequestInput): string {
+function summary(request: TemplateRequest): string {
   const services = request.services.map(labelForService).join(", ") || "—";
   const addOns = request.add_ons.length
     ? request.add_ons.map(labelForAddOn).join(", ")

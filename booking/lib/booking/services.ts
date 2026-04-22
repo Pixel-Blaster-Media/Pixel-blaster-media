@@ -134,12 +134,41 @@ export const PREFERRED_TIMES = [
 
 export type PreferredTime = (typeof PREFERRED_TIMES)[number]["id"];
 
+/**
+ * Slug → human label map for items seeded by migration 0008 (catalog_items).
+ * Admin list views use the label-for-service/add-on helpers with fallback
+ * to the raw slug, so a new catalog item the admin adds but that isn't in
+ * this map will render its slug verbatim — functional but not pretty.
+ * A future refactor should fetch labels from the catalog instead.
+ */
+const CATALOG_SLUG_LABELS: Record<string, string> = {
+  // bundles
+  blue_print: "The Blue Print",
+  social_media_special: "Social Media Special",
+  social_media_plus: "Social Media PLUS",
+  ultimate: "The Ultimate",
+  // a-la-carte
+  residential_photography: "Residential Photography",
+  aerial_photography: "Aerial Photography",
+  iguide_measurements: "iGuide + Measurements",
+  social_media_reel: "Social Media Reel",
+  video_tour: "Video Tour",
+  interior_retakes: "Interior Retakes",
+  exterior_retakes: "Exterior Retakes",
+  // add-ons
+  on_camera: "Put me on camera",
+};
+
 export function labelForService(id: string): string {
-  return SERVICE_BY_ID[id as ServiceId]?.label ?? id;
+  return (
+    SERVICE_BY_ID[id as ServiceId]?.label ?? CATALOG_SLUG_LABELS[id] ?? id
+  );
 }
 
 export function labelForAddOn(id: string): string {
-  return ADDON_BY_ID[id as AddOnId]?.label ?? id;
+  return (
+    ADDON_BY_ID[id as AddOnId]?.label ?? CATALOG_SLUG_LABELS[id] ?? id
+  );
 }
 
 export function isValidServiceId(id: string): id is ServiceId {

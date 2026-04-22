@@ -7,13 +7,13 @@ import { createSelfBooking, type SelfBookResult } from "./actions";
 const initial: SelfBookResult | null = null;
 
 export default function BookingConfirmForm({
-  services,
-  addOns,
+  serviceSlugs,
+  addOnSlugs,
   slot,
   whenLabel,
 }: {
-  services: string[];
-  addOns: string[];
+  serviceSlugs: string[];
+  addOnSlugs: string[];
   slot: string;
   whenLabel: string;
 }) {
@@ -21,16 +21,16 @@ export default function BookingConfirmForm({
 
   return (
     <form action={formAction} className="space-y-4">
-      {services.map((s) => (
+      {serviceSlugs.map((s) => (
         <input key={s} type="hidden" name="services" value={s} />
       ))}
-      {addOns.map((a) => (
+      {addOnSlugs.map((a) => (
         <input key={a} type="hidden" name="add_ons" value={a} />
       ))}
       <input type="hidden" name="slot" value={slot} />
 
       <p className="text-sm text-ink-muted">
-        You're booking <span className="text-white">{whenLabel}</span>.
+        You&apos;re booking <span className="text-white">{whenLabel}</span>.
       </p>
 
       <div className="grid gap-4 md:grid-cols-2">

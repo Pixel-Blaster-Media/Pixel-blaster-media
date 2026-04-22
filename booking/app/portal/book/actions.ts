@@ -7,11 +7,7 @@ import {
   BUSINESS_TZ,
   isSlotAvailable,
 } from "@/lib/booking/availability";
-import {
-  isValidAddOnId,
-  isValidServiceId,
-  totalDurationMinutes,
-} from "@/lib/booking/services";
+import { getActiveCatalog } from "@/lib/booking/catalog";
 import { sendEmail } from "@/lib/email/resend";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
@@ -27,10 +23,10 @@ export interface SelfBookResult {
 /**
  * Self-service booking action invoked by the realtor calendar form.
  *
- * Defense in depth: we re-validate the service ids, re-check slot
- * availability, and read the owner_id from the authenticated session
- * rather than anything the client sent. Auto-confirms the booking
- * (status = 'confirmed') per admin's configured default.
+ * Defense in depth: we re-validate every slug against the live catalog,
+ * re-check slot availability, and read the owner_id from the authenticated
+ * session rather than anything the client sent. Auto-confirms the booking
+ * (status = 'confirmed').
  */
 export async function createSelfBooking(
   _prev: SelfBookResult | null,
@@ -38,23 +34,21 @@ export async function createSelfBooking(
 ): Promise<SelfBookResult> {
   const user = await requireUser("/portal/book");
 
-  const services = ((formData.getAll("services") as string[]) ?? [])
+  const serviceSlugs = ((formData.getAll("services") as string[]) ?? [])
     .map((s) => s.trim())
     .filter(Boolean);
-  const addOns = ((formData.getAll("add_ons") as string[]) ?? [])
+  const addOnSlugs = ((formData.getAll("add_ons") as string[]) ?? [])
     .map((s) => s.trim())
     .filter(Boolean);
   const slotStartRaw = ((formData.get("slot") as string | null) ?? "").trim();
-  const streetAddress = ((formData.get("street_address") as string | null) ?? "").trim();
+  const streetAddress =
+    ((formData.get("street_address") as string | null) ?? "").trim();
   const city = ((formData.get("city") as string | null) ?? "").trim();
   const postalCode = ((formData.get("postal_code") as string | null) ?? "").trim();
   const notes = ((formData.get("notes") as string | null) ?? "").trim();
 
-  if (services.length === 0 || !services.every(isValidServiceId)) {
-    return { ok: false, error: "Pick at least one valid service." };
-  }
-  if (addOns.length && !addOns.every(isValidAddOnId)) {
-    return { ok: false, error: "One of the selected add-ons isn't recognized." };
+  if (serviceSlugs.length === 0) {
+    return { ok: false, error: "Pick at least one service." };
   }
   if (!streetAddress) {
     return { ok: false, error: "Property address is required." };
@@ -63,15 +57,46 @@ export async function createSelfBooking(
     return { ok: false, error: "Pick a time slot first." };
   }
 
+  // Re-validate slugs against the live catalog — don't trust the client.
+  const catalog = await getActiveCatalog();
+  const bySlug = new Map<string, (typeof catalog.bundles)[number]>();
+  for (const r of catalog.bundles) bySlug.set(r.slug, r);
+  for (const r of catalog.aLaCarte) bySlug.set(r.slug, r);
+  for (const r of catalog.addons) bySlug.set(r.slug, r);
+
+  const validServices: typeof catalog.bundles = [];
+  for (const slug of serviceSlugs) {
+    const item = bySlug.get(slug);
+    if (!item || item.kind === "addon") {
+      return {
+        ok: false,
+        error: `Unknown service "${slug}". Refresh the page and try again.`,
+      };
+    }
+    validServices.push(item);
+  }
+
+  const hasVideo = validServices.some((s) => s.is_video);
+
+  const validAddons: typeof catalog.bundles = [];
+  for (const slug of addOnSlugs) {
+    const item = bySlug.get(slug);
+    if (!item || item.kind !== "addon") continue;
+    if (item.require_has_video && !hasVideo) continue;
+    validAddons.push(item);
+  }
+
   const slotStart = new Date(slotStartRaw);
   if (Number.isNaN(slotStart.getTime())) {
     return { ok: false, error: "That time doesn't look valid — try picking again." };
   }
 
-  const duration = Math.max(totalDurationMinutes(services, addOns), 60);
+  const duration = Math.max(
+    validServices.reduce((n, s) => n + s.duration_minutes, 0) +
+      validAddons.reduce((n, a) => n + a.duration_minutes, 0),
+    60,
+  );
 
-  // Belt and braces: the browser showed this slot as free a few seconds
-  // ago, but another realtor may have grabbed it in the meantime.
   const stillFree = await isSlotAvailable(slotStart, duration);
   if (!stillFree) {
     return {
@@ -83,7 +108,6 @@ export async function createSelfBooking(
 
   const supabase = getServiceSupabase();
 
-  // Find or create a property for this address under the realtor.
   const { data: existing } = await supabase
     .from("properties")
     .select("id")
@@ -111,6 +135,12 @@ export async function createSelfBooking(
     propertyId = created.id;
   }
 
+  // Store slugs in the legacy services[] / add_ons[] arrays so existing
+  // code paths (email templates, admin views) keep working. A follow-up
+  // commit will materialize booking_line_items for accurate invoicing.
+  const legacyServices = validServices.map((s) => s.slug);
+  const legacyAddons = validAddons.map((a) => a.slug);
+
   const { data: booking, error: bookErr } = await supabase
     .from("bookings")
     .insert({
@@ -118,8 +148,8 @@ export async function createSelfBooking(
       owner_id: user.userId,
       status: "confirmed",
       scheduled_at: slotStart.toISOString(),
-      services,
-      add_ons: addOns,
+      services: legacyServices,
+      add_ons: legacyAddons,
       client_notes: notes || null,
     })
     .select("id")
@@ -130,7 +160,6 @@ export async function createSelfBooking(
     return { ok: false, error: "Could not save booking. Try again." };
   }
 
-  // Heads-up to admin. Intentionally best-effort.
   const adminTo = process.env.ADMIN_NOTIFICATION_EMAIL;
   if (adminTo) {
     const when = new Intl.DateTimeFormat("en-US", {
@@ -138,6 +167,8 @@ export async function createSelfBooking(
       dateStyle: "full",
       timeStyle: "short",
     }).format(slotStart);
+    const serviceLabels = validServices.map((s) => s.name).join(", ");
+    const addonLabels = validAddons.map((a) => a.name).join(", ");
     await sendEmail({
       to: adminTo,
       subject: `New self-booking — ${streetAddress}`,
@@ -146,8 +177,8 @@ export async function createSelfBooking(
         <p>
           <strong>Address:</strong> ${escapeHtml(streetAddress)}<br>
           <strong>When:</strong> ${escapeHtml(when)}<br>
-          <strong>Services:</strong> ${services.join(", ")}<br>
-          ${addOns.length ? `<strong>Add-ons:</strong> ${addOns.join(", ")}<br>` : ""}
+          <strong>Services:</strong> ${escapeHtml(serviceLabels)}<br>
+          ${addonLabels ? `<strong>Add-ons:</strong> ${escapeHtml(addonLabels)}<br>` : ""}
           ${notes ? `<strong>Notes:</strong> ${escapeHtml(notes)}<br>` : ""}
         </p>
         <p>Open in admin: ${process.env.NEXT_PUBLIC_APP_URL ?? ""}/admin/bookings/${booking.id}</p>
