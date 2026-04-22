@@ -2,33 +2,48 @@
 
 import { useState, useTransition } from "react";
 
-import type { CatalogItemRow } from "@/lib/booking/catalog";
+import type { CatalogItemKind } from "@/lib/supabase/database.types";
 
-import { deleteCatalogItem, updateCatalogItem } from "./actions";
+import { createCatalogItem } from "./actions";
 
-export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
+export default function NewItemForm({ kind }: { kind: CatalogItemKind }) {
   const [pending, startPending] = useTransition();
-  const [deleting, startDeleting] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [open, setOpen] = useState(false);
 
-  const isAddon = item.kind === "addon";
+  if (!open) {
+    return (
+      <div className="px-4 py-3">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="text-xs font-semibold uppercase tracking-wider text-brand-light hover:text-white"
+        >
+          + Add {kind === "addon" ? "add-on" : kind === "bundle" ? "bundle" : "a-la-carte item"}
+        </button>
+      </div>
+    );
+  }
+
+  const isAddon = kind === "addon";
 
   return (
     <form
       action={(fd) => {
         setError(null);
-        setSaved(false);
         startPending(async () => {
-          const res = await updateCatalogItem(fd);
-          if (!res.ok) setError(res.error ?? "Save failed.");
-          else setSaved(true);
+          const res = await createCatalogItem(fd);
+          if (!res.ok) setError(res.error ?? "Create failed.");
+          else {
+            setOpen(false);
+            // The revalidatePath in the action refreshes the server component
+            // list, so the new item appears without a page reload.
+          }
         });
       }}
-      className="space-y-3"
+      className="space-y-3 rounded-md border border-white/10 bg-ink-soft/70 p-4"
     >
-      <input type="hidden" name="id" value={item.id} />
-      <input type="hidden" name="kind" value={item.kind} />
+      <input type="hidden" name="kind" value={kind} />
 
       <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
         <label className="flex flex-col gap-1">
@@ -37,8 +52,8 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
           </span>
           <input
             name="name"
-            defaultValue={item.name}
             required
+            placeholder={isAddon ? "Twilight exterior" : "The Blue Print"}
             className="rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
           />
         </label>
@@ -53,7 +68,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
               type="number"
               min={0}
               step="0.01"
-              defaultValue={(item.price_cents / 100).toFixed(2)}
+              defaultValue="0"
               className="w-24 rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
             />
           </div>
@@ -68,7 +83,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
               type="number"
               min={0}
               step="1"
-              defaultValue={item.duration_minutes}
+              defaultValue="0"
               className="w-20 rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
             />
             <span className="text-xs text-ink-muted">min</span>
@@ -83,7 +98,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
             type="number"
             min={0}
             step="1"
-            defaultValue={item.display_order}
+            defaultValue="100"
             className="w-16 rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
           />
         </label>
@@ -91,13 +106,12 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
 
       <label className="flex flex-col gap-1">
         <span className="text-[10px] uppercase tracking-wider text-ink-muted">
-          Description (shown on the booking form — supports line breaks and
-          bullet-style dashes)
+          Description
         </span>
         <textarea
           name="description"
-          defaultValue={item.description}
-          rows={4}
+          rows={3}
+          placeholder="- Up to 50 Photos&#10;- iGuide Virtual Tour&#10;- Floor plans"
           className="w-full rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
         />
       </label>
@@ -107,7 +121,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
           <input
             type="checkbox"
             name="active"
-            defaultChecked={item.active}
+            defaultChecked
             className="h-4 w-4 accent-brand-light"
           />
           <span>Active</span>
@@ -116,7 +130,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
           <input
             type="checkbox"
             name="taxable"
-            defaultChecked={item.taxable}
+            defaultChecked
             className="h-4 w-4 accent-brand-light"
           />
           <span>Taxable</span>
@@ -126,7 +140,6 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
             <input
               type="checkbox"
               name="require_has_video"
-              defaultChecked={item.require_has_video}
               className="h-4 w-4 accent-brand-light"
             />
             <span>Only when cart has video</span>
@@ -136,45 +149,30 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
             <input
               type="checkbox"
               name="is_video"
-              defaultChecked={item.is_video}
               className="h-4 w-4 accent-brand-light"
             />
             <span>Counts as video</span>
           </label>
         )}
-        <code className="ml-auto text-[10px] text-ink-muted">
-          slug: {item.slug}
-        </code>
       </div>
 
       <div className="flex items-center gap-3">
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md border border-white/15 px-3 py-1.5 text-xs text-white hover:border-brand-light hover:text-brand-light disabled:opacity-50"
+          className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-light disabled:opacity-50"
         >
-          {pending ? "Saving…" : saved ? "✓ Saved" : "Save"}
+          {pending ? "Adding…" : "Add item"}
         </button>
         <button
           type="button"
-          disabled={deleting}
           onClick={() => {
-            if (
-              !confirm(
-                `Delete "${item.name}"? This cannot be undone. If any booking references this item, the delete will fail — toggle Active off instead.`,
-              )
-            ) {
-              return;
-            }
+            setOpen(false);
             setError(null);
-            startDeleting(async () => {
-              const res = await deleteCatalogItem(item.id);
-              if (!res.ok) setError(res.error ?? "Delete failed.");
-            });
           }}
-          className="rounded-md border border-red-400/30 px-3 py-1.5 text-xs text-red-200 hover:bg-red-400/10 disabled:opacity-50"
+          className="rounded-md border border-white/15 px-3 py-1.5 text-xs text-white hover:border-white/30"
         >
-          {deleting ? "Deleting…" : "Delete"}
+          Cancel
         </button>
         {error ? (
           <p role="alert" className="text-xs text-red-300">

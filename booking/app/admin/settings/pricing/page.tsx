@@ -1,24 +1,16 @@
 import type { Metadata } from "next";
 
-import { ADD_ONS, SERVICES } from "@/lib/booking/services";
-import { getServerSupabase } from "@/lib/supabase/server";
-import type { Database } from "@/lib/supabase/database.types";
+import { getFullCatalog, type CatalogItemRow } from "@/lib/booking/catalog";
+import type { CatalogItemKind } from "@/lib/supabase/database.types";
 
-import PriceRow from "./PriceRow";
+import CatalogItemEditor from "./PriceRow";
+import NewItemForm from "./NewItemForm";
 
 export const metadata: Metadata = { title: "Pricing" };
 export const dynamic = "force-dynamic";
 
-type PriceRowType = Database["public"]["Tables"]["service_prices"]["Row"];
-
 export default async function PricingPage() {
-  const supabase = getServerSupabase();
-  const { data: prices } = await supabase
-    .from("service_prices")
-    .select("service_id, price_cents, taxable, updated_at, updated_by")
-    .returns<PriceRowType[]>();
-
-  const byId = new Map((prices ?? []).map((p) => [p.service_id, p]));
+  const { bundles, aLaCarte, addons } = await getFullCatalog();
 
   return (
     <div className="space-y-10">
@@ -28,55 +20,72 @@ export default async function PricingPage() {
         </p>
         <h1 className="mt-1 text-2xl font-bold text-white">Pricing</h1>
         <p className="mt-2 text-sm text-ink-muted">
-          Prices used on the QuickBooks invoice when you click &quot;Send
-          invoice&quot; on a booking. Any service at $0 will block invoicing —
-          set a real number before running your first invoice.
+          Bundles, a-la-carte items, and add-ons shown on the booking form
+          and invoiced via QuickBooks. Edits here take effect immediately
+          for new bookings. Existing bookings keep whatever price was
+          locked in at booking time.
         </p>
       </header>
 
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
-          Services
-        </h2>
-        <ul className="mt-4 divide-y divide-white/5 rounded-lg border border-white/10 bg-ink-soft/50">
-          {SERVICES.map((s) => {
-            const row = byId.get(s.id);
-            return (
-              <li key={s.id} className="p-4">
-                <PriceRow
-                  serviceId={s.id}
-                  label={s.label}
-                  blurb={s.blurb}
-                  priceCents={row?.price_cents ?? 0}
-                  taxable={row?.taxable ?? true}
-                />
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
-          Add-ons
-        </h2>
-        <ul className="mt-4 divide-y divide-white/5 rounded-lg border border-white/10 bg-ink-soft/50">
-          {ADD_ONS.map((a) => {
-            const row = byId.get(a.id);
-            return (
-              <li key={a.id} className="p-4">
-                <PriceRow
-                  serviceId={a.id}
-                  label={a.label}
-                  blurb={a.blurb}
-                  priceCents={row?.price_cents ?? 0}
-                  taxable={row?.taxable ?? true}
-                />
-              </li>
-            );
-          })}
-        </ul>
-      </section>
+      <Section
+        kind="bundle"
+        title="Bundles"
+        blurb="Realtors pick one bundle. Duration + price are fixed."
+        items={bundles}
+      />
+      <Section
+        kind="a_la_carte"
+        title="A-La-Carte"
+        blurb="Realtors can combine multiple with quantities. Durations stack into a single booking slot."
+        items={aLaCarte}
+      />
+      <Section
+        kind="addon"
+        title="Add-ons"
+        blurb='Toggled per booking. Mark "Only when cart has video" for add-ons like "put me on camera" so they hide unless the selection includes video.'
+        items={addons}
+      />
     </div>
+  );
+}
+
+function Section({
+  kind,
+  title,
+  blurb,
+  items,
+}: {
+  kind: CatalogItemKind;
+  title: string;
+  blurb: string;
+  items: CatalogItemRow[];
+}) {
+  return (
+    <section>
+      <div className="flex flex-col gap-1">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
+          {title}
+        </h2>
+        <p className="text-xs text-ink-muted">{blurb}</p>
+      </div>
+      <ul className="mt-4 divide-y divide-white/5 rounded-lg border border-white/10 bg-ink-soft/50">
+        {items.map((it) => (
+          <li
+            key={it.id}
+            className={`p-4 ${it.active ? "" : "opacity-60"}`}
+          >
+            <CatalogItemEditor item={it} />
+          </li>
+        ))}
+        {items.length === 0 ? (
+          <li className="p-4 text-sm text-ink-muted">
+            Nothing here yet — add one below.
+          </li>
+        ) : null}
+        <li>
+          <NewItemForm kind={kind} />
+        </li>
+      </ul>
+    </section>
   );
 }
