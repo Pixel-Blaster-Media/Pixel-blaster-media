@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 
+import { getActiveCatalog } from "@/lib/booking/catalog";
+
 import BookingForm from "./BookingForm";
 
 export const metadata: Metadata = {
@@ -8,7 +10,11 @@ export const metadata: Metadata = {
     "Request a real estate photography, iGuide virtual tour, or floor plan shoot with Pixel Blaster Media.",
 };
 
-export default function BookPage() {
+export const dynamic = "force-dynamic";
+
+export default async function BookPage() {
+  const catalog = await getActiveCatalog();
+
   return (
     <div className="space-y-10">
       <header className="max-w-2xl">
@@ -24,7 +30,39 @@ export default function BookPage() {
         </p>
       </header>
 
-      <BookingForm />
+      <BookingForm
+        bundles={catalog.bundles.map(toDTO)}
+        aLaCarte={catalog.aLaCarte.map(toDTO)}
+        addons={catalog.addons.map(toDTO)}
+      />
     </div>
   );
+}
+
+// Narrow the full DB row to the DTO the picker cares about, so future
+// catalog_items columns don't leak to the client bundle.
+function toDTO(r: {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  duration_minutes: number;
+  price_cents: number;
+  kind: "bundle" | "a_la_carte" | "addon";
+  is_video: boolean;
+  require_has_video: boolean;
+  display_order: number;
+}) {
+  return {
+    id: r.id,
+    slug: r.slug,
+    name: r.name,
+    description: r.description,
+    duration_minutes: r.duration_minutes,
+    price_cents: r.price_cents,
+    kind: r.kind,
+    is_video: r.is_video,
+    require_has_video: r.require_has_video,
+    display_order: r.display_order,
+  };
 }

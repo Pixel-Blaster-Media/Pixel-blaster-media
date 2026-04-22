@@ -2,16 +2,11 @@
  * Shape + validation for booking_request submissions.
  *
  * Validation is intentionally hand-rolled (no zod / yup) to keep the
- * dependency surface tight in Phase 2. If validation gets more complex in
- * later phases, swap to zod and export inferred types from the schema.
+ * dependency surface tight. If it gets more complex, swap to zod.
  */
 
-import {
-  isValidAddOnId,
-  isValidServiceId,
-  PREFERRED_TIMES,
-  type PreferredTime,
-} from "./services";
+import type { CartLinePayload } from "./cart-types";
+import { PREFERRED_TIMES, type PreferredTime } from "./services";
 
 export interface BookingRequestInput {
   contact_name: string;
@@ -22,15 +17,18 @@ export interface BookingRequestInput {
   city?: string;
   postal_code?: string;
   square_footage?: number;
-  services: string[];
-  add_ons: string[];
+  /**
+   * New shape from the catalog-driven picker. Empty array allowed at the
+   * schema level; `validateBookingRequest` rejects it.
+   */
+  cart: CartLinePayload[];
   preferred_date?: string; // ISO date (yyyy-mm-dd)
   preferred_time?: PreferredTime;
   notes?: string;
 }
 
 export type ValidationErrors = Partial<
-  Record<keyof BookingRequestInput | "_form", string>
+  Record<keyof BookingRequestInput | "_form" | "services", string>
 >;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -55,14 +53,8 @@ export function validateBookingRequest(
     errors.street_address = "Property address is required.";
   }
 
-  if (!Array.isArray(input.services) || input.services.length === 0) {
-    errors.services = "Pick at least one service.";
-  } else if (!input.services.every(isValidServiceId)) {
-    errors.services = "One of the selected services isn't recognized.";
-  }
-
-  if (input.add_ons && !input.add_ons.every(isValidAddOnId)) {
-    errors.add_ons = "One of the selected add-ons isn't recognized.";
+  if (!Array.isArray(input.cart) || input.cart.length === 0) {
+    errors.services = "Pick a bundle or at least one a-la-carte item.";
   }
 
   if (

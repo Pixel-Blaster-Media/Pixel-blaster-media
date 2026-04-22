@@ -194,6 +194,7 @@ interface BookingRequestsTable {
     square_footage: number | null;
     services: string[];
     add_ons: string[];
+    cart: Json;
     preferred_date: string | null;
     preferred_time: string | null;
     notes: string | null;
@@ -217,6 +218,7 @@ interface BookingRequestsTable {
     square_footage?: number | null;
     services?: string[];
     add_ons?: string[];
+    cart?: Json;
     preferred_date?: string | null;
     preferred_time?: string | null;
     notes?: string | null;

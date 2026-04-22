@@ -2,20 +2,26 @@
 
 import { useFormState, useFormStatus } from "react-dom";
 
-import {
-  ADD_ONS,
-  PREFERRED_TIMES,
-  SERVICES,
-} from "@/lib/booking/services";
+import CartPicker, { type CatalogItemDTO } from "@/app/_components/CartPicker";
+import { PREFERRED_TIMES } from "@/lib/booking/services";
 import type {
   BookingActionResult,
   ValidationErrors,
 } from "@/lib/booking/schema";
+
 import { submitBookingRequest } from "./actions";
 
 const initialState: BookingActionResult | null = null;
 
-export default function BookingForm() {
+export default function BookingForm({
+  bundles,
+  aLaCarte,
+  addons,
+}: {
+  bundles: CatalogItemDTO[];
+  aLaCarte: CatalogItemDTO[];
+  addons: CatalogItemDTO[];
+}) {
   const [state, formAction] = useFormState(submitBookingRequest, initialState);
   const errors: ValidationErrors = state?.errors ?? {};
 
@@ -43,58 +49,15 @@ export default function BookingForm() {
       <Section
         eyebrow="Step 1"
         title="What do you need?"
-        helper="Pick everything you'd like for this listing. We'll quote based on what you select."
+        helper="Pick a bundle or build it out a-la-carte. Video add-ons appear automatically when you select something with video."
         error={errors.services}
       >
-        <ul className="grid gap-3 md:grid-cols-2">
-          {SERVICES.map((s) => (
-            <li key={s.id}>
-              <label className="flex h-full cursor-pointer items-start gap-3 rounded-lg border border-white/10 bg-ink-soft/50 p-4 transition hover:border-brand/60 hover:bg-ink-soft has-[:checked]:border-brand-light has-[:checked]:bg-brand/10">
-                <input
-                  type="checkbox"
-                  name="services"
-                  value={s.id}
-                  className="mt-1 h-4 w-4 accent-brand-light"
-                />
-                <span className="flex-1">
-                  <span className="block font-semibold text-white">
-                    {s.label}
-                  </span>
-                  <span className="mt-1 block text-sm text-ink-muted">
-                    {s.blurb}
-                  </span>
-                </span>
-              </label>
-            </li>
-          ))}
-        </ul>
-
-        <fieldset className="mt-6">
-          <legend className="text-sm font-semibold uppercase tracking-wider text-ink-muted">
-            Add-ons
-          </legend>
-          <div className="mt-3 grid gap-2 md:grid-cols-3">
-            {ADD_ONS.map((a) => (
-              <label
-                key={a.id}
-                className="flex cursor-pointer items-start gap-2 rounded-md border border-white/5 bg-ink-soft/40 p-3 text-sm hover:border-brand/40 has-[:checked]:border-brand-light/60"
-              >
-                <input
-                  type="checkbox"
-                  name="add_ons"
-                  value={a.id}
-                  className="mt-0.5 h-4 w-4 accent-brand-light"
-                />
-                <span className="flex-1">
-                  <span className="block text-white">{a.label}</span>
-                  <span className="mt-0.5 block text-xs text-ink-muted">
-                    {a.blurb}
-                  </span>
-                </span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        <CartPicker
+          bundles={bundles}
+          aLaCarte={aLaCarte}
+          addons={addons}
+          hiddenInputName="cart"
+        />
       </Section>
 
       <Section
@@ -205,7 +168,7 @@ function SubmitRow() {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-6">
       <p className="text-xs text-ink-muted">
-        No payment is taken at booking. We'll confirm pricing before the shoot.
+        No payment is taken at booking. We&apos;ll confirm pricing before the shoot.
       </p>
       <button
         type="submit"
@@ -243,9 +206,7 @@ function Section({
         {helper ? (
           <p className="mt-1 text-sm text-ink-muted">{helper}</p>
         ) : null}
-        {error ? (
-          <p className="mt-2 text-sm text-red-300">{error}</p>
-        ) : null}
+        {error ? <p className="mt-2 text-sm text-red-300">{error}</p> : null}
       </header>
       {children}
     </section>

@@ -1,71 +1,136 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useTransition } from "react";
+import { useMemo, useTransition } from "react";
 
-import { ADD_ONS, SERVICES } from "@/lib/booking/services";
+import type { CatalogItemDTO } from "@/app/_components/CartPicker";
 
 /**
- * Multi-select for services + add-ons. Drives the URL (?services=a,b).
+ * Catalog-driven picker for /portal/book. URL-driven so slots can re-
+ * fetch server-side on change.
  *
- * Writing to the URL instead of component state means:
- *   - the parent (server) component re-renders with new slots automatically
- *   - the realtor can bookmark / share a pre-filled booking link
- *   - browser back works the way you'd expect
+ *   ?services=blue_print,interior_retakes&add_ons=on_camera
+ *
+ * For v1 self-serve: bundle = single-select (mutually exclusive), a-la-
+ * carte = multi-toggle (no quantity), add-ons = toggle (gated on video).
+ * Quantities ship when we rework the flow to a cart URL param.
  */
 export default function ServicePicker({
-  selectedServices,
-  selectedAddOns,
+  selectedSlugs,
+  selectedAddOnSlugs,
+  bundles,
+  aLaCarte,
+  addons,
 }: {
-  selectedServices: string[];
-  selectedAddOns: string[];
+  selectedSlugs: string[];
+  selectedAddOnSlugs: string[];
+  bundles: CatalogItemDTO[];
+  aLaCarte: CatalogItemDTO[];
+  addons: CatalogItemDTO[];
 }) {
   const router = useRouter();
   const params = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  function toggle(group: "services" | "add_ons", id: string) {
+  const bundleBySlug = useMemo(() => {
+    const m = new Map<string, CatalogItemDTO>();
+    for (const b of bundles) m.set(b.slug, b);
+    return m;
+  }, [bundles]);
+  const aLaCarteBySlug = useMemo(() => {
+    const m = new Map<string, CatalogItemDTO>();
+    for (const a of aLaCarte) m.set(a.slug, a);
+    return m;
+  }, [aLaCarte]);
+
+  const hasVideo = useMemo(() => {
+    return selectedSlugs.some(
+      (s) =>
+        bundleBySlug.get(s)?.is_video || aLaCarteBySlug.get(s)?.is_video,
+    );
+  }, [selectedSlugs, bundleBySlug, aLaCarteBySlug]);
+
+  const visibleAddons = addons.filter(
+    (a) => !a.require_has_video || hasVideo,
+  );
+
+  function updateUrl(nextServices: string[], nextAddons: string[]) {
     const next = new URLSearchParams(params.toString());
-    const current = (next.get(group) ?? "").split(",").filter(Boolean);
-    const idx = current.indexOf(id);
-    if (idx === -1) current.push(id);
-    else current.splice(idx, 1);
-    if (current.length > 0) next.set(group, current.join(","));
-    else next.delete(group);
-    // Clear a selected slot whenever services change — duration changes
-    // so slots need recomputing.
+    // Prune addons that no longer qualify after the service change.
+    const videoAfter = nextServices.some(
+      (s) =>
+        bundleBySlug.get(s)?.is_video || aLaCarteBySlug.get(s)?.is_video,
+    );
+    const cleanedAddons = nextAddons.filter((slug) => {
+      const addon = addons.find((a) => a.slug === slug);
+      if (!addon) return false;
+      return !addon.require_has_video || videoAfter;
+    });
+
+    if (nextServices.length > 0) next.set("services", nextServices.join(","));
+    else next.delete("services");
+    if (cleanedAddons.length > 0) next.set("add_ons", cleanedAddons.join(","));
+    else next.delete("add_ons");
+    // Slot must be re-picked when duration changes.
     next.delete("slot");
     startTransition(() => {
       router.replace(`?${next.toString()}`, { scroll: false });
     });
   }
 
+  function selectBundle(slug: string) {
+    // Keep non-bundle selections; replace any existing bundle with this one
+    // (or clear it if the same bundle is re-clicked).
+    const nonBundle = selectedSlugs.filter((s) => !bundleBySlug.has(s));
+    const currentBundle = selectedSlugs.find((s) => bundleBySlug.has(s));
+    const nextBundles = currentBundle === slug ? [] : [slug];
+    updateUrl([...nextBundles, ...nonBundle], selectedAddOnSlugs);
+  }
+
+  function toggleALaCarte(slug: string) {
+    const on = selectedSlugs.includes(slug);
+    const next = on
+      ? selectedSlugs.filter((s) => s !== slug)
+      : [...selectedSlugs, slug];
+    updateUrl(next, selectedAddOnSlugs);
+  }
+
+  function toggleAddon(slug: string) {
+    const on = selectedAddOnSlugs.includes(slug);
+    const next = on
+      ? selectedAddOnSlugs.filter((s) => s !== slug)
+      : [...selectedAddOnSlugs, slug];
+    updateUrl(selectedSlugs, next);
+  }
+
+  const selectedBundleSlug = selectedSlugs.find((s) => bundleBySlug.has(s));
+
   return (
     <div className={isPending ? "opacity-60" : ""}>
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
-          Services
+          Bundles
         </p>
-        <ul className="mt-3 flex flex-wrap gap-2">
-          {SERVICES.map((s) => {
-            const on = selectedServices.includes(s.id);
+        <ul className="mt-3 grid gap-2 md:grid-cols-2">
+          {bundles.map((b) => {
+            const on = selectedBundleSlug === b.slug;
             return (
-              <li key={s.id}>
+              <li key={b.id}>
                 <button
                   type="button"
-                  onClick={() => toggle("services", s.id)}
+                  onClick={() => selectBundle(b.slug)}
+                  aria-pressed={on}
                   className={
-                    "rounded-full border px-4 py-2 text-sm transition " +
+                    "flex w-full items-baseline justify-between gap-3 rounded-md border px-3 py-2 text-left text-sm transition " +
                     (on
-                      ? "border-brand-light bg-brand/20 text-brand-light"
+                      ? "border-brand-light bg-brand/15 text-brand-light"
                       : "border-white/15 text-white/80 hover:border-white/40")
                   }
-                  aria-pressed={on}
-                  title={s.blurb}
+                  title={b.description}
                 >
-                  {s.label}
-                  <span className="ml-2 text-[10px] opacity-70">
-                    {s.durationMinutes}m
+                  <span className="truncate font-semibold">{b.name}</span>
+                  <span className="text-xs opacity-80">
+                    ${(b.price_cents / 100).toFixed(0)} · {b.duration_minutes}m
                   </span>
                 </button>
               </li>
@@ -76,37 +141,69 @@ export default function ServicePicker({
 
       <div className="mt-5">
         <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
-          Add-ons
+          A-la-carte
         </p>
         <ul className="mt-3 flex flex-wrap gap-2">
-          {ADD_ONS.map((a) => {
-            const on = selectedAddOns.includes(a.id);
+          {aLaCarte.map((a) => {
+            const on = selectedSlugs.includes(a.slug);
             return (
               <li key={a.id}>
                 <button
                   type="button"
-                  onClick={() => toggle("add_ons", a.id)}
-                  className={
-                    "rounded-md border px-3 py-1.5 text-xs transition " +
-                    (on
-                      ? "border-brand-light bg-brand/15 text-brand-light"
-                      : "border-white/10 text-white/70 hover:border-white/30")
-                  }
+                  onClick={() => toggleALaCarte(a.slug)}
                   aria-pressed={on}
-                  title={a.blurb}
+                  className={
+                    "rounded-full border px-4 py-2 text-sm transition " +
+                    (on
+                      ? "border-brand-light bg-brand/20 text-brand-light"
+                      : "border-white/15 text-white/80 hover:border-white/40")
+                  }
+                  title={a.description}
                 >
-                  {a.label}
-                  {a.durationMinutes > 0 ? (
-                    <span className="ml-1.5 opacity-70">
-                      +{a.durationMinutes}m
-                    </span>
-                  ) : null}
+                  {a.name}
+                  <span className="ml-2 text-[10px] opacity-70">
+                    ${(a.price_cents / 100).toFixed(0)} · {a.duration_minutes}m
+                  </span>
                 </button>
               </li>
             );
           })}
         </ul>
       </div>
+
+      {visibleAddons.length > 0 ? (
+        <div className="mt-5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+            Add-ons
+          </p>
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {visibleAddons.map((a) => {
+              const on = selectedAddOnSlugs.includes(a.slug);
+              return (
+                <li key={a.id}>
+                  <button
+                    type="button"
+                    onClick={() => toggleAddon(a.slug)}
+                    aria-pressed={on}
+                    className={
+                      "rounded-md border px-3 py-1.5 text-xs transition " +
+                      (on
+                        ? "border-brand-light bg-brand/15 text-brand-light"
+                        : "border-white/10 text-white/70 hover:border-white/30")
+                    }
+                    title={a.description}
+                  >
+                    {a.name}
+                    <span className="ml-1.5 opacity-70">
+                      +${(a.price_cents / 100).toFixed(0)}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }

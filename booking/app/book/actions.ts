@@ -3,7 +3,9 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { getServiceSupabase } from "@/lib/supabase/server";
+import { parseCart, type CartLinePayload } from "@/lib/booking/cart-types";
+import { getActiveCatalog } from "@/lib/booking/catalog";
+import type { Database } from "@/lib/supabase/database.types";
 import {
   type BookingActionResult,
   type BookingRequestInput,
@@ -14,29 +16,72 @@ import {
   adminNotificationEmail,
   clientConfirmationEmail,
 } from "@/lib/email/templates";
+import { getServiceSupabase } from "@/lib/supabase/server";
 
-/**
- * Server Action invoked by the booking form on /book.
- *
- * Flow:
- *   1. Pull values out of FormData.
- *   2. Honeypot check — bots that fill `_company` get silently dropped.
- *   3. Validate. Errors are returned for the form to render inline.
- *   4. Insert into `booking_requests` via the service-role client.
- *   5. Fire-and-forget two emails (one to the realtor, one to admin).
- *   6. Redirect to /book/success.
- *
- * No payment is taken in v1.
- */
 export async function submitBookingRequest(
   _prev: BookingActionResult | null,
   formData: FormData,
 ): Promise<BookingActionResult> {
-  // 1. Honeypot — bots love to fill every input.
+  // Honeypot — bots love to fill every input.
   if ((formData.get("_company") as string)?.trim()) {
-    // Pretend success; don't tip off the bot.
     redirect("/book/success");
   }
+
+  // Cart — serialized JSON from CartPicker's hidden input.
+  const rawCart = (formData.get("cart") as string | null) ?? "[]";
+  let parsedCart: CartLinePayload[] = [];
+  try {
+    parsedCart = parseCart(JSON.parse(rawCart));
+  } catch {
+    parsedCart = [];
+  }
+
+  // Load the catalog server-side so we can trust slugs + IDs and reject
+  // anything the client may have fabricated. Unknown ids are dropped.
+  const catalog = await getActiveCatalog();
+  const byId = new Map<string, (typeof catalog.bundles)[number]>();
+  for (const r of catalog.bundles) byId.set(r.id, r);
+  for (const r of catalog.aLaCarte) byId.set(r.id, r);
+  for (const r of catalog.addons) byId.set(r.id, r);
+
+  const cart: CartLinePayload[] = [];
+  const legacyServices: string[] = [];
+  const legacyAddOns: string[] = [];
+  let hasVideo = false;
+  for (const line of parsedCart) {
+    const item = byId.get(line.catalog_item_id);
+    if (!item) continue;
+    const quantity =
+      item.kind === "a_la_carte" ? Math.max(1, Math.floor(line.quantity)) : 1;
+    cart.push({
+      catalog_item_id: item.id,
+      slug: item.slug,
+      quantity,
+    });
+    // Mirror into legacy columns: services[] holds bundle + a-la-carte slugs
+    // (repeated by qty); add_ons[] holds addon slugs.
+    if (item.kind === "addon") {
+      legacyAddOns.push(item.slug);
+    } else {
+      for (let i = 0; i < quantity; i++) legacyServices.push(item.slug);
+      if (item.is_video) hasVideo = true;
+    }
+  }
+
+  // Strip any "require_has_video" addons that no longer qualify after
+  // filtering (defensive; the client UI auto-cleans, but don't trust it).
+  const filteredCart = cart.filter((line) => {
+    const item = byId.get(line.catalog_item_id);
+    if (!item) return false;
+    if (item.kind === "addon" && item.require_has_video && !hasVideo) {
+      return false;
+    }
+    return true;
+  });
+  const filteredAddOns = filteredCart
+    .map((l) => byId.get(l.catalog_item_id))
+    .filter((it): it is NonNullable<typeof it> => !!it && it.kind === "addon")
+    .map((it) => it.slug);
 
   const input: BookingRequestInput = {
     contact_name: str(formData, "contact_name"),
@@ -47,8 +92,7 @@ export async function submitBookingRequest(
     city: optStr(formData, "city"),
     postal_code: optStr(formData, "postal_code"),
     square_footage: optInt(formData, "square_footage"),
-    services: formData.getAll("services").map(String),
-    add_ons: formData.getAll("add_ons").map(String),
+    cart: filteredCart,
     preferred_date: optStr(formData, "preferred_date"),
     preferred_time: optStr(formData, "preferred_time") as
       | BookingRequestInput["preferred_time"]
@@ -56,13 +100,11 @@ export async function submitBookingRequest(
     notes: optStr(formData, "notes"),
   };
 
-  // 2. Validate.
   const errors = validateBookingRequest(input);
   if (Object.keys(errors).length > 0) {
     return { ok: false, errors };
   }
 
-  // 3. Persist.
   const supabase = getServiceSupabase();
   const userAgent = headers().get("user-agent") ?? null;
 
@@ -77,8 +119,9 @@ export async function submitBookingRequest(
       city: input.city ?? null,
       postal_code: input.postal_code ?? null,
       square_footage: input.square_footage ?? null,
-      services: input.services,
-      add_ons: input.add_ons,
+      services: legacyServices,
+      add_ons: filteredAddOns,
+      cart: filteredCart as unknown as Database["public"]["Tables"]["booking_requests"]["Insert"]["cart"],
       preferred_date: input.preferred_date ?? null,
       preferred_time: input.preferred_time ?? null,
       notes: input.notes ?? null,
@@ -101,11 +144,20 @@ export async function submitBookingRequest(
 
   const requestId = data.id;
 
-  // 4. Send emails. Don't block the redirect on email success — the
-  //    booking is already recorded; email failures get logged.
   const adminTo = process.env.ADMIN_NOTIFICATION_EMAIL;
-  const clientEmail = clientConfirmationEmail({ request: input, requestId });
-  const adminEmail = adminNotificationEmail({ request: input, requestId });
+  const emailInput = {
+    ...input,
+    services: legacyServices,
+    add_ons: filteredAddOns,
+  };
+  const clientEmail = clientConfirmationEmail({
+    request: emailInput,
+    requestId,
+  });
+  const adminEmail = adminNotificationEmail({
+    request: emailInput,
+    requestId,
+  });
 
   await Promise.all([
     sendEmail({
@@ -124,7 +176,6 @@ export async function submitBookingRequest(
       : Promise.resolve({ ok: true, skipped: true } as const),
   ]);
 
-  // 5. Done.
   redirect("/book/success");
 }
 
