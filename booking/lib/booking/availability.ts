@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { totalDurationMinutes } from "./services";
 
@@ -78,7 +79,7 @@ export async function listAvailableSlots({
 
   // Pull the three inputs in parallel. These are all small datasets so we
   // can afford to fetch the full rows; the filtering happens in memory.
-  const [hoursRes, blocksRes, bookingsRes] = await Promise.all([
+  const [hoursRes, blocksRes, bookingsRes, googleBusy] = await Promise.all([
     supabase
       .from("business_hours")
       .select("day_of_week, start_time, end_time, enabled")
@@ -97,6 +98,9 @@ export async function listAvailableSlots({
       .gte("scheduled_at", addMinutes(from, -6 * 60).toISOString())
       .lt("scheduled_at", to.toISOString())
       .returns<BookingRow[]>(),
+    // Optional Google Calendar free/busy union. If no calendar is
+    // connected, returns [] so slot computation is unaffected.
+    fetchGoogleBusy(from, to),
   ]);
 
   const hoursByDow = new Map<number, BusinessHoursRow>();
@@ -113,6 +117,11 @@ export async function listAvailableSlots({
     const start = new Date(booking.scheduled_at);
     const minutes = durationOfBooking(booking.services, booking.add_ons);
     busy.push({ start, end: addMinutes(start, minutes) });
+  }
+  // Google Calendar busy windows — doctor appointments, personal stuff,
+  // anything the admin already has on their personal calendar.
+  for (const g of googleBusy) {
+    busy.push({ start: g.start, end: g.end });
   }
 
   const slots: Slot[] = [];
@@ -167,6 +176,28 @@ export async function isSlotAvailable(
     durationMinutes,
   });
   return slots.some((s) => new Date(s.start).getTime() === start.getTime());
+}
+
+// ---- Google Calendar free/busy ----
+
+/**
+ * Best-effort fetch of the admin's Google Calendar busy windows.
+ * If no calendar is connected or the API errors, we return [] so slot
+ * computation falls back to DB-only busy. Better to risk a double-book
+ * than to crash the entire booking form when Google is down.
+ */
+async function fetchGoogleBusy(
+  from: Date,
+  to: Date,
+): Promise<{ start: Date; end: Date }[]> {
+  try {
+    const client = await getGoogleCalendarClient();
+    if (!client) return [];
+    return await client.getBusy(from, to);
+  } catch (err) {
+    console.warn("[availability] google freeBusy failed", err);
+    return [];
+  }
 }
 
 // ---- Duration + time helpers (small + local so callers don't need dayjs) ----

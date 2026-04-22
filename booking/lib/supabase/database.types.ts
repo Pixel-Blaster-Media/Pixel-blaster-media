@@ -118,6 +118,8 @@ interface BookingsTable {
     quickbooks_invoice_status: string | null;
     quickbooks_invoice_total_cents: number | null;
     quickbooks_invoice_synced_at: string | null;
+    google_calendar_event_id: string | null;
+    google_calendar_event_url: string | null;
     created_at: string;
     updated_at: string;
   };
@@ -141,8 +143,35 @@ interface BookingsTable {
     quickbooks_invoice_status?: string | null;
     quickbooks_invoice_total_cents?: number | null;
     quickbooks_invoice_synced_at?: string | null;
+    google_calendar_event_id?: string | null;
+    google_calendar_event_url?: string | null;
   };
   Update: Partial<BookingsTable["Insert"]>;
+  Relationships: [];
+}
+
+interface GoogleCalendarConnectionTable {
+  Row: {
+    id: number;
+    google_account_email: string;
+    calendar_id: string;
+    refresh_token: string;
+    access_token: string | null;
+    access_token_expires_at: string | null;
+    connected_at: string;
+    connected_by: string | null;
+    updated_at: string;
+  };
+  Insert: {
+    id?: number;
+    google_account_email: string;
+    calendar_id?: string;
+    refresh_token: string;
+    access_token?: string | null;
+    access_token_expires_at?: string | null;
+    connected_by?: string | null;
+  };
+  Update: Partial<GoogleCalendarConnectionTable["Insert"]>;
   Relationships: [];
 }
 
@@ -383,6 +412,7 @@ export interface Database {
       service_prices: ServicePricesTable;
       catalog_items: CatalogItemsTable;
       booking_line_items: BookingLineItemsTable;
+      google_calendar_connection: GoogleCalendarConnectionTable;
     };
     Views: Record<string, never>;
     Functions: {

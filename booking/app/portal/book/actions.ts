@@ -9,6 +9,7 @@ import {
 } from "@/lib/booking/availability";
 import { getActiveCatalog } from "@/lib/booking/catalog";
 import { sendEmail } from "@/lib/email/resend";
+import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
 interface InsertedRow {
@@ -158,6 +159,44 @@ export async function createSelfBooking(
   if (bookErr || !booking) {
     console.error("[selfBook] booking insert failed", bookErr);
     return { ok: false, error: "Could not save booking. Try again." };
+  }
+
+  // Push the event to Google Calendar (best-effort — a failure here doesn't
+  // block the booking since everything's already persisted). If successful,
+  // we stash the event id on the booking so we can later update/cancel it.
+  try {
+    const gcal = await getGoogleCalendarClient();
+    if (gcal) {
+      const endAt = new Date(slotStart.getTime() + duration * 60_000);
+      const serviceLabels = validServices.map((s) => s.name).join(", ");
+      const addonLabels = validAddons.map((a) => a.name).join(", ");
+      const realtor = user.fullName ?? user.email;
+      const addressLine = [streetAddress, city, postalCode]
+        .filter(Boolean)
+        .join(", ");
+      const event = await gcal.createEvent({
+        summary: `Shoot — ${streetAddress}`,
+        location: addressLine,
+        description:
+          `Realtor: ${realtor}\nEmail: ${user.email}\n` +
+          `Services: ${serviceLabels}\n` +
+          (addonLabels ? `Add-ons: ${addonLabels}\n` : "") +
+          (notes ? `\nNotes:\n${notes}\n` : ""),
+        startISO: slotStart.toISOString(),
+        endISO: endAt.toISOString(),
+        attendeeEmail: user.email,
+        attendeeName: user.fullName ?? undefined,
+      });
+      await supabase
+        .from("bookings")
+        .update({
+          google_calendar_event_id: event.id,
+          google_calendar_event_url: event.htmlLink,
+        })
+        .eq("id", booking.id);
+    }
+  } catch (err) {
+    console.warn("[selfBook] google calendar event create failed", err);
   }
 
   const adminTo = process.env.ADMIN_NOTIFICATION_EMAIL;
