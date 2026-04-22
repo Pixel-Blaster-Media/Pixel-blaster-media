@@ -7,10 +7,15 @@ import { revalidatePath } from "next/cache";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { sendEmail } from "@/lib/email/resend";
+import {
+  buildAuthorizeUrl as buildGoogleAuthorizeUrl,
+  revokeToken as revokeGoogleToken,
+} from "@/lib/integrations/google-calendar/oauth";
 import { buildAuthorizeUrl } from "@/lib/integrations/quickbooks/oauth";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
 const STATE_COOKIE = "qbo_oauth_state";
+const GOOGLE_STATE_COOKIE = "google_oauth_state";
 
 /**
  * Kick off the QuickBooks OAuth consent flow.
@@ -116,6 +121,64 @@ export async function sendTestEmail(
       emailFrom: process.env.EMAIL_FROM ?? null,
     },
   };
+}
+
+/**
+ * Kick off the Google Calendar OAuth consent flow. Same pattern as the
+ * QuickBooks connect action: mint a CSRF token, drop it in a short-lived
+ * cookie, redirect to Google's consent screen. The callback route
+ * validates the echoed state against the cookie.
+ */
+export async function startGoogleCalendarConnect(): Promise<void> {
+  await requireAdmin();
+
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+  if (!clientId || !appUrl) {
+    throw new Error(
+      "GOOGLE_CLIENT_ID and NEXT_PUBLIC_APP_URL must be set before connecting.",
+    );
+  }
+
+  const state = randomBytes(24).toString("hex");
+  cookies().set(GOOGLE_STATE_COOKIE, state, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 10 * 60,
+  });
+
+  const redirectUri = new URL(
+    "/api/integrations/google-calendar/callback",
+    appUrl,
+  ).toString();
+
+  const authUrl = buildGoogleAuthorizeUrl({ clientId, redirectUri, state });
+  redirect(authUrl);
+}
+
+/**
+ * Disconnect wipes the row. Best-effort call to Google's revoke endpoint
+ * so the refresh token is invalidated on Google's side too — any cached
+ * access tokens stop working immediately.
+ */
+export async function disconnectGoogleCalendar(): Promise<void> {
+  await requireAdmin();
+  const supabase = getServiceSupabase();
+  const { data: conn } = await supabase
+    .from("google_calendar_connection")
+    .select("refresh_token")
+    .eq("id", 1)
+    .maybeSingle<{ refresh_token: string }>();
+
+  if (conn?.refresh_token) {
+    await revokeGoogleToken(conn.refresh_token);
+  }
+
+  await supabase.from("google_calendar_connection").delete().eq("id", 1);
+  revalidatePath("/admin/settings/integrations");
 }
 
 /**

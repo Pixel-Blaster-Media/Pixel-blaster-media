@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { totalDurationMinutes } from "@/lib/booking/services";
 import { sendEmail } from "@/lib/email/resend";
 import { shootConfirmedEmail } from "@/lib/email/templates";
+import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -184,6 +186,51 @@ export async function acceptRequest(
   if (updErr) {
     console.warn("[accept] booking_request update failed", updErr);
     // Booking still exists — just log; don't roll the whole thing back.
+  }
+
+  // 5b. Push to Google Calendar (best-effort). Skipped if no calendar is
+  // connected. If the scheduledAt is null (accepted without a date), we
+  // skip here too — the admin will set the time later and we'll need a
+  // reschedule affordance to push the event at that point.
+  if (scheduledAt) {
+    try {
+      const gcal = await getGoogleCalendarClient();
+      if (gcal) {
+        const startDate = new Date(scheduledAt);
+        const duration = Math.max(
+          totalDurationMinutes(req.services, req.add_ons),
+          60,
+        );
+        const endDate = new Date(startDate.getTime() + duration * 60_000);
+        const addressLine = [req.street_address, req.city, req.postal_code]
+          .filter(Boolean)
+          .join(", ");
+        const event = await gcal.createEvent({
+          summary: `Shoot — ${req.street_address}`,
+          location: addressLine,
+          description:
+            `Realtor: ${req.contact_name}\nEmail: ${req.contact_email}\n` +
+            (req.contact_phone ? `Phone: ${req.contact_phone}\n` : "") +
+            (req.brokerage ? `Brokerage: ${req.brokerage}\n` : "") +
+            `Services: ${req.services.join(", ")}\n` +
+            (req.add_ons.length ? `Add-ons: ${req.add_ons.join(", ")}\n` : "") +
+            (req.notes ? `\nNotes:\n${req.notes}\n` : ""),
+          startISO: startDate.toISOString(),
+          endISO: endDate.toISOString(),
+          attendeeEmail: req.contact_email,
+          attendeeName: req.contact_name,
+        });
+        await supabase
+          .from("bookings")
+          .update({
+            google_calendar_event_id: event.id,
+            google_calendar_event_url: event.htmlLink,
+          })
+          .eq("id", booking.id);
+      }
+    } catch (err) {
+      console.warn("[accept] google calendar event create failed", err);
+    }
   }
 
   // 6. Send the realtor a welcome + one-click sign-in link to the portal.
