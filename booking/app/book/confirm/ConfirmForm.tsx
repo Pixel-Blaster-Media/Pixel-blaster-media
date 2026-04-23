@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 
-import { checkEmailAction, createPublicBooking, type BookResult } from "./actions";
+import { checkEmailAction, createPublicBooking, type BookResult } from "../actions";
+import type { WizardState } from "@/lib/booking/wizard-state";
 
 const initial: BookResult | null = null;
 
@@ -17,39 +18,23 @@ interface ProfileLite {
 }
 
 /**
- * Public booking confirm form.
- *
- * Two modes:
- *   - Signed in (profile != null): hidden contact/auth section, just
- *     property details + notes.
- *   - Signed out: collects contact info, then (on email blur) checks
- *     whether that email already has an account. If yes → password +
- *     "Forgot password?" link. If no → "Create a password" helper.
- *
- * One unified submit handler (`createPublicBooking`) handles both
- * signup and sign-in paths based on the detected state.
+ * Step 4 form — hidden inputs carry forward the wizard state (services,
+ * property details, slot), plus the auth section that toggles between
+ * sign-in and create-account based on email existence.
  */
-export default function BookingConfirmForm({
-  serviceSlugs,
-  addOnSlugs,
-  slot,
-  whenLabel,
+export default function ConfirmForm({
+  state,
   profile,
 }: {
-  serviceSlugs: string[];
-  addOnSlugs: string[];
-  slot: string;
-  whenLabel: string;
+  state: WizardState;
   profile: ProfileLite | null;
 }) {
-  const [state, formAction] = useFormState(createPublicBooking, initial);
+  const [formState, formAction] = useFormState(createPublicBooking, initial);
 
   const [email, setEmail] = useState(profile?.email ?? "");
   const [mode, setMode] = useState<"unknown" | "new" | "existing">("unknown");
   const [, startTransition] = useTransition();
 
-  // When the user types a fresh email, reset our detection so they
-  // see the neutral label until the server check finishes.
   function handleEmailChange(value: string) {
     setEmail(value);
     setMode("unknown");
@@ -71,62 +56,47 @@ export default function BookingConfirmForm({
     });
   }
 
-  // Re-seed state on profile change (e.g. client nav into /book while signed in)
   useEffect(() => {
     if (profile) setEmail(profile.email);
   }, [profile]);
 
   return (
     <form action={formAction} className="space-y-5">
-      {serviceSlugs.map((s) => (
+      {/* Carry wizard state into the action */}
+      {state.services.map((s) => (
         <input key={s} type="hidden" name="services" value={s} />
       ))}
-      {addOnSlugs.map((a) => (
+      {state.addOns.map((a) => (
         <input key={a} type="hidden" name="add_ons" value={a} />
       ))}
-      <input type="hidden" name="slot" value={slot} />
+      <input type="hidden" name="slot" value={state.slot ?? ""} />
+      <input type="hidden" name="street_address" value={state.streetAddress} />
+      <input type="hidden" name="unit_number" value={state.unitNumber} />
+      <input type="hidden" name="city" value={state.city} />
+      <input type="hidden" name="postal_code" value={state.postalCode} />
+      <input
+        type="hidden"
+        name="square_footage"
+        value={state.squareFootage == null ? "" : String(state.squareFootage)}
+      />
+      <input type="hidden" name="is_vacant" value={state.isVacant ?? ""} />
+      <input
+        type="hidden"
+        name="include_basement"
+        value={
+          state.includeBasement == null ? "" : state.includeBasement ? "1" : "0"
+        }
+      />
 
-      <p className="text-sm text-ink-muted">
-        You&apos;re booking <span className="text-white">{whenLabel}</span>.
-      </p>
-
-      {/* ---- Property details (always shown) ---- */}
-      <fieldset className="grid gap-4 md:grid-cols-2">
-        <legend className="sr-only">Property details</legend>
-        <Field
-          label="Property address"
-          name="street_address"
-          required
-          placeholder="123 King St W"
-          className="md:col-span-2"
-          error={state?.errors?.street_address}
-        />
-        <Field label="City" name="city" defaultValue="Hamilton" />
-        <Field label="Postal code" name="postal_code" placeholder="L8P 4S8" />
-        <label className="block md:col-span-2">
-          <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
-            Notes (optional)
-          </span>
-          <textarea
-            name="notes"
-            rows={3}
-            placeholder="Tenant occupied, vacant, pets, gate code, etc."
-            className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
-          />
-        </label>
-      </fieldset>
-
-      {/* ---- Contact + auth (hidden when signed in) ---- */}
       {profile ? null : (
         <fieldset className="grid gap-4 md:grid-cols-2">
           <legend className="sr-only">Your contact info</legend>
-
           <Field
             label="Full name"
             name="contact_name"
             required
             autoComplete="name"
-            error={state?.errors?.contact_name}
+            error={formState?.errors?.contact_name}
           />
           <Field
             label="Brokerage"
@@ -143,7 +113,7 @@ export default function BookingConfirmForm({
             value={email}
             onChange={(e) => handleEmailChange(e.currentTarget.value)}
             onBlur={handleEmailBlur}
-            error={state?.errors?.contact_email}
+            error={formState?.errors?.contact_email}
           />
           <Field
             label="Phone"
@@ -151,16 +121,13 @@ export default function BookingConfirmForm({
             type="tel"
             autoComplete="tel"
             placeholder="(905) 555-0123"
-            error={state?.errors?.contact_phone}
+            error={formState?.errors?.contact_phone}
           />
-
           <div className="md:col-span-2">
             <label className="block">
               <span className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-ink-muted">
                 <span>
-                  {mode === "existing"
-                    ? "Password"
-                    : "Create a password"}
+                  {mode === "existing" ? "Password" : "Create a password"}
                   <span className="text-brand-light"> *</span>
                 </span>
                 {mode === "existing" ? (
@@ -182,7 +149,7 @@ export default function BookingConfirmForm({
                 minLength={8}
                 className={
                   "mt-1 w-full rounded-md border bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
-                  (state?.errors?.password
+                  (formState?.errors?.password
                     ? "border-red-400/60"
                     : "border-white/10")
                 }
@@ -194,9 +161,9 @@ export default function BookingConfirmForm({
                     ? "You'll be able to sign in later to see all your bookings and reschedule."
                     : "8+ characters. We'll either sign you in or create your account."}
               </span>
-              {state?.errors?.password ? (
+              {formState?.errors?.password ? (
                 <span className="mt-1 block text-xs text-red-300">
-                  {state.errors.password}
+                  {formState.errors.password}
                 </span>
               ) : null}
             </label>
@@ -204,59 +171,89 @@ export default function BookingConfirmForm({
         </fieldset>
       )}
 
-      {state?.errors?._form ? (
+      {/* Optional notes — for either path. */}
+      <label className="block">
+        <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+          Anything we should know? (optional)
+        </span>
+        <textarea
+          name="notes"
+          rows={3}
+          placeholder="Pets, gate code, lockbox, etc."
+          className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+        />
+      </label>
+
+      {formState?.errors?._form ? (
         <p role="alert" className="text-sm text-red-300">
-          {state.errors._form}
+          {formState.errors._form}
         </p>
       ) : null}
 
-      <SubmitRow />
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-5">
+        <Link
+          href={`/book/schedule?${buildQuery(state)}`}
+          className="rounded-md border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-white/30"
+        >
+          ← Back
+        </Link>
+        <SubmitButton />
+      </div>
     </form>
   );
 }
 
-function SubmitRow() {
+function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-5">
-      <p className="text-xs text-ink-muted">
-        Payment happens after the shoot. We&apos;ll confirm pricing if anything
-        needs adjusting.
-      </p>
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-md bg-brand px-5 py-2.5 font-semibold text-white hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {pending ? "Booking…" : "Confirm booking"}
-      </button>
-    </div>
+    <button
+      type="submit"
+      disabled={pending}
+      className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {pending ? "Booking…" : "Confirm booking"}
+    </button>
   );
 }
 
 function Field({
   label,
   name,
-  error,
-  className = "",
   type = "text",
-  ...rest
+  required,
+  placeholder,
+  autoComplete,
+  value,
+  onChange,
+  onBlur,
+  error,
 }: {
   label: string;
   name: string;
+  type?: string;
+  required?: boolean;
+  placeholder?: string;
+  autoComplete?: string;
+  value?: string;
+  onChange?: React.ChangeEventHandler<HTMLInputElement>;
+  onBlur?: React.FocusEventHandler<HTMLInputElement>;
   error?: string;
-  className?: string;
-} & React.InputHTMLAttributes<HTMLInputElement>) {
+}) {
   return (
-    <label className={"block " + className}>
+    <label className="block">
       <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
         {label}
-        {rest.required ? <span className="text-brand-light"> *</span> : null}
+        {required ? <span className="text-brand-light"> *</span> : null}
       </span>
       <input
         name={name}
         type={type}
-        {...rest}
+        required={required}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        value={value}
+        onChange={onChange}
+        onBlur={onBlur}
         className={
           "mt-1 w-full rounded-md border bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
           (error ? "border-red-400/60" : "border-white/10")
@@ -267,4 +264,22 @@ function Field({
       ) : null}
     </label>
   );
+}
+
+function buildQuery(state: WizardState): string {
+  const out = new URLSearchParams();
+  if (state.services.length) out.set("services", state.services.join(","));
+  if (state.addOns.length) out.set("add_ons", state.addOns.join(","));
+  if (state.streetAddress) out.set("address", state.streetAddress);
+  if (state.unitNumber) out.set("unit", state.unitNumber);
+  if (state.city) out.set("city", state.city);
+  if (state.postalCode) out.set("postal", state.postalCode);
+  if (state.squareFootage != null)
+    out.set("sqft", String(state.squareFootage));
+  if (state.isVacant) out.set("vacant", state.isVacant);
+  if (state.includeBasement != null) {
+    out.set("basement", state.includeBasement ? "1" : "0");
+  }
+  if (state.slot) out.set("slot", state.slot);
+  return out.toString();
 }

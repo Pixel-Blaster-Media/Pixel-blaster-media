@@ -72,8 +72,12 @@ export async function createPublicBooking(
     .filter(Boolean);
   const slotStartRaw = str(formData, "slot");
   const streetAddress = str(formData, "street_address");
+  const unitNumber = str(formData, "unit_number");
   const city = str(formData, "city");
   const postalCode = str(formData, "postal_code");
+  const squareFootageRaw = str(formData, "square_footage");
+  const isVacantRaw = str(formData, "is_vacant");
+  const includeBasementRaw = str(formData, "include_basement");
   const notes = str(formData, "notes");
 
   const contactName = str(formData, "contact_name");
@@ -81,6 +85,22 @@ export async function createPublicBooking(
   const contactPhone = str(formData, "contact_phone");
   const brokerage = str(formData, "brokerage");
   const password = (formData.get("password") as string | null) ?? "";
+
+  const squareFootage = squareFootageRaw
+    ? Math.max(0, Math.trunc(Number(squareFootageRaw)))
+    : null;
+  const isVacant: "vacant" | "occupied" | "partial" | null =
+    isVacantRaw === "vacant" ||
+    isVacantRaw === "occupied" ||
+    isVacantRaw === "partial"
+      ? isVacantRaw
+      : null;
+  const includeBasement: boolean | null =
+    includeBasementRaw === "1"
+      ? true
+      : includeBasementRaw === "0"
+        ? false
+        : null;
 
   if (serviceSlugs.length === 0) {
     return { ok: false, errors: { _form: "Pick at least one service." } };
@@ -211,6 +231,10 @@ export async function createPublicBooking(
       services: legacyServices,
       add_ons: legacyAddons,
       client_notes: notes || null,
+      unit_number: unitNumber || null,
+      square_footage: squareFootage,
+      is_vacant: isVacant,
+      include_basement: includeBasement,
     })
     .select("id")
     .single<InsertedRow>();
@@ -230,16 +254,32 @@ export async function createPublicBooking(
       const endAt = new Date(slotStart.getTime() + duration * 60_000);
       const serviceLabels = validServices.map((s) => s.name).join(", ");
       const addonLabels = validAddons.map((a) => a.name).join(", ");
-      const addressLine = [streetAddress, city, postalCode]
+      const streetLine = unitNumber
+        ? `${streetAddress}, Unit ${unitNumber}`
+        : streetAddress;
+      const addressLine = [streetLine, city, postalCode]
         .filter(Boolean)
         .join(", ");
+      const occupancyLabel =
+        isVacant === "vacant"
+          ? "Vacant"
+          : isVacant === "partial"
+            ? "Partially occupied"
+            : isVacant === "occupied"
+              ? "Occupied"
+              : null;
       const event = await gcal.createEvent({
-        summary: `Shoot — ${streetAddress}`,
+        summary: `Shoot — ${streetLine}`,
         location: addressLine,
         description:
           `Realtor: ${userDisplayName}\nEmail: ${userEmail}\n` +
           `Services: ${serviceLabels}\n` +
           (addonLabels ? `Add-ons: ${addonLabels}\n` : "") +
+          (squareFootage ? `Size: ~${squareFootage} sqft\n` : "") +
+          (occupancyLabel ? `Occupancy: ${occupancyLabel}\n` : "") +
+          (includeBasement != null
+            ? `Basement: ${includeBasement ? "include" : "skip"}\n`
+            : "") +
           (notes ? `\nNotes:\n${notes}\n` : ""),
         startISO: slotStart.toISOString(),
         endISO: endAt.toISOString(),
@@ -266,17 +306,20 @@ export async function createPublicBooking(
   }).format(slotStart);
   const serviceLabels = validServices.map((s) => s.name).join(", ");
   const addonLabels = validAddons.map((a) => a.name).join(", ");
+  const emailAddressLine = unitNumber
+    ? `${streetAddress}, Unit ${unitNumber}`
+    : streetAddress;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
   await Promise.all([
     sendEmail({
       to: userEmail,
-      subject: `Booking confirmed — ${streetAddress}`,
+      subject: `Booking confirmed — ${emailAddressLine}`,
       html: `
         <p>Hi ${escapeHtml(userDisplayName)},</p>
         <p>Your shoot is booked and on our calendar.</p>
         <p>
-          <strong>Address:</strong> ${escapeHtml(streetAddress)}<br>
+          <strong>Address:</strong> ${escapeHtml(emailAddressLine)}<br>
           <strong>When:</strong> ${escapeHtml(whenLabel)}<br>
           <strong>Services:</strong> ${escapeHtml(serviceLabels)}<br>
           ${addonLabels ? `<strong>Add-ons:</strong> ${escapeHtml(addonLabels)}<br>` : ""}
@@ -292,7 +335,7 @@ export async function createPublicBooking(
     sendAdminNotification({
       booking: {
         id: booking.id,
-        address: streetAddress,
+        address: emailAddressLine,
         whenLabel,
         serviceLabels,
         addonLabels,
