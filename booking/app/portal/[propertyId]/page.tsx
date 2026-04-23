@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import {
   BOOKING_STATUSES,
   deliverableTypeLabel,
+  isCancellable,
 } from "@/lib/booking/booking-status";
 import { requireUser } from "@/lib/auth/require-user";
 import { getServerSupabase } from "@/lib/supabase/server";
@@ -13,6 +14,7 @@ import type {
   DeliverableType,
 } from "@/lib/supabase/database.types";
 
+import CancelBookingButton from "./CancelBookingButton";
 import CopyLinkButton from "./CopyLinkButton";
 
 export const dynamic = "force-dynamic";
@@ -115,6 +117,16 @@ export default async function PropertyDetailPage({
               <span className="text-ink-muted">
                 {new Date(latestBooking.scheduled_at).toLocaleString()}
               </span>
+            ) : null}
+            {isCancellable(latestBooking.status) ? (
+              <CancelBookingButton
+                bookingId={latestBooking.id}
+                whenLabel={
+                  latestBooking.scheduled_at
+                    ? new Date(latestBooking.scheduled_at).toLocaleString()
+                    : null
+                }
+              />
             ) : null}
           </div>
         ) : null}
