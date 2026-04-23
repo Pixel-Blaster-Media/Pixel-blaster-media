@@ -71,7 +71,7 @@ export default async function InboxPage({
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
-            Inbox
+            Inbox · historical
           </p>
           <h1 className="mt-1 text-2xl font-bold text-white">
             Booking requests
@@ -94,6 +94,14 @@ export default async function InboxPage({
           ))}
         </nav>
       </header>
+
+      <p className="rounded-md border border-white/10 bg-ink-soft/40 px-4 py-3 text-xs text-ink-muted">
+        New self-serve bookings go directly to{" "}
+        <Link href="/admin/bookings" className="text-brand-light underline">
+          Bookings
+        </Link>
+        . This inbox is the archive of older &ldquo;request&rdquo; submissions.
+      </p>
 
       {requests && requests.length > 0 ? (
         <ul className="divide-y divide-white/5 overflow-hidden rounded-lg border border-white/10 bg-ink-soft/50">

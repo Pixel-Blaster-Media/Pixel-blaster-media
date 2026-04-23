@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useFormState, useFormStatus } from "react-dom";
 
 import {
@@ -28,8 +29,14 @@ export default function PasswordSignInForm() {
         />
       </label>
       <label className="block">
-        <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
-          Password
+        <span className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-ink-muted">
+          <span>Password</span>
+          <Link
+            href="/auth/reset"
+            className="text-[11px] normal-case tracking-normal text-brand-light hover:underline"
+          >
+            Forgot password?
+          </Link>
         </span>
         <input
           type="password"
