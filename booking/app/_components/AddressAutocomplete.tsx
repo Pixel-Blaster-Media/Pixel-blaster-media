@@ -1,36 +1,48 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from "react";
 
 /**
- * Google Places address autocomplete.
+ * Address autocomplete backed by Places API (New) REST.
  *
- * Loads the Maps JavaScript SDK + Places library on first mount, then
- * wires `google.maps.places.Autocomplete` to the input below. When the
- * user picks a prediction:
+ * Why not the classic `google.maps.places.Autocomplete` widget? Google
+ * disabled that constructor for API keys created after 2025-03-01, so
+ * any fresh key returns an empty `places` object and the widget
+ * errors "Cannot read properties of undefined (reading 'Autocomplete')".
  *
- *   - We parse the `address_components` into street / unit / city /
- *     postal_code and emit them to the parent via `onPlace`.
- *   - The input itself keeps the formatted address for visual confirmation.
+ * Why not the newer `PlaceAutocompleteElement` Web Component? Its
+ * built-in dropdown can't be styled to match our dark theme — the
+ * shadow-DOM parts are limited, and we'd still need the Maps JS SDK
+ * loaded (which also tends to fail with InvalidKeyMapError on freshly-
+ * issued keys while restrictions propagate).
  *
- * Falls back gracefully:
- *   - No `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` → the component renders as a
- *     plain text input and just emits the raw typed value.
- *   - Script fails to load (offline, API quota, etc.) → same fallback.
+ * So this component talks directly to
+ *   POST https://places.googleapis.com/v1/places:autocomplete
+ *   GET  https://places.googleapis.com/v1/places/{placeId}
  *
- * Canadian-only for now (`country: ["ca"]`). Most realtors search in the
- * GTA; US addresses would require changing this or adding a setting.
+ * and renders our own styled suggestion list. Only dep is a public API
+ * key with Places API (New) enabled and the browser's origin whitelisted
+ * as an HTTP referrer.
+ *
+ * Falls back to a plain text input whenever anything fails — the user
+ * can always type an address manually, and step-2 validation only
+ * requires street + city.
  */
 
 export interface PlaceParts {
-  /** Street number + street name, e.g. "123 King St W". */
   street_address: string;
-  /** Suite / unit / apt, if the user picked a Premise + subpremise. */
   unit_number: string;
   city: string;
   province: string;
   postal_code: string;
-  /** The address as Google formatted it — useful for debugging / fallback. */
   formatted_address: string;
 }
 
@@ -39,60 +51,22 @@ interface Props {
   label: string;
   required?: boolean;
   placeholder?: string;
-  /** Initial displayed value — use when pre-filling on step revisit. */
+  /** Pre-fill when the user revisits step 2 from a later step. */
   defaultValue?: string;
-  /** Fires when the user picks an autocomplete suggestion. */
+  /** Fires when the user picks a suggestion. */
   onPlace: (parts: PlaceParts) => void;
-  /** Fires on plain typing (for two-way controlled usage). */
+  /** Fires on plain typing so the parent can stay in sync. */
   onChange?: (value: string) => void;
   error?: string;
 }
 
-// Module-level so repeated mounts don't re-inject the <script>.
-let loaderPromise: Promise<void> | null = null;
+type Suggestion = {
+  placeId: string;
+  text: string;
+};
 
-function loadPlacesSdk(): Promise<void> {
-  if (typeof window === "undefined") return Promise.reject(new Error("SSR"));
-  if (loaderPromise) return loaderPromise;
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  if (!apiKey) {
-    return Promise.reject(
-      new Error("NEXT_PUBLIC_GOOGLE_MAPS_API_KEY not set"),
-    );
-  }
-  // Global cached between Autocomplete mounts.
-  const win = window as unknown as { google?: { maps?: { places?: unknown } } };
-  if (win.google?.maps?.places) {
-    return Promise.resolve();
-  }
-
-  loaderPromise = new Promise((resolve, reject) => {
-    const existing = document.getElementById("google-maps-sdk");
-    if (existing) {
-      existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", () =>
-        reject(new Error("Google Maps SDK failed to load")),
-      );
-      return;
-    }
-    const s = document.createElement("script");
-    s.id = "google-maps-sdk";
-    s.async = true;
-    s.defer = true;
-    s.src =
-      "https://maps.googleapis.com/maps/api/js?" +
-      new URLSearchParams({
-        key: apiKey,
-        libraries: "places",
-        loading: "async",
-        v: "weekly",
-      }).toString();
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error("Google Maps SDK failed to load"));
-    document.head.appendChild(s);
-  });
-  return loaderPromise;
-}
+const MIN_QUERY_LENGTH = 3;
+const DEBOUNCE_MS = 250;
 
 export default function AddressAutocomplete({
   name,
@@ -104,145 +78,266 @@ export default function AddressAutocomplete({
   onChange,
   error,
 }: Props) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<unknown>(null);
-  const [sdkReady, setSdkReady] = useState(false);
-  const [sdkError, setSdkError] = useState<string | null>(null);
   const inputId = useId();
+  const containerRef = useRef<HTMLDivElement>(null);
 
+  // Fully controlled: the input's value is `value`, which either the
+  // user types or we set from a suggestion click. This avoids the
+  // "re-render steals focus / resets DOM value" class of bugs.
+  const [value, setValue] = useState(defaultValue ?? "");
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const [highlighted, setHighlighted] = useState(-1);
+  const [fetchDisabled, setFetchDisabled] = useState(false);
+
+  // One session token per "typing session" so Google bills a session
+  // (autocomplete + details) as a single billable event per their docs.
+  const [sessionToken, setSessionToken] = useState<string>(() =>
+    crypto.randomUUID(),
+  );
+
+  // Stash callbacks in refs so we don't have to include them in effect
+  // deps (keeps the debounce effect from thrashing on every parent
+  // re-render).
+  const onPlaceRef = useRef(onPlace);
+  const onChangeRef = useRef(onChange);
   useEffect(() => {
-    let cancelled = false;
-    loadPlacesSdk()
-      .then(() => {
-        if (cancelled) return;
-        setSdkReady(true);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setSdkError(err instanceof Error ? err.message : String(err));
-      });
+    onPlaceRef.current = onPlace;
+  }, [onPlace]);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  // Debounced suggestion fetch.
+  useEffect(() => {
+    if (!apiKey || fetchDisabled) return;
+    const q = value.trim();
+    if (q.length < MIN_QUERY_LENGTH) {
+      setSuggestions([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          "https://places.googleapis.com/v1/places:autocomplete",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Goog-Api-Key": apiKey,
+            },
+            body: JSON.stringify({
+              input: q,
+              includedRegionCodes: ["ca"],
+              sessionToken,
+            }),
+            signal: controller.signal,
+          },
+        );
+        if (!res.ok) {
+          // Swallow — 403 (key rejected) / 429 (quota) / etc. should
+          // silently stop showing suggestions, not break typing.
+          if (res.status === 403 || res.status === 401) {
+            setFetchDisabled(true);
+          }
+          setSuggestions([]);
+          return;
+        }
+        const data = (await res.json()) as {
+          suggestions?: Array<{
+            placePrediction?: {
+              placeId: string;
+              text?: { text?: string };
+            };
+          }>;
+        };
+        const next: Suggestion[] = [];
+        for (const s of data.suggestions ?? []) {
+          const p = s.placePrediction;
+          if (!p?.placeId || !p.text?.text) continue;
+          next.push({ placeId: p.placeId, text: p.text.text });
+        }
+        setSuggestions(next);
+        setIsOpen(next.length > 0);
+        setHighlighted(-1);
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        // Network error — swallow, plain input still works.
+        setSuggestions([]);
+      }
+    }, DEBOUNCE_MS);
     return () => {
-      cancelled = true;
+      clearTimeout(timer);
+      controller.abort();
     };
+  }, [value, apiKey, sessionToken, fetchDisabled]);
+
+  // Click outside → close the dropdown.
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (!containerRef.current?.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
-  useEffect(() => {
-    if (!sdkReady || !inputRef.current) return;
-    const win = window as unknown as {
-      google?: {
-        maps?: {
-          places?: {
-            Autocomplete?: new (
-              input: HTMLInputElement,
-              options: unknown,
-            ) => {
-              addListener: (event: string, cb: () => void) => void;
-              getPlace: () => {
-                address_components?: Array<{
-                  long_name: string;
-                  short_name: string;
-                  types: string[];
-                }>;
-                formatted_address?: string;
-              };
-            };
-          };
+  const pickPlace = useCallback(
+    async (suggestion: Suggestion) => {
+      setIsOpen(false);
+      setValue(suggestion.text);
+      onChangeRef.current?.(suggestion.text);
+      if (!apiKey) return;
+      try {
+        const res = await fetch(
+          `https://places.googleapis.com/v1/places/${encodeURIComponent(
+            suggestion.placeId,
+          )}?sessionToken=${encodeURIComponent(sessionToken)}`,
+          {
+            headers: {
+              "X-Goog-Api-Key": apiKey,
+              "X-Goog-FieldMask": "addressComponents,formattedAddress",
+            },
+          },
+        );
+        if (!res.ok) return;
+        const place = (await res.json()) as {
+          formattedAddress?: string;
+          addressComponents?: Array<{
+            longText?: string;
+            shortText?: string;
+            types?: string[];
+          }>;
         };
-      };
-    };
-
-    // Guard against SDK-loaded-but-places-library-unavailable. Happens
-    // when the API key is rejected ("InvalidKey" warning) — the script
-    // tag loads but google.maps.places never gets populated.
-    const AutocompleteCtor = win.google?.maps?.places?.Autocomplete;
-    if (!AutocompleteCtor) {
-      console.warn(
-        "[autocomplete] google.maps.places.Autocomplete not available — API key rejected or Places library missing. Falling back to plain input.",
-      );
-      setSdkError(
-        "Address autocomplete unavailable — type the address and we'll validate it.",
-      );
-      return;
-    }
-
-    let ac: InstanceType<typeof AutocompleteCtor>;
-    try {
-      ac = new AutocompleteCtor(inputRef.current, {
-        types: ["address"],
-        componentRestrictions: { country: ["ca"] },
-        fields: ["address_components", "formatted_address"],
-      });
-    } catch (err) {
-      console.warn("[autocomplete] constructor threw", err);
-      setSdkError("Address autocomplete failed to start.");
-      return;
-    }
-    autocompleteRef.current = ac;
-
-    ac.addListener("place_changed", () => {
-      const place = ac.getPlace();
-      const parts = parseAddressComponents(
-        place.address_components ?? [],
-        place.formatted_address ?? "",
-      );
-      onPlace(parts);
-      if (inputRef.current && place.formatted_address) {
-        inputRef.current.value = place.formatted_address;
-        onChange?.(place.formatted_address);
+        const parts = parsePlace(place);
+        // Display just the street line in the input — city / postal go
+        // into their own fields. Keeps each piece editable.
+        const display = parts.street_address || parts.formatted_address || suggestion.text;
+        setValue(display);
+        onChangeRef.current?.(display);
+        onPlaceRef.current(parts);
+      } finally {
+        // Rotate the session token — Google's pricing treats one
+        // autocomplete+details pair as a single session.
+        setSessionToken(crypto.randomUUID());
       }
-    });
+    },
+    [apiKey, sessionToken],
+  );
 
-    return () => {
-      // Detach listener on unmount; Google doesn't expose a clean API
-      // for this but dropping the ref + the old input is enough since
-      // the event fires against the input node.
-      autocompleteRef.current = null;
-    };
-  }, [sdkReady, onPlace, onChange]);
+  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (!isOpen || suggestions.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlighted((h) => (h + 1) % suggestions.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlighted(
+        (h) => (h - 1 + suggestions.length) % suggestions.length,
+      );
+    } else if (e.key === "Enter" && highlighted >= 0) {
+      e.preventDefault();
+      void pickPlace(suggestions[highlighted]);
+    } else if (e.key === "Escape") {
+      setIsOpen(false);
+    }
+  }
+
+  function onType(e: ChangeEvent<HTMLInputElement>) {
+    const v = e.target.value;
+    setValue(v);
+    onChangeRef.current?.(v);
+    if (!isOpen && v.length >= MIN_QUERY_LENGTH) setIsOpen(true);
+  }
+
+  const helperText = !apiKey
+    ? "Just type the address manually."
+    : fetchDisabled
+      ? "Autocomplete offline — type the address manually."
+      : value.length < MIN_QUERY_LENGTH
+        ? "Start typing — we'll suggest full addresses."
+        : suggestions.length === 0
+          ? "No matches yet — keep typing."
+          : "Pick a suggestion or keep typing.";
 
   return (
-    <label className="block">
-      <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
-        {label}
-        {required ? <span className="text-brand-light"> *</span> : null}
-      </span>
-      <input
-        id={inputId}
-        ref={inputRef}
-        name={name}
-        type="text"
-        required={required}
-        placeholder={placeholder}
-        defaultValue={defaultValue}
-        autoComplete="off"
-        onChange={(e) => onChange?.(e.currentTarget.value)}
-        className={
-          "mt-1 w-full rounded-md border bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
-          (error ? "border-red-400/60" : "border-white/10")
-        }
-      />
-      <span className="mt-1 block text-[11px] text-ink-muted">
-        {sdkError
-          ? "Autocomplete offline — just type the address manually."
-          : sdkReady
-            ? "Start typing — we'll suggest full addresses."
-            : "Loading suggestions…"}
-      </span>
-      {error ? (
-        <span className="mt-1 block text-xs text-red-300">{error}</span>
+    <div ref={containerRef} className="relative">
+      <label htmlFor={inputId} className="block">
+        <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+          {label}
+          {required ? <span className="text-brand-light"> *</span> : null}
+        </span>
+        <input
+          id={inputId}
+          name={name}
+          type="text"
+          required={required}
+          placeholder={placeholder}
+          value={value}
+          onChange={onType}
+          onKeyDown={onKeyDown}
+          onFocus={() => suggestions.length > 0 && setIsOpen(true)}
+          autoComplete="off"
+          aria-autocomplete="list"
+          aria-expanded={isOpen}
+          className={
+            "mt-1 w-full rounded-md border bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
+            (error ? "border-red-400/60" : "border-white/10")
+          }
+        />
+        <span className="mt-1 block text-[11px] text-ink-muted">
+          {helperText}
+        </span>
+        {error ? (
+          <span className="mt-1 block text-xs text-red-300">{error}</span>
+        ) : null}
+      </label>
+      {isOpen && suggestions.length > 0 ? (
+        <ul
+          role="listbox"
+          className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-auto rounded-md border border-white/10 bg-ink shadow-xl"
+        >
+          {suggestions.map((s, i) => (
+            <li key={s.placeId} role="option" aria-selected={i === highlighted}>
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  // onMouseDown (not onClick) so focus doesn't move to
+                  // the button before we process the pick — otherwise
+                  // the outside-click handler fires first and closes.
+                  e.preventDefault();
+                  void pickPlace(s);
+                }}
+                onMouseEnter={() => setHighlighted(i)}
+                className={
+                  "block w-full px-3 py-2 text-left text-sm transition " +
+                  (i === highlighted
+                    ? "bg-brand/15 text-white"
+                    : "text-white/90 hover:bg-white/5")
+                }
+              >
+                {s.text}
+              </button>
+            </li>
+          ))}
+        </ul>
       ) : null}
-    </label>
+    </div>
   );
 }
 
-function parseAddressComponents(
-  components: Array<{
-    long_name: string;
-    short_name: string;
-    types: string[];
-  }>,
-  formatted_address: string,
-): PlaceParts {
+function parsePlace(place: {
+  formattedAddress?: string;
+  addressComponents?: Array<{
+    longText?: string;
+    shortText?: string;
+    types?: string[];
+  }>;
+}): PlaceParts {
   let streetNumber = "";
   let route = "";
   let unit = "";
@@ -250,23 +345,28 @@ function parseAddressComponents(
   let province = "";
   let postal_code = "";
 
-  for (const c of components) {
-    if (c.types.includes("street_number")) streetNumber = c.long_name;
-    else if (c.types.includes("route")) route = c.long_name;
-    else if (c.types.includes("subpremise")) unit = c.long_name;
-    else if (c.types.includes("postal_town")) city = c.long_name;
-    else if (c.types.includes("locality")) city = c.long_name || city;
-    else if (c.types.includes("administrative_area_level_3") && !city) {
-      city = c.long_name;
-    } else if (c.types.includes("sublocality") && !city) {
-      // Some Toronto addresses come through as sublocalities
-      city = c.long_name;
-    } else if (c.types.includes("administrative_area_level_1")) {
-      province = c.short_name;
-    } else if (c.types.includes("postal_code")) postal_code = c.long_name;
+  for (const c of place.addressComponents ?? []) {
+    const types = c.types ?? [];
+    const long = c.longText ?? "";
+    const short = c.shortText ?? "";
+    if (types.includes("street_number")) streetNumber = long;
+    else if (types.includes("route")) route = long;
+    else if (types.includes("subpremise")) unit = long;
+    else if (types.includes("postal_town")) city = long;
+    else if (types.includes("locality")) city = long || city;
+    else if (types.includes("administrative_area_level_3") && !city) {
+      city = long;
+    } else if (types.includes("sublocality") && !city) {
+      city = long;
+    } else if (types.includes("administrative_area_level_1")) {
+      province = short;
+    } else if (types.includes("postal_code")) postal_code = long;
   }
 
-  const street_address = [streetNumber, route].filter(Boolean).join(" ").trim();
+  const street_address = [streetNumber, route]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
 
   return {
     street_address,
@@ -274,6 +374,6 @@ function parseAddressComponents(
     city,
     province,
     postal_code,
-    formatted_address,
+    formatted_address: place.formattedAddress ?? street_address,
   };
 }
