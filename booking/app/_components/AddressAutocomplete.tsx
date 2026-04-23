@@ -129,10 +129,10 @@ export default function AddressAutocomplete({
   useEffect(() => {
     if (!sdkReady || !inputRef.current) return;
     const win = window as unknown as {
-      google: {
-        maps: {
-          places: {
-            Autocomplete: new (
+      google?: {
+        maps?: {
+          places?: {
+            Autocomplete?: new (
               input: HTMLInputElement,
               options: unknown,
             ) => {
@@ -150,11 +150,33 @@ export default function AddressAutocomplete({
         };
       };
     };
-    const ac = new win.google.maps.places.Autocomplete(inputRef.current, {
-      types: ["address"],
-      componentRestrictions: { country: ["ca"] },
-      fields: ["address_components", "formatted_address"],
-    });
+
+    // Guard against SDK-loaded-but-places-library-unavailable. Happens
+    // when the API key is rejected ("InvalidKey" warning) — the script
+    // tag loads but google.maps.places never gets populated.
+    const AutocompleteCtor = win.google?.maps?.places?.Autocomplete;
+    if (!AutocompleteCtor) {
+      console.warn(
+        "[autocomplete] google.maps.places.Autocomplete not available — API key rejected or Places library missing. Falling back to plain input.",
+      );
+      setSdkError(
+        "Address autocomplete unavailable — type the address and we'll validate it.",
+      );
+      return;
+    }
+
+    let ac: InstanceType<typeof AutocompleteCtor>;
+    try {
+      ac = new AutocompleteCtor(inputRef.current, {
+        types: ["address"],
+        componentRestrictions: { country: ["ca"] },
+        fields: ["address_components", "formatted_address"],
+      });
+    } catch (err) {
+      console.warn("[autocomplete] constructor threw", err);
+      setSdkError("Address autocomplete failed to start.");
+      return;
+    }
     autocompleteRef.current = ac;
 
     ac.addListener("place_changed", () => {
