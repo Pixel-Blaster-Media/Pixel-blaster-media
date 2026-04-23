@@ -6,6 +6,7 @@ import {
   BOOKING_STATUSES,
   DELIVERABLE_TYPES,
   deliverableTypeLabel,
+  isCancellable,
 } from "@/lib/booking/booking-status";
 import type {
   BookingStatus,
@@ -14,6 +15,7 @@ import type {
 
 import {
   addManualDeliverable,
+  cancelBookingAsAdmin,
   deleteDeliverable,
   updateBookingStatus,
 } from "./actions";
@@ -49,6 +51,28 @@ export default function BookingActions({
     });
   }
 
+  function cancel() {
+    if (
+      !confirm(
+        "Cancel this booking? The realtor will be emailed and the Google Calendar event will be removed. The slot becomes bookable again.",
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const res = await cancelBookingAsAdmin(bookingId);
+      if (!res.ok) setError(res.error ?? "Cancel failed.");
+    });
+  }
+
+  // Skip `cancelled` from the normal transitions list — we render a
+  // dedicated "Cancel booking" button below that runs the richer flow
+  // (delete calendar event, email realtor). Plain pipeline buttons
+  // cover requested→confirmed, confirmed→shot, etc.
+  const forwardOnly = transitions.filter((s) => s !== "cancelled");
+  const showCancel = isCancellable(currentStatus);
+
   return (
     <div className="space-y-6 rounded-lg border border-brand/20 bg-brand/5 p-4">
       <div>
@@ -59,12 +83,12 @@ export default function BookingActions({
           Current: {BOOKING_STATUSES[currentStatus].label}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          {transitions.length === 0 ? (
+          {forwardOnly.length === 0 && !showCancel ? (
             <p className="text-xs text-ink-muted">
               Terminal state — no further transitions.
             </p>
           ) : (
-            transitions.map((s) => (
+            forwardOnly.map((s) => (
               <button
                 key={s}
                 type="button"
@@ -76,6 +100,16 @@ export default function BookingActions({
               </button>
             ))
           )}
+          {showCancel ? (
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={cancel}
+              className="rounded-md border border-red-400/40 px-3 py-1.5 text-sm text-red-200 hover:border-red-300 hover:bg-red-500/10 disabled:opacity-60"
+            >
+              Cancel booking
+            </button>
+          ) : null}
         </div>
         {error ? (
           <p className="mt-2 text-sm text-red-300" role="alert">

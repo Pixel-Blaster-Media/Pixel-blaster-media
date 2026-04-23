@@ -62,6 +62,22 @@ export function nextBookingStatuses(current: BookingStatus): BookingStatus[] {
   return FORWARD[current] ?? [];
 }
 
+/**
+ * Statuses a booking can be user-cancelled from. Once work has started
+ * (`shot` / `editing`) or the deliverables have been handed over
+ * (`delivered`), the Cancel button hides — admin can still move the
+ * status manually via the pipeline if they need to record something
+ * unusual.
+ *
+ * Client-safe (no server-only deps) so it can be checked in client
+ * components for conditional rendering.
+ */
+const CANCELLABLE_STATUSES: BookingStatus[] = ["requested", "confirmed"];
+
+export function isCancellable(status: BookingStatus): boolean {
+  return CANCELLABLE_STATUSES.includes(status);
+}
+
 export const BOOKING_REQUEST_STATUSES: Record<BookingRequestStatus, StatusMeta> = {
   new: {
     label: "New",

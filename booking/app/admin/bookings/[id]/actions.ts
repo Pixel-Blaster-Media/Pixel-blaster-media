@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { nextBookingStatuses } from "@/lib/booking/booking-status";
+import { cancelBooking } from "@/lib/booking/cancel";
 import { syncEnhance } from "@/lib/integrations/fotello/sync";
 import type { FotelloShotType } from "@/lib/integrations/fotello/client";
 import {
@@ -107,6 +108,23 @@ export async function updateBookingStatus(
 
   if (error) return { ok: false, error: error.message };
 
+  revalidatePath("/admin/bookings");
+  revalidatePath(`/admin/bookings/${bookingId}`);
+  return { ok: true };
+}
+
+/**
+ * Admin-initiated cancel — includes side effects the pipeline button
+ * doesn't (delete Google Calendar event, email the realtor). Use this
+ * for user-facing "cancellations", and reserve `updateBookingStatus`
+ * for normal pipeline progression.
+ */
+export async function cancelBookingAsAdmin(
+  bookingId: string,
+): Promise<ActionResult> {
+  await requireAdmin();
+  const result = await cancelBooking(bookingId, "admin");
+  if (!result.ok) return { ok: false, error: result.error };
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true };
