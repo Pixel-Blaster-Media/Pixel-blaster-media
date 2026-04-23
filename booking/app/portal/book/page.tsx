@@ -4,18 +4,17 @@ import Link from "next/link";
 import type { CatalogItemDTO } from "@/app/_components/CartPicker";
 import { requireUser } from "@/lib/auth/require-user";
 import {
-  BUSINESS_TZ,
-  listAvailableSlots,
-} from "@/lib/booking/availability";
-import {
   getActiveCatalog,
   type CatalogItemRow,
 } from "@/lib/booking/catalog";
+import {
+  formatSlotLabel,
+  loadSlotsForNextDays,
+} from "@/lib/booking/slot-display";
 
 import BookingConfirmForm from "./BookingConfirmForm";
 import ServicePicker from "./ServicePicker";
 import SlotPicker from "./SlotPicker";
-import type { SlotsByDay } from "./slot-types";
 
 export const metadata: Metadata = { title: "Book a shoot" };
 export const dynamic = "force-dynamic";
@@ -74,10 +73,10 @@ export default async function PortalBookPage({
   );
 
   const selectedSlot = searchParams.slot ?? null;
-  const daysOfSlots: SlotsByDay[] =
-    selectedSlugs.length > 0 ? await loadSlotsForNextWeeks(duration, 28) : [];
+  const daysOfSlots =
+    selectedSlugs.length > 0 ? await loadSlotsForNextDays(duration, 28) : [];
 
-  const whenLabel = selectedSlot ? formatSlot(new Date(selectedSlot)) : null;
+  const whenLabel = selectedSlot ? formatSlotLabel(new Date(selectedSlot)) : null;
 
   const selectedLabel = selectedItems.map((it) => it.name).join(", ");
 
@@ -174,64 +173,3 @@ function parseCsv(raw: string | undefined): string[] {
   return out;
 }
 
-async function loadSlotsForNextWeeks(
-  durationMinutes: number,
-  days: number,
-): Promise<SlotsByDay[]> {
-  const now = new Date();
-  const from = new Date(now);
-  from.setMinutes(0, 0, 0);
-  from.setHours(from.getHours() + 1);
-
-  const to = new Date(from);
-  to.setDate(to.getDate() + days);
-
-  const slots = await listAvailableSlots({ from, to, durationMinutes });
-
-  const dayFmt = new Intl.DateTimeFormat("en-US", {
-    timeZone: BUSINESS_TZ,
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-  });
-  const timeFmt = new Intl.DateTimeFormat("en-US", {
-    timeZone: BUSINESS_TZ,
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  const dayKeyFmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: BUSINESS_TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-
-  const buckets = new Map<string, SlotsByDay>();
-  for (let i = 0; i < days; i++) {
-    const d = new Date(from);
-    d.setDate(d.getDate() + i);
-    const key = dayKeyFmt.format(d);
-    if (!buckets.has(key)) {
-      buckets.set(key, { dateLabel: dayFmt.format(d), slots: [] });
-    }
-  }
-
-  for (const s of slots) {
-    const d = new Date(s.start);
-    const key = dayKeyFmt.format(d);
-    const bucket = buckets.get(key);
-    if (!bucket) continue;
-    bucket.slots.push({ start: s.start, timeLabel: timeFmt.format(d) });
-  }
-
-  const entries = Array.from(buckets.entries());
-  return entries.map(([, v]) => v);
-}
-
-function formatSlot(d: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: BUSINESS_TZ,
-    dateStyle: "full",
-    timeStyle: "short",
-  }).format(d);
-}
