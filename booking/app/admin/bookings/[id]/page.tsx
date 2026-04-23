@@ -29,6 +29,9 @@ interface BookingDetail {
   services: string[];
   add_ons: string[];
   square_footage: number | null;
+  unit_number: string | null;
+  is_vacant: "vacant" | "occupied" | "partial" | null;
+  include_basement: boolean | null;
   client_notes: string | null;
   internal_notes: string | null;
   iguide_id: string | null;
@@ -84,7 +87,7 @@ export default async function BookingDetailPage({
       supabase
         .from("bookings")
         .select(
-          "id, status, scheduled_at, services, add_ons, square_footage, client_notes, internal_notes, iguide_id, iguide_portal_id, fotello_listing_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage)",
+          "id, status, scheduled_at, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, internal_notes, iguide_id, iguide_portal_id, fotello_listing_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage)",
         )
         .eq("id", params.id)
         .single<BookingDetail>(),
@@ -171,6 +174,32 @@ export default async function BookingDetailPage({
           <Row
             label="Square footage"
             value={booking.square_footage ? `${booking.square_footage}` : "—"}
+          />
+          <Row
+            label="Unit #"
+            value={booking.unit_number ? booking.unit_number : "—"}
+          />
+          <Row
+            label="Occupancy"
+            value={
+              booking.is_vacant === "vacant"
+                ? "Vacant"
+                : booking.is_vacant === "partial"
+                  ? "Partially occupied"
+                  : booking.is_vacant === "occupied"
+                    ? "Occupied"
+                    : "—"
+            }
+          />
+          <Row
+            label="Basement"
+            value={
+              booking.include_basement == null
+                ? "—"
+                : booking.include_basement
+                  ? "Include"
+                  : "Skip"
+            }
           />
         </Panel>
       </div>
