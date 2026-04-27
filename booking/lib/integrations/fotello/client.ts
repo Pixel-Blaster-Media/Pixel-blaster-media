@@ -1,5 +1,7 @@
 import "server-only";
 
+import { getCredential } from "@/lib/integrations/credentials";
+
 /**
  * Typed client for Fotello's API.
  *
@@ -57,11 +59,11 @@ export class FotelloError extends Error {
   }
 }
 
-function apiKey(): string {
-  const key = process.env.FOTELLO_API_KEY;
+async function apiKey(): Promise<string> {
+  const key = await getCredential("fotello", "api_key", "FOTELLO_API_KEY");
   if (!key) {
     throw new FotelloError(
-      "FOTELLO_API_KEY is not configured. Request it from Fotello support and paste into env vars.",
+      "Fotello API key not configured. Save it in /admin/settings/integrations or set FOTELLO_API_KEY in env vars.",
       500,
       "",
     );
@@ -79,12 +81,13 @@ async function request<T>(
     url.searchParams.set(k, v);
   }
 
+  const token = await apiKey();
   const res = await fetch(url.toString(), {
     method,
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey()}`,
+      Authorization: `Bearer ${token}`,
     },
     body: init.body ? JSON.stringify(init.body) : undefined,
     cache: "no-store",

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { getCredential } from "@/lib/integrations/credentials";
 import { iguideViewerUrl } from "@/lib/integrations/iguide/parse-id";
 import type { IGuideReadyEvent } from "@/lib/integrations/iguide/portal-client";
 import { syncIGuideFromWebhook } from "@/lib/integrations/iguide/sync";
@@ -30,10 +31,14 @@ export const dynamic = "force-dynamic";
  *   - 500 only for transient DB/network failures our side
  */
 export async function POST(request: NextRequest) {
-  const expected = process.env.IGUIDE_WEBHOOK_SECRET;
+  const expected = await getCredential(
+    "iguide",
+    "webhook_secret",
+    "IGUIDE_WEBHOOK_SECRET",
+  );
   if (!expected) {
     console.error(
-      "[iguide.webhook] IGUIDE_WEBHOOK_SECRET is not configured — refusing to process event.",
+      "[iguide.webhook] webhook secret is not configured — refusing to process event.",
     );
     return NextResponse.json({ ok: false, error: "not_configured" }, { status: 503 });
   }

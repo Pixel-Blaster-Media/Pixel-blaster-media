@@ -1,5 +1,7 @@
 import "server-only";
 
+import { getCredential } from "@/lib/integrations/credentials";
+
 /**
  * iGuide Portal REST API client.
  *
@@ -27,17 +29,17 @@ import "server-only";
 
 const DEFAULT_BASE_URL = "https://manage.youriguide.com/api/v1";
 
-function getCredentials(): { appId: string; appToken: string; baseUrl: string } | null {
-  const appId = process.env.IGUIDE_APP_ID?.trim();
-  const appToken = process.env.IGUIDE_APP_TOKEN?.trim();
+async function getCredentials(): Promise<{ appId: string; appToken: string; baseUrl: string } | null> {
+  const appId = await getCredential("iguide", "app_id", "IGUIDE_APP_ID");
+  const appToken = await getCredential("iguide", "app_token", "IGUIDE_APP_TOKEN");
   if (!appId || !appToken) return null;
   const baseUrl = (process.env.IGUIDE_API_BASE?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, "");
   return { appId, appToken, baseUrl };
 }
 
 /** Is the Portal API configured? Useful to gate admin UI. */
-export function hasPortalCredentials(): boolean {
-  return getCredentials() !== null;
+export async function hasPortalCredentials(): Promise<boolean> {
+  return (await getCredentials()) !== null;
 }
 
 export interface PortalResult<T> {
@@ -51,13 +53,13 @@ async function portalFetch<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<PortalResult<T>> {
-  const creds = getCredentials();
+  const creds = await getCredentials();
   if (!creds) {
     return {
       ok: false,
       status: 0,
       error:
-        "iGuide Portal API not configured. Set IGUIDE_APP_ID and IGUIDE_APP_TOKEN.",
+        "iGuide Portal API not configured. Save credentials in /admin/settings/integrations or set IGUIDE_APP_ID + IGUIDE_APP_TOKEN.",
     };
   }
 

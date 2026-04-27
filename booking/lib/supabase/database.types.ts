@@ -181,6 +181,22 @@ interface GoogleCalendarConnectionTable {
   Relationships: [];
 }
 
+interface IntegrationCredentialsTable {
+  Row: {
+    provider: string;
+    credentials: Record<string, string>;
+    updated_at: string;
+    updated_by: string | null;
+  };
+  Insert: {
+    provider: string;
+    credentials?: Record<string, string>;
+    updated_by?: string | null;
+  };
+  Update: Partial<IntegrationCredentialsTable["Insert"]>;
+  Relationships: [];
+}
+
 interface DeliverablesTable {
   Row: {
     id: string;
@@ -419,6 +435,7 @@ export interface Database {
       catalog_items: CatalogItemsTable;
       booking_line_items: BookingLineItemsTable;
       google_calendar_connection: GoogleCalendarConnectionTable;
+      integration_credentials: IntegrationCredentialsTable;
     };
     Views: Record<string, never>;
     Functions: {
