@@ -223,7 +223,7 @@ export default async function BookingDetailPage({
         bookingId={booking.id}
         initialIGuideId={booking.iguide_id}
         initialPortalId={booking.iguide_portal_id}
-        portalApiConfigured={hasPortalCredentials()}
+        portalApiConfigured={await hasPortalCredentials()}
       />
 
       <FotelloSection

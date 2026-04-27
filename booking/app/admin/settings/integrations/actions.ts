@@ -6,6 +6,12 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import {
+  clearCredentialFields,
+  getCredential,
+  type Provider,
+  saveCredentials,
+} from "@/lib/integrations/credentials";
 import { sendEmail } from "@/lib/email/resend";
 import {
   buildAuthorizeUrl as buildGoogleAuthorizeUrl,
@@ -94,7 +100,11 @@ export async function sendTestEmail(
       ok: false,
       error: "Enter a valid email address.",
       config: {
-        resendApiKeyPresent: !!process.env.RESEND_API_KEY,
+        resendApiKeyPresent: !!(await getCredential(
+          "resend",
+          "api_key",
+          "RESEND_API_KEY",
+        )),
         emailFrom: process.env.EMAIL_FROM ?? null,
       },
     };
@@ -117,10 +127,77 @@ export async function sendTestEmail(
   return {
     ...res,
     config: {
-      resendApiKeyPresent: !!process.env.RESEND_API_KEY,
+      resendApiKeyPresent: !!(await getCredential(
+        "resend",
+        "api_key",
+        "RESEND_API_KEY",
+      )),
       emailFrom: process.env.EMAIL_FROM ?? null,
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Generic per-provider credential save / clear actions, used by the
+// per-integration forms on the page. Validates every field passed in is
+// in the provider's allowlist so the form can't be coaxed into writing
+// arbitrary keys.
+// ---------------------------------------------------------------------------
+
+const ALLOWED_FIELDS: Record<Provider, string[]> = {
+  fotello: ["api_key"],
+  iguide: ["app_id", "app_token", "webhook_secret"],
+  resend: ["api_key"],
+};
+
+function isProvider(value: string): value is Provider {
+  return value === "fotello" || value === "iguide" || value === "resend";
+}
+
+export async function saveIntegrationCredentials(
+  provider: string,
+  rawFields: Record<string, string>,
+): Promise<{ ok: boolean; error?: string }> {
+  const admin = await requireAdmin();
+  if (!isProvider(provider)) {
+    return { ok: false, error: `Unknown provider "${provider}".` };
+  }
+
+  const allowed = new Set(ALLOWED_FIELDS[provider]);
+  const fields: Record<string, string> = {};
+  for (const [k, v] of Object.entries(rawFields)) {
+    if (!allowed.has(k)) continue;
+    if (typeof v !== "string") continue;
+    fields[k] = v;
+  }
+
+  if (Object.keys(fields).length === 0) {
+    return { ok: false, error: "No valid fields to save." };
+  }
+
+  const result = await saveCredentials(provider, fields, admin.userId);
+  if (!result.ok) return result;
+  revalidatePath("/admin/settings/integrations");
+  return { ok: true };
+}
+
+export async function clearIntegrationCredentials(
+  provider: string,
+  fields: string[],
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  if (!isProvider(provider)) {
+    return { ok: false, error: `Unknown provider "${provider}".` };
+  }
+  const allowed = new Set(ALLOWED_FIELDS[provider]);
+  const valid = fields.filter((f) => allowed.has(f));
+  if (valid.length === 0) {
+    return { ok: false, error: "Nothing valid to clear." };
+  }
+  const result = await clearCredentialFields(provider, valid);
+  if (!result.ok) return result;
+  revalidatePath("/admin/settings/integrations");
+  return { ok: true };
 }
 
 /**

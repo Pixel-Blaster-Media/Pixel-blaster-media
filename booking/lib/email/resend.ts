@@ -1,5 +1,7 @@
 import "server-only";
 
+import { getCredential } from "@/lib/integrations/credentials";
+
 /**
  * Thin Resend wrapper.
  *
@@ -28,12 +30,12 @@ export interface SendEmailResult {
 }
 
 export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = await getCredential("resend", "api_key", "RESEND_API_KEY");
   const from = process.env.EMAIL_FROM;
 
   if (!apiKey || !from) {
     console.warn(
-      "[email] RESEND_API_KEY or EMAIL_FROM not set — skipping send to",
+      "[email] Resend API key or EMAIL_FROM not set — skipping send to",
       args.to,
     );
     return { ok: true, skipped: true };

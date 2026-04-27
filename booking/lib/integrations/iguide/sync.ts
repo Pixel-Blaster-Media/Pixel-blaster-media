@@ -73,7 +73,7 @@ export async function syncIGuideForBooking(
   }
 
   // Prefer the Portal API when we have the portal id + credentials.
-  if (portalId && hasPortalCredentials()) {
+  if (portalId && (await hasPortalCredentials())) {
     const res = await getAssetUrls(portalId);
     if (res.ok && res.data) {
       return persistFromAssetUrls({

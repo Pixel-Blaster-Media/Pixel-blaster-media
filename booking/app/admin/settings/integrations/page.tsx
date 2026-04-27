@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 
+import { getCredentialSource } from "@/lib/integrations/credentials";
 import { getQBClient, QBOError } from "@/lib/integrations/quickbooks/client";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 
 import ConnectButton from "./ConnectButton";
+import CredentialsForm, {
+  type CredentialFieldStatus,
+} from "./CredentialsForm";
 import DisconnectButton from "./DisconnectButton";
 import EmailTester from "./EmailTester";
 import GoogleConnectButton from "./GoogleConnectButton";
@@ -74,9 +78,28 @@ export default async function IntegrationsPage({
   const googleFlashError = searchParams.google_error;
   const googleFlashOk = searchParams.google_connected === "1";
 
-  // Email/Resend configuration status — strictly server-side so we can show
-  // whether env vars are set without ever leaking the values.
-  const resendConfigured = Boolean(process.env.RESEND_API_KEY);
+  // Per-provider credential status — strictly server-side so we can
+  // show whether each field is set without ever leaking values.
+  const [
+    resendApiKeyStatus,
+    fotelloApiKeyStatus,
+    iguideAppIdStatus,
+    iguideAppTokenStatus,
+    iguideWebhookStatus,
+  ]: CredentialFieldStatus[] = await Promise.all([
+    getCredentialSource("resend", "api_key", "RESEND_API_KEY"),
+    getCredentialSource("fotello", "api_key", "FOTELLO_API_KEY"),
+    getCredentialSource("iguide", "app_id", "IGUIDE_APP_ID"),
+    getCredentialSource("iguide", "app_token", "IGUIDE_APP_TOKEN"),
+    getCredentialSource("iguide", "webhook_secret", "IGUIDE_WEBHOOK_SECRET"),
+  ]);
+
+  const resendConfigured = resendApiKeyStatus.source !== "none";
+  const fotelloConfigured = fotelloApiKeyStatus.source !== "none";
+  const iguideConfigured =
+    iguideAppIdStatus.source !== "none" &&
+    iguideAppTokenStatus.source !== "none";
+
   const emailFrom = process.env.EMAIL_FROM ?? null;
   const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL ?? "";
   const googleConfigured = Boolean(
@@ -156,16 +179,21 @@ export default async function IntegrationsPage({
           )}
         </div>
 
-        <div className="mt-5 space-y-4">
+        <CredentialsForm
+          provider="resend"
+          fields={[
+            {
+              name: "api_key",
+              label: "Resend API key",
+              helper:
+                "Starts with re_. Create at resend.com/api-keys with Sending access on pixelblastermedia.com.",
+            },
+          ]}
+          statuses={{ api_key: resendApiKeyStatus }}
+        />
+
+        <div className="mt-5 space-y-4 border-t border-white/5 pt-4">
           <dl className="grid gap-y-1 text-sm md:grid-cols-[180px_1fr]">
-            <dt className="text-ink-muted">RESEND_API_KEY</dt>
-            <dd className="text-white">
-              {resendConfigured ? (
-                <span className="text-emerald-200">set</span>
-              ) : (
-                <span className="text-amber-300">not set in Vercel env</span>
-              )}
-            </dd>
             <dt className="text-ink-muted">EMAIL_FROM</dt>
             <dd className="text-white">
               {emailFrom ? (
@@ -198,6 +226,99 @@ export default async function IntegrationsPage({
             </div>
           </div>
         </div>
+      </section>
+
+      {/* iGUIDE — Portal API + webhook secret. Used by /admin/bookings to
+          sync tour deliverables and by the webhook receiver to verify
+          incoming events. */}
+      <section className="rounded-lg border border-white/10 bg-ink-soft/50 p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-white">iGUIDE</h2>
+            <p className="mt-1 text-sm text-ink-muted">
+              Powers automatic tour-and-floorplan sync. The App ID + Token
+              come from manage.youriguide.com → Settings → API Management →
+              API Tokens. The webhook secret is a long random string you
+              paste into iGUIDE&apos;s webhook URL config (
+              <code className="text-xs">?secret=…</code>).
+            </p>
+          </div>
+          {iguideConfigured ? (
+            <span className="shrink-0 rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-emerald-200">
+              Configured
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-amber-200">
+              Not configured
+            </span>
+          )}
+        </div>
+
+        <CredentialsForm
+          provider="iguide"
+          fields={[
+            {
+              name: "app_id",
+              label: "App ID",
+              helper: "The Token ID column from API Tokens.",
+              type: "text",
+            },
+            {
+              name: "app_token",
+              label: "App Token",
+              helper:
+                "The Token Value — long JWT-looking string. Shown once on creation.",
+            },
+            {
+              name: "webhook_secret",
+              label: "Webhook secret",
+              helper:
+                "Same value used in the iGUIDE webhook URL after secret=. 32+ random hex chars.",
+            },
+          ]}
+          statuses={{
+            app_id: iguideAppIdStatus,
+            app_token: iguideAppTokenStatus,
+            webhook_secret: iguideWebhookStatus,
+          }}
+        />
+      </section>
+
+      {/* Fotello — single API key, used for /getEnhance polling and
+          listing creation. */}
+      <section className="rounded-lg border border-white/10 bg-ink-soft/50 p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Fotello</h2>
+            <p className="mt-1 text-sm text-ink-muted">
+              When you track an enhance on a booking, we poll Fotello&apos;s
+              <code className="mx-1 text-xs">/getEnhance</code> endpoint
+              and surface the gallery on the realtor&apos;s portal once
+              it&apos;s ready. Single API key, issued by Fotello support.
+            </p>
+          </div>
+          {fotelloConfigured ? (
+            <span className="shrink-0 rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-emerald-200">
+              Configured
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-amber-200">
+              Not configured
+            </span>
+          )}
+        </div>
+
+        <CredentialsForm
+          provider="fotello"
+          fields={[
+            {
+              name: "api_key",
+              label: "Fotello API key",
+              helper: "Bearer token issued by Fotello support.",
+            },
+          ]}
+          statuses={{ api_key: fotelloApiKeyStatus }}
+        />
       </section>
 
       <section className="rounded-lg border border-white/10 bg-ink-soft/50 p-5">
