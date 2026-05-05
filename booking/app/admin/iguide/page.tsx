@@ -89,19 +89,37 @@ export default async function IGuideReviewPage() {
         <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
           iGUIDE
         </p>
-        <h1 className="mt-1 text-2xl font-bold text-white">Review queue</h1>
+        <h1 className="mt-1 text-2xl font-bold text-white">
+          iGUIDEs needing a booking
+        </h1>
         <p className="mt-2 max-w-3xl text-sm text-ink-muted">
-          Phone uploads can create brand-new iGUIDEs in the portal. If the
-          webhook cannot match one confidently, it lands here so you can attach
-          it to the correct booking.
+          This page is only for iGUIDEs the site could not safely match by
+          itself. Pick the booking it belongs to, or hide it if it is not your
+          shoot.
         </p>
       </header>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <InfoBox
+          title="What shows up here"
+          body="New ready webhooks from iGUIDE that did not clearly match one booking."
+        />
+        <InfoBox
+          title="What does not"
+          body="Old portal tours will not appear unless iGUIDE sends a new ready webhook."
+        />
+        <InfoBox
+          title="Random shoots"
+          body="If another account or editor sends events to this webhook, hide them with Not my shoot."
+        />
+      </div>
 
       {events && events.length > 0 ? (
         <ul className="space-y-3">
           {events.map((event) => {
             const details = eventDetails(event.payload_json);
             const suggested = suggestBooking(details, bookingOptions);
+            const status = statusCopy(event.match_status);
             return (
               <li
                 key={event.id}
@@ -111,6 +129,11 @@ export default async function IGuideReviewPage() {
                   <div>
                     <p className="font-semibold text-white">
                       {details.address || event.alias || event.iguide_id}
+                    </p>
+                    <p className="mt-1 text-sm text-ink-muted">
+                      {suggested
+                        ? "Possible match found. Check the dropdown, then link it."
+                        : "No clear match. Choose the right booking manually."}
                     </p>
                     <p className="mt-1 text-xs text-ink-muted">
                       Portal ID:{" "}
@@ -126,9 +149,16 @@ export default async function IGuideReviewPage() {
                       </p>
                     ) : null}
                   </div>
-                  <span className="rounded-full border border-amber-300/40 px-2 py-0.5 text-[10px] uppercase tracking-wider text-amber-200">
-                    {event.match_status}
-                  </span>
+                  <div className="text-right">
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${status.classes}`}
+                    >
+                      {status.label}
+                    </span>
+                    <p className="mt-1 text-[10px] text-ink-muted">
+                      {new Date(event.received_at).toLocaleString()}
+                    </p>
+                  </div>
                 </div>
 
                 <LinkEventForm
@@ -142,8 +172,8 @@ export default async function IGuideReviewPage() {
         </ul>
       ) : (
         <p className="rounded-lg border border-dashed border-white/10 bg-ink-soft/40 px-4 py-8 text-center text-sm text-ink-muted">
-          Nothing to review. New ready events that cannot auto-match will show up
-          here.
+          Nothing to review. If an iGUIDE comes in and the site cannot match it,
+          it will show up here.
         </p>
       )}
 
@@ -156,6 +186,34 @@ export default async function IGuideReviewPage() {
       </p>
     </div>
   );
+}
+
+function InfoBox({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-ink-soft/40 p-4">
+      <p className="text-sm font-semibold text-white">{title}</p>
+      <p className="mt-1 text-xs text-ink-muted">{body}</p>
+    </div>
+  );
+}
+
+function statusCopy(status: string): { label: string; classes: string } {
+  if (status === "failed") {
+    return {
+      label: "Needs help",
+      classes: "border-red-300/40 text-red-200",
+    };
+  }
+  if (status === "received") {
+    return {
+      label: "New",
+      classes: "border-brand-light/50 text-brand-light",
+    };
+  }
+  return {
+    label: "Needs review",
+    classes: "border-amber-300/40 text-amber-200",
+  };
 }
 
 function formatBookingLabel(booking: BookingOptionRow): string {

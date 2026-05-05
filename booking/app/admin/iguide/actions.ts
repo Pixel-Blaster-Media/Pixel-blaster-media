@@ -86,6 +86,29 @@ export async function linkIGuideWebhookEvent(
   return { ok: true };
 }
 
+export async function ignoreIGuideWebhookEvent(
+  formData: FormData,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+
+  const eventId = String(formData.get("event_id") ?? "");
+  if (!eventId) return { ok: false, error: "Missing iGUIDE event." };
+
+  const { error } = await getServiceSupabase()
+    .from("iguide_webhook_events")
+    .update({
+      match_status: "ignored",
+      match_source: "admin_ignored",
+      last_error: null,
+      processed_at: new Date().toISOString(),
+    })
+    .eq("id", eventId);
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/admin/iguide");
+  return { ok: true };
+}
+
 function toReadyEvent(value: Json): IGuideReadyEvent | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
