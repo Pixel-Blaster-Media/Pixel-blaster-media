@@ -13,6 +13,7 @@ import {
   saveCredentials,
 } from "@/lib/integrations/credentials";
 import { sendEmail } from "@/lib/email/resend";
+import { testPortalCredentials } from "@/lib/integrations/iguide/portal-client";
 import {
   buildAuthorizeUrl as buildGoogleAuthorizeUrl,
   revokeToken as revokeGoogleToken,
@@ -212,6 +213,27 @@ export async function clearIntegrationCredentials(
   if (!result.ok) return result;
   revalidatePath("/admin/settings/integrations");
   return { ok: true };
+}
+
+export async function testIGuideCredentials(): Promise<{
+  ok: boolean;
+  error?: string;
+  appIdLast4?: string;
+}> {
+  await requireAdmin();
+  const result = await testPortalCredentials();
+  if (!result.ok || !result.data?.appId) {
+    return {
+      ok: false,
+      error:
+        result.error ??
+        "iGUIDE did not accept the saved App ID and App Token.",
+    };
+  }
+  return {
+    ok: true,
+    appIdLast4: result.data.appId.slice(-4),
+  };
 }
 
 /**

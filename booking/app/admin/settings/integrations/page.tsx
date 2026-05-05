@@ -13,6 +13,7 @@ import DisconnectButton from "./DisconnectButton";
 import EmailTester from "./EmailTester";
 import GoogleConnectButton from "./GoogleConnectButton";
 import GoogleDisconnectButton from "./GoogleDisconnectButton";
+import IGuideTester from "./IGuideTester";
 import ItemPicker from "./ItemPicker";
 
 export const metadata: Metadata = { title: "Integrations" };
@@ -283,6 +284,7 @@ export default async function IntegrationsPage({
             webhook_secret: iguideWebhookStatus,
           }}
         />
+        <IGuideTester disabled={!iguideConfigured} />
       </section>
 
       {/* Fotello — single API key, used for /getEnhance polling and
