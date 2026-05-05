@@ -3,13 +3,18 @@ import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
 
+type CookieStore = {
+  get(name: string): { value: string } | undefined;
+  set(options: { name: string; value: string } & CookieOptions): void;
+};
+
 /**
  * Server-side Supabase client tied to the current request's cookies.
  * Use from Server Components, Server Actions, and Route Handlers when you
  * want operations to run as the signed-in user (subject to RLS).
  */
 export function getServerSupabase() {
-  const cookieStore = cookies();
+  const cookieStore = cookies() as unknown as CookieStore;
 
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

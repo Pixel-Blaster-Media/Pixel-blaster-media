@@ -5,6 +5,10 @@ import { redirect } from "next/navigation";
 
 import { getServerSupabase } from "@/lib/supabase/server";
 
+type HeaderStore = {
+  get(name: string): string | null;
+};
+
 export interface SignInState {
   error?: string;
 }
@@ -33,10 +37,11 @@ export async function sendMagicLink(
   }
 
   const supabase = getServerSupabase();
+  const headerStore = headers() as unknown as HeaderStore;
   const origin =
     process.env.NEXT_PUBLIC_APP_URL ??
-    headers().get("origin") ??
-    `https://${headers().get("host") ?? "localhost:3000"}`;
+    headerStore.get("origin") ??
+    `https://${headerStore.get("host") ?? "localhost:3000"}`;
 
   const callback = new URL("/auth/callback", origin);
   callback.searchParams.set("next", next);

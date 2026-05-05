@@ -80,11 +80,14 @@ export async function createInvoiceForBooking(
   // Short-circuit if an invoice already exists for this booking.
   const { data: existing } = await supabase
     .from("bookings")
-    .select("quickbooks_invoice_id, quickbooks_invoice_url")
+    .select(
+      "quickbooks_invoice_id, quickbooks_invoice_url, quickbooks_invoice_status",
+    )
     .eq("id", input.bookingId)
     .maybeSingle<{
       quickbooks_invoice_id: string | null;
       quickbooks_invoice_url: string | null;
+      quickbooks_invoice_status: string | null;
     }>();
 
   if (existing?.quickbooks_invoice_id) {
@@ -92,6 +95,13 @@ export async function createInvoiceForBooking(
       ok: true,
       invoiceId: existing.quickbooks_invoice_id,
       invoiceUrl: existing.quickbooks_invoice_url ?? undefined,
+    };
+  }
+  if (existing?.quickbooks_invoice_status === "creating") {
+    return {
+      ok: false,
+      error:
+        "An invoice is already being created for this booking. Wait a moment, then refresh the invoice status.",
     };
   }
 
@@ -160,9 +170,39 @@ export async function createInvoiceForBooking(
     };
   }
 
+  const { data: locked, error: lockErr } = await supabase
+    .from("bookings")
+    .update({ quickbooks_invoice_status: "creating" })
+    .eq("id", input.bookingId)
+    .is("quickbooks_invoice_id", null)
+    .or(
+      "quickbooks_invoice_status.is.null,quickbooks_invoice_status.neq.creating",
+    )
+    .select("id")
+    .maybeSingle<{ id: string }>();
+
+  if (lockErr) return { ok: false, error: lockErr.message };
+  if (!locked) {
+    return {
+      ok: false,
+      error:
+        "An invoice is already being created for this booking. Wait a moment, then refresh the invoice status.",
+    };
+  }
+
   // Find or create customer.
-  const customerId = await findOrCreateCustomer(qb, input.realtor);
+  let customerId: string | null;
+  try {
+    customerId = await findOrCreateCustomer(qb, input.realtor);
+  } catch (err) {
+    await clearInvoiceCreationLock(input.bookingId);
+    return {
+      ok: false,
+      error: err instanceof QBOError ? err.message : String(err),
+    };
+  }
   if (!customerId) {
+    await clearInvoiceCreationLock(input.bookingId);
     return { ok: false, error: "Could not find or create QuickBooks customer." };
   }
 
@@ -200,6 +240,7 @@ export async function createInvoiceForBooking(
   } catch (err) {
     const msg = err instanceof QBOError ? `${err.message}: ${err.body.slice(0, 200)}` : String(err);
     console.error("[qbo.invoice] create failed", msg);
+    await clearInvoiceCreationLock(input.bookingId);
     return { ok: false, error: `QuickBooks rejected the invoice: ${msg}` };
   }
 
@@ -231,6 +272,17 @@ export async function createInvoiceForBooking(
     invoiceUrl,
     totalCents,
   };
+}
+
+async function clearInvoiceCreationLock(bookingId: string): Promise<void> {
+  const supabase = getServiceSupabase();
+  const { error } = await supabase
+    .from("bookings")
+    .update({ quickbooks_invoice_status: null })
+    .eq("id", bookingId)
+    .eq("quickbooks_invoice_status", "creating")
+    .is("quickbooks_invoice_id", null);
+  if (error) console.warn("[qbo.invoice] lock clear failed", error);
 }
 
 /**

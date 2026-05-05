@@ -4,11 +4,12 @@ export const metadata: Metadata = {
   title: "Check your email",
 };
 
-export default function CheckEmailPage({
+export default async function CheckEmailPage({
   searchParams,
 }: {
-  searchParams: { email?: string };
+  searchParams: Promise<{ email?: string }>;
 }) {
+  const params = await searchParams;
   return (
     <div className="mx-auto max-w-md space-y-6 py-8">
       <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
@@ -18,7 +19,7 @@ export default function CheckEmailPage({
       <p className="text-ink-muted">
         If an account exists for{" "}
         <span className="text-white">
-          {searchParams.email ?? "that email"}
+          {params.email ?? "that email"}
         </span>
         , we sent a sign-in link. It expires in about an hour.
       </p>

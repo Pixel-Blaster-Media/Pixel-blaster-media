@@ -2,6 +2,20 @@ import "server-only";
 
 import { cookies } from "next/headers";
 
+type MutableCookieStore = {
+  getAll(): Array<{ name: string; value: string }>;
+  delete(name: string): void;
+  set(options: {
+    name: string;
+    value: string;
+    httpOnly: boolean;
+    secure: boolean;
+    sameSite: "lax";
+    path: string;
+    maxAge: number;
+  }): void;
+};
+
 /**
  * Mint the same cookie shape `@supabase/ssr` expects, given a token pair
  * already obtained (e.g. from /auth/v1/token?grant_type=password or from
@@ -73,7 +87,7 @@ export function setSupabaseSessionCookie(tokens: SessionTokens, email: string) {
   const encoded =
     "base64-" + Buffer.from(JSON.stringify(session)).toString("base64url");
 
-  const cookieStore = cookies();
+  const cookieStore = cookies() as unknown as MutableCookieStore;
 
   for (const existing of cookieStore.getAll()) {
     if (

@@ -164,6 +164,13 @@ export async function acceptRequest(
       owner_id: userId,
       status: "confirmed",
       scheduled_at: scheduledAt,
+      scheduled_ends_at: scheduledAt
+        ? new Date(
+            new Date(scheduledAt).getTime() +
+              Math.max(totalDurationMinutes(req.services, req.add_ons), 60) *
+                60_000,
+          ).toISOString()
+        : null,
       services: req.services,
       add_ons: req.add_ons,
       square_footage: req.square_footage,
@@ -174,6 +181,13 @@ export async function acceptRequest(
 
   if (bookErr || !booking) {
     console.error("[accept] booking insert failed", bookErr);
+    if (bookErr?.code === "23P01") {
+      return {
+        ok: false,
+        error:
+          "That time overlaps another active booking. Pick a different slot.",
+      };
+    }
     return { ok: false, error: "Could not create booking record." };
   }
 

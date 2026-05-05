@@ -37,13 +37,14 @@ interface ItemQueryResponse {
 export default async function IntegrationsPage({
   searchParams,
 }: {
-  searchParams: {
+  searchParams: Promise<{
     qbo_connected?: string;
     qbo_error?: string;
     google_connected?: string;
     google_error?: string;
-  };
+  }>;
 }) {
+  const params = await searchParams;
   const supabase = getServerSupabase();
   const { data: connection } = await supabase
     .from("quickbooks_connection")
@@ -73,10 +74,10 @@ export default async function IntegrationsPage({
     }
   }
 
-  const flashError = searchParams.qbo_error;
-  const flashOk = searchParams.qbo_connected === "1";
-  const googleFlashError = searchParams.google_error;
-  const googleFlashOk = searchParams.google_connected === "1";
+  const flashError = params.qbo_error;
+  const flashOk = params.qbo_connected === "1";
+  const googleFlashError = params.google_error;
+  const googleFlashOk = params.google_connected === "1";
 
   // Per-provider credential status — strictly server-side so we can
   // show whether each field is set without ever leaking values.

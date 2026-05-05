@@ -20,13 +20,14 @@ type BookingRequestRow =
 export default async function RequestDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const supabase = getServerSupabase();
   const { data: req, error } = await supabase
     .from("booking_requests")
     .select("*")
-    .eq("id", params.id)
+    .eq("id", id)
     .single<BookingRequestRow>();
 
   if (error || !req) notFound();

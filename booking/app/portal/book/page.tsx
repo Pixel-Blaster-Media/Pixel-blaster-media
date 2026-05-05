@@ -22,8 +22,9 @@ export const dynamic = "force-dynamic";
 export default async function PortalBookPage({
   searchParams,
 }: {
-  searchParams: { services?: string; add_ons?: string; slot?: string };
+  searchParams: Promise<{ services?: string; add_ons?: string; slot?: string }>;
 }) {
+  const params = await searchParams;
   await requireUser("/portal/book");
   const catalog = await getActiveCatalog();
 
@@ -35,8 +36,8 @@ export default async function PortalBookPage({
   const validALaCarteSlugs = new Set(aLaCarte.map((a) => a.slug));
   const validAddonSlugs = new Set(addons.map((a) => a.slug));
 
-  const rawServices = parseCsv(searchParams.services);
-  const rawAddOns = parseCsv(searchParams.add_ons);
+  const rawServices = parseCsv(params.services);
+  const rawAddOns = parseCsv(params.add_ons);
 
   // Service = bundle OR a-la-carte slug. Reject anything not in the
   // catalog so stale URLs don't crash subsequent lookups.
@@ -72,7 +73,7 @@ export default async function PortalBookPage({
     0,
   );
 
-  const selectedSlot = searchParams.slot ?? null;
+  const selectedSlot = params.slot ?? null;
   const daysOfSlots =
     selectedSlugs.length > 0 ? await loadSlotsForNextDays(duration, 28) : [];
 
@@ -172,4 +173,3 @@ function parseCsv(raw: string | undefined): string[] {
   }
   return out;
 }
-

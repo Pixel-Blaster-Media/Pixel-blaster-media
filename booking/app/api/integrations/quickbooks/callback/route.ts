@@ -10,6 +10,11 @@ export const dynamic = "force-dynamic";
 
 const STATE_COOKIE = "qbo_oauth_state";
 
+type MutableCookieStore = {
+  get(name: string): { value: string } | undefined;
+  delete(name: string): void;
+};
+
 /**
  * Intuit redirects the admin back here after consent. Params:
  *   - ?code=...      — one-time authorization code
@@ -45,7 +50,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(settingsUrl);
   }
 
-  const cookieStore = cookies();
+  const cookieStore = cookies() as unknown as MutableCookieStore;
   const expectedState = cookieStore.get(STATE_COOKIE)?.value;
   if (!expectedState || expectedState !== state) {
     settingsUrl.searchParams.set("qbo_error", "state_mismatch");

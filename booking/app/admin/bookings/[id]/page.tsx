@@ -78,8 +78,9 @@ interface DeliverableRow {
 export default async function BookingDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const supabase = getServerSupabase();
 
   const [{ data: booking, error: bookErr }, { data: deliverables }] =
@@ -89,14 +90,14 @@ export default async function BookingDetailPage({
         .select(
           "id, status, scheduled_at, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, internal_notes, iguide_id, iguide_portal_id, fotello_listing_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage)",
         )
-        .eq("id", params.id)
+        .eq("id", id)
         .single<BookingDetail>(),
       supabase
         .from("deliverables")
         .select(
           "id, type, source, external_id, url, thumbnail_url, metadata, ready_at, created_at",
         )
-        .eq("booking_id", params.id)
+        .eq("booking_id", id)
         .order("created_at", { ascending: false })
         .returns<DeliverableRow[]>(),
     ]);

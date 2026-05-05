@@ -23,6 +23,20 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 const STATE_COOKIE = "qbo_oauth_state";
 const GOOGLE_STATE_COOKIE = "google_oauth_state";
 
+type MutableCookieStore = {
+  set(
+    name: string,
+    value: string,
+    options: {
+      httpOnly: boolean;
+      secure: boolean;
+      sameSite: "lax";
+      path: string;
+      maxAge: number;
+    },
+  ): void;
+};
+
 /**
  * Kick off the QuickBooks OAuth consent flow.
  *
@@ -43,7 +57,7 @@ export async function startQuickBooksConnect(): Promise<void> {
   }
 
   const state = randomBytes(24).toString("hex");
-  cookies().set(STATE_COOKIE, state, {
+  (cookies() as unknown as MutableCookieStore).set(STATE_COOKIE, state, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -219,13 +233,17 @@ export async function startGoogleCalendarConnect(): Promise<void> {
   }
 
   const state = randomBytes(24).toString("hex");
-  cookies().set(GOOGLE_STATE_COOKIE, state, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 10 * 60,
-  });
+  (cookies() as unknown as MutableCookieStore).set(
+    GOOGLE_STATE_COOKIE,
+    state,
+    {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 10 * 60,
+    },
+  );
 
   const redirectUri = new URL(
     "/api/integrations/google-calendar/callback",

@@ -51,6 +51,7 @@ interface CalendarBlockRow {
 
 interface BookingRow {
   scheduled_at: string | null;
+  scheduled_ends_at: string | null;
   services: string[];
   add_ons: string[];
   status: string;
@@ -92,7 +93,7 @@ export async function listAvailableSlots({
       .returns<CalendarBlockRow[]>(),
     supabase
       .from("bookings")
-      .select("scheduled_at, services, add_ons, status")
+      .select("scheduled_at, scheduled_ends_at, services, add_ons, status")
       .in("status", ["requested", "confirmed", "shot", "editing", "delivered"])
       .not("scheduled_at", "is", null)
       .gte("scheduled_at", addMinutes(from, -6 * 60).toISOString())
@@ -115,8 +116,10 @@ export async function listAvailableSlots({
   for (const booking of bookingsRes.data ?? []) {
     if (!booking.scheduled_at) continue;
     const start = new Date(booking.scheduled_at);
-    const minutes = durationOfBooking(booking.services, booking.add_ons);
-    busy.push({ start, end: addMinutes(start, minutes) });
+    const end = booking.scheduled_ends_at
+      ? new Date(booking.scheduled_ends_at)
+      : addMinutes(start, durationOfBooking(booking.services, booking.add_ons));
+    busy.push({ start, end });
   }
   // Google Calendar busy windows — doctor appointments, personal stuff,
   // anything the admin already has on their personal calendar.

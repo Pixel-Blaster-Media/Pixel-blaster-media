@@ -29,5 +29,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(failed);
   }
 
-  return NextResponse.redirect(new URL(next, url.origin));
+  return NextResponse.redirect(new URL(safeNextPath(next), url.origin));
+}
+
+function safeNextPath(next: string): string {
+  if (!next.startsWith("/") || next.startsWith("//") || next.includes("\\")) {
+    return "/admin";
+  }
+  return next;
 }

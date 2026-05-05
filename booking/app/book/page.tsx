@@ -18,9 +18,9 @@ export const dynamic = "force-dynamic";
 export default async function BookStep1Page({
   searchParams,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const state = parseWizardState(searchParams);
+  const state = parseWizardState(await searchParams);
   const catalog = await getActiveCatalog();
 
   const bundles = catalog.bundles.map(toDTO);

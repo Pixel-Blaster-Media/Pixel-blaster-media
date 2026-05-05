@@ -38,9 +38,10 @@ const ACTIVE_STATUSES: BookingStatus[] = [
 export default async function BookingsPage({
   searchParams,
 }: {
-  searchParams: { filter?: string };
+  searchParams: Promise<{ filter?: string }>;
 }) {
-  const filter = (FILTERS.find((f) => f.id === searchParams.filter)?.id ??
+  const params = await searchParams;
+  const filter = (FILTERS.find((f) => f.id === params.filter)?.id ??
     "active") as (typeof FILTERS)[number]["id"];
 
   const supabase = getServerSupabase();

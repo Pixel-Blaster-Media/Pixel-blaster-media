@@ -149,6 +149,9 @@ export async function createSelfBooking(
       owner_id: user.userId,
       status: "confirmed",
       scheduled_at: slotStart.toISOString(),
+      scheduled_ends_at: new Date(
+        slotStart.getTime() + duration * 60_000,
+      ).toISOString(),
       services: legacyServices,
       add_ons: legacyAddons,
       client_notes: notes || null,
@@ -158,6 +161,13 @@ export async function createSelfBooking(
 
   if (bookErr || !booking) {
     console.error("[selfBook] booking insert failed", bookErr);
+    if (bookErr?.code === "23P01") {
+      return {
+        ok: false,
+        error:
+          "That slot was just taken. Please pick another — the calendar has been refreshed.",
+      };
+    }
     return { ok: false, error: "Could not save booking. Try again." };
   }
 

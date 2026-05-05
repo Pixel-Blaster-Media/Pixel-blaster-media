@@ -16,6 +16,11 @@ export const dynamic = "force-dynamic";
 
 const STATE_COOKIE = "google_oauth_state";
 
+type MutableCookieStore = {
+  get(name: string): { value: string } | undefined;
+  delete(name: string): void;
+};
+
 /**
  * Google redirects the admin back here after consent with:
  *   - ?code=...   — one-time authorization code
@@ -49,7 +54,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(settingsUrl);
   }
 
-  const cookieStore = cookies();
+  const cookieStore = cookies() as unknown as MutableCookieStore;
   const expectedState = cookieStore.get(STATE_COOKIE)?.value;
   if (!expectedState || expectedState !== state) {
     settingsUrl.searchParams.set("google_error", "state_mismatch");

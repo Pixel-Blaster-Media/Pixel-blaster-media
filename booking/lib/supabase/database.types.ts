@@ -104,6 +104,7 @@ interface BookingsTable {
     owner_id: string;
     status: BookingStatus;
     scheduled_at: string | null;
+    scheduled_ends_at: string | null;
     services: string[];
     add_ons: string[];
     square_footage: number | null;
@@ -132,6 +133,7 @@ interface BookingsTable {
     owner_id: string;
     status?: BookingStatus;
     scheduled_at?: string | null;
+    scheduled_ends_at?: string | null;
     services?: string[];
     add_ons?: string[];
     square_footage?: number | null;

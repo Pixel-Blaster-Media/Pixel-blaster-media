@@ -156,7 +156,10 @@ export async function addManualDeliverable(
     return { ok: false, error: "URL is required." };
   }
   try {
-    new URL(url);
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") {
+      return { ok: false, error: "URL must start with https://." };
+    }
   } catch {
     return { ok: false, error: "URL doesn't look valid." };
   }

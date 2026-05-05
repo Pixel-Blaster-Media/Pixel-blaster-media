@@ -5,12 +5,13 @@ import ResetRequestForm from "./ResetRequestForm";
 
 export const metadata: Metadata = { title: "Reset password" };
 
-export default function ResetPage({
+export default async function ResetPage({
   searchParams,
 }: {
-  searchParams: { sent?: string; email?: string };
+  searchParams: Promise<{ sent?: string; email?: string }>;
 }) {
-  const sent = searchParams.sent === "1";
+  const params = await searchParams;
+  const sent = params.sent === "1";
 
   return (
     <div className="mx-auto max-w-md space-y-6 py-16">
@@ -26,7 +27,7 @@ export default function ResetPage({
       {sent ? (
         <div className="space-y-4">
           <p className="rounded-md border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-100">
-            If an account exists for {searchParams.email ?? "that email"}, a
+            If an account exists for {params.email ?? "that email"}, a
             reset link is on its way. Check your inbox (and spam) — the link
             is good for about an hour.
           </p>

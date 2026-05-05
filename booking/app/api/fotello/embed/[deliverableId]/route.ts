@@ -27,9 +27,10 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(
   _req: NextRequest,
-  ctx: { params: { deliverableId: string } },
+  ctx: { params: Promise<{ deliverableId: string }> },
 ) {
   const user = await requireUser();
+  const { deliverableId } = await ctx.params;
 
   const supabase = getServerSupabase();
   // RLS lets realtors see only their own deliverables; admins see all.
@@ -37,7 +38,7 @@ export async function GET(
   const { data: deliverable } = await supabase
     .from("deliverables")
     .select("id, source, type")
-    .eq("id", ctx.params.deliverableId)
+    .eq("id", deliverableId)
     .maybeSingle<{ id: string; source: string; type: string }>();
 
   if (!deliverable) {

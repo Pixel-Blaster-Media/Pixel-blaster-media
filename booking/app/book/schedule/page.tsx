@@ -19,9 +19,9 @@ export const dynamic = "force-dynamic";
 export default async function BookStep3Page({
   searchParams,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const state = parseWizardState(searchParams);
+  const state = parseWizardState(await searchParams);
   const c = stepCompleteness(state);
   if (!c.step1) redirect("/book");
   if (!c.step2) redirect(`/book/property?${serializeForRedirect(state)}`);

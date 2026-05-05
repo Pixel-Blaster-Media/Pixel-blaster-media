@@ -3,6 +3,20 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+type MutableCookieStore = {
+  getAll(): Array<{ name: string; value: string }>;
+  delete(name: string): void;
+  set(options: {
+    name: string;
+    value: string;
+    httpOnly: boolean;
+    secure: boolean;
+    sameSite: "lax";
+    path: string;
+    maxAge: number;
+  }): void;
+};
+
 export interface PasswordSignInState {
   error?: string;
 }
@@ -142,7 +156,7 @@ export async function signInWithPassword(
   const encoded =
     "base64-" + Buffer.from(JSON.stringify(session)).toString("base64url");
 
-  const cookieStore = cookies();
+  const cookieStore = cookies() as unknown as MutableCookieStore;
 
   // Wipe stale chunks first.
   for (const existing of cookieStore.getAll()) {

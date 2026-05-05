@@ -33,10 +33,11 @@ type FilterId = (typeof FILTERS)[number]["id"];
 export default async function InboxPage({
   searchParams,
 }: {
-  searchParams: { filter?: string };
+  searchParams: Promise<{ filter?: string }>;
 }) {
+  const params = await searchParams;
   const filter: FilterId =
-    (FILTERS.find((f) => f.id === searchParams.filter)?.id as FilterId) ??
+    (FILTERS.find((f) => f.id === params.filter)?.id as FilterId) ??
     "open";
 
   const supabase = getServerSupabase();

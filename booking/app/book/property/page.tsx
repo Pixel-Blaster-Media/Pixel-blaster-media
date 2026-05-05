@@ -14,12 +14,12 @@ export const metadata: Metadata = {
 };
 export const dynamic = "force-dynamic";
 
-export default function BookStep2Page({
+export default async function BookStep2Page({
   searchParams,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const state = parseWizardState(searchParams);
+  const state = parseWizardState(await searchParams);
 
   // Guard — can't be here without step 1 done.
   if (!stepCompleteness(state).step1) {

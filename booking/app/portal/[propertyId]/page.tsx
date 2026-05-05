@@ -48,9 +48,10 @@ interface DeliverableRow {
 export default async function PropertyDetailPage({
   params,
 }: {
-  params: { propertyId: string };
+  params: Promise<{ propertyId: string }>;
 }) {
-  await requireUser(`/portal/${params.propertyId}`);
+  const { propertyId } = await params;
+  await requireUser(`/portal/${propertyId}`);
   const supabase = getServerSupabase();
 
   // RLS will ensure the row is only returned if the caller owns it (or
@@ -60,7 +61,7 @@ export default async function PropertyDetailPage({
     .select(
       "id, street_address, city, postal_code, owner_id, bookings(id, status, scheduled_at, services, created_at)",
     )
-    .eq("id", params.propertyId)
+    .eq("id", propertyId)
     .maybeSingle<PropertyRow>();
 
   if (!property) notFound();

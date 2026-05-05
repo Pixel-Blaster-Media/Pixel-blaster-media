@@ -4,6 +4,20 @@ import { NextResponse, type NextRequest } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type MutableCookieStore = {
+  getAll(): Array<{ name: string; value: string }>;
+  delete(name: string): void;
+  set(options: {
+    name: string;
+    value: string;
+    httpOnly: boolean;
+    secure: boolean;
+    sameSite: "lax";
+    path: string;
+    maxAge: number;
+  }): void;
+};
+
 /**
  * Client-to-server session bridge.
  *
@@ -121,7 +135,7 @@ export async function POST(request: NextRequest) {
     "base64-" + Buffer.from(JSON.stringify(session)).toString("base64url");
 
   const cookieBase = `sb-${projectRef}-auth-token`;
-  const cookieStore = cookies();
+  const cookieStore = cookies() as unknown as MutableCookieStore;
 
   // Clear any stale chunks from a previous sign-in before writing new ones.
   for (const existing of cookieStore.getAll()) {

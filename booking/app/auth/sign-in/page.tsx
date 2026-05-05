@@ -6,11 +6,12 @@ export const metadata: Metadata = {
   title: "Sign in",
 };
 
-export default function SignInPage({
+export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: { next?: string };
+  searchParams: Promise<{ next?: string }>;
 }) {
+  const params = await searchParams;
   return (
     <div className="mx-auto max-w-md space-y-6 py-8">
       <header>
@@ -22,7 +23,7 @@ export default function SignInPage({
           We'll email you a one-tap sign-in link. No password to remember.
         </p>
       </header>
-      <SignInForm next={searchParams.next} />
+      <SignInForm next={params.next} />
     </div>
   );
 }
