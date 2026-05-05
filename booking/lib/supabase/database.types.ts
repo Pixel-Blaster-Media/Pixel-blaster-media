@@ -447,6 +447,9 @@ interface CatalogItemsTable {
     display_order: number;
     is_video: boolean;
     require_has_video: boolean;
+    badge: string | null;
+    highlight: boolean;
+    ideal_for: string | null;
     created_at: string;
     updated_at: string;
   };
@@ -463,6 +466,9 @@ interface CatalogItemsTable {
     display_order?: number;
     is_video?: boolean;
     require_has_video?: boolean;
+    badge?: string | null;
+    highlight?: boolean;
+    ideal_for?: string | null;
   };
   Update: Partial<CatalogItemsTable["Insert"]>;
   Relationships: [];

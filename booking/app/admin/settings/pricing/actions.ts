@@ -85,12 +85,17 @@ export async function createCatalogItem(
 
   const description =
     ((formData.get("description") as string | null) ?? "").trim();
+  const badge = ((formData.get("badge") as string | null) ?? "").trim();
+  const idealFor = ((formData.get("ideal_for") as string | null) ?? "").trim();
 
   const insert: CatalogItemInsert = {
     kind,
     slug,
     name,
     description,
+    badge: badge || null,
+    highlight: formData.get("highlight") === "on",
+    ideal_for: idealFor || null,
     price_cents: priceCents,
     duration_minutes: duration,
     display_order: displayOrder,
@@ -142,9 +147,15 @@ export async function updateCatalogItem(
   if (displayOrder === null)
     return { ok: false, error: "Invalid display order." };
 
+  const badge = ((formData.get("badge") as string | null) ?? "").trim();
+  const idealFor = ((formData.get("ideal_for") as string | null) ?? "").trim();
+
   const update: CatalogItemUpdate = {
     name,
     description: ((formData.get("description") as string | null) ?? "").trim(),
+    badge: badge || null,
+    highlight: formData.get("highlight") === "on",
+    ideal_for: idealFor || null,
     price_cents: priceCents,
     duration_minutes: duration,
     display_order: displayOrder,

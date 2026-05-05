@@ -140,18 +140,32 @@ export default function PackageAccordion({
                   onClick={() => selectBundle(b.slug)}
                   aria-pressed={selected}
                   className={
-                    "flex w-full flex-col gap-2 rounded-lg border p-4 text-left transition " +
+                    "relative flex w-full flex-col gap-2 rounded-lg border p-4 text-left transition " +
                     (selected
                       ? "border-brand-light bg-brand/10"
-                      : "border-white/10 bg-ink-soft/50 hover:border-brand/60 hover:bg-ink-soft")
+                      : b.highlight
+                        ? "border-brand/40 bg-brand/5 hover:border-brand-light hover:bg-brand/10"
+                        : "border-white/10 bg-ink-soft/50 hover:border-brand/60 hover:bg-ink-soft")
                   }
                 >
+                  {b.badge ? (
+                    <span className="absolute right-3 top-3 rounded-full border border-brand-light/40 bg-brand/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-light">
+                      {b.badge}
+                    </span>
+                  ) : null}
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="font-semibold text-white">{b.name}</span>
+                    <span className="pr-28 font-semibold text-white">
+                      {b.name}
+                    </span>
                     <span className="text-sm font-semibold text-brand-light">
                       ${(b.price_cents / 100).toFixed(0)}
                     </span>
                   </div>
+                  {b.ideal_for ? (
+                    <span className="text-xs text-brand-light/90">
+                      Ideal for: {b.ideal_for}
+                    </span>
+                  ) : null}
                   <span className="text-[11px] uppercase tracking-wider text-ink-muted">
                     {formatMinutes(b.duration_minutes)}
                   </span>
@@ -189,18 +203,32 @@ export default function PackageAccordion({
                   onClick={() => toggleALaCarte(a.slug)}
                   aria-pressed={selected}
                   className={
-                    "flex w-full flex-col gap-2 rounded-lg border p-4 text-left transition " +
+                    "relative flex w-full flex-col gap-2 rounded-lg border p-4 text-left transition " +
                     (selected
                       ? "border-brand-light bg-brand/10"
-                      : "border-white/10 bg-ink-soft/50 hover:border-brand/60 hover:bg-ink-soft")
+                      : a.highlight
+                        ? "border-brand/40 bg-brand/5 hover:border-brand-light hover:bg-brand/10"
+                        : "border-white/10 bg-ink-soft/50 hover:border-brand/60 hover:bg-ink-soft")
                   }
                 >
+                  {a.badge ? (
+                    <span className="absolute right-3 top-3 rounded-full border border-brand-light/40 bg-brand/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-light">
+                      {a.badge}
+                    </span>
+                  ) : null}
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="font-semibold text-white">{a.name}</span>
+                    <span className="pr-28 font-semibold text-white">
+                      {a.name}
+                    </span>
                     <span className="text-sm font-semibold text-brand-light">
                       ${(a.price_cents / 100).toFixed(0)}
                     </span>
                   </div>
+                  {a.ideal_for ? (
+                    <span className="text-xs text-brand-light/90">
+                      Ideal for: {a.ideal_for}
+                    </span>
+                  ) : null}
                   <span className="text-[11px] uppercase tracking-wider text-ink-muted">
                     {formatMinutes(a.duration_minutes)}
                   </span>
@@ -266,7 +294,8 @@ export default function PackageAccordion({
 
       {/* Totals + continue */}
       {selectedSlugs.length > 0 ? (
-        <div className="sticky bottom-0 -mx-4 mt-4 border-t border-white/10 bg-ink/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:rounded-lg md:border md:bg-brand/5">
+        <div className="sticky bottom-0 -mx-4 mt-4 space-y-3 border-t border-white/10 bg-ink/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:rounded-lg md:border md:bg-brand/5">
+          <BookingUpsellPanel selectedSlugs={selectedSlugs} />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm">
               <span className="font-semibold text-white">
@@ -280,6 +309,78 @@ export default function PackageAccordion({
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function BookingUpsellPanel({ selectedSlugs }: { selectedSlugs: string[] }) {
+  const hasPhoto = selectedSlugs.some((s) =>
+    [
+      "residential_photography",
+      "blue_print",
+      "social_media_special",
+      "social_media_plus",
+      "ultimate",
+    ].includes(s),
+  );
+  const hasIGuide = selectedSlugs.some((s) =>
+    [
+      "iguide_measurements",
+      "blue_print",
+      "social_media_special",
+      "social_media_plus",
+      "ultimate",
+    ].includes(s),
+  );
+  const hasDrone = selectedSlugs.some((s) =>
+    [
+      "aerial_photography",
+      "social_media_special",
+      "social_media_plus",
+      "ultimate",
+    ].includes(s),
+  );
+  const hasVideo = selectedSlugs.some((s) =>
+    [
+      "social_media_reel",
+      "video_tour",
+      "social_media_special",
+      "social_media_plus",
+      "ultimate",
+    ].includes(s),
+  );
+
+  const suggestions: string[] = [];
+  if (hasPhoto && !hasIGuide) {
+    suggestions.push(
+      "Add iGUIDE + measurements so agents can launch MLS with floor plans and a tour.",
+    );
+  }
+  if (hasIGuide && !hasPhoto) {
+    suggestions.push(
+      "Pair iGUIDE with photography for a cleaner one-stop listing package.",
+    );
+  }
+  if (hasPhoto && !hasDrone) {
+    suggestions.push(
+      "Drone photos are an easy upgrade for lots, corner properties, and premium listings.",
+    );
+  }
+  if (hasVideo) {
+    suggestions.push(
+      "Video package selected — add on-camera agent intros if they want stronger social content.",
+    );
+  }
+  if (suggestions.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-brand-light/20 bg-brand/10 p-3 text-xs text-white/85">
+      <p className="font-semibold text-brand-light">Worth considering</p>
+      <ul className="mt-1 list-disc space-y-1 pl-4 text-ink-muted">
+        {suggestions.slice(0, 2).map((s) => (
+          <li key={s}>{s}</li>
+        ))}
+      </ul>
     </div>
   );
 }

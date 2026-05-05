@@ -17,6 +17,9 @@ export interface CatalogItemDTO {
   is_video: boolean;
   require_has_video: boolean;
   display_order: number;
+  badge: string | null;
+  highlight: boolean;
+  ideal_for: string | null;
 }
 
 interface Props {

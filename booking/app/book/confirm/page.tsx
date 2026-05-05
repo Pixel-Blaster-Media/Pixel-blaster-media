@@ -152,7 +152,9 @@ export default async function BookStep4Page({
         </dl>
         <p className="mt-3 border-t border-white/5 pt-3 text-[11px] text-ink-muted">
           Payment happens after the shoot. We&apos;ll adjust if the sqft or
-          details need tweaking.
+          details need tweaking. Travel is included within roughly 30 km of
+          the core service area; outside that, any travel fee is reviewed
+          before invoicing.
         </p>
       </section>
 

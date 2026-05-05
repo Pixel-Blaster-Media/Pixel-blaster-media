@@ -102,6 +102,31 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
         />
       </label>
 
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] uppercase tracking-wider text-ink-muted">
+            Badge
+          </span>
+          <input
+            name="badge"
+            defaultValue={item.badge ?? ""}
+            placeholder="Most popular"
+            className="rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] uppercase tracking-wider text-ink-muted">
+            Ideal for
+          </span>
+          <input
+            name="ideal_for"
+            defaultValue={item.ideal_for ?? ""}
+            placeholder="Standard listings, luxury homes, social-first launches…"
+            className="rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
+          />
+        </label>
+      </div>
+
       <div className="flex flex-wrap items-center gap-4 text-xs text-ink-muted">
         <label className="flex items-center gap-2">
           <input
@@ -120,6 +145,15 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
             className="h-4 w-4 accent-brand-light"
           />
           <span>Taxable</span>
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            name="highlight"
+            defaultChecked={item.highlight}
+            className="h-4 w-4 accent-brand-light"
+          />
+          <span>Highlight in booking flow</span>
         </label>
         {isAddon ? (
           <label className="flex items-center gap-2">

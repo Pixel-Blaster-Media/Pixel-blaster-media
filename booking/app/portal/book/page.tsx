@@ -161,6 +161,9 @@ function toDTO(r: CatalogItemRow): CatalogItemDTO {
     is_video: r.is_video,
     require_has_video: r.require_has_video,
     display_order: r.display_order,
+    badge: r.badge,
+    highlight: r.highlight,
+    ideal_for: r.ideal_for,
   };
 }
 
