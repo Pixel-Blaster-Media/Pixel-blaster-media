@@ -72,9 +72,9 @@ export async function POST(request: NextRequest) {
       console.warn(
         `[iguide.webhook] Received 'ready' for iGuide ${body.iguideId} (${iguideViewerUrl(
           body.iguideAlias ?? body.iguideId,
-        )}) but no booking is tagged with it. Tag the booking and click Sync.`,
+        )}) but no booking matched it confidently. Event was kept for admin review if the event inbox table exists.`,
       );
-      return NextResponse.json({ ok: true, skipped: "untagged" });
+      return NextResponse.json({ ok: true, skipped: "unmatched_for_review" });
     }
     console.error("[iguide.webhook] sync failed", result.error);
     // 500 triggers iGuide's retry — appropriate for transient failures.

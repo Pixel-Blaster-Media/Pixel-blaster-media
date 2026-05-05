@@ -218,9 +218,78 @@ export interface IGuideSubaccount {
   emailHint?: string;
 }
 
+export interface IGuideCreateInput {
+  type: "standard" | string;
+  industry: "residential" | string;
+  address: {
+    country: string;
+    provinceState: string;
+    city: string;
+    postalCode: string;
+    streetName: string;
+    streetNumber: string;
+    unit?: string;
+  };
+}
+
+export interface IGuideCreateResponse {
+  id: string;
+  alias?: string;
+  workOrderId?: string;
+  defaultViewId?: string;
+  [key: string]: unknown;
+}
+
+export interface IGuideWorkOrderResponse {
+  id?: string;
+  workOrderId?: string;
+  status?: string;
+  state?: string;
+  taskType?: string;
+  [key: string]: unknown;
+}
+
 // ===========================================================================
 // Endpoints we actually use
 // ===========================================================================
+
+/** Verify the configured iGuide credentials without touching any booking data. */
+export async function testPortalCredentials(): Promise<
+  PortalResult<{ appId: string }>
+> {
+  return portalFetch<{ appId: string }>("/integrations/test", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+/**
+ * Create an iGUIDE from a booking/property record. This is the safest path for
+ * automation because the response includes the immutable iGUIDE id and initial
+ * work order id, which we store immediately for exact webhook matching.
+ *
+ * Scope: iguide.write.
+ */
+export async function createIGuide(
+  input: IGuideCreateInput,
+): Promise<PortalResult<IGuideCreateResponse>> {
+  return portalFetch<IGuideCreateResponse>("/iguides/", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/** Read the current state of a work order we previously created. */
+export async function getWorkOrder(
+  iguideId: string,
+  workOrderId: string,
+): Promise<PortalResult<IGuideWorkOrderResponse>> {
+  return portalFetch<IGuideWorkOrderResponse>(
+    `/iguides/${encodeURIComponent(iguideId)}/workOrders/${encodeURIComponent(
+      workOrderId,
+    )}`,
+  );
+}
 
 /**
  * Fetch the on-demand `ready` event payload for an already-published tour.

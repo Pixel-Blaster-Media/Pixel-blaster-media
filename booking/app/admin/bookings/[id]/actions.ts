@@ -11,7 +11,11 @@ import {
   parseIGuideAlias,
   parseIGuidePortalId,
 } from "@/lib/integrations/iguide/parse-id";
-import { syncIGuideForBooking } from "@/lib/integrations/iguide/sync";
+import { createIGuide as createIGuideInPortal } from "@/lib/integrations/iguide/portal-client";
+import {
+  recordIGuideCreateJob,
+  syncIGuideForBooking,
+} from "@/lib/integrations/iguide/sync";
 import {
   createInvoiceForBooking,
   refreshInvoiceStatus as refreshInvoiceInQBO,
@@ -36,6 +40,20 @@ interface BookingWithIGuideRow {
   property_id: string;
   iguide_id: string | null;
   iguide_portal_id: string | null;
+}
+
+interface BookingForIGuideCreateRow {
+  id: string;
+  property_id: string;
+  unit_number: string | null;
+  iguide_id: string | null;
+  iguide_portal_id: string | null;
+  properties: {
+    street_address: string;
+    city: string | null;
+    province: string | null;
+    postal_code: string | null;
+  } | null;
 }
 
 interface BookingForInvoiceRow {
@@ -315,6 +333,110 @@ export async function syncIGuide(
     address: result.address,
     portalId: result.portalId,
   };
+}
+
+export async function createIGuideForBooking(
+  bookingId: string,
+): Promise<
+  ActionResult & {
+    iguideId?: string;
+    portalId?: string;
+    workOrderId?: string | null;
+  }
+> {
+  await requireAdmin();
+
+  const supabase = getServerSupabase();
+  const { data: booking, error } = await supabase
+    .from("bookings")
+    .select(
+      "id, property_id, unit_number, iguide_id, iguide_portal_id, properties(street_address, city, province, postal_code)",
+    )
+    .eq("id", bookingId)
+    .single<BookingForIGuideCreateRow>();
+
+  if (error || !booking) return { ok: false, error: "Booking not found." };
+  if (!booking.properties) {
+    return { ok: false, error: "Booking has no property address." };
+  }
+  if (booking.iguide_portal_id) {
+    return {
+      ok: false,
+      error: "This booking already has an iGuide Portal ID.",
+    };
+  }
+
+  const address = buildIGuideAddress(booking.properties.street_address);
+  if (!address.streetNumber || !address.streetName) {
+    return {
+      ok: false,
+      error: "Couldn't split the street address into a number and street name.",
+    };
+  }
+
+  const result = await createIGuideInPortal({
+    type: "standard",
+    industry: "residential",
+    address: {
+      country: "CA",
+      provinceState: booking.properties.province ?? "ON",
+      city: booking.properties.city ?? "",
+      postalCode: booking.properties.postal_code ?? "",
+      streetNumber: address.streetNumber,
+      streetName: address.streetName,
+      ...(booking.unit_number ? { unit: booking.unit_number } : {}),
+    },
+  });
+
+  if (!result.ok || !result.data) {
+    return {
+      ok: false,
+      error: result.error ?? "iGuide did not create the tour.",
+    };
+  }
+  if (!result.data.id) {
+    return { ok: false, error: "iGuide response did not include an id." };
+  }
+
+  const service = getServiceSupabase();
+  const { error: updateErr } = await service
+    .from("bookings")
+    .update({
+      iguide_portal_id: result.data.id,
+      iguide_id: result.data.alias ?? booking.iguide_id,
+    })
+    .eq("id", bookingId);
+
+  if (updateErr) return { ok: false, error: updateErr.message };
+
+  const recorded = await recordIGuideCreateJob({
+    bookingId: booking.id,
+    propertyId: booking.property_id,
+    iguideId: result.data.id,
+    alias: result.data.alias ?? null,
+    workOrderId: result.data.workOrderId ?? null,
+    defaultViewId: result.data.defaultViewId ?? null,
+    rawCreateResponse: result.data,
+  });
+  if (!recorded.ok) return { ok: false, error: recorded.error };
+
+  revalidatePath(`/admin/bookings/${bookingId}`);
+  return {
+    ok: true,
+    iguideId: result.data.alias,
+    portalId: result.data.id,
+    workOrderId: result.data.workOrderId ?? null,
+  };
+}
+
+function buildIGuideAddress(streetAddress: string): {
+  streetNumber: string;
+  streetName: string;
+} {
+  const trimmed = streetAddress.trim().replace(/\s+/g, " ");
+  const match = trimmed.match(/^([0-9]+[A-Za-z-]?)\s+(.+)$/);
+  if (!match) return { streetNumber: "", streetName: trimmed };
+  return { streetNumber: match[1], streetName: match[2] };
 }
 
 // ---------------------------------------------------------------------------

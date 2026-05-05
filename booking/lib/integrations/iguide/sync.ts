@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getServiceSupabase } from "@/lib/supabase/server";
-import type { Database } from "@/lib/supabase/database.types";
+import type { Database, Json } from "@/lib/supabase/database.types";
 
 import {
   fetchIGuideRESO,
@@ -23,6 +23,10 @@ import {
 } from "./portal-client";
 
 type BookingUpdate = Database["public"]["Tables"]["bookings"]["Update"];
+type IGuideJobInsert = Database["public"]["Tables"]["iguide_jobs"]["Insert"];
+type IGuideJobUpdate = Database["public"]["Tables"]["iguide_jobs"]["Update"];
+type IGuideWebhookEventInsert =
+  Database["public"]["Tables"]["iguide_webhook_events"]["Insert"];
 
 type DeliverableInsert =
   Database["public"]["Tables"]["deliverables"]["Insert"];
@@ -43,6 +47,20 @@ interface BookingTarget {
   property_id: string;
   iguide_id: string | null;
   iguide_portal_id: string | null;
+}
+
+interface PropertyMatchBooking extends BookingTarget {
+  scheduled_at: string | null;
+  status: string;
+  properties: {
+    street_address: string;
+    city: string | null;
+    postal_code: string | null;
+  } | null;
+}
+
+interface WebhookRecord {
+  id: string;
 }
 
 /**
@@ -119,6 +137,7 @@ export async function syncIGuideForBooking(
 export async function syncIGuideFromReadyEvent(
   booking: BookingTarget,
   event: IGuideReadyEvent,
+  matchSource = "manual",
 ): Promise<SyncIGuideResult> {
   const supabase = getServiceSupabase();
 
@@ -148,6 +167,8 @@ export async function syncIGuideFromReadyEvent(
   const rows = buildDeliverableRowsFromReady(booking, alias, event);
   const { upserts, error } = await upsertDeliverables(rows);
   if (error) return { ok: false, upserts, error, portalId };
+
+  await upsertIGuideJobFromReadyEvent(booking, event, matchSource);
 
   return {
     ok: true,
@@ -454,27 +475,17 @@ export async function syncIGuideFromWebhook(
     };
   }
 
-  // Prefer lookup by portal id (immutable). Fall back to alias only if
-  // the booking was tagged via paste before the webhook fired.
-  let booking: BookingTarget | null = null;
-  if (portalId) {
-    const { data } = await supabase
-      .from("bookings")
-      .select("id, property_id, iguide_id, iguide_portal_id")
-      .eq("iguide_portal_id", portalId)
-      .maybeSingle<BookingTarget>();
-    booking = data ?? null;
-  }
-  if (!booking && alias) {
-    const { data } = await supabase
-      .from("bookings")
-      .select("id, property_id, iguide_id, iguide_portal_id")
-      .eq("iguide_id", alias)
-      .maybeSingle<BookingTarget>();
-    booking = data ?? null;
-  }
+  const webhookRecord = await saveWebhookEvent(event);
+  const matched = await findBookingForReadyEvent(event);
+  const booking = matched.booking;
 
   if (!booking) {
+    if (webhookRecord) {
+      await updateWebhookEvent(webhookRecord.id, {
+        match_status: "unmatched",
+        last_error: `No booking matched iGuide ${portalId ?? alias}.`,
+      });
+    }
     return {
       ok: false,
       upserts: 0,
@@ -482,6 +493,265 @@ export async function syncIGuideFromWebhook(
     };
   }
 
-  const result = await syncIGuideFromReadyEvent(booking, event);
+  const result = await syncIGuideFromReadyEvent(booking, event, matched.source);
+  if (webhookRecord) {
+    await updateWebhookEvent(webhookRecord.id, {
+      match_status: result.ok ? "processed" : "failed",
+      matched_booking_id: booking.id,
+      match_source: matched.source,
+      processed_at: result.ok ? new Date().toISOString() : null,
+      last_error: result.ok ? null : result.error ?? "Sync failed.",
+    });
+  }
   return { ...result, bookingId: booking.id };
+}
+
+async function saveWebhookEvent(
+  event: IGuideReadyEvent,
+): Promise<WebhookRecord | null> {
+  const supabase = getServiceSupabase();
+  const eventType = event.type ?? "ready";
+  const portalId = event.iguideId;
+  const workOrderId = event.workOrderId ?? null;
+
+  const existingQuery = supabase
+    .from("iguide_webhook_events")
+    .select("id")
+    .eq("event_type", eventType)
+    .eq("iguide_id", portalId);
+
+  const { data: existing } = workOrderId
+    ? await existingQuery.eq("work_order_id", workOrderId).maybeSingle<WebhookRecord>()
+    : await existingQuery.is("work_order_id", null).maybeSingle<WebhookRecord>();
+
+  const payload: IGuideWebhookEventInsert = {
+    event_type: eventType,
+    iguide_id: portalId,
+    work_order_id: workOrderId,
+    alias: event.iguideAlias ?? null,
+    payload_json: redactReadyEvent(event),
+    match_status: "received",
+  };
+
+  if (existing) {
+    const { error } = await supabase
+      .from("iguide_webhook_events")
+      .update(payload)
+      .eq("id", existing.id);
+    if (error) {
+      console.warn("[iguide.webhook] failed to update event inbox", error);
+      return null;
+    }
+    return existing;
+  }
+
+  const { data, error } = await supabase
+    .from("iguide_webhook_events")
+    .insert(payload)
+    .select("id")
+    .single<WebhookRecord>();
+  if (error) {
+    console.warn("[iguide.webhook] failed to save event inbox", error);
+    return null;
+  }
+  return data;
+}
+
+async function updateWebhookEvent(
+  id: string,
+  updates: Database["public"]["Tables"]["iguide_webhook_events"]["Update"],
+) {
+  const { error } = await getServiceSupabase()
+    .from("iguide_webhook_events")
+    .update(updates)
+    .eq("id", id);
+  if (error) console.warn("[iguide.webhook] failed to update event status", error);
+}
+
+async function findBookingForReadyEvent(
+  event: IGuideReadyEvent,
+): Promise<{ booking: BookingTarget | null; source: string }> {
+  const supabase = getServiceSupabase();
+  const portalId = event.iguideId?.trim();
+  const alias = event.iguideAlias?.trim();
+
+  if (portalId) {
+    const { data: job } = await supabase
+      .from("iguide_jobs")
+      .select("booking_id, bookings(id, property_id, iguide_id, iguide_portal_id)")
+      .eq("iguide_id", portalId)
+      .maybeSingle<{
+        booking_id: string;
+        bookings: BookingTarget | null;
+      }>();
+    if (job?.bookings) return { booking: job.bookings, source: "job_iguide_id" };
+
+    const { data } = await supabase
+      .from("bookings")
+      .select("id, property_id, iguide_id, iguide_portal_id")
+      .eq("iguide_portal_id", portalId)
+      .maybeSingle<BookingTarget>();
+    if (data) return { booking: data, source: "booking_portal_id" };
+  }
+
+  if (alias) {
+    const { data } = await supabase
+      .from("bookings")
+      .select("id, property_id, iguide_id, iguide_portal_id")
+      .eq("iguide_id", alias)
+      .maybeSingle<BookingTarget>();
+    if (data) return { booking: data, source: "booking_alias" };
+  }
+
+  const addressMatch = await findSingleBookingByAddress(event.property);
+  if (addressMatch) return { booking: addressMatch, source: "exact_address" };
+
+  return { booking: null, source: "unmatched" };
+}
+
+async function findSingleBookingByAddress(
+  property: IGuideReadyEvent["property"],
+): Promise<BookingTarget | null> {
+  const target = normalizeAddress(
+    [
+      property?.streetNumber,
+      property?.streetName,
+      property?.unit,
+      property?.city,
+      property?.postalCode,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+  const postal = normalizePostalCode(property?.postalCode);
+  if (!target || !postal) return null;
+
+  const { data, error } = await getServiceSupabase()
+    .from("bookings")
+    .select(
+      "id, property_id, iguide_id, iguide_portal_id, scheduled_at, status, properties(street_address, city, postal_code)",
+    )
+    .in("status", ["requested", "confirmed", "shot", "editing", "delivered"])
+    .returns<PropertyMatchBooking[]>();
+
+  if (error || !data) {
+    if (error) console.warn("[iguide.sync] address match query failed", error);
+    return null;
+  }
+
+  const matches = data.filter((booking) => {
+    const dbPostal = normalizePostalCode(booking.properties?.postal_code);
+    if (dbPostal !== postal) return false;
+    const dbAddress = normalizeAddress(
+      [
+        booking.properties?.street_address,
+        booking.properties?.city,
+        booking.properties?.postal_code,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    );
+    return dbAddress === target || dbAddress.includes(target) || target.includes(dbAddress);
+  });
+
+  if (matches.length !== 1) return null;
+  const match = matches[0];
+  return {
+    id: match.id,
+    property_id: match.property_id,
+    iguide_id: match.iguide_id,
+    iguide_portal_id: match.iguide_portal_id,
+  };
+}
+
+async function upsertIGuideJobFromReadyEvent(
+  booking: BookingTarget,
+  event: IGuideReadyEvent,
+  matchSource: string,
+) {
+  const supabase = getServiceSupabase();
+  const row: IGuideJobInsert = {
+    booking_id: booking.id,
+    property_id: booking.property_id,
+    iguide_id: event.iguideId,
+    alias: event.iguideAlias ?? booking.iguide_id ?? null,
+    work_order_id: event.workOrderId ?? null,
+    default_view_id: event.defaultViewId ?? null,
+    status: "ready",
+    match_source: matchSource,
+    raw_ready_event: redactReadyEvent(event),
+  };
+  const { error } = await supabase
+    .from("iguide_jobs")
+    .upsert(row, { onConflict: "iguide_id" });
+  if (error) console.warn("[iguide.sync] failed to upsert job", error);
+}
+
+export async function recordIGuideCreateJob(input: {
+  bookingId: string;
+  propertyId: string;
+  iguideId: string;
+  alias?: string | null;
+  workOrderId?: string | null;
+  defaultViewId?: string | null;
+  rawCreateResponse: unknown;
+}): Promise<{ ok: boolean; error?: string }> {
+  const row: IGuideJobInsert = {
+    booking_id: input.bookingId,
+    property_id: input.propertyId,
+    iguide_id: input.iguideId,
+    alias: input.alias ?? null,
+    work_order_id: input.workOrderId ?? null,
+    default_view_id: input.defaultViewId ?? null,
+    status: "created",
+    match_source: "booking_created",
+    raw_create_response: asJsonObject(input.rawCreateResponse),
+  };
+  const { error } = await getServiceSupabase()
+    .from("iguide_jobs")
+    .upsert(row, { onConflict: "iguide_id" });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function updateIGuideJobStatus(
+  iguideId: string,
+  updates: IGuideJobUpdate,
+) {
+  const { error } = await getServiceSupabase()
+    .from("iguide_jobs")
+    .update(updates)
+    .eq("iguide_id", iguideId);
+  if (error) console.warn("[iguide.sync] failed to update job status", error);
+}
+
+function redactReadyEvent(event: IGuideReadyEvent): Json {
+  const copy = { ...event } as Record<string, unknown>;
+  if ("authtoken" in copy) copy.authtoken = "[redacted]";
+  return copy as Json;
+}
+
+function asJsonObject(value: unknown): Json {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Json;
+  }
+  return {};
+}
+
+function normalizePostalCode(value: string | null | undefined): string {
+  return (value ?? "").replace(/\s+/g, "").toUpperCase();
+}
+
+function normalizeAddress(value: string | null | undefined): string {
+  return (value ?? "")
+    .toLowerCase()
+    .replace(/\b(street|st)\b/g, "st")
+    .replace(/\b(avenue|ave)\b/g, "ave")
+    .replace(/\b(road|rd)\b/g, "rd")
+    .replace(/\b(drive|dr)\b/g, "dr")
+    .replace(/\b(court|ct)\b/g, "ct")
+    .replace(/\b(lane|ln)\b/g, "ln")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }

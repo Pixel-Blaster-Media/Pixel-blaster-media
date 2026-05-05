@@ -75,6 +75,13 @@ interface DeliverableRow {
   created_at: string;
 }
 
+interface IGuideJobRow {
+  status: string;
+  work_order_id: string | null;
+  default_view_id: string | null;
+  match_source: string;
+}
+
 export default async function BookingDetailPage({
   params,
 }: {
@@ -83,7 +90,11 @@ export default async function BookingDetailPage({
   const { id } = await params;
   const supabase = getServerSupabase();
 
-  const [{ data: booking, error: bookErr }, { data: deliverables }] =
+  const [
+    { data: booking, error: bookErr },
+    { data: deliverables },
+    { data: iguideJob },
+  ] =
     await Promise.all([
       supabase
         .from("bookings")
@@ -100,6 +111,11 @@ export default async function BookingDetailPage({
         .eq("booking_id", id)
         .order("created_at", { ascending: false })
         .returns<DeliverableRow[]>(),
+      supabase
+        .from("iguide_jobs")
+        .select("status, work_order_id, default_view_id, match_source")
+        .eq("booking_id", id)
+        .maybeSingle<IGuideJobRow>(),
     ]);
 
   if (bookErr || !booking) notFound();
@@ -225,6 +241,7 @@ export default async function BookingDetailPage({
         initialIGuideId={booking.iguide_id}
         initialPortalId={booking.iguide_portal_id}
         portalApiConfigured={await hasPortalCredentials()}
+        job={iguideJob ?? null}
       />
 
       <FotelloSection

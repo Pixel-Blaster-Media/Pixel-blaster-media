@@ -199,6 +199,74 @@ interface IntegrationCredentialsTable {
   Relationships: [];
 }
 
+interface IGuideJobsTable {
+  Row: {
+    id: string;
+    booking_id: string;
+    property_id: string;
+    iguide_id: string;
+    alias: string | null;
+    work_order_id: string | null;
+    default_view_id: string | null;
+    status: string;
+    match_source: string;
+    raw_create_response: Json;
+    raw_ready_event: Json | null;
+    last_error: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  Insert: {
+    id?: string;
+    booking_id: string;
+    property_id: string;
+    iguide_id: string;
+    alias?: string | null;
+    work_order_id?: string | null;
+    default_view_id?: string | null;
+    status?: string;
+    match_source?: string;
+    raw_create_response?: Json;
+    raw_ready_event?: Json | null;
+    last_error?: string | null;
+  };
+  Update: Partial<IGuideJobsTable["Insert"]>;
+  Relationships: [];
+}
+
+interface IGuideWebhookEventsTable {
+  Row: {
+    id: string;
+    event_type: string;
+    iguide_id: string;
+    work_order_id: string | null;
+    alias: string | null;
+    payload_json: Json;
+    match_status: string;
+    matched_booking_id: string | null;
+    match_source: string | null;
+    processed_at: string | null;
+    last_error: string | null;
+    received_at: string;
+    updated_at: string;
+  };
+  Insert: {
+    id?: string;
+    event_type: string;
+    iguide_id: string;
+    work_order_id?: string | null;
+    alias?: string | null;
+    payload_json?: Json;
+    match_status?: string;
+    matched_booking_id?: string | null;
+    match_source?: string | null;
+    processed_at?: string | null;
+    last_error?: string | null;
+  };
+  Update: Partial<IGuideWebhookEventsTable["Insert"]>;
+  Relationships: [];
+}
+
 interface DeliverablesTable {
   Row: {
     id: string;
@@ -438,6 +506,8 @@ export interface Database {
       booking_line_items: BookingLineItemsTable;
       google_calendar_connection: GoogleCalendarConnectionTable;
       integration_credentials: IntegrationCredentialsTable;
+      iguide_jobs: IGuideJobsTable;
+      iguide_webhook_events: IGuideWebhookEventsTable;
     };
     Views: Record<string, never>;
     Functions: {

@@ -2,18 +2,25 @@
 
 import { useState, useTransition } from "react";
 
-import { saveIGuideId, syncIGuide } from "./actions";
+import { createIGuideForBooking, saveIGuideId, syncIGuide } from "./actions";
 
 export default function IGuideSection({
   bookingId,
   initialIGuideId,
   initialPortalId,
   portalApiConfigured,
+  job,
 }: {
   bookingId: string;
   initialIGuideId: string | null;
   initialPortalId: string | null;
   portalApiConfigured: boolean;
+  job: {
+    status: string;
+    work_order_id: string | null;
+    default_view_id: string | null;
+    match_source: string;
+  } | null;
 }) {
   // The input is a free-form paste field — admin can type an alias, a
   // youriguide.com URL, a portal id, or a manage.youriguide.com URL.
@@ -23,6 +30,7 @@ export default function IGuideSection({
   const [portalId, setPortalId] = useState(initialPortalId);
   const [saving, startSaving] = useTransition();
   const [syncing, startSyncing] = useTransition();
+  const [creating, startCreating] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [okMessage, setOkMessage] = useState<string | null>(null);
 
@@ -88,8 +96,33 @@ export default function IGuideSection({
     });
   }
 
+  function onCreate() {
+    if (
+      !confirm(
+        "Create a new iGuide in the iGuide Portal for this booking? This will link the returned Portal ID to the booking automatically.",
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setOkMessage(null);
+    startCreating(async () => {
+      const res = await createIGuideForBooking(bookingId);
+      if (!res.ok) {
+        setError(res.error ?? "iGuide create failed.");
+        return;
+      }
+      if (res.portalId) setPortalId(res.portalId);
+      if (res.iguideId) setSavedId(res.iguideId);
+      setOkMessage(
+        `Created iGuide${res.workOrderId ? `, work order ${res.workOrderId}` : ""}.`,
+      );
+    });
+  }
+
   const hasLink = Boolean(savedId || portalId);
   const canSave = inputValue.trim() !== "";
+  const canCreate = portalApiConfigured && !portalId && !creating;
 
   return (
     <div className="space-y-4 rounded-lg border border-brand/20 bg-brand/5 p-4">
@@ -98,15 +131,36 @@ export default function IGuideSection({
           iGuide
         </h2>
         <p className="mt-1 text-xs text-ink-muted">
-          Paste any of: tour URL, alias, Portal ID (e.g. igYGFV5GG6V8DD1),
-          or a manage.youriguide.com edit URL. Sync pulls the tour + floor
-          plan into deliverables.{" "}
+          Create an iGuide from this booking for exact webhook matching, or
+          paste any of: tour URL, alias, Portal ID (e.g. igYGFV5GG6V8DD1), or a
+          manage.youriguide.com edit URL. Sync pulls the tour + floor plan into
+          deliverables.{" "}
           {portalApiConfigured
             ? "Portal API is configured — sync uses the authenticated API when a portal ID is known."
             : "Portal API not configured — falls back to the public RESO autofill endpoint. Add IGUIDE_APP_ID / IGUIDE_APP_TOKEN in Vercel to enable."}{" "}
           The webhook populates the portal ID automatically when a tour
           goes live.
         </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={!canCreate}
+          onClick={onCreate}
+          className="rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
+        >
+          {creating ? "Creating…" : "Create iGuide"}
+        </button>
+        {!portalApiConfigured ? (
+          <p className="text-xs text-amber-300/80">
+            Add iGuide API credentials before creating tours from here.
+          </p>
+        ) : portalId ? (
+          <p className="text-xs text-ink-muted">
+            This booking is already linked to an iGuide Portal record.
+          </p>
+        ) : null}
       </div>
 
       <div className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
@@ -165,6 +219,20 @@ export default function IGuideSection({
               No portal ID yet — sync will use the public RESO endpoint
               until the ready webhook fires. If that 401s, paste the
               Portal ID (igXXXXX) from manage.youriguide.com.
+            </p>
+          ) : null}
+          {job ? (
+            <p>
+              Job:{" "}
+              <span className="text-white/90">{job.status}</span>
+              {job.work_order_id ? (
+                <>
+                  {" · "}Work order:{" "}
+                  <code className="rounded bg-black/30 px-1 py-0.5 text-[11px] text-white/90">
+                    {job.work_order_id}
+                  </code>
+                </>
+              ) : null}
             </p>
           ) : null}
           <button
