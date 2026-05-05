@@ -109,6 +109,31 @@ export async function ignoreIGuideWebhookEvent(
   return { ok: true };
 }
 
+export async function ignoreIGuideWebhookEvents(
+  formData: FormData,
+): Promise<void> {
+  await requireAdmin();
+
+  const eventIds = formData
+    .getAll("event_id")
+    .map(String)
+    .filter(Boolean)
+    .slice(0, 200);
+  if (eventIds.length === 0) return;
+
+  await getServiceSupabase()
+    .from("iguide_webhook_events")
+    .update({
+      match_status: "ignored",
+      match_source: "admin_bulk_ignored",
+      last_error: null,
+      processed_at: new Date().toISOString(),
+    })
+    .in("id", eventIds);
+
+  revalidatePath("/admin/iguide");
+}
+
 function toReadyEvent(value: Json): IGuideReadyEvent | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;

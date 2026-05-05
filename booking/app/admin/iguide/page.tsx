@@ -4,6 +4,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
 
 import LinkEventForm from "./LinkEventForm";
+import { ignoreIGuideWebhookEvents } from "./actions";
 
 export const metadata = { title: "iGUIDE Review" };
 export const dynamic = "force-dynamic";
@@ -37,7 +38,13 @@ interface BookingOptionRow {
   } | null;
 }
 
-export default async function IGuideReviewPage() {
+export default async function IGuideReviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const params = await searchParams;
+  const view = params.view === "all" ? "all" : "likely";
   const supabase = getServerSupabase();
   const [{ data: events, error }, { data: bookings }] = await Promise.all([
     supabase
@@ -47,7 +54,7 @@ export default async function IGuideReviewPage() {
       )
       .in("match_status", ["received", "unmatched", "failed"])
       .order("received_at", { ascending: false })
-      .limit(50)
+      .limit(200)
       .returns<IGuideEventRow[]>(),
     supabase
       .from("bookings")
@@ -82,6 +89,22 @@ export default async function IGuideReviewPage() {
     ),
     postal: normalizePostalCode(booking.properties?.postal_code),
   }));
+  const reviewItems = (events ?? []).map((event) => {
+    const details = eventDetails(event.payload_json);
+    const suggested = suggestBooking(details, bookingOptions);
+    const hasSamePostal = Boolean(
+      details.postal &&
+        bookingOptions.some((booking) => booking.postal === details.postal),
+    );
+    return { event, details, suggested, hasSamePostal };
+  });
+  const likelyItems = reviewItems.filter(
+    (item) => item.suggested || item.hasSamePostal,
+  );
+  const unrelatedItems = reviewItems.filter(
+    (item) => !item.suggested && !item.hasSamePostal,
+  );
+  const visibleItems = view === "all" ? reviewItems : likelyItems;
 
   return (
     <div className="space-y-6">
@@ -114,11 +137,54 @@ export default async function IGuideReviewPage() {
         />
       </div>
 
-      {events && events.length > 0 ? (
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <nav className="flex gap-1 text-xs">
+          <Link
+            href="/admin/iguide"
+            className={
+              "rounded-md border px-3 py-1.5 transition " +
+              (view === "likely"
+                ? "border-brand-light bg-brand/15 text-brand-light"
+                : "border-white/10 text-ink-muted hover:border-white/30 hover:text-white")
+            }
+          >
+            Likely matches ({likelyItems.length})
+          </Link>
+          <Link
+            href="/admin/iguide?view=all"
+            className={
+              "rounded-md border px-3 py-1.5 transition " +
+              (view === "all"
+                ? "border-brand-light bg-brand/15 text-brand-light"
+                : "border-white/10 text-ink-muted hover:border-white/30 hover:text-white")
+            }
+          >
+            All unmatched ({reviewItems.length})
+          </Link>
+        </nav>
+        {view === "likely" && unrelatedItems.length > 0 ? (
+          <form action={ignoreIGuideWebhookEvents}>
+            {unrelatedItems.map((item) => (
+              <input
+                key={item.event.id}
+                type="hidden"
+                name="event_id"
+                value={item.event.id}
+              />
+            ))}
+            <button
+              type="submit"
+              className="rounded-md border border-red-300/30 px-3 py-1.5 text-xs text-red-200 hover:border-red-300 hover:bg-red-500/10"
+            >
+              Hide {unrelatedItems.length} unrelated iGUIDEs
+            </button>
+          </form>
+        ) : null}
+      </div>
+
+      {visibleItems.length > 0 ? (
         <ul className="space-y-3">
-          {events.map((event) => {
-            const details = eventDetails(event.payload_json);
-            const suggested = suggestBooking(details, bookingOptions);
+          {visibleItems.map(({ event, details, suggested, hasSamePostal }) => {
             const status = statusCopy(event.match_status);
             return (
               <li
@@ -133,7 +199,9 @@ export default async function IGuideReviewPage() {
                     <p className="mt-1 text-sm text-ink-muted">
                       {suggested
                         ? "Possible match found. Check the dropdown, then link it."
-                        : "No clear match. Choose the right booking manually."}
+                        : hasSamePostal
+                          ? "Same postal code as a booking. Choose carefully before linking."
+                          : "No matching postal code in current bookings. This is probably unrelated."}
                     </p>
                     <p className="mt-1 text-xs text-ink-muted">
                       Portal ID:{" "}
@@ -172,8 +240,9 @@ export default async function IGuideReviewPage() {
         </ul>
       ) : (
         <p className="rounded-lg border border-dashed border-white/10 bg-ink-soft/40 px-4 py-8 text-center text-sm text-ink-muted">
-          Nothing to review. If an iGUIDE comes in and the site cannot match it,
-          it will show up here.
+          {view === "likely" && unrelatedItems.length > 0
+            ? "No likely matches. The remaining iGUIDEs look unrelated to current bookings."
+            : "Nothing to review. If an iGUIDE comes in and the site cannot match it, it will show up here."}
         </p>
       )}
 
