@@ -64,6 +64,13 @@ async function portalFetch<T>(
   }
 
   const url = `${creds.baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+  const credentialProblem = validateHeaderCredential(
+    "iGUIDE Client ID",
+    creds.appId,
+  ) ?? validateHeaderCredential("iGUIDE Token", creds.appToken);
+  if (credentialProblem) {
+    return { ok: false, status: 0, error: credentialProblem };
+  }
 
   let res: Response;
   try {
@@ -127,6 +134,21 @@ async function portalFetch<T>(
   }
 
   return { ok: true, status: res.status, data: parsed as T };
+}
+
+function validateHeaderCredential(label: string, value: string): string | null {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code > 255) {
+      return `${label} contains a character that cannot be sent to iGUIDE at position ${
+        i + 1
+      }. Delete and paste it again directly from iGUIDE. Avoid smart quotes, extra labels, or copied formatting.`;
+    }
+  }
+  if (/\s/.test(value)) {
+    return `${label} contains a space or line break. Delete and paste only the exact value from iGUIDE.`;
+  }
+  return null;
 }
 
 // ===========================================================================
