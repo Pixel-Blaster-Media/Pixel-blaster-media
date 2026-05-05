@@ -6,6 +6,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 
 import ConnectButton from "./ConnectButton";
+import CopyTextButton from "./CopyTextButton";
 import CredentialsForm, {
   type CredentialFieldStatus,
 } from "./CredentialsForm";
@@ -107,6 +108,10 @@ export default async function IntegrationsPage({
   const googleConfigured = Boolean(
     process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET,
   );
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
+  const webhookUrlBase = appUrl
+    ? `${appUrl}/api/integrations/iguide/webhook?secret=`
+    : "/api/integrations/iguide/webhook?secret=";
 
   return (
     <div className="space-y-10">
@@ -238,11 +243,8 @@ export default async function IntegrationsPage({
           <div>
             <h2 className="text-lg font-semibold text-white">iGUIDE</h2>
             <p className="mt-1 text-sm text-ink-muted">
-              Powers automatic tour-and-floorplan sync. The App ID + Token
-              come from manage.youriguide.com → Settings → API Management →
-              API Tokens. The webhook secret is a long random string you
-              paste into iGUIDE&apos;s webhook URL config (
-              <code className="text-xs">?secret=…</code>).
+              Connect this once so new iGUIDEs from your phone can be matched
+              to bookings and synced into deliverables.
             </p>
           </div>
           {iguideConfigured ? (
@@ -256,26 +258,67 @@ export default async function IntegrationsPage({
           )}
         </div>
 
+        <div className="mt-4 rounded-md border border-brand-light/20 bg-brand/10 p-4">
+          <p className="text-sm font-semibold text-white">
+            What to copy from iGUIDE
+          </p>
+          <ol className="mt-2 list-inside list-decimal space-y-1 text-sm text-ink-muted">
+            <li>
+              In iGUIDE, go to{" "}
+              <strong>Settings → API Management → API Tokens</strong>.
+            </li>
+            <li>
+              Copy iGUIDE&apos;s <strong>Client ID</strong> into{" "}
+              <strong>iGUIDE Client ID</strong> below.
+            </li>
+            <li>
+              Copy iGUIDE&apos;s <strong>Token</strong> into{" "}
+              <strong>iGUIDE Token</strong> below.
+            </li>
+            <li>
+              Make up a long random <strong>Webhook secret</strong>, save it
+              below, then add it to the end of the webhook URL in iGUIDE.
+            </li>
+          </ol>
+        </div>
+
+        <div className="mt-4 rounded-md border border-white/10 bg-black/20 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
+            Webhook URL for iGUIDE
+          </p>
+          <p className="mt-1 text-xs text-ink-muted">
+            After saving the webhook secret below, paste this into iGUIDE&apos;s
+            webhook setup and put your secret after the equals sign.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <code className="min-w-0 flex-1 overflow-x-auto rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-xs text-white">
+              {webhookUrlBase}YOUR_SECRET_HERE
+            </code>
+            <CopyTextButton value={`${webhookUrlBase}YOUR_SECRET_HERE`} />
+          </div>
+        </div>
+
         <CredentialsForm
           provider="iguide"
           fields={[
             {
               name: "app_id",
-              label: "App ID",
-              helper: "The Token ID column from API Tokens.",
+              label: "iGUIDE Client ID",
+              helper:
+                "In iGUIDE this may be labelled Client ID. It is the short ID beside the token.",
               type: "text",
             },
             {
               name: "app_token",
-              label: "App Token",
+              label: "iGUIDE Token",
               helper:
-                "The Token Value — long JWT-looking string. Shown once on creation.",
+                "In iGUIDE this is labelled Token. It is the long secret value shown when the token is created.",
             },
             {
               name: "webhook_secret",
               label: "Webhook secret",
               helper:
-                "Same value used in the iGUIDE webhook URL after secret=. 32+ random hex chars.",
+                "You choose this. Use a long random value, save it here, then put the same value after secret= in the webhook URL.",
             },
           ]}
           statuses={{
