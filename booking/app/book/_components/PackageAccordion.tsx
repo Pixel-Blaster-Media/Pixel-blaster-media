@@ -387,33 +387,21 @@ function BookingUpsellPanel({
       "ultimate",
     ].includes(s),
   );
-  const hasOnCamera = selectedAddOnSlugs.includes("on_camera");
-
   const upgrades: Array<{
     slug: string;
-    action: "service" | "addon";
+    action: "service";
     eyebrow: string;
     title: string;
     reason: string;
   }> = [];
 
-  if (hasPhoto && !hasDrone && bySlug.has("aerial_photography")) {
+  if (!hasPhoto && bySlug.has("residential_photography")) {
     upgrades.push({
-      slug: "aerial_photography",
+      slug: "residential_photography",
       action: "service",
-      eyebrow: "Exterior impact",
-      title: "Add drone photos",
-      reason: "Great for lots, corner properties, pools, views, and premium listings.",
-    });
-  }
-
-  if (!hasVideo && bySlug.has("social_media_reel")) {
-    upgrades.push({
-      slug: "social_media_reel",
-      action: "service",
-      eyebrow: "Social boost",
-      title: "Add a social media reel",
-      reason: "Gives the realtor something quick to post on Instagram, Facebook, and TikTok.",
+      eyebrow: "Listing basics",
+      title: "Add residential photos",
+      reason: "Photos are still the core MLS asset and pair well with every tour or drone order.",
     });
   }
 
@@ -423,17 +411,27 @@ function BookingUpsellPanel({
       action: "service",
       eyebrow: "MLS-ready",
       title: "Add iGUIDE + measurements",
-      reason: "Adds floor plans, room measurements, virtual tour, and listing analytics.",
+      reason: "Your current selection has photos, but no floor plan, measurements, or virtual tour.",
     });
   }
 
-  if (hasVideo && !hasOnCamera && bySlug.has("on_camera")) {
+  if ((hasPhoto || hasIGuide) && !hasDrone && bySlug.has("aerial_photography")) {
     upgrades.push({
-      slug: "on_camera",
-      action: "addon",
-      eyebrow: "Agent brand",
-      title: "Add on-camera intro",
-      reason: "Perfect for agents who want to build trust and personality in the video.",
+      slug: "aerial_photography",
+      action: "service",
+      eyebrow: "Exterior impact",
+      title: "Add drone photos",
+      reason: "Your current selection does not include aerials — useful for lots, corner properties, pools, views, and premium listings.",
+    });
+  }
+
+  if (!hasVideo && bySlug.has("social_media_reel")) {
+    upgrades.push({
+      slug: "social_media_reel",
+      action: "service",
+      eyebrow: "Social boost",
+      title: "Add a social media reel",
+      reason: "Your current selection has no video, so this gives the realtor something quick to post on Instagram, Facebook, and TikTok.",
     });
   }
 
@@ -457,11 +455,7 @@ function BookingUpsellPanel({
             <button
               key={upgrade.slug}
               type="button"
-              onClick={() =>
-                upgrade.action === "addon"
-                  ? onAddAddon(upgrade.slug)
-                  : onAddService(upgrade.slug)
-              }
+              onClick={() => onAddService(upgrade.slug)}
               className="rounded-md border border-white/10 bg-ink/50 p-3 text-left transition hover:border-brand-light/60 hover:bg-brand/15"
             >
               <span className="text-[10px] font-semibold uppercase tracking-wider text-brand-light/90">
