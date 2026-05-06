@@ -47,7 +47,7 @@ export default async function IntegrationsPage({
   }>;
 }) {
   const params = await searchParams;
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data: connection } = await supabase
     .from("quickbooks_connection")
     .select("*")

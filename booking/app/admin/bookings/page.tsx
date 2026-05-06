@@ -44,7 +44,7 @@ export default async function BookingsPage({
   const filter = (FILTERS.find((f) => f.id === params.filter)?.id ??
     "active") as (typeof FILTERS)[number]["id"];
 
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   let query = supabase
     .from("bookings")
     .select(

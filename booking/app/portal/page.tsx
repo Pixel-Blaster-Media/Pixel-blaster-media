@@ -30,7 +30,7 @@ interface DeliverableRow {
 
 export default async function PortalIndex() {
   const user = await requireUser("/portal");
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
 
   // RLS scopes these selects to the current user — realtors only see
   // their own properties / bookings / deliverables.

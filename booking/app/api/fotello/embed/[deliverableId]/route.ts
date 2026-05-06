@@ -32,7 +32,7 @@ export async function GET(
   const user = await requireUser();
   const { deliverableId } = await ctx.params;
 
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   // RLS lets realtors see only their own deliverables; admins see all.
   // If the deliverable doesn't surface, 404 regardless of why.
   const { data: deliverable } = await supabase

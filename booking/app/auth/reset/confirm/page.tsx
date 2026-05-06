@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
  * etc.), we show a soft error with a way to restart.
  */
 export default async function ResetConfirmPage() {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const {
     data: { session },
   } = await supabase.auth.getSession();

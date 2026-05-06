@@ -88,7 +88,7 @@ export default async function BookingDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
 
   const [
     { data: booking, error: bookErr },

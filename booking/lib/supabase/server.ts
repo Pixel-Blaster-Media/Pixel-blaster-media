@@ -13,8 +13,8 @@ type CookieStore = {
  * Use from Server Components, Server Actions, and Route Handlers when you
  * want operations to run as the signed-in user (subject to RLS).
  */
-export function getServerSupabase() {
-  const cookieStore = cookies() as unknown as CookieStore;
+export async function getServerSupabase() {
+  const cookieStore = (await cookies()) as unknown as CookieStore;
 
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import type { InputHTMLAttributes } from "react";
 import { useMemo, useState, useTransition } from "react";
 
 import { addCalendarBlock } from "@/app/admin/settings/availability/actions";
+import { createAdminShoot } from "./actions";
 
 interface CalendarItem {
   id: string;
@@ -28,6 +31,17 @@ interface DayColumn {
   workEndMinutes: number;
 }
 
+interface CatalogItemOption {
+  id: string;
+  kind: "bundle" | "a_la_carte" | "addon";
+  name: string;
+  description: string;
+  durationMinutes: number;
+  priceCents: number;
+  badge: string | null;
+  requireHasVideo: boolean;
+}
+
 const START_HOUR = 7;
 const END_HOUR = 20;
 const SLOT_MINUTES = 30;
@@ -36,15 +50,19 @@ const HOUR_HEIGHT = 72;
 export default function CalendarWeekView({
   days,
   items,
+  catalogItems,
 }: {
   days: DayColumn[];
   items: CalendarItem[];
+  catalogItems: CatalogItemOption[];
 }) {
+  const router = useRouter();
   const [selected, setSelected] = useState<{
     day: DayColumn;
     hour: number;
     minute: number;
   } | null>(null);
+  const [mode, setMode] = useState<"shoot" | "block">("shoot");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -142,6 +160,7 @@ export default function CalendarWeekView({
                       )}`}
                       onClick={() => {
                         setError(null);
+                        setMode("shoot");
                         setSelected({ day, hour, minute });
                       }}
                       className="absolute left-0 right-0 border-t border-white/[0.06] transition hover:bg-brand/15"
@@ -214,8 +233,7 @@ export default function CalendarWeekView({
                 {formatTime(selected.hour, selected.minute)}
               </p>
               <p className="mt-1 text-xs text-ink-muted">
-                Add a private busy block here. Shoots are added through the
-                booking flow for now, so realtor/property details stay complete.
+                Add a confirmed shoot here, or block the time off privately.
               </p>
             </div>
             <button
@@ -227,6 +245,128 @@ export default function CalendarWeekView({
             </button>
           </div>
 
+          <div className="mt-4 inline-flex rounded-md border border-white/10 bg-ink p-1 text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                setError(null);
+                setMode("shoot");
+              }}
+              className={`rounded px-3 py-1.5 ${
+                mode === "shoot"
+                  ? "bg-brand text-white"
+                  : "text-ink-muted hover:text-white"
+              }`}
+            >
+              Add shoot
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setError(null);
+                setMode("block");
+              }}
+              className={`rounded px-3 py-1.5 ${
+                mode === "block"
+                  ? "bg-brand text-white"
+                  : "text-ink-muted hover:text-white"
+              }`}
+            >
+              Block time
+            </button>
+          </div>
+
+          {mode === "shoot" ? (
+            <form
+              className="mt-4 space-y-4"
+              action={(formData) => {
+                setError(null);
+                startTransition(async () => {
+                  const result = await createAdminShoot(formData);
+                  if (!result.ok || !result.bookingId) {
+                    setError(result.error ?? "Could not add shoot.");
+                    return;
+                  }
+                  router.push(`/admin/bookings/${result.bookingId}`);
+                });
+              }}
+            >
+              <input
+                type="hidden"
+                name="scheduled_at"
+                value={selectedSlot ?? ""}
+              />
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <TextField
+                  label="Realtor name"
+                  name="contact_name"
+                  required
+                  autoComplete="name"
+                />
+                <TextField
+                  label="Realtor email"
+                  name="contact_email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                />
+                <TextField
+                  label="Phone"
+                  name="contact_phone"
+                  type="tel"
+                  autoComplete="tel"
+                />
+                <TextField label="Brokerage" name="brokerage" />
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <TextField
+                  label="Property address"
+                  name="street_address"
+                  required
+                  className="md:col-span-2"
+                />
+                <TextField label="Unit" name="unit_number" />
+                <TextField label="City" name="city" />
+                <TextField label="Province/state" name="province" defaultValue="ON" />
+                <TextField label="Postal code" name="postal_code" />
+                <TextField
+                  label="Square feet"
+                  name="square_footage"
+                  type="number"
+                  min="0"
+                  inputMode="numeric"
+                />
+              </div>
+
+              <CatalogPicker items={catalogItems} />
+
+              <label className="block">
+                <span className="text-xs text-ink-muted">Notes</span>
+                <textarea
+                  name="notes"
+                  rows={3}
+                  className="mt-1 w-full rounded-md border border-white/10 bg-ink px-2 py-1.5 text-sm text-white"
+                />
+              </label>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+                >
+                  {pending ? "Adding..." : "Add confirmed shoot"}
+                </button>
+                {error ? (
+                  <p className="text-sm text-red-300" role="alert">
+                    {error}
+                  </p>
+                ) : null}
+              </div>
+            </form>
+          ) : (
           <form
             className="mt-3 grid gap-2 md:grid-cols-[1fr_1fr_auto]"
             action={(formData) => {
@@ -282,17 +422,86 @@ export default function CalendarWeekView({
               </p>
             ) : null}
           </form>
-
-          <div className="mt-3">
-            <Link
-              href={`/book?slot=${encodeURIComponent(selectedSlot ?? "")}`}
-              className="text-xs text-brand-light underline hover:text-white"
-            >
-              Open booking form with this time
-            </Link>
-          </div>
+          )}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function TextField({
+  label,
+  className,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement> & {
+  label: string;
+}) {
+  return (
+    <label className={`block ${className ?? ""}`}>
+      <span className="text-xs text-ink-muted">{label}</span>
+      <input
+        {...props}
+        className="mt-1 w-full rounded-md border border-white/10 bg-ink px-2 py-1.5 text-sm text-white"
+      />
+    </label>
+  );
+}
+
+function CatalogPicker({ items }: { items: CatalogItemOption[] }) {
+  const groups: { title: string; kinds: CatalogItemOption["kind"][] }[] = [
+    { title: "Packages", kinds: ["bundle"] },
+    { title: "A-la-carte", kinds: ["a_la_carte"] },
+    { title: "Add-ons", kinds: ["addon"] },
+  ];
+
+  return (
+    <div className="space-y-3">
+      {groups.map((group) => {
+        const groupItems = items.filter((item) => group.kinds.includes(item.kind));
+        if (groupItems.length === 0) return null;
+        return (
+          <fieldset key={group.title}>
+            <legend className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+              {group.title}
+            </legend>
+            <div className="mt-2 grid gap-2 md:grid-cols-2">
+              {groupItems.map((item) => (
+                <label
+                  key={item.id}
+                  className="flex min-h-[76px] gap-3 rounded-md border border-white/10 bg-ink p-3 text-sm text-white hover:border-brand/40"
+                >
+                  <input
+                    type="checkbox"
+                    name="catalog_item_id"
+                    value={item.id}
+                    className="mt-1 h-4 w-4 rounded border-white/20 bg-ink"
+                  />
+                  <span>
+                    <span className="flex flex-wrap items-center gap-2 font-semibold">
+                      {item.name}
+                      {item.badge ? (
+                        <span className="rounded border border-brand/30 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-brand-light">
+                          {item.badge}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="mt-1 block text-xs text-ink-muted">
+                      {formatPrice(item.priceCents)} ·{" "}
+                      {formatDuration(item.durationMinutes)}
+                      {item.requireHasVideo ? " · needs video" : ""}
+                    </span>
+                    {item.description ? (
+                      <span className="mt-1 line-clamp-2 block text-xs text-ink-muted">
+                        {item.description}
+                      </span>
+                    ) : null}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        );
+      })}
     </div>
   );
 }
@@ -370,6 +579,19 @@ function formatDateTimeRange(startISO: string, endISO: string): string {
     minute: "2-digit",
   });
   return `${fmt.format(new Date(startISO))}-${fmt.format(new Date(endISO))}`;
+}
+
+function formatPrice(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const extraMinutes = minutes % 60;
+  return extraMinutes === 0
+    ? `${hours} hr`
+    : `${hours} hr ${extraMinutes} min`;
 }
 
 function toDateTimeLocal(date: string, hour: number, minute: number): string {

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { businessDateTimeLocalToUtc } from "@/lib/booking/availability";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
 export interface ActionResult {
@@ -63,9 +64,9 @@ export async function addCalendarBlock(
   if (!starts || !ends) {
     return { ok: false, error: "Start and end are required." };
   }
-  const startsDate = new Date(starts);
-  const endsDate = new Date(ends);
-  if (Number.isNaN(startsDate.getTime()) || Number.isNaN(endsDate.getTime())) {
+  const startsDate = businessDateTimeLocalToUtc(starts);
+  const endsDate = businessDateTimeLocalToUtc(ends);
+  if (!startsDate || !endsDate) {
     return { ok: false, error: "Invalid dates." };
   }
   if (endsDate <= startsDate) {

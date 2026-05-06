@@ -36,7 +36,7 @@ export async function sendMagicLink(
     return { error: "That email doesn't look right." };
   }
 
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const headerStore = headers() as unknown as HeaderStore;
   const origin =
     process.env.NEXT_PUBLIC_APP_URL ??

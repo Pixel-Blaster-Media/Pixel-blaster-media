@@ -384,7 +384,7 @@ async function resolveUser(params: {
   password: string;
 }): Promise<ResolveUserOk | ResolveUserErr> {
   // 1) Already signed in? Use the existing session.
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const {
     data: { session },
   } = await supabase.auth.getSession();

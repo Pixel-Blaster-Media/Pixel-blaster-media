@@ -36,7 +36,7 @@ interface ProfileLookupRow {
  * context object so admin pages can render the user's name.
  */
 export async function requireAdmin(): Promise<AdminContext> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
 
   // getSession() reads the stored cookie locally. It still *may* call
   // the network if the token is about to expire (auto-refresh) — but

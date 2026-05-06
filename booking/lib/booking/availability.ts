@@ -181,6 +181,17 @@ export async function isSlotAvailable(
   return slots.some((s) => new Date(s.start).getTime() === start.getTime());
 }
 
+export function businessDateTimeLocalToUtc(value: string): Date | null {
+  const normalized = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(normalized)) {
+    return null;
+  }
+
+  const withSeconds = normalized.length === 16 ? `${normalized}:00` : normalized;
+  const date = localToUtc(withSeconds);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 // ---- Google Calendar free/busy ----
 
 /**

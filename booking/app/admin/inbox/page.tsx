@@ -40,7 +40,7 @@ export default async function InboxPage({
     (FILTERS.find((f) => f.id === params.filter)?.id as FilterId) ??
     "open";
 
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   let query = supabase
     .from("booking_requests")
     .select(

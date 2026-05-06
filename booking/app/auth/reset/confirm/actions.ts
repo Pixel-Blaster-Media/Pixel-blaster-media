@@ -33,7 +33,7 @@ export async function setNewPassword(
     return { error: "Passwords don't match — re-enter to confirm." };
   }
 
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const {
     data: { session },
   } = await supabase.auth.getSession();

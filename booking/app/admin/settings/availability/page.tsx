@@ -33,7 +33,7 @@ interface CalendarBlockRow {
 }
 
 export default async function AvailabilityPage() {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
 
   const [hoursRes, blocksRes] = await Promise.all([
     supabase

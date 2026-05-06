@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/auth/sign-in", url.origin));
   }
 
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {

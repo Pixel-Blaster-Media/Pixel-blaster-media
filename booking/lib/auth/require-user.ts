@@ -31,7 +31,7 @@ interface ProfileRow {
  * and a network blip must not log out a valid session.
  */
 export async function requireUser(nextPath?: string): Promise<UserContext> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const {
     data: { session },
   } = await supabase.auth.getSession();

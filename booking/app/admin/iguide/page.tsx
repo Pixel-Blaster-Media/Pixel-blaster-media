@@ -45,7 +45,7 @@ export default async function IGuideReviewPage({
 }) {
   const params = await searchParams;
   const view = params.view === "all" ? "all" : "likely";
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const [{ data: events, error }, { data: bookings }] = await Promise.all([
     supabase
       .from("iguide_webhook_events")

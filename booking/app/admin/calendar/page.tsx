@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 
 import { BOOKING_STATUSES } from "@/lib/booking/booking-status";
 import { BUSINESS_TZ } from "@/lib/booking/availability";
+import { getActiveCatalog } from "@/lib/booking/catalog";
 import {
   labelForService,
   totalDurationMinutes,
@@ -53,6 +54,17 @@ interface CalendarItem {
   statusClass?: string;
 }
 
+interface CatalogItemOption {
+  id: string;
+  kind: "bundle" | "a_la_carte" | "addon";
+  name: string;
+  description: string;
+  durationMinutes: number;
+  priceCents: number;
+  badge: string | null;
+  requireHasVideo: boolean;
+}
+
 export default async function AdminCalendarPage({
   searchParams,
 }: {
@@ -68,8 +80,8 @@ export default async function AdminCalendarPage({
   const rangeStart = broadUtcDate(weekStart, -1);
   const rangeEnd = broadUtcDate(weekEnd, 1);
 
-  const supabase = getServerSupabase();
-  const [bookingsRes, blocksRes, hoursRes] = await Promise.all([
+  const supabase = await getServerSupabase();
+  const [bookingsRes, blocksRes, hoursRes, catalog] = await Promise.all([
     supabase
       .from("bookings")
       .select(
@@ -92,6 +104,7 @@ export default async function AdminCalendarPage({
       .from("business_hours")
       .select("day_of_week, start_time, end_time, enabled")
       .returns<BusinessHoursRow[]>(),
+    getActiveCatalog(),
   ]);
 
   const hoursByDow = new Map(
@@ -211,8 +224,27 @@ export default async function AdminCalendarPage({
         </div>
       </header>
 
-      <CalendarWeekView days={days} items={items} />
+      <CalendarWeekView
+        days={days}
+        items={items}
+        catalogItems={catalogToOptions(catalog)}
+      />
     </div>
+  );
+}
+
+function catalogToOptions(catalog: Awaited<ReturnType<typeof getActiveCatalog>>): CatalogItemOption[] {
+  return [...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(
+    (item) => ({
+      id: item.id,
+      kind: item.kind,
+      name: item.name,
+      description: item.description,
+      durationMinutes: item.duration_minutes,
+      priceCents: item.price_cents,
+      badge: item.badge,
+      requireHasVideo: item.require_has_video,
+    }),
   );
 }
 

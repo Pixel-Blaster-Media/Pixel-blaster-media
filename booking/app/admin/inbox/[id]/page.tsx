@@ -23,7 +23,7 @@ export default async function RequestDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data: req, error } = await supabase
     .from("booking_requests")
     .select("*")

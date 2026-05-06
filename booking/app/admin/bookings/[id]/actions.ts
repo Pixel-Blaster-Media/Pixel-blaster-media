@@ -100,7 +100,7 @@ export async function updateBookingStatus(
   next: BookingStatus,
 ): Promise<ActionResult> {
   await requireAdmin();
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
 
   const { data: current, error: loadErr } = await supabase
     .from("bookings")
@@ -182,7 +182,7 @@ export async function addManualDeliverable(
     return { ok: false, error: "URL doesn't look valid." };
   }
 
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data: booking, error: bookErr } = await supabase
     .from("bookings")
     .select("id, property_id")
@@ -308,7 +308,7 @@ export async function syncIGuide(
 ): Promise<ActionResult & { upserts?: number; address?: string; portalId?: string }> {
   await requireAdmin();
 
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data: booking, error } = await supabase
     .from("bookings")
     .select("id, property_id, iguide_id, iguide_portal_id")
@@ -346,7 +346,7 @@ export async function createIGuideForBooking(
 > {
   await requireAdmin();
 
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data: booking, error } = await supabase
     .from("bookings")
     .select(
@@ -454,7 +454,7 @@ export async function createInvoice(
 > {
   await requireAdmin();
 
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data: booking, error } = await supabase
     .from("bookings")
     .select(
@@ -541,7 +541,7 @@ export async function trackFotelloEnhance(
   const trimmed = enhanceId.trim();
   if (!trimmed) return { ok: false, error: "Enhance ID is required." };
 
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data: booking, error } = await supabase
     .from("bookings")
     .select("id, property_id, fotello_listing_id")

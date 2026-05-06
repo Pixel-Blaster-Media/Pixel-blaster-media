@@ -175,7 +175,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 async function loadSessionProfile(): Promise<SessionProfile | null> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const {
     data: { session },
   } = await supabase.auth.getSession();

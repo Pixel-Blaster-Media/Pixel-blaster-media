@@ -52,7 +52,7 @@ export default async function PropertyDetailPage({
 }) {
   const { propertyId } = await params;
   await requireUser(`/portal/${propertyId}`);
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
 
   // RLS will ensure the row is only returned if the caller owns it (or
   // is admin). .maybeSingle() so a non-owner just gets 404, not 500.

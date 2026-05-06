@@ -25,7 +25,7 @@ export async function cancelOwnBooking(
 ): Promise<CancelOwnResult> {
   const user = await requireUser();
 
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data: booking, error } = await supabase
     .from("bookings")
     .select("id, owner_id, property_id")
