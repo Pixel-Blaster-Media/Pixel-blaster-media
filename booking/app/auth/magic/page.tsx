@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import PasswordSignInForm from "./PasswordSignInForm";
+import SignInForm from "../sign-in/SignInForm";
 
 export const metadata: Metadata = {
-  title: "Sign in with password",
+  title: "Magic link sign in",
 };
 
-export default async function PasswordSignInPage({
+export default async function MagicLinkSignInPage({
   searchParams,
 }: {
   searchParams: Promise<{ next?: string }>;
@@ -20,21 +20,20 @@ export default async function PasswordSignInPage({
           Pixel Blaster
         </p>
         <h1 className="mt-2 text-3xl font-bold text-white">
-          Sign in with password
+          Email me a sign-in link
         </h1>
         <p className="mt-2 text-sm text-ink-muted">
-          Use your email and password to open your bookings, media, and admin
-          tools.
+          Use this if you cannot get into your account with a password.
         </p>
       </header>
-      <PasswordSignInForm next={params.next} />
+      <SignInForm next={params.next} />
       <p className="text-xs text-ink-muted">
-        Prefer a magic link?{" "}
+        Know your password?{" "}
         <Link
-          href={`/auth/magic${params.next ? `?next=${encodeURIComponent(params.next)}` : ""}`}
+          href={`/auth/sign-in${params.next ? `?next=${encodeURIComponent(params.next)}` : ""}`}
           className="text-brand-light underline"
         >
-          Use the magic-link form
+          Sign in with password
         </Link>
         .
       </p>

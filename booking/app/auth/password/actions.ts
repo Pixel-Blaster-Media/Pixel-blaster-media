@@ -44,6 +44,9 @@ export async function signInWithPassword(
 ): Promise<PasswordSignInState> {
   const email = ((formData.get("email") as string | null) ?? "").trim().toLowerCase();
   const password = ((formData.get("password") as string | null) ?? "").toString();
+  const next = safeNextPath(
+    ((formData.get("next") as string | null) ?? "/admin").trim(),
+  );
 
   if (!email || !password) {
     return { error: "Email and password are both required." };
@@ -178,5 +181,11 @@ export async function signInWithPassword(
     maxAge: 60 * 60 * 24 * 400,
   });
 
-  redirect("/admin");
+  redirect(next);
+}
+
+function safeNextPath(next: string): string {
+  if (!next.startsWith("/") || next.startsWith("//")) return "/admin";
+  if (next.startsWith("/auth/")) return "/admin";
+  return next;
 }

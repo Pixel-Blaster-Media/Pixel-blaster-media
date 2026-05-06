@@ -553,7 +553,7 @@ async function resolveUser(params: {
   );
   if (!signIn.ok) {
     // The user was created but sign-in failed — they can still sign in
-    // later via /auth/password, so don't block the booking.
+    // later via /auth/sign-in, so don't block the booking.
     console.warn("[book] sign-in after create failed", signIn.error);
     return {
       ok: false,
@@ -561,7 +561,7 @@ async function resolveUser(params: {
         ok: false,
         errors: {
           _form:
-            "Your account was created but we couldn't sign you in automatically. Try /auth/password.",
+            "Your account was created but we couldn't sign you in automatically. Try /auth/sign-in.",
         },
       },
     };
