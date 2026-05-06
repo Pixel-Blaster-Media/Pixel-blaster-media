@@ -364,6 +364,13 @@ export default async function BookingDetailPage({
             />
           </Panel>
 
+          <DeliveryChecklist
+            booking={booking}
+            links={deliveryLinks}
+            readyDeliverables={readyDeliverables}
+            deliveryEmailSentAt={deliveryNotification?.sent_at ?? null}
+          />
+
           {booking.client_notes || booking.internal_notes ? (
             <Panel title="Notes">
               {booking.client_notes ? (
@@ -380,6 +387,237 @@ export default async function BookingDetailPage({
       </div>
     </div>
   );
+}
+
+function DeliveryChecklist({
+  booking,
+  links,
+  readyDeliverables,
+  deliveryEmailSentAt,
+}: {
+  booking: BookingDetail;
+  links: DeliveryLink[];
+  readyDeliverables: DeliverableRow[];
+  deliveryEmailSentAt: string | null;
+}) {
+  const items = buildDeliveryChecklistItems({
+    booking,
+    links,
+    readyDeliverables,
+    deliveryEmailSentAt,
+  });
+  const missingRequired = items.filter(
+    (item) => item.required && item.status === "missing",
+  ).length;
+
+  return (
+    <Panel title="Delivery checklist">
+      <div
+        className={`rounded-md border p-3 ${
+          missingRequired === 0
+            ? "border-emerald-400/30 bg-emerald-500/10"
+            : "border-amber-400/30 bg-amber-500/10"
+        }`}
+      >
+        <p className="text-sm font-semibold text-white">
+          {missingRequired === 0
+            ? "Ready to send"
+            : `${missingRequired} required item${
+                missingRequired === 1 ? "" : "s"
+              } missing`}
+        </p>
+        <p className="mt-1 text-xs text-ink-muted">
+          Use this as a quick final check before sending or resending the
+          delivery email.
+        </p>
+      </div>
+      <ul className="space-y-2">
+        {items.map((item) => (
+          <li
+            key={item.label}
+            className="rounded-md border border-white/10 bg-ink/35 p-3"
+          >
+            <div className="flex items-start gap-2">
+              <span
+                className={`mt-0.5 grid h-5 w-5 place-items-center rounded-full text-xs font-bold ${
+                  item.status === "ready"
+                    ? "bg-emerald-400/20 text-emerald-200"
+                    : item.status === "missing"
+                      ? "bg-amber-400/20 text-amber-100"
+                      : "bg-white/10 text-ink-muted"
+                }`}
+                aria-hidden="true"
+              >
+                {item.status === "ready"
+                  ? "✓"
+                  : item.status === "missing"
+                    ? "!"
+                    : "·"}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-white">
+                    {item.label}
+                  </p>
+                  {!item.required ? (
+                    <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-ink-muted">
+                      Optional
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-xs text-ink-muted">{item.detail}</p>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
+type ChecklistStatus = "ready" | "missing" | "optional";
+
+interface ChecklistItem {
+  label: string;
+  detail: string;
+  required: boolean;
+  status: ChecklistStatus;
+}
+
+function buildDeliveryChecklistItems({
+  booking,
+  links,
+  readyDeliverables,
+  deliveryEmailSentAt,
+}: {
+  booking: BookingDetail;
+  links: DeliveryLink[];
+  readyDeliverables: DeliverableRow[];
+  deliveryEmailSentAt: string | null;
+}): ChecklistItem[] {
+  const expectsPhotos = expectsAny(booking, [
+    "residential_photography",
+    "blue_print",
+    "social_media_special",
+    "social_media_plus",
+    "ultimate",
+  ]);
+  const expectsIGuide = expectsAny(booking, [
+    "iguide_measurements",
+    "blue_print",
+    "social_media_special",
+    "social_media_plus",
+    "ultimate",
+  ]);
+  const expectsVideo = expectsAny(booking, [
+    "social_media_reel",
+    "video_tour",
+    "social_media_special",
+    "social_media_plus",
+    "ultimate",
+  ]);
+
+  const hasPhotoLink = hasCategory(links, "photos");
+  const hasTourLink = hasCategory(links, "tour");
+  const hasFloorPlanLink = hasCategory(links, "floor_plans");
+  const hasVideoLink = hasCategory(links, "video");
+  const hasInvoice =
+    Boolean(booking.quickbooks_invoice_id) ||
+    Boolean(booking.quickbooks_invoice_url) ||
+    Boolean(booking.quickbooks_invoice_number);
+  const hasPendingFotello =
+    Boolean(booking.fotello_listing_id) &&
+    readyDeliverables.some(
+      (deliverable) =>
+        deliverable.source === "fotello" && deliverable.url === "about:blank",
+    );
+
+  const items: ChecklistItem[] = [
+    {
+      label: "Photos",
+      detail: hasPhotoLink
+        ? "Photo delivery link is included."
+        : expectsPhotos
+          ? "Add a Fotello listing share link or wait for the gallery to finish."
+          : "No photo package selected.",
+      required: expectsPhotos,
+      status: hasPhotoLink ? "ready" : expectsPhotos ? "missing" : "optional",
+    },
+    {
+      label: "iGUIDE tour",
+      detail: hasTourLink
+        ? "Branded/unbranded tour links are included."
+        : expectsIGuide
+          ? "Add or sync the iGUIDE before sending."
+          : "No iGUIDE package selected.",
+      required: expectsIGuide,
+      status: hasTourLink ? "ready" : expectsIGuide ? "missing" : "optional",
+    },
+    {
+      label: "Floor plans",
+      detail: hasFloorPlanLink
+        ? "Floor plan and overview PDF links are included."
+        : expectsIGuide
+          ? "Sync iGUIDE so the floor plans are included."
+          : "Only needed when iGUIDE/floor plans were ordered.",
+      required: expectsIGuide,
+      status: hasFloorPlanLink
+        ? "ready"
+        : expectsIGuide
+          ? "missing"
+          : "optional",
+    },
+    {
+      label: "Video",
+      detail: hasVideoLink
+        ? "Video download or YouTube/streaming link is included."
+        : expectsVideo
+          ? "Add the video download and/or YouTube link in the Media section."
+          : "Optional unless this booking includes video.",
+      required: expectsVideo,
+      status: hasVideoLink ? "ready" : expectsVideo ? "missing" : "optional",
+    },
+    {
+      label: "Invoice",
+      detail: hasInvoice
+        ? "QuickBooks invoice has been created."
+        : "Create this when you want invoice info attached to the booking.",
+      required: false,
+      status: hasInvoice ? "ready" : "optional",
+    },
+    {
+      label: "Delivery email",
+      detail: deliveryEmailSentAt
+        ? `Last sent ${formatDateTime(deliveryEmailSentAt)}.`
+        : "Send when the required media above is ready.",
+      required: false,
+      status: deliveryEmailSentAt ? "ready" : "optional",
+    },
+  ];
+
+  if (hasPendingFotello && !hasPhotoLink) {
+    items.splice(1, 0, {
+      label: "Fotello processing",
+      detail:
+        "A Fotello enhance is being tracked, but it is not ready for realtor delivery yet.",
+      required: false,
+      status: "optional",
+    });
+  }
+
+  return items;
+}
+
+function expectsAny(booking: BookingDetail, slugs: string[]): boolean {
+  const selected = new Set([...booking.services, ...booking.add_ons]);
+  return slugs.some((slug) => selected.has(slug));
+}
+
+function hasCategory(
+  links: DeliveryLink[],
+  category: DeliveryLinkCategory,
+): boolean {
+  return links.some((link) => link.category === category);
 }
 
 function DeliveryLinksPanel({ links }: { links: DeliveryLink[] }) {

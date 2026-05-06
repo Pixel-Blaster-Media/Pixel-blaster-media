@@ -191,6 +191,11 @@ export default function IGuideSection({
           {syncing ? "Syncing…" : "Sync from iGuide"}
         </button>
       </div>
+      <p className="text-xs text-ink-muted">
+        Paste the iGUIDE link or Portal ID, click Save, then click Sync from
+        iGuide. If sync complains about asset links, paste the public
+        youriguide.com tour URL as well.
+      </p>
 
       {savedId || portalId ? (
         <div className="space-y-1 text-xs text-ink-muted">

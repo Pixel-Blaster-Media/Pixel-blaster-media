@@ -106,6 +106,14 @@ export async function syncIGuideForBooking(
     console.warn(
       `[iguide.sync] Portal API asset-urls failed for ${portalId}: ${res.error}. Falling back to RESO.`,
     );
+    if (!alias) {
+      return {
+        ok: false,
+        upserts: 0,
+        error:
+          "iGUIDE accepted the Portal ID, but the API could not read this tour's asset links. Paste the public youriguide.com tour URL too, then sync again.",
+      };
+    }
   }
 
   // Fallback: public RESO autofill keyed by alias.
@@ -114,7 +122,7 @@ export async function syncIGuideForBooking(
       ok: false,
       upserts: 0,
       error:
-        "No alias on record and Portal API unavailable — re-save the iGuide URL on this booking.",
+        "This booking only has an iGUIDE Portal ID. Paste the public youriguide.com tour URL so the app has a fallback link to sync.",
     };
   }
   const fetched = await fetchIGuideRESO(alias);
