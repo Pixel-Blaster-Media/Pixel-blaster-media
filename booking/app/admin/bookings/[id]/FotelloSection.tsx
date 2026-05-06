@@ -143,7 +143,10 @@ export default function FotelloSection({
   }
 
   return (
-    <div className="space-y-5 rounded-lg border border-brand/20 bg-brand/5 p-4">
+    <div
+      id="fotello"
+      className="space-y-5 rounded-lg border border-brand/20 bg-brand/5 p-4"
+    >
       <div>
         <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
           Fotello

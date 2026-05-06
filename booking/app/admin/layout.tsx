@@ -4,6 +4,7 @@ import { signOut } from "@/lib/auth/sign-out";
 import { requireAdmin } from "@/lib/auth/require-admin";
 
 const NAV = [
+  { href: "/admin/today", label: "Today" },
   { href: "/admin/inbox", label: "Inbox" },
   { href: "/admin/bookings", label: "Bookings" },
   { href: "/admin/iguide", label: "iGUIDE Review" },

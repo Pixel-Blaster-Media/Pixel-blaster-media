@@ -125,7 +125,10 @@ export default function IGuideSection({
   const canCreate = portalApiConfigured && !portalId && !creating;
 
   return (
-    <div className="space-y-4 rounded-lg border border-brand/20 bg-brand/5 p-4">
+    <div
+      id="iguide"
+      className="space-y-4 rounded-lg border border-brand/20 bg-brand/5 p-4"
+    >
       <div>
         <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
           iGuide
