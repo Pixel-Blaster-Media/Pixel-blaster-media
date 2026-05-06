@@ -638,7 +638,7 @@ export async function saveFotelloListingId(
   rawInput: string,
 ): Promise<ActionResult & { listingId?: string | null }> {
   await requireAdmin();
-  const trimmed = rawInput.trim();
+  const trimmed = extractFotelloListingId(rawInput);
   const listingId = trimmed === "" ? null : trimmed;
   // Fotello listing ids are Firebase-style strings; we don't enforce a
   // format beyond "not whitespace" — the API will reject bad ids when
@@ -653,6 +653,24 @@ export async function saveFotelloListingId(
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true, listingId };
+}
+
+function extractFotelloListingId(rawInput: string): string {
+  const trimmed = rawInput.trim();
+  if (!trimmed) return "";
+
+  try {
+    const url = new URL(trimmed);
+    const segments = url.pathname.split("/").filter(Boolean);
+    const listingIndex = segments.findIndex((segment) => segment === "listings");
+    if (listingIndex >= 0 && segments[listingIndex + 1]) {
+      return segments[listingIndex + 1];
+    }
+  } catch {
+    // Not a URL; treat it as the ID itself.
+  }
+
+  return trimmed;
 }
 
 export async function prepareFotelloUpload(

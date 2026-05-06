@@ -33,6 +33,7 @@ export default function FotelloSection({
   const [savedListingId, setSavedListingId] = useState(initialListingId);
   const [savingListing, startSavingListing] = useTransition();
   const [listingError, setListingError] = useState<string | null>(null);
+  const [listingMessage, setListingMessage] = useState<string | null>(null);
 
   const [enhanceInput, setEnhanceInput] = useState("");
   const [trackingPending, startTracking] = useTransition();
@@ -47,6 +48,7 @@ export default function FotelloSection({
 
   function onSaveListing() {
     setListingError(null);
+    setListingMessage(null);
     startSavingListing(async () => {
       const res = await saveFotelloListingId(bookingId, listingId);
       if (!res.ok) {
@@ -55,6 +57,11 @@ export default function FotelloSection({
       }
       setSavedListingId(res.listingId ?? null);
       setListingId(res.listingId ?? "");
+      setListingMessage(
+        res.listingId
+          ? "Listing saved. This connects the Fotello job folder, but it will not create a portal gallery until an enhance is tracked or uploaded here."
+          : "Listing ID cleared.",
+      );
     });
   }
 
@@ -201,12 +208,17 @@ export default function FotelloSection({
         <label className="block text-xs font-medium uppercase tracking-wider text-ink-muted">
           Fotello listing ID
         </label>
+        <p className="mt-1 text-xs text-ink-muted">
+          This is the ID after <span className="font-mono">/listings/</span> in
+          a Fotello dashboard URL. It connects the Fotello listing to this
+          booking, but it does not add anything to the realtor portal by itself.
+        </p>
         <div className="mt-1 flex flex-wrap gap-2">
           <input
             type="text"
             value={listingId}
             onChange={(e) => setListingId(e.target.value)}
-            placeholder="Paste the listing id from Fotello"
+            placeholder="WkgmcWEz7UUSqtfwSn6P or full Fotello listing URL"
             className="flex-1 min-w-[260px] rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
           <button
@@ -223,10 +235,9 @@ export default function FotelloSection({
             {listingError}
           </p>
         ) : null}
-        <p className="mt-1 text-xs text-ink-muted">
-          Optional fallback only. Most jobs create this automatically when you
-          upload photos above.
-        </p>
+        {listingMessage ? (
+          <p className="mt-1 text-xs text-emerald-300">{listingMessage}</p>
+        ) : null}
       </div>
 
       {/* Track a new enhance */}
