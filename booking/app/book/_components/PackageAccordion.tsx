@@ -307,7 +307,21 @@ export default function PackageAccordion({
       {/* Totals + continue */}
       {selectedSlugs.length > 0 ? (
         <div className="sticky bottom-0 -mx-4 mt-4 space-y-3 border-t border-white/10 bg-ink/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:rounded-lg md:border md:bg-brand/5">
-          <BookingUpsellPanel selectedSlugs={selectedSlugs} />
+          <BookingUpsellPanel
+            selectedSlugs={selectedSlugs}
+            selectedAddOnSlugs={selectedAddOnSlugs}
+            bySlug={bySlug}
+            onAddService={(slug) => {
+              if (!selectedSlugs.includes(slug)) {
+                updateUrl([...selectedSlugs, slug], selectedAddOnSlugs);
+              }
+            }}
+            onAddAddon={(slug) => {
+              if (!selectedAddOnSlugs.includes(slug)) {
+                updateUrl(selectedSlugs, [...selectedAddOnSlugs, slug]);
+              }
+            }}
+          />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm">
               <span className="font-semibold text-white">
@@ -325,7 +339,19 @@ export default function PackageAccordion({
   );
 }
 
-function BookingUpsellPanel({ selectedSlugs }: { selectedSlugs: string[] }) {
+function BookingUpsellPanel({
+  selectedSlugs,
+  selectedAddOnSlugs,
+  bySlug,
+  onAddService,
+  onAddAddon,
+}: {
+  selectedSlugs: string[];
+  selectedAddOnSlugs: string[];
+  bySlug: Map<string, CatalogItemDTO>;
+  onAddService: (slug: string) => void;
+  onAddAddon: (slug: string) => void;
+}) {
   const hasPhoto = selectedSlugs.some((s) =>
     [
       "residential_photography",
@@ -361,38 +387,102 @@ function BookingUpsellPanel({ selectedSlugs }: { selectedSlugs: string[] }) {
       "ultimate",
     ].includes(s),
   );
+  const hasOnCamera = selectedAddOnSlugs.includes("on_camera");
 
-  const suggestions: string[] = [];
-  if (hasPhoto && !hasIGuide) {
-    suggestions.push(
-      "Add iGUIDE + measurements so agents can launch MLS with floor plans and a tour.",
-    );
+  const upgrades: Array<{
+    slug: string;
+    action: "service" | "addon";
+    eyebrow: string;
+    title: string;
+    reason: string;
+  }> = [];
+
+  if (hasPhoto && !hasDrone && bySlug.has("aerial_photography")) {
+    upgrades.push({
+      slug: "aerial_photography",
+      action: "service",
+      eyebrow: "Exterior impact",
+      title: "Add drone photos",
+      reason: "Great for lots, corner properties, pools, views, and premium listings.",
+    });
   }
-  if (hasIGuide && !hasPhoto) {
-    suggestions.push(
-      "Pair iGUIDE with photography for a cleaner one-stop listing package.",
-    );
+
+  if (!hasVideo && bySlug.has("social_media_reel")) {
+    upgrades.push({
+      slug: "social_media_reel",
+      action: "service",
+      eyebrow: "Social boost",
+      title: "Add a social media reel",
+      reason: "Gives the realtor something quick to post on Instagram, Facebook, and TikTok.",
+    });
   }
-  if (hasPhoto && !hasDrone) {
-    suggestions.push(
-      "Drone photos are an easy upgrade for lots, corner properties, and premium listings.",
-    );
+
+  if (hasPhoto && !hasIGuide && bySlug.has("iguide_measurements")) {
+    upgrades.push({
+      slug: "iguide_measurements",
+      action: "service",
+      eyebrow: "MLS-ready",
+      title: "Add iGUIDE + measurements",
+      reason: "Adds floor plans, room measurements, virtual tour, and listing analytics.",
+    });
   }
-  if (hasVideo) {
-    suggestions.push(
-      "Video package selected — add on-camera agent intros if they want stronger social content.",
-    );
+
+  if (hasVideo && !hasOnCamera && bySlug.has("on_camera")) {
+    upgrades.push({
+      slug: "on_camera",
+      action: "addon",
+      eyebrow: "Agent brand",
+      title: "Add on-camera intro",
+      reason: "Perfect for agents who want to build trust and personality in the video.",
+    });
   }
-  if (suggestions.length === 0) return null;
+
+  if (upgrades.length === 0) return null;
 
   return (
     <div className="rounded-lg border border-brand-light/20 bg-brand/10 p-3 text-xs text-white/85">
-      <p className="font-semibold text-brand-light">Worth considering</p>
-      <ul className="mt-1 list-disc space-y-1 pl-4 text-ink-muted">
-        {suggestions.slice(0, 2).map((s) => (
-          <li key={s}>{s}</li>
-        ))}
-      </ul>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="font-semibold text-brand-light">Worth considering</p>
+          <p className="mt-0.5 text-[11px] text-ink-muted">
+            Quick upgrades realtors often add to this type of booking.
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 grid gap-2 md:grid-cols-2">
+        {upgrades.slice(0, 3).map((upgrade) => {
+          const item = bySlug.get(upgrade.slug);
+          if (!item) return null;
+          return (
+            <button
+              key={upgrade.slug}
+              type="button"
+              onClick={() =>
+                upgrade.action === "addon"
+                  ? onAddAddon(upgrade.slug)
+                  : onAddService(upgrade.slug)
+              }
+              className="rounded-md border border-white/10 bg-ink/50 p-3 text-left transition hover:border-brand-light/60 hover:bg-brand/15"
+            >
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-brand-light/90">
+                {upgrade.eyebrow}
+              </span>
+              <span className="mt-1 flex items-start justify-between gap-3">
+                <span className="font-semibold text-white">{upgrade.title}</span>
+                <span className="shrink-0 font-semibold text-brand-light">
+                  +${(item.price_cents / 100).toFixed(0)}
+                </span>
+              </span>
+              <span className="mt-1 block text-[11px] leading-relaxed text-ink-muted">
+                {upgrade.reason}
+              </span>
+              <span className="mt-2 inline-flex rounded-full border border-brand-light/25 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-light">
+                Click to add
+              </span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
