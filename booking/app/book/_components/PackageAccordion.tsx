@@ -44,10 +44,10 @@ export default function PackageAccordion({
     () => selectedSlugs.some((s) => aLaCarte.some((a) => a.slug === s)),
     [selectedSlugs, aLaCarte],
   );
-  const [bundlesOpen, setBundlesOpen] = useState(
-    hasBundle || (!hasALaCarte && selectedSlugs.length === 0),
-  );
   const [aLaCarteOpen, setALaCarteOpen] = useState(hasALaCarte);
+  const [expandedSlug, setExpandedSlug] = useState<string | null>(
+    selectedSlugs[0] ?? null,
+  );
 
   const bySlug = useMemo(() => {
     const m = new Map<string, CatalogItemDTO>();
@@ -119,28 +119,43 @@ export default function PackageAccordion({
   }
 
   return (
-    <div className="space-y-4">
-      {/* Bundles */}
-      <AccordionSection
-        open={bundlesOpen}
-        onToggle={() => setBundlesOpen((v) => !v)}
-        title="Bundles"
-        subtitle={
-          hasBundle ? "Bundle selected" : `${bundles.length} available`
-        }
-        accent={hasBundle}
-      >
-        <ul className="grid gap-3">
+    <div className="space-y-5">
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h3 className="text-base font-semibold text-white">
+              Start with a package
+            </h3>
+            <p className="mt-1 text-sm text-ink-muted">
+              Pick the closest fit. You can open details before choosing, or
+              build a custom order below.
+            </p>
+          </div>
+          {hasBundle ? (
+            <button
+              type="button"
+              onClick={() => {
+                const withoutBundles = selectedSlugs.filter(
+                  (s) => !bundles.some((b) => b.slug === s),
+                );
+                updateUrl(withoutBundles, selectedAddOnSlugs);
+              }}
+              className="text-xs text-ink-muted underline hover:text-brand-light"
+            >
+              Clear package
+            </button>
+          ) : null}
+        </div>
+
+        <ul className="grid gap-3 xl:grid-cols-2">
           {bundles.map((b) => {
             const selected = selectedSlugs.includes(b.slug);
+            const expanded = expandedSlug === b.slug || selected;
             return (
               <li key={b.id}>
-                <button
-                  type="button"
-                  onClick={() => selectBundle(b.slug)}
-                  aria-pressed={selected}
+                <article
                   className={
-                    "relative flex w-full flex-col gap-2 rounded-lg border p-4 text-left transition " +
+                    "flex h-full min-w-0 flex-col rounded-lg border p-4 transition " +
                     (selected
                       ? "border-brand-light bg-brand/10"
                       : b.highlight
@@ -148,108 +163,168 @@ export default function PackageAccordion({
                         : "border-white/10 bg-ink-soft/50 hover:border-brand/60 hover:bg-ink-soft")
                   }
                 >
-                  {b.badge ? (
-                    <span className="absolute right-3 top-3 rounded-full border border-brand-light/40 bg-brand/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-light">
-                      {b.badge}
-                    </span>
-                  ) : null}
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="pr-28 font-semibold text-white">
-                      {b.name}
-                    </span>
-                    <span className="text-sm font-semibold text-brand-light">
-                      ${(b.price_cents / 100).toFixed(0)}
-                    </span>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="text-base font-semibold text-white">
+                          {b.name}
+                        </h4>
+                        {selected ? (
+                          <span className="rounded-full bg-brand-light px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-ink">
+                            Selected
+                          </span>
+                        ) : b.badge ? (
+                          <span className="rounded-full border border-brand-light/40 bg-brand/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-light">
+                            {b.badge}
+                          </span>
+                        ) : null}
+                      </div>
+                      {b.ideal_for ? (
+                        <p className="mt-1 text-sm text-ink-muted">
+                          {b.ideal_for}
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-sm text-ink-muted">
+                          {shortDescription(b.description)}
+                        </p>
+                      )}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-lg font-bold text-brand-light">
+                        ${(b.price_cents / 100).toFixed(0)}
+                      </p>
+                      <p className="text-[11px] uppercase tracking-wider text-ink-muted">
+                        {formatMinutes(b.duration_minutes)}
+                      </p>
+                    </div>
                   </div>
-                  {b.ideal_for ? (
-                    <span className="text-xs text-brand-light/90">
-                      Ideal for: {b.ideal_for}
-                    </span>
-                  ) : null}
-                  <span className="text-[11px] uppercase tracking-wider text-ink-muted">
-                    {formatMinutes(b.duration_minutes)}
-                  </span>
-                  <MediaBadges item={b} />
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <MediaBadges item={b} />
+                    {sqftRuleText(b) ? (
+                      <span className="rounded-full border border-white/10 bg-ink/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+                        Sqft pricing
+                      </span>
+                    ) : null}
+                  </div>
+
                   {sqftRuleText(b) ? (
-                    <span className="rounded-md border border-brand-light/20 bg-brand/10 px-2 py-1 text-[11px] text-brand-light">
+                    <p className="mt-3 rounded-md border border-brand-light/20 bg-brand/10 px-2 py-1.5 text-xs text-brand-light">
                       {sqftRuleText(b)}
-                    </span>
-                  ) : null}
-                  {b.description ? (
-                    <p className="whitespace-pre-wrap text-xs text-ink-muted">
-                      {b.description}
                     </p>
                   ) : null}
-                </button>
+
+                  {expanded && b.description ? (
+                    <PackageDetails item={b} />
+                  ) : null}
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => selectBundle(b.slug)}
+                      aria-pressed={selected}
+                      className={
+                        "rounded-md px-4 py-2 text-sm font-semibold transition " +
+                        (selected
+                          ? "border border-brand-light/40 bg-brand/20 text-white"
+                          : "bg-brand text-white hover:bg-brand-light")
+                      }
+                    >
+                      {selected ? "Package selected" : "Choose package"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedSlug((current) =>
+                          current === b.slug ? null : b.slug,
+                        )
+                      }
+                      className="rounded-md border border-white/10 px-4 py-2 text-sm text-white hover:border-brand-light"
+                    >
+                      {expanded ? "Hide details" : "View details"}
+                    </button>
+                  </div>
+                </article>
               </li>
             );
           })}
         </ul>
-      </AccordionSection>
+      </section>
 
-      {/* A-La-Carte */}
       <AccordionSection
         open={aLaCarteOpen}
         onToggle={() => setALaCarteOpen((v) => !v)}
-        title="A-La-Carte"
+        title="Build a custom order"
         subtitle={
           hasALaCarte
             ? `${selectedSlugs.filter((s) => aLaCarte.some((a) => a.slug === s)).length} picked`
-            : `${aLaCarte.length} options`
+            : "Choose individual services instead"
         }
         accent={hasALaCarte}
       >
-        <ul className="grid gap-3">
+        <ul className="divide-y divide-white/5 rounded-lg border border-white/10 bg-ink/25">
           {aLaCarte.map((a) => {
             const selected = selectedSlugs.includes(a.slug);
+            const expanded = expandedSlug === a.slug || selected;
             return (
-              <li key={a.id}>
-                <button
-                  type="button"
-                  onClick={() => toggleALaCarte(a.slug)}
-                  aria-pressed={selected}
-                  className={
-                    "relative flex w-full flex-col gap-2 rounded-lg border p-4 text-left transition " +
-                    (selected
-                      ? "border-brand-light bg-brand/10"
-                      : a.highlight
-                        ? "border-brand/40 bg-brand/5 hover:border-brand-light hover:bg-brand/10"
-                        : "border-white/10 bg-ink-soft/50 hover:border-brand/60 hover:bg-ink-soft")
-                  }
-                >
-                  {a.badge ? (
-                    <span className="absolute right-3 top-3 rounded-full border border-brand-light/40 bg-brand/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-light">
-                      {a.badge}
-                    </span>
-                  ) : null}
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="pr-28 font-semibold text-white">
-                      {a.name}
-                    </span>
-                    <span className="text-sm font-semibold text-brand-light">
-                      ${(a.price_cents / 100).toFixed(0)}
-                    </span>
-                  </div>
-                  {a.ideal_for ? (
-                    <span className="text-xs text-brand-light/90">
-                      Ideal for: {a.ideal_for}
-                    </span>
-                  ) : null}
-                  <span className="text-[11px] uppercase tracking-wider text-ink-muted">
-                    {formatMinutes(a.duration_minutes)}
-                  </span>
-                  <MediaBadges item={a} />
-                  {sqftRuleText(a) ? (
-                    <span className="rounded-md border border-brand-light/20 bg-brand/10 px-2 py-1 text-[11px] text-brand-light">
-                      {sqftRuleText(a)}
-                    </span>
-                  ) : null}
-                  {a.description ? (
-                    <p className="whitespace-pre-wrap text-xs text-ink-muted">
-                      {a.description}
+              <li
+                key={a.id}
+                className={
+                  "p-3 transition " +
+                  (selected ? "bg-brand/10" : "hover:bg-white/[0.02]")
+                }
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold text-white">{a.name}</p>
+                      <MediaBadges item={a} />
+                      {selected ? (
+                        <span className="rounded-full bg-brand-light px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-ink">
+                          Added
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-xs text-ink-muted">
+                      {a.ideal_for ?? shortDescription(a.description)}
                     </p>
-                  ) : null}
-                </button>
+                    {expanded && a.description ? <PackageDetails item={a} /> : null}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-brand-light">
+                        ${(a.price_cents / 100).toFixed(0)}
+                      </p>
+                      <p className="text-[10px] uppercase tracking-wider text-ink-muted">
+                        {formatMinutes(a.duration_minutes)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedSlug((current) =>
+                          current === a.slug ? null : a.slug,
+                        )
+                      }
+                      className="rounded-md border border-white/10 px-3 py-2 text-xs text-white hover:border-brand-light"
+                    >
+                      Details
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleALaCarte(a.slug)}
+                      aria-pressed={selected}
+                      className={
+                        "min-w-20 rounded-md px-3 py-2 text-xs font-semibold transition " +
+                        (selected
+                          ? "border border-brand-light/40 bg-brand/20 text-white"
+                          : "bg-brand text-white hover:bg-brand-light")
+                      }
+                    >
+                      {selected ? "Remove" : "Add"}
+                    </button>
+                  </div>
+                </div>
               </li>
             );
           })}
@@ -259,9 +334,12 @@ export default function PackageAccordion({
       {/* Add-ons — auto-reveal when the cart has a video item */}
       {visibleAddons.length > 0 ? (
         <section className="rounded-lg border border-white/10 bg-ink-soft/40 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
-            Add-ons
-          </p>
+          <div>
+            <p className="text-sm font-semibold text-white">Add-ons</p>
+            <p className="mt-1 text-xs text-ink-muted">
+              These appear when they make sense for the services selected.
+            </p>
+          </div>
           <ul className="mt-3 grid gap-2">
             {visibleAddons.map((a) => {
               const selected = selectedAddOnSlugs.includes(a.slug);
@@ -360,6 +438,28 @@ function MediaBadges({ item }: { item: CatalogItemDTO }) {
   );
 }
 
+function PackageDetails({ item }: { item: CatalogItemDTO }) {
+  const lines = descriptionLines(item.description);
+  return (
+    <div className="mt-3 rounded-md border border-white/10 bg-ink/35 p-3">
+      {lines.length > 0 ? (
+        <ul className="grid gap-1.5 text-xs text-ink-muted sm:grid-cols-2">
+          {lines.map((line) => (
+            <li key={line} className="flex gap-2">
+              <span className="mt-0.5 text-brand-light">✓</span>
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-ink-muted">
+          Package details will appear here once configured.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function AccordionSection({
   title,
   subtitle,
@@ -410,6 +510,19 @@ function AccordionSection({
       ) : null}
     </section>
   );
+}
+
+function descriptionLines(description: string): string[] {
+  return description
+    .split(/\n+/)
+    .map((line) => line.trim().replace(/^[-•]\s*/, ""))
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function shortDescription(description: string): string {
+  const first = descriptionLines(description)[0];
+  return first ?? "Good fit for a standard real estate media booking.";
 }
 
 function formatMinutes(minutes: number): string {
