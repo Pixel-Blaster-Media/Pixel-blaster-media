@@ -101,54 +101,56 @@ export default function PropertyForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-5">
-      <AddressAutocomplete
-        name="address"
-        label="Property address"
-        required
-        placeholder="Start typing an address…"
-        defaultValue={address}
-        onPlace={handlePlacePicked}
-        onChange={setAddress}
-        error={errors.address}
-      />
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Field
-          label="Unit / Suite #"
-          name="unit"
-          placeholder="e.g. 4B, PH-2, #212"
-          value={unit}
-          onChange={setUnit}
-        />
-        <Field
-          label="City"
-          name="city"
+      <section className="realtor-elevated-panel rounded-2xl p-4">
+        <AddressAutocomplete
+          name="address"
+          label="Property address"
           required
-          value={city}
-          onChange={setCity}
-          error={errors.city}
+          placeholder="Start typing an address…"
+          defaultValue={address}
+          onPlace={handlePlacePicked}
+          onChange={setAddress}
+          error={errors.address}
         />
-        <Field
-          label="Postal code"
-          name="postal"
-          placeholder="L8P 4S8"
-          value={postal}
-          onChange={setPostal}
-        />
-        <Field
-          label="Approx. square footage"
-          name="sqft"
-          type="number"
-          inputMode="numeric"
-          min={0}
-          placeholder="e.g. 2000"
-          value={sqft}
-          onChange={setSqft}
-          helper="For iGUIDE measuring, include finished basement or lower-level space if it should be measured. This affects iGUIDE pricing."
-        />
-      </div>
 
-      <fieldset>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <Field
+            label="Unit / Suite #"
+            name="unit"
+            placeholder="e.g. 4B, PH-2, #212"
+            value={unit}
+            onChange={setUnit}
+          />
+          <Field
+            label="City"
+            name="city"
+            required
+            value={city}
+            onChange={setCity}
+            error={errors.city}
+          />
+          <Field
+            label="Postal code"
+            name="postal"
+            placeholder="L8P 4S8"
+            value={postal}
+            onChange={setPostal}
+          />
+          <Field
+            label="Approx. square footage"
+            name="sqft"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            placeholder="e.g. 2000"
+            value={sqft}
+            onChange={setSqft}
+            helper="For iGUIDE measuring, include finished basement or lower-level space if it should be measured. This affects iGUIDE pricing."
+          />
+        </div>
+      </section>
+
+      <fieldset className="realtor-warm-panel rounded-2xl p-4">
         <legend className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
           Is the property occupied?
         </legend>
@@ -180,7 +182,7 @@ export default function PropertyForm({
         </div>
       </fieldset>
 
-      <fieldset>
+      <fieldset className="realtor-warm-panel rounded-2xl p-4">
         <legend className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
           Include basement in the shoot?
         </legend>
@@ -204,7 +206,7 @@ export default function PropertyForm({
         </div>
       </fieldset>
 
-      <section className="rounded-2xl border border-brand-light/20 bg-gradient-to-br from-brand/12 via-ink-soft/70 to-ink-soft/35 p-4 shadow-sm shadow-black/10">
+      <section className="realtor-green-panel rounded-2xl p-4">
         <div className="max-w-2xl">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
             Must-have shots
@@ -270,7 +272,7 @@ export default function PropertyForm({
             value={shootNotes}
             onChange={(e) => setShootNotes(e.currentTarget.value)}
             placeholder="Example: Please highlight the new kitchen, backyard pergola, and the view from the primary bedroom."
-            className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface/85 px-3 py-2 text-realtor-text placeholder-realtor-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="realtor-field mt-1 w-full rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
         </label>
       </section>
@@ -335,7 +337,7 @@ function Field({
         inputMode={inputMode}
         min={min}
         className={
-          "mt-1 w-full rounded-md border bg-realtor-surface px-3 py-2 text-realtor-text placeholder-realtor-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
+          "realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
           (error ? "border-red-400/60" : "border-realtor-primary/15")
         }
       />
@@ -370,10 +372,10 @@ function RadioCard<T extends string>({
   return (
     <label
       className={
-        "flex cursor-pointer flex-col gap-1 rounded-lg border p-3 transition " +
+        "flex cursor-pointer flex-col gap-1 rounded-lg p-3 transition " +
         (selected
-          ? "border-brand-light bg-brand/10"
-          : "border-realtor-primary/15 hover:border-brand/60")
+          ? "realtor-choice-selected"
+          : "realtor-choice hover:border-brand/60")
       }
     >
       <input

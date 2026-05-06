@@ -108,6 +108,59 @@ a {
   background: color-mix(in srgb, var(--realtor-surface-muted) 70%, white);
 }
 
+.realtor-elevated-panel {
+  border: 1px solid rgba(49, 95, 69, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(255, 253, 248, 0.9)),
+    var(--realtor-surface);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 18px 44px -34px rgba(35, 51, 43, 0.42);
+}
+
+.realtor-warm-panel {
+  border: 1px solid rgba(199, 177, 122, 0.36);
+  background:
+    linear-gradient(135deg, rgba(255, 253, 248, 0.96), rgba(241, 234, 223, 0.9)),
+    var(--realtor-surface-muted);
+  box-shadow: 0 14px 34px -30px rgba(99, 77, 34, 0.38);
+}
+
+.realtor-green-panel {
+  border: 1px solid rgba(49, 95, 69, 0.24);
+  background:
+    linear-gradient(135deg, rgba(255, 253, 248, 0.96), rgba(111, 154, 120, 0.16)),
+    var(--realtor-surface);
+  box-shadow: 0 16px 38px -32px rgba(36, 71, 53, 0.45);
+}
+
+.realtor-choice {
+  border: 1px solid rgba(49, 95, 69, 0.18);
+  background: rgba(255, 253, 248, 0.78);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75) inset;
+}
+
+.realtor-choice-selected {
+  border: 1px solid rgba(49, 95, 69, 0.62);
+  background:
+    linear-gradient(135deg, rgba(49, 95, 69, 0.16), rgba(111, 154, 120, 0.08)),
+    rgba(255, 253, 248, 0.84);
+  box-shadow:
+    0 0 0 1px rgba(49, 95, 69, 0.08),
+    0 12px 24px -22px rgba(36, 71, 53, 0.48);
+}
+
+.realtor-field {
+  border: 1px solid rgba(49, 95, 69, 0.18);
+  background: rgba(255, 253, 248, 0.96);
+  color: var(--realtor-text);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+}
+
+.realtor-field::placeholder {
+  color: var(--realtor-muted);
+}
+
 body:has(.realtor-theme) {
   background: var(--realtor-bg);
   color: var(--realtor-text);

@@ -123,7 +123,7 @@ export default function ConfirmUpsellPanel({
   }
 
   return (
-    <section className="rounded-xl border border-brand-light/25 bg-brand/10 p-4 text-sm">
+    <section className="realtor-green-panel rounded-2xl p-4 text-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
@@ -152,7 +152,7 @@ export default function ConfirmUpsellPanel({
               key={upgrade.slug}
               type="button"
               onClick={() => addService(upgrade.slug)}
-              className="rounded-lg border border-realtor-primary/15 bg-realtor-surface/85 p-3 text-left transition hover:border-brand-light/60 hover:bg-brand/15"
+              className="realtor-elevated-panel rounded-xl p-3 text-left transition hover:border-brand-light/60 hover:bg-brand/15"
             >
               <span className="text-[10px] font-semibold uppercase tracking-wider text-brand-light/90">
                 {upgrade.eyebrow}

@@ -120,7 +120,7 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="realtor-elevated-panel space-y-4 rounded-2xl p-4 md:p-5">
       {/* Month header */}
       <div className="flex items-center justify-between">
         <button
@@ -178,10 +178,10 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
                 (!inMonth
                   ? "border-transparent text-realtor-muted/40"
                   : isSelected
-                    ? "border-brand-light bg-brand/20 text-brand-light"
+                    ? "border-brand-light bg-brand/20 text-brand-light shadow-sm shadow-brand/10"
                     : hasSlots
-                      ? "border-realtor-primary/15 text-realtor-text hover:border-brand-light/60 hover:bg-brand/10"
-                      : "border-realtor-primary/10 text-realtor-muted/60")
+                      ? "border-realtor-primary/15 bg-realtor-surface text-realtor-text hover:border-brand-light/60 hover:bg-brand/10"
+                      : "border-realtor-primary/10 bg-realtor-soft/45 text-realtor-muted/60")
               }
             >
               {cell.date ? cell.date.getDate() : ""}
@@ -201,7 +201,7 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
 
       {/* Slots for picked day */}
       {visibleSlots ? (
-        <div className="rounded-lg border border-realtor-primary/15 bg-realtor-surface-muted/70 p-4">
+        <div className="realtor-warm-panel rounded-xl p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
             {formatDayLabel(openDayKey ?? "")}
           </p>

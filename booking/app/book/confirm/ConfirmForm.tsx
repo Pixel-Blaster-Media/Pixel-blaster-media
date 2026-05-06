@@ -93,7 +93,7 @@ export default function ConfirmForm({
       <input type="hidden" name="shoot_notes" value={state.shootNotes} />
 
       {profile ? null : (
-        <fieldset className="rounded-xl border border-realtor-primary/15 bg-realtor-surface-muted/70 p-4">
+        <fieldset className="realtor-warm-panel rounded-2xl p-4">
           <legend className="sr-only">Your contact info</legend>
           <div className="mb-4">
             <p className="text-sm font-semibold text-realtor-text">
@@ -162,7 +162,7 @@ export default function ConfirmForm({
                   }
                   minLength={8}
                   className={
-                    "mt-1 w-full rounded-md border bg-realtor-surface px-3 py-2 text-realtor-text placeholder-realtor-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
+                    "realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
                     (formState?.errors?.password
                       ? "border-red-400/60"
                       : "border-realtor-primary/15")
@@ -192,7 +192,7 @@ export default function ConfirmForm({
       )}
 
       {/* Optional notes — for either path. */}
-      <label className="block">
+      <label className="realtor-elevated-panel block rounded-2xl p-4">
         <span className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
           Anything we should know? (optional)
         </span>
@@ -200,7 +200,7 @@ export default function ConfirmForm({
           name="notes"
           rows={3}
           placeholder="Pets, gate code, lockbox, etc."
-          className="mt-1 w-full rounded-md border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-realtor-text placeholder-realtor-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+          className="realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
         />
       </label>
 
@@ -275,7 +275,7 @@ function Field({
         onChange={onChange}
         onBlur={onBlur}
         className={
-          "mt-1 w-full rounded-md border bg-realtor-surface px-3 py-2 text-realtor-text placeholder-realtor-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
+          "realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
           (error ? "border-red-400/60" : "border-realtor-primary/15")
         }
       />

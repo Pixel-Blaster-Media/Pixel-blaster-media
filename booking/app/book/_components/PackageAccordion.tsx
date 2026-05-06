@@ -155,12 +155,12 @@ export default function PackageAccordion({
               <li key={b.id}>
                 <article
                   className={
-                    "flex h-full min-w-0 flex-col rounded-lg border p-4 transition " +
+                    "flex h-full min-w-0 flex-col rounded-xl p-4 transition " +
                     (selected
-                      ? "border-realtor-primary bg-realtor-primary/10"
+                      ? "realtor-choice-selected"
                       : b.highlight
-                        ? "border-realtor-primary/40 bg-realtor-primary/5 hover:border-realtor-primary hover:bg-realtor-primary/10"
-                        : "border-realtor-primary/15 realtor-panel hover:border-realtor-primary/50 hover:bg-realtor-surface")
+                        ? "realtor-warm-panel hover:border-realtor-primary"
+                        : "realtor-elevated-panel hover:border-realtor-primary/50")
                   }
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -262,7 +262,7 @@ export default function PackageAccordion({
         }
         accent={hasALaCarte}
       >
-        <ul className="divide-y divide-white/5 rounded-lg border border-realtor-primary/15 bg-realtor-surface/60">
+        <ul className="overflow-hidden rounded-xl border border-realtor-primary/15 bg-realtor-surface/80">
           {aLaCarte.map((a) => {
             const selected = selectedSlugs.includes(a.slug);
             const expanded = expandedSlug === a.slug || selected;
@@ -270,7 +270,7 @@ export default function PackageAccordion({
               <li
                 key={a.id}
                 className={
-                  "p-3 transition " +
+                  "border-b border-realtor-primary/10 p-3 transition last:border-b-0 " +
                   (selected ? "bg-realtor-primary/10" : "hover:bg-realtor-primary/5")
                 }
               >
@@ -333,7 +333,7 @@ export default function PackageAccordion({
 
       {/* Add-ons — auto-reveal when the cart has a video item */}
       {visibleAddons.length > 0 ? (
-        <section className="rounded-lg border border-realtor-primary/15 realtor-soft-panel p-4">
+        <section className="realtor-warm-panel rounded-2xl p-4">
           <div>
             <p className="text-sm font-semibold text-realtor-text">Add-ons</p>
             <p className="mt-1 text-xs text-realtor-muted">
@@ -347,10 +347,10 @@ export default function PackageAccordion({
                 <li key={a.id}>
                   <label
                     className={
-                      "flex cursor-pointer items-start gap-3 rounded-md border p-3 transition " +
+                      "flex cursor-pointer items-start gap-3 rounded-lg p-3 transition " +
                       (selected
-                        ? "border-realtor-primary bg-realtor-primary/10"
-                        : "border-realtor-primary/15 hover:border-realtor-primary/50")
+                        ? "realtor-choice-selected"
+                        : "realtor-choice hover:border-realtor-primary/50")
                     }
                   >
                     <input
@@ -384,7 +384,7 @@ export default function PackageAccordion({
 
       {/* Totals + continue */}
       {selectedSlugs.length > 0 ? (
-        <div className="sticky bottom-0 -mx-4 mt-4 border-t border-realtor-primary/15 bg-realtor-surface/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:rounded-lg md:border md:bg-realtor-primary/5">
+        <div className="sticky bottom-0 -mx-4 mt-4 border-t border-realtor-primary/15 bg-realtor-surface/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:rounded-xl md:border md:bg-realtor-surface/95 md:shadow-lg md:shadow-realtor-primary/5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm">
               <span className="font-semibold text-realtor-text">
@@ -441,7 +441,7 @@ function MediaBadges({ item }: { item: CatalogItemDTO }) {
 function PackageDetails({ item }: { item: CatalogItemDTO }) {
   const lines = descriptionLines(item.description);
   return (
-    <div className="mt-3 rounded-md border border-realtor-primary/15 bg-realtor-soft/50 p-3">
+    <div className="mt-3 rounded-lg border border-realtor-primary/15 bg-realtor-soft/65 p-3">
       {lines.length > 0 ? (
         <ul className="grid gap-1.5 text-xs text-realtor-muted sm:grid-cols-2">
           {lines.map((line) => (
@@ -478,10 +478,10 @@ function AccordionSection({
   return (
     <section
       className={
-        "rounded-xl border transition " +
+        "rounded-2xl transition " +
         (accent
-          ? "border-brand/30 bg-realtor-primary/5"
-          : "border-realtor-primary/15 realtor-soft-panel")
+          ? "realtor-green-panel"
+          : "realtor-warm-panel")
       }
     >
       <button

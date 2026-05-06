@@ -116,7 +116,7 @@ export default async function BookStep4Page({
       />
 
       {/* Summary */}
-      <section className="rounded-xl border border-realtor-primary/15 bg-realtor-surface/80 p-4 text-sm">
+      <section className="realtor-elevated-panel rounded-2xl p-4 text-sm">
         <dl className="space-y-2">
           <Row
             label="Services"

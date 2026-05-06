@@ -49,7 +49,7 @@ export default function AIPackageRecommender({ bundles, aLaCarte, addons }: Prop
   }
 
   return (
-    <section className="rounded-xl border border-brand/30 bg-realtor-primary/10 p-4 shadow-lg shadow-black/10">
+    <section className="realtor-green-panel rounded-2xl p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-realtor-primary">
@@ -74,7 +74,7 @@ export default function AIPackageRecommender({ bundles, aLaCarte, addons }: Prop
           onChange={(e) => setDescription(e.currentTarget.value)}
           rows={4}
           placeholder="Example: 2,200 sqft detached home in Hamilton, occupied, basement included, realtor wants photos, iGUIDE, drone, and maybe a reel for Instagram."
-          className="w-full rounded-lg border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text placeholder-realtor-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+          className="realtor-field w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-light/60"
         />
         <div className="flex flex-wrap items-center gap-3">
           <button
@@ -92,7 +92,7 @@ export default function AIPackageRecommender({ bundles, aLaCarte, addons }: Prop
       </div>
 
       {recommendation ? (
-        <div className="mt-4 rounded-lg border border-realtor-primary/15 bg-realtor-surface/80 p-4">
+        <div className="realtor-elevated-panel mt-4 rounded-xl p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-wider text-realtor-muted">
