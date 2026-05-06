@@ -3,11 +3,9 @@
 import { revalidatePath } from "next/cache";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
-import {
-  deliverableTypeLabel,
-  nextBookingStatuses,
-} from "@/lib/booking/booking-status";
+import { nextBookingStatuses } from "@/lib/booking/booking-status";
 import { cancelBooking } from "@/lib/booking/cancel";
+import { buildDeliveryLinks } from "@/lib/booking/delivery-links";
 import { sendEmail } from "@/lib/email/resend";
 import { deliveryReadyEmail } from "@/lib/email/templates";
 import {
@@ -18,10 +16,6 @@ import {
 } from "@/lib/integrations/fotello/client";
 import { syncEnhance } from "@/lib/integrations/fotello/sync";
 import {
-  iguideFloorplanMetricPdfUrl,
-  iguideFloorplanPdfUrl,
-  iguideUnbrandedUrl,
-  iguideViewerUrl,
   parseIGuideAlias,
   parseIGuidePortalId,
 } from "@/lib/integrations/iguide/parse-id";
@@ -333,7 +327,7 @@ export async function sendDeliveryReadyEmail(
     contactName: booking.profiles.full_name ?? booking.profiles.email,
     streetAddress: booking.properties.street_address,
     portalLink,
-    deliverables: buildDeliveryEmailLinks(ready, appUrl),
+    deliverables: buildDeliveryLinks(ready, appUrl),
   });
 
   const sent = await sendEmail({
@@ -360,113 +354,6 @@ export async function sendDeliveryReadyEmail(
 
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true, resent: Boolean(existing), sentAt };
-}
-
-function buildDeliveryEmailLinks(
-  deliverables: ReadyDeliverableRow[],
-  appUrl: string,
-): Array<{ label: string; url: string }> {
-  const links: Array<{ label: string; url: string }> = [];
-  const seen = new Set<string>();
-
-  function add(label: string, url: string | null | undefined) {
-    if (!url || url === "about:blank" || seen.has(`${label}:${url}`)) return;
-    seen.add(`${label}:${url}`);
-    links.push({ label, url });
-  }
-
-  const iGuideAlias = findIGuideAlias(deliverables);
-  for (const deliverable of deliverables) {
-    if (deliverable.source === "iguide" && iGuideAlias) continue;
-    if (deliverable.source === "fotello") {
-      add(deliverableTypeLabel(deliverable.type), `${appUrl}/api/fotello/embed/${deliverable.id}`);
-      continue;
-    }
-    add(deliveryEmailLabel(deliverable), deliverable.url);
-  }
-
-  if (iGuideAlias) {
-    add("iGUIDE branded tour", iguideViewerUrl(iGuideAlias));
-    add("iGUIDE unbranded tour", iguideUnbrandedUrl(iGuideAlias));
-    add("Floor plan PDF (feet)", iguideFloorplanPdfUrl(iGuideAlias));
-    add("Floor plan PDF (meters)", iguideFloorplanMetricPdfUrl(iGuideAlias));
-    add(
-      "Property overview PDF (feet)",
-      `https://youriguide.com/${iGuideAlias}/doc/branded_property_overview_imperial.pdf`,
-    );
-    add(
-      "Property overview PDF (meters)",
-      `https://youriguide.com/${iGuideAlias}/doc/branded_property_overview_metric.pdf`,
-    );
-    add(
-      "Feature sheet creator",
-      `https://manage.youriguide.com/feature_sheet/?g=${iGuideAlias}`,
-    );
-    add("iGUIDE embed tool", `https://manage.youriguide.com/embed/${iGuideAlias}/`);
-    add(
-      "Create virtual showing",
-      `https://show.youriguide.com/create?url=${encodeURIComponent(
-        iguideViewerUrl(iGuideAlias),
-      )}`,
-    );
-  }
-
-  return links;
-}
-
-function deliveryEmailLabel(deliverable: ReadyDeliverableRow): string {
-  const savedLabel = metadataString(deliverable.metadata, "delivery_label");
-  if (savedLabel) return savedLabel;
-  if (deliverable.type === "video" || deliverable.type === "aerial") {
-    return isStreamingVideoUrl(deliverable.url)
-      ? "YouTube / video link"
-      : "Video download";
-  }
-  return deliverableTypeLabel(deliverable.type);
-}
-
-function isStreamingVideoUrl(url: string): boolean {
-  try {
-    const hostname = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
-    return [
-      "youtube.com",
-      "youtu.be",
-      "vimeo.com",
-      "player.vimeo.com",
-      "facebook.com",
-      "instagram.com",
-      "tiktok.com",
-    ].some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
-  } catch {
-    return false;
-  }
-}
-
-function findIGuideAlias(deliverables: ReadyDeliverableRow[]): string | null {
-  for (const deliverable of deliverables) {
-    if (deliverable.source !== "iguide") continue;
-    const candidates = [
-      metadataString(deliverable.metadata, "branded_url"),
-      metadataString(deliverable.metadata, "pdf_imperial"),
-      metadataString(deliverable.metadata, "pdf_metric"),
-      deliverable.url,
-      metadataString(deliverable.metadata, "alias"),
-    ];
-    for (const candidate of candidates) {
-      if (!candidate) continue;
-      const parsed = parseIGuideAlias(candidate);
-      if (parsed) return parsed;
-    }
-  }
-  return null;
-}
-
-function metadataString(metadata: Json | null, key: string): string | null {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-    return null;
-  }
-  const value = metadata[key];
-  return typeof value === "string" && value.trim() ? value : null;
 }
 
 /**

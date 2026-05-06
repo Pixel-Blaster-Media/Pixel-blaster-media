@@ -83,7 +83,7 @@ export default function BookingActions({
           Job controls
         </p>
         <h2 className="mt-1 text-lg font-semibold text-white">
-          Move, deliver, and add links
+          Move the job and notify the realtor
         </h2>
       </header>
 
@@ -133,38 +133,10 @@ export default function BookingActions({
       </section>
 
       <section className="rounded-md border border-white/10 bg-ink-soft/50 p-3">
-        <h3 className="text-sm font-semibold text-white">Video links</h3>
-        <p className="mt-1 text-xs text-ink-muted">
-          Add a downloadable video file and/or a YouTube/Vimeo viewing link.
-          Both show clearly in the realtor portal.
-        </p>
-        <div className="mt-3 grid gap-3 lg:grid-cols-2">
-          <VideoLinkForm
-            bookingId={bookingId}
-            deliveryKind="download"
-            deliveryLabel="Video download"
-            title="Download file"
-            helper="Dropbox, Google Drive, WeTransfer, or a direct video file."
-            placeholder="https://dropbox.com/... or https://drive.google.com/..."
-            buttonLabel="Add download"
-          />
-          <VideoLinkForm
-            bookingId={bookingId}
-            deliveryKind="streaming"
-            deliveryLabel="YouTube / video link"
-            title="YouTube / viewing link"
-            helper="YouTube, Vimeo, Matterport-style video page, or social video link."
-            placeholder="https://youtube.com/watch?v=..."
-            buttonLabel="Add YouTube link"
-          />
-        </div>
-      </section>
-
-      <section className="rounded-md border border-white/10 bg-ink-soft/50 p-3">
         <h3 className="text-sm font-semibold text-white">Delivery email</h3>
         <p className="mt-1 text-xs text-ink-muted">
           Email the realtor when their ready media links are available in the
-          portal. This can only be sent once per realtor for this booking.
+          portal. If they lose it, you can resend it any time.
         </p>
         <DeliveryEmailButton
           bookingId={bookingId}
@@ -212,80 +184,6 @@ export default function BookingActions({
         ) : null}
       </details>
     </div>
-  );
-}
-
-function VideoLinkForm({
-  bookingId,
-  deliveryKind,
-  deliveryLabel,
-  title,
-  helper,
-  placeholder,
-  buttonLabel,
-}: {
-  bookingId: string;
-  deliveryKind: "download" | "streaming";
-  deliveryLabel: string;
-  title: string;
-  helper: string;
-  placeholder: string;
-  buttonLabel: string;
-}) {
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const [okMessage, setOkMessage] = useState<string | null>(null);
-
-  return (
-    <form
-      id={`video-link-${deliveryKind}-${bookingId}`}
-      className="rounded-md border border-white/10 bg-ink/30 p-3"
-      action={(formData) => {
-        setError(null);
-        setOkMessage(null);
-        startTransition(async () => {
-          const res = await addManualDeliverable(bookingId, formData);
-          if (!res.ok) {
-            setError(res.error ?? "Could not add video link.");
-            return;
-          }
-          setOkMessage(`${deliveryLabel} added.`);
-          (document.getElementById(
-            `video-link-${deliveryKind}-${bookingId}`,
-          ) as HTMLFormElement | null)?.reset();
-        });
-      }}
-    >
-      <input type="hidden" name="type" value="video" />
-      <input type="hidden" name="delivery_kind" value={deliveryKind} />
-      <input type="hidden" name="delivery_label" value={deliveryLabel} />
-      <p className="text-xs font-semibold text-white">{title}</p>
-      <p className="mt-1 text-[11px] text-ink-muted">{helper}</p>
-      <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
-        <input
-          name="url"
-          type="url"
-          placeholder={placeholder}
-          required
-          className="rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
-        />
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
-        >
-          {isPending ? "Adding..." : buttonLabel}
-        </button>
-      </div>
-      {error ? (
-        <p className="mt-2 text-sm text-red-300" role="alert">
-          {error}
-        </p>
-      ) : null}
-      {okMessage ? (
-        <p className="mt-2 text-xs text-emerald-300">{okMessage}</p>
-      ) : null}
-    </form>
   );
 }
 

@@ -33,6 +33,8 @@ interface TemplateArgs {
   requestId: string;
 }
 
+import type { DeliveryLinkCategory } from "@/lib/booking/delivery-links";
+
 const BRAND_TEAL = "#22a4b5";
 const INK = "#0b0f10";
 
@@ -220,15 +222,14 @@ export function deliveryReadyEmail({
   contactName: string;
   streetAddress: string;
   portalLink: string;
-  deliverables: Array<{ label: string; url: string }>;
+  deliverables: Array<{
+    label: string;
+    url: string;
+    category?: DeliveryLinkCategory;
+  }>;
 }) {
   const firstName = contactName.split(" ")[0] || contactName;
-  const links = deliverables
-    .map(
-      (deliverable) =>
-        `<li><a href="${escape(deliverable.url)}" style="color:${BRAND_TEAL}">${escape(deliverable.label)}</a></li>`,
-    )
-    .join("");
+  const groupedLinks = renderDeliveryLinkGroups(deliverables);
 
   const html = `
     <!doctype html>
@@ -243,6 +244,24 @@ export function deliveryReadyEmail({
         border-radius: 6px;
         font-weight: 600;
       }
+      .link-card {
+        border: 1px solid #d7e3e6;
+        border-radius: 8px;
+        padding: 14px;
+        margin: 12px 0;
+        background: #f7fbfc;
+      }
+      .link-card h2 {
+        margin: 0 0 8px;
+        font-size: 16px;
+      }
+      .link-card ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .link-card li {
+        margin: 6px 0;
+      }
       a { color:${BRAND_TEAL}; }
     </style></head>
     <body><div class="wrap">
@@ -253,8 +272,8 @@ export function deliveryReadyEmail({
       <p><a href="${escape(portalLink)}" class="cta">Open your media →</a></p>
 
       ${
-        links
-          ? `<h2>Included links</h2><ul>${links}</ul>`
+        groupedLinks
+          ? `<h2>Included media</h2>${groupedLinks}`
           : ""
       }
 
@@ -266,6 +285,49 @@ export function deliveryReadyEmail({
     subject: `Your listing media is ready — ${streetAddress}`,
     html,
   };
+}
+
+function renderDeliveryLinkGroups(
+  deliverables: Array<{
+    label: string;
+    url: string;
+    category?: DeliveryLinkCategory;
+  }>,
+): string {
+  const order: DeliveryLinkCategory[] = [
+    "photos",
+    "tour",
+    "floor_plans",
+    "video",
+    "tools",
+    "other",
+  ];
+  const titles: Record<DeliveryLinkCategory, string> = {
+    photos: "Photos",
+    tour: "Virtual tour",
+    floor_plans: "Floor plans and PDFs",
+    video: "Video",
+    tools: "iGUIDE tools",
+    other: "Other links",
+  };
+
+  return order
+    .map((category) => {
+      const links = deliverables.filter(
+        (deliverable) => (deliverable.category ?? "other") === category,
+      );
+      if (links.length === 0) return "";
+      const items = links
+        .map(
+          (deliverable) =>
+            `<li><a href="${escape(deliverable.url)}">${escape(
+              deliverable.label,
+            )}</a></li>`,
+        )
+        .join("");
+      return `<div class="link-card"><h2>${escape(titles[category])}</h2><ul>${items}</ul></div>`;
+    })
+    .join("");
 }
 
 function escape(s: string): string {

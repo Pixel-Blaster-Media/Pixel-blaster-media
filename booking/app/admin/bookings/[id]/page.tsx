@@ -3,9 +3,14 @@ import { notFound } from "next/navigation";
 
 import {
   BOOKING_STATUSES,
-  deliverableTypeLabel,
   nextBookingStatuses,
 } from "@/lib/booking/booking-status";
+import {
+  buildDeliveryLinks,
+  metadataString,
+  type DeliveryLink,
+  type DeliveryLinkCategory,
+} from "@/lib/booking/delivery-links";
 import { labelForAddOn, labelForService } from "@/lib/booking/services";
 import { hasPortalCredentials } from "@/lib/integrations/iguide/portal-client";
 import { getServerSupabase } from "@/lib/supabase/server";
@@ -13,12 +18,14 @@ import type {
   BookingStatus,
   DeliverableSource,
   DeliverableType,
+  Json,
 } from "@/lib/supabase/database.types";
 
 import BookingActions from "./BookingActions";
 import FotelloSection from "./FotelloSection";
 import IGuideSection from "./IGuideSection";
 import InvoiceSection from "./InvoiceSection";
+import VideoLinksSection from "./VideoLinksSection";
 
 export const dynamic = "force-dynamic";
 
@@ -66,11 +73,7 @@ interface DeliverableRow {
   external_id: string | null;
   url: string;
   thumbnail_url: string | null;
-  metadata: {
-    status?: string;
-    shot_type?: string;
-    last_synced_at?: string;
-  } | null;
+  metadata: Json | null;
   ready_at: string | null;
   created_at: string;
 }
@@ -137,10 +140,17 @@ export default async function BookingDetailPage({
   const profile = booking.profiles;
   const meta = BOOKING_STATUSES[booking.status];
   const transitions = nextBookingStatuses(booking.status);
-  const otherDeliverables = (deliverables ?? []).filter(
-    (d) => d.source !== "fotello",
-  );
   const readyDeliverables = (deliverables ?? []).filter((d) => d.ready_at);
+  const deliveryLinks = buildDeliveryLinks(
+    readyDeliverables.map((deliverable) => ({
+      id: deliverable.id,
+      type: deliverable.type,
+      source: deliverable.source,
+      url: deliverable.url,
+      metadata: deliverable.metadata,
+    })),
+    process.env.NEXT_PUBLIC_APP_URL ?? "",
+  );
   const fullAddress = [
     property?.street_address,
     booking.unit_number ? `Unit ${booking.unit_number}` : null,
@@ -256,11 +266,15 @@ export default async function BookingDetailPage({
                 .map((d) => ({
                   id: d.id,
                   external_id: d.external_id,
-                  status: d.metadata?.status ?? null,
-                  shotType: d.metadata?.shot_type ?? null,
-                  syncedAt: d.metadata?.last_synced_at ?? d.created_at,
+                  status: metadataString(d.metadata, "status"),
+                  shotType: metadataString(d.metadata, "shot_type"),
+                  syncedAt:
+                    metadataString(d.metadata, "last_synced_at") ??
+                    d.created_at,
                 }))}
             />
+
+            <VideoLinksSection bookingId={booking.id} />
 
             <IGuideSection
               bookingId={booking.id}
@@ -359,39 +373,82 @@ export default async function BookingDetailPage({
             </Panel>
           ) : null}
 
-          <Panel title="Delivery links">
-            {otherDeliverables.length > 0 ? (
-              <ul className="divide-y divide-white/5">
-                {otherDeliverables.map((d) => (
-                  <li key={d.id} className="py-2">
-                    <p className="text-sm font-semibold text-white">
-                      {deliverableTypeLabel(d.type)}
-                      <span className="ml-2 text-[10px] uppercase tracking-wider text-ink-muted">
-                        {d.source}
-                      </span>
-                    </p>
-                    <a
-                      href={d.url}
-                      target="_blank"
-                      rel="noopener"
-                      className="mt-0.5 block truncate text-xs text-brand-light underline"
-                    >
-                      {d.url}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-ink-muted">
-                Video, iGUIDE, floor plan, and manual links will appear here.
-                Fotello galleries are managed in the Fotello section.
-              </p>
-            )}
-          </Panel>
+          <DeliveryLinksPanel links={deliveryLinks} />
         </aside>
       </div>
     </div>
   );
+}
+
+function DeliveryLinksPanel({ links }: { links: DeliveryLink[] }) {
+  const groups = groupDeliveryLinks(links);
+  return (
+    <Panel title="Delivery preview">
+      {links.length > 0 ? (
+        <div className="space-y-3">
+          <p className="text-xs text-ink-muted">
+            These are the links included in the delivery email and portal.
+          </p>
+          {groups.map((group) => (
+            <div key={group.category}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-light">
+                {group.title}
+              </p>
+              <ul className="mt-1 space-y-1">
+                {group.links.map((link) => (
+                  <li key={`${link.label}:${link.url}`}>
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener"
+                      className="block truncate text-xs text-white/90 underline decoration-white/20 hover:text-brand-light"
+                    >
+                      {link.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-ink-muted">
+          Delivery links will appear here once video, iGUIDE, Fotello, or
+          manual links are ready.
+        </p>
+      )}
+    </Panel>
+  );
+}
+
+function groupDeliveryLinks(links: DeliveryLink[]): Array<{
+  category: DeliveryLinkCategory;
+  title: string;
+  links: DeliveryLink[];
+}> {
+  const titles: Record<DeliveryLinkCategory, string> = {
+    photos: "Photos",
+    tour: "Virtual tour",
+    floor_plans: "Floor plans",
+    video: "Video",
+    tools: "Tools",
+    other: "Other",
+  };
+  const order: DeliveryLinkCategory[] = [
+    "photos",
+    "tour",
+    "floor_plans",
+    "video",
+    "tools",
+    "other",
+  ];
+  return order
+    .map((category) => ({
+      category,
+      title: titles[category],
+      links: links.filter((link) => link.category === category),
+    }))
+    .filter((group) => group.links.length > 0);
 }
 
 function SummaryStat({ label, value }: { label: string; value: string }) {
