@@ -23,6 +23,9 @@ interface DayColumn {
   label: string;
   shortLabel: string;
   dateInput: string;
+  enabled: boolean;
+  workStartMinutes: number;
+  workEndMinutes: number;
 }
 
 const START_HOUR = 7;
@@ -55,9 +58,27 @@ export default function CalendarWeekView({
   }, [items]);
 
   const gridHeight = (END_HOUR - START_HOUR) * HOUR_HEIGHT;
+  const selectedSlot = selected
+    ? toDateTimeLocal(selected.day.dateInput, selected.hour, selected.minute)
+    : null;
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3 text-xs text-ink-muted">
+        <span className="inline-flex items-center gap-2">
+          <span className="h-3 w-3 rounded-sm bg-brand/10 ring-1 ring-brand/20" />
+          Working hours
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span className="h-3 w-3 rounded-sm bg-white/[0.04] ring-1 ring-white/10" />
+          Outside hours
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span className="h-3 w-3 rounded-sm bg-brand/25 ring-1 ring-brand-light/50" />
+          Shoot
+        </span>
+      </div>
+
       <div className="overflow-x-auto rounded-lg border border-white/10 bg-ink-soft/40">
         <div className="grid min-w-[980px] grid-cols-[64px_repeat(7,minmax(120px,1fr))]">
           <div className="border-b border-white/10 bg-ink px-2 py-3" />
@@ -91,6 +112,21 @@ export default function CalendarWeekView({
               className="relative border-l border-white/10"
               style={{ height: gridHeight }}
             >
+              {day.enabled ? (
+                <div
+                  className="absolute left-0 right-0 bg-brand/10 ring-1 ring-inset ring-brand/15"
+                  style={{
+                    top:
+                      ((day.workStartMinutes - START_HOUR * 60) / 60) *
+                      HOUR_HEIGHT,
+                    height:
+                      ((day.workEndMinutes - day.workStartMinutes) / 60) *
+                      HOUR_HEIGHT,
+                  }}
+                />
+              ) : (
+                <div className="absolute inset-0 bg-white/[0.025]" />
+              )}
               {Array.from({ length: (END_HOUR - START_HOUR) * 2 }).map(
                 (_, slot) => {
                   const minutes = slot * SLOT_MINUTES;
@@ -108,7 +144,7 @@ export default function CalendarWeekView({
                         setError(null);
                         setSelected({ day, hour, minute });
                       }}
-                      className="absolute left-0 right-0 border-t border-white/[0.06] transition hover:bg-brand/10"
+                      className="absolute left-0 right-0 border-t border-white/[0.06] transition hover:bg-brand/15"
                       style={{
                         top: (minutes / 60) * HOUR_HEIGHT,
                         height: (SLOT_MINUTES / 60) * HOUR_HEIGHT,
@@ -123,6 +159,49 @@ export default function CalendarWeekView({
               ))}
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-white/10 bg-ink-soft/40 p-4 md:hidden">
+        <p className="text-sm font-semibold text-white">This week</p>
+        <div className="mt-3 space-y-3">
+          {days.map((day) => {
+            const dayItems = itemsByDay.get(day.dateInput) ?? [];
+            return (
+              <div key={day.key}>
+                <p className="text-xs uppercase tracking-wider text-ink-muted">
+                  {day.shortLabel} {day.label}
+                  {day.enabled
+                    ? ` · ${minutesToLabel(day.workStartMinutes)}-${minutesToLabel(
+                        day.workEndMinutes,
+                      )}`
+                    : " · closed"}
+                </p>
+                {dayItems.length > 0 ? (
+                  <ul className="mt-1 space-y-1">
+                    {dayItems.map((item) => (
+                      <li key={`${item.kind}-${item.id}`}>
+                        {item.href ? (
+                          <Link
+                            href={item.href}
+                            className="block rounded-md border border-white/10 bg-ink px-3 py-2"
+                          >
+                            <MobileItem item={item} />
+                          </Link>
+                        ) : (
+                          <div className="rounded-md border border-white/10 bg-ink px-3 py-2">
+                            <MobileItem item={item} />
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-xs text-ink-muted">No items.</p>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -165,7 +244,7 @@ export default function CalendarWeekView({
             <input
               type="hidden"
               name="starts_at"
-              value={toDateTimeLocal(selected.day.dateInput, selected.hour, selected.minute)}
+              value={selectedSlot ?? ""}
             />
             <label className="block">
               <span className="text-xs text-ink-muted">Ends</span>
@@ -206,15 +285,28 @@ export default function CalendarWeekView({
 
           <div className="mt-3">
             <Link
-              href="/book"
+              href={`/book?slot=${encodeURIComponent(selectedSlot ?? "")}`}
               className="text-xs text-brand-light underline hover:text-white"
             >
-              Open booking form to add a shoot
+              Open booking form with this time
             </Link>
           </div>
         </div>
       ) : null}
     </div>
+  );
+}
+
+function MobileItem({ item }: { item: CalendarItem }) {
+  return (
+    <>
+      <p className="text-xs font-semibold text-white">
+        {formatDateTimeRange(item.startsAt, item.endsAt)} · {item.title}
+      </p>
+      <p className="mt-0.5 truncate text-[11px] text-ink-muted">
+        {item.subtitle}
+      </p>
+    </>
   );
 }
 
@@ -263,6 +355,21 @@ function formatTime(hour: number, minute: number): string {
   const suffix = hour >= 12 ? "PM" : "AM";
   const display = hour % 12 || 12;
   return `${display}:${String(minute).padStart(2, "0")} ${suffix}`;
+}
+
+function minutesToLabel(totalMinutes: number): string {
+  return formatTime(Math.floor(totalMinutes / 60), totalMinutes % 60).replace(
+    ":00 ",
+    " ",
+  );
+}
+
+function formatDateTimeRange(startISO: string, endISO: string): string {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${fmt.format(new Date(startISO))}-${fmt.format(new Date(endISO))}`;
 }
 
 function toDateTimeLocal(date: string, hour: number, minute: number): string {

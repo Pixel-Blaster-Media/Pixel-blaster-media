@@ -33,6 +33,13 @@ interface BlockRow {
   label: string | null;
 }
 
+interface BusinessHoursRow {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  enabled: boolean;
+}
+
 interface CalendarItem {
   id: string;
   kind: "booking" | "block";
@@ -62,7 +69,7 @@ export default async function AdminCalendarPage({
   const rangeEnd = broadUtcDate(weekEnd, 1);
 
   const supabase = getServerSupabase();
-  const [bookingsRes, blocksRes] = await Promise.all([
+  const [bookingsRes, blocksRes, hoursRes] = await Promise.all([
     supabase
       .from("bookings")
       .select(
@@ -81,14 +88,26 @@ export default async function AdminCalendarPage({
       .lt("starts_at", rangeEnd.toISOString())
       .order("starts_at")
       .returns<BlockRow[]>(),
+    supabase
+      .from("business_hours")
+      .select("day_of_week, start_time, end_time, enabled")
+      .returns<BusinessHoursRow[]>(),
   ]);
 
+  const hoursByDow = new Map(
+    (hoursRes.data ?? []).map((row) => [row.day_of_week, row]),
+  );
   const days = Array.from({ length: 7 }).map((_, i) => {
     const key = addDaysKey(weekStart, i);
     const date = dateFromKey(key);
+    const dow = date.getUTCDay();
+    const hours = hoursByDow.get(dow);
     return {
       key,
       dateInput: key,
+      enabled: Boolean(hours?.enabled),
+      workStartMinutes: timeToMinutes(hours?.start_time ?? "09:00:00"),
+      workEndMinutes: timeToMinutes(hours?.end_time ?? "17:00:00"),
       label: new Intl.DateTimeFormat("en-US", {
         timeZone: "UTC",
         month: "short",
@@ -159,8 +178,9 @@ export default async function AdminCalendarPage({
           </p>
           <h1 className="mt-1 text-2xl font-bold text-white">Calendar</h1>
           <p className="mt-2 text-sm text-ink-muted">
-            Shoots and private busy blocks in one weekly schedule. Click an
-            empty time to block it off.
+            Shoots and private busy blocks in one weekly schedule. Working
+            hours are highlighted; click an empty time to block it off or start
+            a booking.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
@@ -240,4 +260,9 @@ function formatHeaderDate(key: string): string {
     day: "numeric",
     year: "numeric",
   }).format(dateFromKey(key));
+}
+
+function timeToMinutes(value: string): number {
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + (minutes || 0);
 }
