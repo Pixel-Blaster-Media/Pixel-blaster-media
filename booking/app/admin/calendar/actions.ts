@@ -24,8 +24,55 @@ interface ActionResult {
   bookingId?: string;
 }
 
+interface RealtorLookupResult {
+  ok: boolean;
+  realtor?: {
+    email: string;
+    fullName: string;
+    phone: string;
+    brokerage: string;
+  };
+}
+
 interface InsertedRow {
   id: string;
+}
+
+interface ProfileLookupRow {
+  email: string;
+  full_name: string | null;
+  phone: string | null;
+  brokerage: string | null;
+}
+
+export async function lookupRealtor(
+  email: string,
+): Promise<RealtorLookupResult> {
+  await requireAdmin();
+
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail || !normalizedEmail.includes("@")) {
+    return { ok: false };
+  }
+
+  const supabase = getServiceSupabase();
+  const { data } = await supabase
+    .from("profiles")
+    .select("email, full_name, phone, brokerage")
+    .eq("email", normalizedEmail)
+    .limit(1)
+    .maybeSingle<ProfileLookupRow>();
+
+  if (!data) return { ok: false };
+  return {
+    ok: true,
+    realtor: {
+      email: data.email,
+      fullName: data.full_name ?? "",
+      phone: data.phone ?? "",
+      brokerage: data.brokerage ?? "",
+    },
+  };
 }
 
 export async function createAdminShoot(

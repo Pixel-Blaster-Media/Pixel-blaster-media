@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { InputHTMLAttributes } from "react";
+import type { InputHTMLAttributes, ReactNode } from "react";
 import { useMemo, useState, useTransition } from "react";
 
+import AddressAutocomplete, {
+  type PlaceParts,
+} from "@/app/_components/AddressAutocomplete";
 import { addCalendarBlock } from "@/app/admin/settings/availability/actions";
-import { createAdminShoot } from "./actions";
+import { createAdminShoot, lookupRealtor } from "./actions";
 
 interface CalendarItem {
   id: string;
@@ -64,7 +67,23 @@ export default function CalendarWeekView({
   } | null>(null);
   const [mode, setMode] = useState<"shoot" | "block">("shoot");
   const [error, setError] = useState<string | null>(null);
+  const [lookupMessage, setLookupMessage] = useState<string | null>(null);
+  const [realtor, setRealtor] = useState({
+    contact_name: "",
+    contact_email: "",
+    contact_phone: "",
+    brokerage: "",
+  });
+  const [property, setProperty] = useState({
+    street_address: "",
+    unit_number: "",
+    city: "",
+    province: "ON",
+    postal_code: "",
+    square_footage: "",
+  });
   const [pending, startTransition] = useTransition();
+  const [lookupPending, startLookupTransition] = useTransition();
 
   const itemsByDay = useMemo(() => {
     const map = new Map<string, CalendarItem[]>();
@@ -160,6 +179,7 @@ export default function CalendarWeekView({
                       )}`}
                       onClick={() => {
                         setError(null);
+                        setLookupMessage(null);
                         setMode("shoot");
                         setSelected({ day, hour, minute });
                       }}
@@ -297,50 +317,186 @@ export default function CalendarWeekView({
                 value={selectedSlot ?? ""}
               />
 
-              <div className="grid gap-3 md:grid-cols-2">
-                <TextField
-                  label="Realtor name"
-                  name="contact_name"
-                  required
-                  autoComplete="name"
-                />
-                <TextField
-                  label="Realtor email"
-                  name="contact_email"
-                  type="email"
-                  required
-                  autoComplete="email"
-                />
-                <TextField
-                  label="Phone"
-                  name="contact_phone"
-                  type="tel"
-                  autoComplete="tel"
-                />
-                <TextField label="Brokerage" name="brokerage" />
-              </div>
+              <FormSection
+                step="1"
+                title="Package"
+                detail="Pick what they booked first. Add-ons can stay empty."
+              >
+                <CatalogPicker items={catalogItems} />
+              </FormSection>
 
-              <div className="grid gap-3 md:grid-cols-2">
-                <TextField
-                  label="Property address"
+              <FormSection
+                step="2"
+                title="Realtor"
+                detail="Enter email first to auto-fill returning clients."
+              >
+                <div className="grid gap-3 md:grid-cols-2">
+                  <TextField
+                    label="Realtor email"
+                    name="contact_email"
+                    type="email"
+                    required
+                    autoComplete="email"
+                    value={realtor.contact_email}
+                    onChange={(event) => {
+                      setLookupMessage(null);
+                      setRealtor((draft) => ({
+                        ...draft,
+                        contact_email: event.currentTarget.value,
+                      }));
+                    }}
+                    onBlur={() => {
+                      const email = realtor.contact_email.trim();
+                      if (!email.includes("@")) return;
+                      startLookupTransition(async () => {
+                        const result = await lookupRealtor(email);
+                        if (!result.ok || !result.realtor) {
+                          setLookupMessage("New realtor.");
+                          return;
+                        }
+                        setRealtor({
+                          contact_email: result.realtor.email,
+                          contact_name: result.realtor.fullName,
+                          contact_phone: result.realtor.phone,
+                          brokerage: result.realtor.brokerage,
+                        });
+                        setLookupMessage("Realtor found.");
+                      });
+                    }}
+                  />
+                  <TextField
+                    label="Realtor name"
+                    name="contact_name"
+                    required
+                    autoComplete="name"
+                    value={realtor.contact_name}
+                    onChange={(event) =>
+                      setRealtor((draft) => ({
+                        ...draft,
+                        contact_name: event.currentTarget.value,
+                      }))
+                    }
+                  />
+                  <TextField
+                    label="Phone"
+                    name="contact_phone"
+                    type="tel"
+                    autoComplete="tel"
+                    value={realtor.contact_phone}
+                    onChange={(event) =>
+                      setRealtor((draft) => ({
+                        ...draft,
+                        contact_phone: event.currentTarget.value,
+                      }))
+                    }
+                  />
+                  <TextField
+                    label="Brokerage"
+                    name="brokerage"
+                    value={realtor.brokerage}
+                    onChange={(event) =>
+                      setRealtor((draft) => ({
+                        ...draft,
+                        brokerage: event.currentTarget.value,
+                      }))
+                    }
+                  />
+                </div>
+                {lookupMessage ? (
+                  <p className="text-xs text-brand-light">
+                    {lookupPending ? "Checking..." : lookupMessage}
+                  </p>
+                ) : null}
+              </FormSection>
+
+              <FormSection
+                step="3"
+                title="Property"
+                detail="Start typing the address and pick a suggestion when one matches."
+              >
+                <AddressAutocomplete
                   name="street_address"
+                  label="Property address"
                   required
-                  className="md:col-span-2"
+                  defaultValue={property.street_address}
+                  onChange={(value) =>
+                    setProperty((draft) => ({
+                      ...draft,
+                      street_address: value,
+                    }))
+                  }
+                  onPlace={(parts: PlaceParts) => {
+                    setProperty((draft) => ({
+                      ...draft,
+                      street_address: parts.street_address,
+                      unit_number: parts.unit_number || draft.unit_number,
+                      city: parts.city,
+                      province: parts.province || draft.province,
+                      postal_code: parts.postal_code,
+                    }));
+                  }}
                 />
-                <TextField label="Unit" name="unit_number" />
-                <TextField label="City" name="city" />
-                <TextField label="Province/state" name="province" defaultValue="ON" />
-                <TextField label="Postal code" name="postal_code" />
-                <TextField
-                  label="Square feet"
-                  name="square_footage"
-                  type="number"
-                  min="0"
-                  inputMode="numeric"
-                />
-              </div>
-
-              <CatalogPicker items={catalogItems} />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <TextField
+                    label="Unit"
+                    name="unit_number"
+                    value={property.unit_number}
+                    onChange={(event) =>
+                      setProperty((draft) => ({
+                        ...draft,
+                        unit_number: event.currentTarget.value,
+                      }))
+                    }
+                  />
+                  <TextField
+                    label="City"
+                    name="city"
+                    value={property.city}
+                    onChange={(event) =>
+                      setProperty((draft) => ({
+                        ...draft,
+                        city: event.currentTarget.value,
+                      }))
+                    }
+                  />
+                  <TextField
+                    label="Province/state"
+                    name="province"
+                    value={property.province}
+                    onChange={(event) =>
+                      setProperty((draft) => ({
+                        ...draft,
+                        province: event.currentTarget.value,
+                      }))
+                    }
+                  />
+                  <TextField
+                    label="Postal code"
+                    name="postal_code"
+                    value={property.postal_code}
+                    onChange={(event) =>
+                      setProperty((draft) => ({
+                        ...draft,
+                        postal_code: event.currentTarget.value,
+                      }))
+                    }
+                  />
+                  <TextField
+                    label="Square feet"
+                    name="square_footage"
+                    type="number"
+                    min="0"
+                    inputMode="numeric"
+                    value={property.square_footage}
+                    onChange={(event) =>
+                      setProperty((draft) => ({
+                        ...draft,
+                        square_footage: event.currentTarget.value,
+                      }))
+                    }
+                  />
+                </div>
+              </FormSection>
 
               <label className="block">
                 <span className="text-xs text-ink-muted">Notes</span>
@@ -444,6 +600,33 @@ function TextField({
         className="mt-1 w-full rounded-md border border-white/10 bg-ink px-2 py-1.5 text-sm text-white"
       />
     </label>
+  );
+}
+
+function FormSection({
+  step,
+  title,
+  detail,
+  children,
+}: {
+  step: string;
+  title: string;
+  detail: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-3 border-t border-white/10 pt-4 first:border-t-0 first:pt-0">
+      <div className="flex items-start gap-3">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-brand/40 bg-brand/10 text-xs font-semibold text-brand-light">
+          {step}
+        </span>
+        <div>
+          <h2 className="text-sm font-semibold text-white">{title}</h2>
+          <p className="text-xs text-ink-muted">{detail}</p>
+        </div>
+      </div>
+      <div className="space-y-3">{children}</div>
+    </section>
   );
 }
 

@@ -89,6 +89,17 @@ Back office for photographers:
 - QuickBooks/invoicing
 - package/pricing management
 
+Near-term integration pipeline:
+
+- Full Fotello upload/enhancement workflow from the admin booking page.
+  Admin should upload photos on a booking, choose interior/exterior, let the app
+  create/get the Fotello listing, request presigned uploads server-side, upload
+  directly from the browser, start enhancement server-side, track the enhance ID,
+  and publish completed photo galleries to the realtor portal via the existing
+  deliverables flow. Keep `FOTELLO_API_KEY` server-only, never hard-code or log
+  it, preserve manual enhance ID tracking as fallback, and avoid schema changes
+  unless upload tracking becomes necessary.
+
 ### 3. Realtor Portal
 
 The realtor backend should be excellent and easy:

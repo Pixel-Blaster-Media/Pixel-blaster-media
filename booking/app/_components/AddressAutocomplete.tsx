@@ -79,6 +79,7 @@ export default function AddressAutocomplete({
   error,
 }: Props) {
   const inputId = useId();
+  const listboxId = `${inputId}-listbox`;
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Fully controlled: the input's value is `value`, which either the
@@ -282,8 +283,11 @@ export default function AddressAutocomplete({
           onKeyDown={onKeyDown}
           onFocus={() => suggestions.length > 0 && setIsOpen(true)}
           autoComplete="off"
+          role="combobox"
           aria-autocomplete="list"
           aria-expanded={isOpen}
+          aria-controls={listboxId}
+          aria-haspopup="listbox"
           className={
             "mt-1 w-full rounded-md border bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
             (error ? "border-red-400/60" : "border-white/10")
@@ -298,6 +302,7 @@ export default function AddressAutocomplete({
       </label>
       {isOpen && suggestions.length > 0 ? (
         <ul
+          id={listboxId}
           role="listbox"
           className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-auto rounded-md border border-white/10 bg-ink shadow-xl"
         >
