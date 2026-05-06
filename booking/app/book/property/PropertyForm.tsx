@@ -8,6 +8,15 @@ import AddressAutocomplete, {
 } from "@/app/_components/AddressAutocomplete";
 import type { VacancyState } from "@/lib/booking/wizard-state";
 
+const SHOT_REQUEST_OPTIONS = [
+  { slug: "pool", label: "Pool / backyard", helper: "Outdoor features, patio, landscaping." },
+  { slug: "view", label: "View / exterior", helper: "Views, curb appeal, corner lot, street context." },
+  { slug: "upgrades", label: "Upgrades / details", helper: "Kitchen, bath, finishes, custom features." },
+  { slug: "basement", label: "Basement", helper: "Finished lower level, rec room, separate entrance." },
+  { slug: "mechanicals", label: "Mechanicals", helper: "Furnace, panel, utility room, systems." },
+  { slug: "neighbourhood", label: "Neighbourhood", helper: "Park, school, lake, trail, community features." },
+];
+
 /**
  * Step 2 — property details.
  *
@@ -30,6 +39,8 @@ export default function PropertyForm({
     sqft: string;
     vacant: VacancyState | "";
     basement: "1" | "0" | "";
+    shotRequests: string[];
+    shootNotes: string;
   };
 }) {
   const router = useRouter();
@@ -42,6 +53,8 @@ export default function PropertyForm({
   const [sqft, setSqft] = useState(initial.sqft);
   const [vacant, setVacant] = useState<VacancyState | "">(initial.vacant);
   const [basement, setBasement] = useState<"1" | "0" | "">(initial.basement);
+  const [shotRequests, setShotRequests] = useState<string[]>(initial.shotRequests);
+  const [shootNotes, setShootNotes] = useState(initial.shootNotes);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   function handlePlacePicked(parts: PlaceParts) {
@@ -75,6 +88,10 @@ export default function PropertyForm({
     else out.delete("vacant");
     if (basement) out.set("basement", basement);
     else out.delete("basement");
+    if (shotRequests.length) out.set("shots", shotRequests.join(","));
+    else out.delete("shots");
+    if (shootNotes.trim()) out.set("shoot_notes", shootNotes.trim());
+    else out.delete("shoot_notes");
     // Dropping an old slot — if they edit property details, the time
     // may no longer make sense for the new service duration anyway.
     out.delete("slot");
@@ -186,6 +203,77 @@ export default function PropertyForm({
           />
         </div>
       </fieldset>
+
+      <section className="rounded-2xl border border-brand-light/20 bg-gradient-to-br from-brand/12 via-ink-soft/70 to-ink-soft/35 p-4 shadow-sm shadow-black/10">
+        <div className="max-w-2xl">
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
+            Must-have shots
+          </p>
+          <h3 className="mt-1 text-base font-semibold text-white">
+            Anything specific we should make sure to capture?
+          </h3>
+          <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+            This helps avoid the classic “I wish we got that angle” problem. Pick anything important and add notes if there’s a specific feature or request.
+          </p>
+        </div>
+
+        <div className="mt-4 grid gap-2 md:grid-cols-2">
+          {SHOT_REQUEST_OPTIONS.map((option) => {
+            const selected = shotRequests.includes(option.slug);
+            return (
+              <button
+                key={option.slug}
+                type="button"
+                aria-pressed={selected}
+                onClick={() =>
+                  setShotRequests((current) =>
+                    current.includes(option.slug)
+                      ? current.filter((s) => s !== option.slug)
+                      : [...current, option.slug],
+                  )
+                }
+                className={
+                  "rounded-xl border p-3 text-left transition " +
+                  (selected
+                    ? "border-brand-light bg-brand/20 text-white shadow-sm shadow-brand/10"
+                    : "border-white/10 bg-ink/35 text-white/90 hover:border-brand-light/45 hover:bg-brand/10")
+                }
+              >
+                <span className="flex items-center gap-2 text-sm font-semibold">
+                  <span
+                    aria-hidden="true"
+                    className={
+                      "flex h-5 w-5 items-center justify-center rounded-full border text-[10px] " +
+                      (selected
+                        ? "border-brand-light bg-brand-light/20 text-brand-light"
+                        : "border-white/20 text-white/40")
+                    }
+                  >
+                    {selected ? "✓" : "+"}
+                  </span>
+                  {option.label}
+                </span>
+                <span className="mt-1 block pl-7 text-xs leading-relaxed text-ink-muted">
+                  {option.helper}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <label className="mt-4 block">
+          <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+            Specific shot notes (optional)
+          </span>
+          <textarea
+            rows={3}
+            value={shootNotes}
+            onChange={(e) => setShootNotes(e.currentTarget.value)}
+            placeholder="Example: Please highlight the new kitchen, backyard pergola, and the view from the primary bedroom."
+            className="mt-1 w-full rounded-xl border border-white/10 bg-ink/45 px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+          />
+        </label>
+      </section>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-5">
         <button

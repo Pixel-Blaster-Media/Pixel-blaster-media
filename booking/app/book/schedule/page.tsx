@@ -75,5 +75,13 @@ function serializeForRedirect(state: ReturnType<typeof parseWizardState>) {
   if (state.unitNumber) out.set("unit", state.unitNumber);
   if (state.city) out.set("city", state.city);
   if (state.postalCode) out.set("postal", state.postalCode);
+  if (state.squareFootage != null)
+    out.set("sqft", String(state.squareFootage));
+  if (state.isVacant) out.set("vacant", state.isVacant);
+  if (state.includeBasement != null) {
+    out.set("basement", state.includeBasement ? "1" : "0");
+  }
+  if (state.shotRequests.length) out.set("shots", state.shotRequests.join(","));
+  if (state.shootNotes) out.set("shoot_notes", state.shootNotes);
   return out.toString();
 }

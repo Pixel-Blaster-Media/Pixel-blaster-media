@@ -26,6 +26,9 @@ export interface WizardState {
   squareFootage: number | null;
   isVacant: VacancyState | null;
   includeBasement: boolean | null;
+  /** Step 2 — agent-requested must-have shots and context. */
+  shotRequests: string[];
+  shootNotes: string;
   /** Step 3 — chosen ISO-UTC slot start. */
   slot: string | null;
 }
@@ -45,6 +48,8 @@ export function parseWizardState(
     squareFootage: intOrNull(raw.sqft),
     isVacant: vacancy(raw.vacant),
     includeBasement: boolOrNull(raw.basement),
+    shotRequests: parseCsv(raw.shots),
+    shootNotes: str(raw.shoot_notes),
     slot: str(raw.slot) || null,
   };
 }
@@ -63,6 +68,8 @@ export function serializeWizardState(s: Partial<WizardState>): URLSearchParams {
   if (s.includeBasement != null) {
     out.set("basement", s.includeBasement ? "1" : "0");
   }
+  if (s.shotRequests?.length) out.set("shots", s.shotRequests.join(","));
+  if (s.shootNotes) out.set("shoot_notes", s.shootNotes);
   if (s.slot) out.set("slot", s.slot);
   return out;
 }

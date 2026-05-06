@@ -154,6 +154,25 @@ export default async function BookStep4Page({
               value={state.includeBasement ? "Include in shoot" : "Skip"}
             />
           ) : null}
+          {state.shotRequests.length || state.shootNotes ? (
+            <Row
+              label="Shot notes"
+              value={
+                <span className="space-y-1">
+                  {state.shotRequests.length ? (
+                    <span className="block">
+                      {state.shotRequests.map(formatShotRequest).join(", ")}
+                    </span>
+                  ) : null}
+                  {state.shootNotes ? (
+                    <span className="block text-ink-muted">
+                      {state.shootNotes}
+                    </span>
+                  ) : null}
+                </span>
+              }
+            />
+          ) : null}
           <Row label="When" value={whenLabel} />
           {pricedItems.some((row) => row.price.overageCents > 0) ? (
             <Row
@@ -268,5 +287,20 @@ function serializeForRedirect(state: ReturnType<typeof parseWizardState>) {
   if (state.includeBasement != null) {
     out.set("basement", state.includeBasement ? "1" : "0");
   }
+  if (state.shotRequests.length) out.set("shots", state.shotRequests.join(","));
+  if (state.shootNotes) out.set("shoot_notes", state.shootNotes);
   return out.toString();
+}
+
+function formatShotRequest(slug: string): string {
+  return (
+    {
+      pool: "Pool / backyard",
+      view: "View / exterior",
+      upgrades: "Upgrades / details",
+      basement: "Basement",
+      mechanicals: "Mechanicals",
+      neighbourhood: "Neighbourhood",
+    } satisfies Record<string, string>
+  )[slug] ?? slug;
 }

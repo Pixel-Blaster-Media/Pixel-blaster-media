@@ -116,6 +116,8 @@ function buildQuerySuffix(state: WizardState): string {
   if (state.includeBasement != null) {
     params.set("basement", state.includeBasement ? "1" : "0");
   }
+  if (state.shotRequests.length) params.set("shots", state.shotRequests.join(","));
+  if (state.shootNotes) params.set("shoot_notes", state.shootNotes);
   if (state.slot) params.set("slot", state.slot);
   const q = params.toString();
   return q ? `?${q}` : "";

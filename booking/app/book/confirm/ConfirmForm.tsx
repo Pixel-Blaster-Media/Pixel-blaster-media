@@ -87,6 +87,10 @@ export default function ConfirmForm({
           state.includeBasement == null ? "" : state.includeBasement ? "1" : "0"
         }
       />
+      {state.shotRequests.map((s) => (
+        <input key={s} type="hidden" name="must_have_shots" value={s} />
+      ))}
+      <input type="hidden" name="shoot_notes" value={state.shootNotes} />
 
       {profile ? null : (
         <fieldset className="rounded-xl border border-white/10 bg-ink-soft/35 p-4">

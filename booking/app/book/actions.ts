@@ -78,6 +78,10 @@ export async function createPublicBooking(
   const squareFootageRaw = str(formData, "square_footage");
   const isVacantRaw = str(formData, "is_vacant");
   const includeBasementRaw = str(formData, "include_basement");
+  const mustHaveShots = ((formData.getAll("must_have_shots") as string[]) ?? [])
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const shootNotes = str(formData, "shoot_notes");
   const notes = str(formData, "notes");
 
   const contactName = str(formData, "contact_name");
@@ -101,6 +105,7 @@ export async function createPublicBooking(
       : includeBasementRaw === "0"
         ? false
         : null;
+  const combinedNotes = buildBookingNotes({ mustHaveShots, shootNotes, notes });
 
   if (serviceSlugs.length === 0) {
     return { ok: false, errors: { _form: "Pick at least one service." } };
@@ -233,7 +238,7 @@ export async function createPublicBooking(
       ).toISOString(),
       services: legacyServices,
       add_ons: legacyAddons,
-      client_notes: notes || null,
+      client_notes: combinedNotes || null,
       unit_number: unitNumber || null,
       square_footage: squareFootage,
       is_vacant: isVacant,
@@ -308,7 +313,7 @@ export async function createPublicBooking(
           (includeBasement != null
             ? `Basement: ${includeBasement ? "include" : "skip"}\n`
             : "") +
-          (notes ? `\nNotes:\n${notes}\n` : ""),
+          (combinedNotes ? `\nNotes:\n${combinedNotes}\n` : ""),
         startISO: slotStart.toISOString(),
         endISO: endAt.toISOString(),
         attendeeEmail: userEmail,
@@ -372,7 +377,7 @@ export async function createPublicBooking(
         whenLabel,
         serviceLabels,
         addonLabels,
-        notes,
+        notes: combinedNotes,
       },
       realtor: {
         email: userEmail,
@@ -663,6 +668,39 @@ function decodeUserId(token: string): string | null {
 
 function str(fd: FormData, key: string): string {
   return ((fd.get(key) as string | null) ?? "").trim();
+}
+
+function buildBookingNotes({
+  mustHaveShots,
+  shootNotes,
+  notes,
+}: {
+  mustHaveShots: string[];
+  shootNotes: string;
+  notes: string;
+}): string {
+  const parts: string[] = [];
+  if (mustHaveShots.length) {
+    parts.push(
+      `Must-have shots: ${mustHaveShots.map(formatShotRequest).join(", ")}`,
+    );
+  }
+  if (shootNotes) parts.push(`Specific shot notes: ${shootNotes}`);
+  if (notes) parts.push(`Booking notes: ${notes}`);
+  return parts.join("\n\n");
+}
+
+function formatShotRequest(slug: string): string {
+  return (
+    {
+      pool: "Pool / backyard",
+      view: "View / exterior",
+      upgrades: "Upgrades / details",
+      basement: "Basement",
+      mechanicals: "Mechanicals",
+      neighbourhood: "Neighbourhood",
+    } satisfies Record<string, string>
+  )[slug] ?? slug;
 }
 
 function escapeHtml(s: string): string {

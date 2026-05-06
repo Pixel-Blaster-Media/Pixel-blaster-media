@@ -56,6 +56,8 @@ export default async function BookStep2Page({
               : state.includeBasement
                 ? "1"
                 : "0",
+          shotRequests: state.shotRequests,
+          shootNotes: state.shootNotes,
         }}
       />
     </>
