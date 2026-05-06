@@ -99,6 +99,12 @@ Near-term integration pipeline:
   deliverables flow. Keep `FOTELLO_API_KEY` server-only, never hard-code or log
   it, preserve manual enhance ID tracking as fallback, and avoid schema changes
   unless upload tracking becomes necessary.
+- Google Places address autocomplete reliability pass. The public booking flow
+  and admin calendar drawer should both return suggestions consistently. Check
+  that `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` is plain ASCII, has Places API (New)
+  enabled, has billing enabled, and allows both production and localhost browser
+  referrers. Improve the UI so API/key/referrer failures show a clear admin-safe
+  message instead of only "No matches yet."
 
 ### 3. Realtor Portal
 
