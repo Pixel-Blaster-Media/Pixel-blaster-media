@@ -51,11 +51,20 @@ export function buildDeliveryLinks(
   for (const deliverable of deliverables) {
     if (deliverable.source === "iguide" && iGuideAlias) continue;
     if (deliverable.source === "fotello") {
-      add(
-        "photos",
-        deliverableTypeLabel(deliverable.type),
-        `${appUrl}/api/fotello/embed/${deliverable.id}`,
-      );
+      const deliveryKind = metadataString(deliverable.metadata, "delivery_kind");
+      if (deliveryKind) {
+        add(
+          categoryForFotelloDeliveryKind(deliveryKind),
+          fotelloDeliveryLabel(deliveryKind),
+          deliverable.url,
+        );
+      } else {
+        add(
+          "photos",
+          deliverableTypeLabel(deliverable.type),
+          `${appUrl}/api/fotello/embed/${deliverable.id}`,
+        );
+      }
       continue;
     }
     add(
@@ -100,6 +109,23 @@ export function buildDeliveryLinks(
   }
 
   return links;
+}
+
+function categoryForFotelloDeliveryKind(kind: string): DeliveryLinkCategory {
+  if (kind === "branded_property_website" || kind === "unbranded_property_website") {
+    return "tour";
+  }
+  return "photos";
+}
+
+function fotelloDeliveryLabel(kind: string): string {
+  if (kind === "branded_property_website") {
+    return "Fotello branded property website";
+  }
+  if (kind === "unbranded_property_website") {
+    return "Fotello unbranded property website";
+  }
+  return "Fotello listing share link";
 }
 
 export function isStreamingVideoUrl(url: string): boolean {

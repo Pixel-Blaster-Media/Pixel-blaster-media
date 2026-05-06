@@ -261,7 +261,7 @@ export default async function PropertyDetailPage({
         <section className="space-y-6">
           <SectionHeader title="Photos" />
           {gallery.map((g) =>
-            g.source === "fotello" ? (
+            g.source === "fotello" && !metadataString(g.metadata, "delivery_kind") ? (
               <FotelloGallery key={g.id} deliverable={g} />
             ) : (
               <ManualGallery key={g.id} deliverable={g} />
@@ -693,10 +693,12 @@ function FotelloGallery({ deliverable }: { deliverable: DeliverableRow }) {
 
 /** Manually-pasted gallery URL — just a button row, no iframe. */
 function ManualGallery({ deliverable }: { deliverable: DeliverableRow }) {
+  const label =
+    metadataString(deliverable.metadata, "delivery_label") ?? "Photo gallery";
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-ink-soft/50 p-4">
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-white">Photo gallery</p>
+        <p className="text-sm font-semibold text-white">{label}</p>
         <p className="mt-0.5 truncate text-xs text-ink-muted">
           {deliverable.url}
         </p>

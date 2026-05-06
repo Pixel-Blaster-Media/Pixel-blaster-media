@@ -266,7 +266,9 @@ export default async function BookingDetailPage({
                 .map((d) => ({
                   id: d.id,
                   external_id: d.external_id,
+                  url: d.url,
                   status: metadataString(d.metadata, "status"),
+                  deliveryKind: metadataString(d.metadata, "delivery_kind"),
                   shotType: metadataString(d.metadata, "shot_type"),
                   syncedAt:
                     metadataString(d.metadata, "last_synced_at") ??

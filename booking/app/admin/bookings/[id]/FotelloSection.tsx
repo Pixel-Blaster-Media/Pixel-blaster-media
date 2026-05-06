@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import {
   prepareFotelloUpload,
+  saveFotelloDeliveryLinks,
   saveFotelloListingId,
   startFotelloEnhance,
   trackFotelloEnhance,
@@ -14,7 +15,9 @@ import {
 interface FotelloDeliverable {
   id: string;
   external_id: string | null;
+  url: string;
   status: string | null;
+  deliveryKind: string | null;
   shotType: string | null;
   syncedAt: string | null;
 }
@@ -44,7 +47,14 @@ export default function FotelloSection({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
+  const [savingDeliveryLinks, startSavingDeliveryLinks] = useTransition();
+  const [deliveryLinksError, setDeliveryLinksError] = useState<string | null>(null);
+  const [deliveryLinksOk, setDeliveryLinksOk] = useState<string | null>(null);
+
   const listingDirty = (listingId.trim() || null) !== savedListingId;
+  const trackedEnhances = deliverables.filter((d) => !d.deliveryKind);
+  const deliveryLink = (kind: string) =>
+    deliverables.find((d) => d.deliveryKind === kind)?.url ?? "";
 
   function onSaveListing() {
     setListingError(null);
@@ -240,6 +250,86 @@ export default function FotelloSection({
         ) : null}
       </div>
 
+      {/* Realtor delivery links */}
+      <form
+        action={(formData) => {
+          setDeliveryLinksError(null);
+          setDeliveryLinksOk(null);
+          startSavingDeliveryLinks(async () => {
+            const res = await saveFotelloDeliveryLinks(bookingId, formData);
+            if (!res.ok) {
+              setDeliveryLinksError(res.error ?? "Could not save Fotello delivery links.");
+              return;
+            }
+            setDeliveryLinksOk("Fotello delivery links saved.");
+            router.refresh();
+          });
+        }}
+        className="rounded-md border border-white/10 bg-ink-soft/50 p-3"
+      >
+        <p className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+          Realtor delivery links
+        </p>
+        <p className="mt-1 text-xs text-ink-muted">
+          Fotello says these listing-level links are the right links to send to
+          realtors. Paste them here when Fotello gives them to you; leave a field
+          blank to remove it.
+        </p>
+        <div className="mt-3 grid gap-2">
+          <label className="block">
+            <span className="text-[10px] uppercase tracking-wider text-ink-muted">
+              Listing Share Link
+            </span>
+            <input
+              name="listing_share_url"
+              type="url"
+              defaultValue={deliveryLink("listing_share")}
+              placeholder="https://..."
+              className="mt-1 w-full rounded-md border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[10px] uppercase tracking-wider text-ink-muted">
+              Branded Property Website
+            </span>
+            <input
+              name="branded_property_website_url"
+              type="url"
+              defaultValue={deliveryLink("branded_property_website")}
+              placeholder="https://..."
+              className="mt-1 w-full rounded-md border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[10px] uppercase tracking-wider text-ink-muted">
+              Unbranded Property Website
+            </span>
+            <input
+              name="unbranded_property_website_url"
+              type="url"
+              defaultValue={deliveryLink("unbranded_property_website")}
+              placeholder="https://..."
+              className="mt-1 w-full rounded-md border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
+            />
+          </label>
+        </div>
+        <button
+          type="submit"
+          disabled={savingDeliveryLinks}
+          className="mt-3 rounded-md border border-white/15 px-3 py-2 text-sm font-semibold text-white hover:border-brand-light hover:bg-brand/10 disabled:opacity-50"
+        >
+          {savingDeliveryLinks ? "Saving..." : "Save delivery links"}
+        </button>
+        {deliveryLinksError ? (
+          <p className="mt-2 text-xs text-red-300" role="alert">
+            {deliveryLinksError}
+          </p>
+        ) : null}
+        {deliveryLinksOk ? (
+          <p className="mt-2 text-xs text-emerald-300">{deliveryLinksOk}</p>
+        ) : null}
+      </form>
+
       {/* Track a new enhance */}
       <div className="rounded-md border border-white/10 bg-ink-soft/50 p-3">
         <p className="text-xs font-medium uppercase tracking-wider text-ink-muted">
@@ -277,13 +367,13 @@ export default function FotelloSection({
       </div>
 
       {/* Tracked enhances */}
-      {deliverables.length > 0 ? (
+      {trackedEnhances.length > 0 ? (
         <div>
           <p className="text-xs font-medium uppercase tracking-wider text-ink-muted">
-            Tracked enhances ({deliverables.length})
+            Tracked enhances ({trackedEnhances.length})
           </p>
           <ul className="mt-2 space-y-2">
-            {deliverables.map((d) => (
+            {trackedEnhances.map((d) => (
               <TrackedEnhanceRow
                 key={d.id}
                 bookingId={bookingId}

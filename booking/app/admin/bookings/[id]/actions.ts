@@ -698,6 +698,104 @@ export async function saveFotelloListingId(
   return { ok: true, listingId };
 }
 
+const FOTELLO_DELIVERY_LINKS = [
+  {
+    field: "listing_share_url",
+    kind: "listing_share",
+    label: "Fotello listing share link",
+    type: "photo_gallery",
+  },
+  {
+    field: "branded_property_website_url",
+    kind: "branded_property_website",
+    label: "Fotello branded property website",
+    type: "virtual_tour",
+  },
+  {
+    field: "unbranded_property_website_url",
+    kind: "unbranded_property_website",
+    label: "Fotello unbranded property website",
+    type: "virtual_tour",
+  },
+] as const;
+
+export async function saveFotelloDeliveryLinks(
+  bookingId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  await requireAdmin();
+
+  const service = getServiceSupabase();
+  const { data: booking, error } = await service
+    .from("bookings")
+    .select("id, property_id, fotello_listing_id")
+    .eq("id", bookingId)
+    .single<{
+      id: string;
+      property_id: string;
+      fotello_listing_id: string | null;
+    }>();
+
+  if (error || !booking) return { ok: false, error: "Booking not found." };
+
+  const rows = [];
+  for (const link of FOTELLO_DELIVERY_LINKS) {
+    const rawUrl = ((formData.get(link.field) as string | null) ?? "").trim();
+    if (!rawUrl) continue;
+
+    const urlError = validateHttpsUrl(rawUrl);
+    if (urlError) return { ok: false, error: `${link.label}: ${urlError}` };
+
+    rows.push({
+      booking_id: booking.id,
+      property_id: booking.property_id,
+      type: link.type as DeliverableType,
+      source: "fotello" as const,
+      external_id: `${booking.id}:${link.kind}`,
+      url: rawUrl,
+      embed_html: null,
+      thumbnail_url: null,
+      metadata: {
+        delivery_kind: link.kind,
+        delivery_label: link.label,
+        fotello_listing_id: booking.fotello_listing_id,
+        last_synced_at: new Date().toISOString(),
+      },
+      ready_at: new Date().toISOString(),
+    });
+  }
+
+  const externalIds = FOTELLO_DELIVERY_LINKS.map(
+    (link) => `${booking.id}:${link.kind}`,
+  );
+  const { error: deleteError } = await service
+    .from("deliverables")
+    .delete()
+    .eq("booking_id", booking.id)
+    .eq("source", "fotello")
+    .in("external_id", externalIds);
+  if (deleteError) return { ok: false, error: deleteError.message };
+
+  if (rows.length > 0) {
+    const { error: insertError } = await service
+      .from("deliverables")
+      .insert(rows);
+    if (insertError) return { ok: false, error: insertError.message };
+  }
+
+  revalidatePath(`/admin/bookings/${bookingId}`);
+  return { ok: true };
+}
+
+function validateHttpsUrl(rawUrl: string): string | null {
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.protocol === "https:" ? null : "URL must start with https://.";
+  } catch {
+    return "URL doesn't look valid.";
+  }
+}
+
 function extractFotelloListingId(rawInput: string): string {
   const trimmed = rawInput.trim();
   if (!trimmed) return "";
