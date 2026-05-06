@@ -279,7 +279,7 @@ export default function AddressAutocomplete({
   return (
     <div ref={containerRef} className="relative">
       <label htmlFor={inputId} className="block">
-        <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+        <span className="address-autocomplete-label text-xs font-medium uppercase tracking-wider text-ink-muted">
           {label}
           {required ? <span className="text-brand-light"> *</span> : null}
         </span>
@@ -300,11 +300,11 @@ export default function AddressAutocomplete({
           aria-controls={listboxId}
           aria-haspopup="listbox"
           className={
-            "mt-1 w-full rounded-md border bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
+            "address-autocomplete-input mt-1 w-full rounded-md border bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
             (error ? "border-red-400/60" : "border-white/10")
           }
         />
-        <span className="mt-1 block text-[11px] text-ink-muted">
+        <span className="address-autocomplete-helper mt-1 block text-[11px] text-ink-muted">
           {helperText}
         </span>
         {error ? (
@@ -315,7 +315,7 @@ export default function AddressAutocomplete({
         <ul
           id={listboxId}
           role="listbox"
-          className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-auto rounded-md border border-white/10 bg-ink shadow-xl"
+          className="address-autocomplete-list absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-auto rounded-md border border-white/10 bg-ink shadow-xl"
         >
           {suggestions.map((s, i) => (
             <li key={s.placeId} role="option" aria-selected={i === highlighted}>
@@ -330,7 +330,7 @@ export default function AddressAutocomplete({
                 }}
                 onMouseEnter={() => setHighlighted(i)}
                 className={
-                  "block w-full px-3 py-2 text-left text-sm transition " +
+                  "address-autocomplete-option block w-full px-3 py-2 text-left text-sm transition " +
                   (i === highlighted
                     ? "bg-brand/15 text-white"
                     : "text-white/90 hover:bg-white/5")

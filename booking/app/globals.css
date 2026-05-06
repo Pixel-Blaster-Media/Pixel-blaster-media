@@ -140,3 +140,33 @@ body:has(.realtor-theme) .site-footer {
   margin-top: 0;
   color: var(--realtor-muted);
 }
+
+.realtor-theme .address-autocomplete-label,
+.realtor-theme .address-autocomplete-helper {
+  color: var(--realtor-muted);
+}
+
+.realtor-theme .address-autocomplete-input {
+  border-color: var(--realtor-border);
+  background: var(--realtor-surface);
+  color: var(--realtor-text);
+}
+
+.realtor-theme .address-autocomplete-input::placeholder {
+  color: var(--realtor-muted);
+}
+
+.realtor-theme .address-autocomplete-list {
+  border-color: var(--realtor-border);
+  background: var(--realtor-surface);
+}
+
+.realtor-theme .address-autocomplete-option {
+  color: var(--realtor-text);
+}
+
+.realtor-theme .address-autocomplete-option:hover,
+.realtor-theme .address-autocomplete-option[aria-selected="true"] {
+  background: color-mix(in srgb, var(--realtor-primary) 10%, transparent);
+  color: var(--realtor-primary-dark);
+}
