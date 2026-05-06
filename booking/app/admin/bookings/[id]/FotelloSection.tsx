@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import {
+  prepareFotelloUpload,
   saveFotelloListingId,
+  startFotelloEnhance,
   trackFotelloEnhance,
   untrackFotelloEnhance,
 } from "./actions";
@@ -25,6 +28,7 @@ export default function FotelloSection({
   initialListingId: string | null;
   deliverables: FotelloDeliverable[];
 }) {
+  const router = useRouter();
   const [listingId, setListingId] = useState(initialListingId ?? "");
   const [savedListingId, setSavedListingId] = useState(initialListingId);
   const [savingListing, startSavingListing] = useTransition();
@@ -35,6 +39,12 @@ export default function FotelloSection({
   const [trackingPending, startTracking] = useTransition();
   const [trackError, setTrackError] = useState<string | null>(null);
   const [trackOk, setTrackOk] = useState<string | null>(null);
+
+  const [uploadShotType, setUploadShotType] =
+    useState<"interior" | "exterior">("interior");
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const listingDirty = (listingId.trim() || null) !== savedListingId;
 
@@ -69,6 +79,72 @@ export default function FotelloSection({
     });
   }
 
+  async function onUpload(formData: FormData) {
+    setUploadError(null);
+    setUploadStatus(null);
+
+    const files = formData
+      .getAll("photos")
+      .filter((value): value is File => value instanceof File && value.size > 0);
+    if (files.length === 0) {
+      setUploadError("Pick at least one photo.");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      setUploadStatus(savedListingId ? "Preparing uploads..." : "Creating Fotello listing...");
+      const prepared = await prepareFotelloUpload(
+        bookingId,
+        files.map((file) => file.name),
+      );
+      if (!prepared.ok || !prepared.uploads || !prepared.listingId) {
+        setUploadError(prepared.error ?? "Could not prepare Fotello uploads.");
+        return;
+      }
+      setSavedListingId(prepared.listingId);
+      setListingId(prepared.listingId);
+
+      setUploadStatus(`Uploading ${files.length} photo${files.length === 1 ? "" : "s"}...`);
+      for (let i = 0; i < files.length; i += 1) {
+        const upload = prepared.uploads[i];
+        const file = files[i];
+        if (!upload) throw new Error("Fotello did not return enough upload URLs.");
+        const res = await fetch(upload.url, {
+          method: "PUT",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: file,
+        });
+        if (!res.ok) {
+          throw new Error(`Upload failed for ${file.name}.`);
+        }
+        setUploadStatus(`Uploaded ${i + 1} of ${files.length} photos...`);
+      }
+
+      setUploadStatus("Starting Fotello enhancement...");
+      const started = await startFotelloEnhance(
+        bookingId,
+        prepared.uploads.map((upload) => upload.id),
+        prepared.listingId,
+        uploadShotType,
+      );
+      if (!started.ok) {
+        setUploadError(started.error ?? "Could not start Fotello enhancement.");
+        return;
+      }
+      setUploadStatus(
+        started.status === "completed"
+          ? `Completed. Enhance ${started.enhanceId} is ready in the realtor portal.`
+          : `Tracking enhance ${started.enhanceId}. Status: ${started.status ?? "unknown"}.`,
+      );
+      router.refresh();
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <div className="space-y-5 rounded-lg border border-brand/20 bg-brand/5 p-4">
       <div>
@@ -81,6 +157,56 @@ export default function FotelloSection({
           on the realtor's portal page automatically.
         </p>
       </div>
+
+      {/* Upload photos */}
+      <form
+        action={onUpload}
+        className="rounded-md border border-white/10 bg-ink-soft/50 p-3"
+      >
+        <p className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+          Upload to Fotello
+        </p>
+        <p className="mt-1 text-xs text-ink-muted">
+          Pick photos from this shoot and Fotello will enhance them under this
+          booking's listing.
+        </p>
+        <div className="mt-3 grid gap-2 md:grid-cols-[1fr_140px_auto]">
+          <input
+            type="file"
+            name="photos"
+            multiple
+            accept="image/*"
+            disabled={uploading}
+            className="rounded-md border border-white/10 bg-ink px-3 py-2 text-sm text-white file:mr-3 file:rounded file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white disabled:opacity-60"
+          />
+          <select
+            value={uploadShotType}
+            onChange={(e) =>
+              setUploadShotType(e.target.value as "interior" | "exterior")
+            }
+            disabled={uploading}
+            className="rounded-md border border-white/10 bg-ink px-3 py-2 text-sm text-white disabled:opacity-60"
+          >
+            <option value="interior">Interior</option>
+            <option value="exterior">Exterior</option>
+          </select>
+          <button
+            type="submit"
+            disabled={uploading}
+            className="rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
+          >
+            {uploading ? "Working..." : "Upload + enhance"}
+          </button>
+        </div>
+        {uploadStatus ? (
+          <p className="mt-2 text-xs text-emerald-300">{uploadStatus}</p>
+        ) : null}
+        {uploadError ? (
+          <p className="mt-2 text-xs text-red-300" role="alert">
+            {uploadError}
+          </p>
+        ) : null}
+      </form>
 
       {/* Listing ID */}
       <div>

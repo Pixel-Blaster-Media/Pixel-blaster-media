@@ -5,8 +5,13 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { nextBookingStatuses } from "@/lib/booking/booking-status";
 import { cancelBooking } from "@/lib/booking/cancel";
+import {
+  createEnhance,
+  createListing,
+  createUpload,
+  type FotelloShotType,
+} from "@/lib/integrations/fotello/client";
 import { syncEnhance } from "@/lib/integrations/fotello/sync";
-import type { FotelloShotType } from "@/lib/integrations/fotello/client";
 import {
   parseIGuideAlias,
   parseIGuidePortalId,
@@ -33,6 +38,16 @@ interface BookingStatusRow {
 interface BookingMinimalRow {
   id: string;
   property_id: string;
+}
+
+interface BookingFotelloRow {
+  id: string;
+  property_id: string;
+  fotello_listing_id: string | null;
+  properties: {
+    street_address: string;
+    city: string | null;
+  } | null;
 }
 
 interface BookingWithIGuideRow {
@@ -525,6 +540,138 @@ export async function saveFotelloListingId(
   return { ok: true, listingId };
 }
 
+export async function prepareFotelloUpload(
+  bookingId: string,
+  filenames: string[],
+): Promise<
+  ActionResult & {
+    listingId?: string;
+    uploads?: Array<{ id: string; url: string; expires: string }>;
+  }
+> {
+  await requireAdmin();
+
+  const cleanFilenames = filenames
+    .map((filename) => filename.trim())
+    .filter(Boolean)
+    .slice(0, 100);
+  if (cleanFilenames.length === 0) {
+    return { ok: false, error: "Pick at least one photo." };
+  }
+
+  const service = getServiceSupabase();
+  const { data: booking, error } = await service
+    .from("bookings")
+    .select("id, property_id, fotello_listing_id, properties(street_address, city)")
+    .eq("id", bookingId)
+    .single<BookingFotelloRow>();
+
+  if (error || !booking) return { ok: false, error: "Booking not found." };
+
+  try {
+    let listingId = booking.fotello_listing_id;
+    if (!listingId) {
+      const listing = await createListing(fotelloListingName(booking));
+      listingId = listing.id;
+      const { error: updateError } = await service
+        .from("bookings")
+        .update({ fotello_listing_id: listingId })
+        .eq("id", booking.id);
+      if (updateError) return { ok: false, error: updateError.message };
+    }
+
+    const uploads = await Promise.all(
+      cleanFilenames.map((filename) => createUpload(filename)),
+    );
+    revalidatePath(`/admin/bookings/${bookingId}`);
+    return {
+      ok: true,
+      listingId,
+      uploads: uploads.map((upload) => ({
+        id: upload.id,
+        url: upload.url,
+        expires: upload.expires,
+      })),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : "Fotello could not prepare uploads.",
+    };
+  }
+}
+
+export async function startFotelloEnhance(
+  bookingId: string,
+  uploadIds: string[],
+  listingId: string,
+  shotType: FotelloShotType,
+): Promise<ActionResult & { enhanceId?: string; status?: string }> {
+  await requireAdmin();
+
+  const cleanUploadIds = uploadIds.map((id) => id.trim()).filter(Boolean);
+  const cleanListingId = listingId.trim();
+  if (cleanUploadIds.length === 0) {
+    return { ok: false, error: "No Fotello upload IDs were provided." };
+  }
+  if (!cleanListingId) {
+    return { ok: false, error: "Missing Fotello listing ID." };
+  }
+  if (shotType !== "interior" && shotType !== "exterior") {
+    return { ok: false, error: "Pick interior or exterior." };
+  }
+
+  const service = getServiceSupabase();
+  const { data: booking, error } = await service
+    .from("bookings")
+    .select("id, property_id, fotello_listing_id")
+    .eq("id", bookingId)
+    .single<{
+      id: string;
+      property_id: string;
+      fotello_listing_id: string | null;
+    }>();
+
+  if (error || !booking) return { ok: false, error: "Booking not found." };
+  if (booking.fotello_listing_id !== cleanListingId) {
+    const { error: updateError } = await service
+      .from("bookings")
+      .update({ fotello_listing_id: cleanListingId })
+      .eq("id", booking.id);
+    if (updateError) return { ok: false, error: updateError.message };
+  }
+
+  try {
+    const enhance = await createEnhance({
+      uploadIds: cleanUploadIds,
+      listingId: cleanListingId,
+      shotType,
+    });
+    const result = await syncEnhance({
+      enhanceId: enhance.id,
+      booking: {
+        id: booking.id,
+        property_id: booking.property_id,
+        fotello_listing_id: cleanListingId,
+      },
+      shotType,
+    });
+
+    revalidatePath(`/admin/bookings/${bookingId}`);
+    if (!result.ok) return { ok: false, error: result.error };
+    return { ok: true, enhanceId: enhance.id, status: result.status };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error ? err.message : "Fotello could not start enhance.",
+    };
+  }
+}
+
 /**
  * Track (or refresh) a Fotello enhance against the booking. If the
  * enhance is already `completed`, the sync run will upsert a
@@ -563,6 +710,16 @@ export async function trackFotelloEnhance(
   revalidatePath(`/admin/bookings/${bookingId}`);
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true, status: result.status };
+}
+
+function fotelloListingName(booking: BookingFotelloRow): string {
+  const address = [
+    booking.properties?.street_address,
+    booking.properties?.city,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  return address || `Booking ${booking.id}`;
 }
 
 /** Untrack (delete) a Fotello-sourced deliverable row. */
