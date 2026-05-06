@@ -304,24 +304,29 @@ export default function PackageAccordion({
         </section>
       ) : null}
 
+      {/* Low-key upgrade suggestions — placed in the page flow so they appear
+          when the user reaches the bottom instead of popping up immediately. */}
+      {selectedSlugs.length > 0 ? (
+        <BookingUpsellPanel
+          selectedSlugs={selectedSlugs}
+          selectedAddOnSlugs={selectedAddOnSlugs}
+          bySlug={bySlug}
+          onAddService={(slug) => {
+            if (!selectedSlugs.includes(slug)) {
+              updateUrl([...selectedSlugs, slug], selectedAddOnSlugs);
+            }
+          }}
+          onAddAddon={(slug) => {
+            if (!selectedAddOnSlugs.includes(slug)) {
+              updateUrl(selectedSlugs, [...selectedAddOnSlugs, slug]);
+            }
+          }}
+        />
+      ) : null}
+
       {/* Totals + continue */}
       {selectedSlugs.length > 0 ? (
-        <div className="sticky bottom-0 -mx-4 mt-4 space-y-3 border-t border-white/10 bg-ink/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:rounded-lg md:border md:bg-brand/5">
-          <BookingUpsellPanel
-            selectedSlugs={selectedSlugs}
-            selectedAddOnSlugs={selectedAddOnSlugs}
-            bySlug={bySlug}
-            onAddService={(slug) => {
-              if (!selectedSlugs.includes(slug)) {
-                updateUrl([...selectedSlugs, slug], selectedAddOnSlugs);
-              }
-            }}
-            onAddAddon={(slug) => {
-              if (!selectedAddOnSlugs.includes(slug)) {
-                updateUrl(selectedSlugs, [...selectedAddOnSlugs, slug]);
-              }
-            }}
-          />
+        <div className="sticky bottom-0 -mx-4 mt-4 border-t border-white/10 bg-ink/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:rounded-lg md:border md:bg-brand/5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm">
               <span className="font-semibold text-white">
