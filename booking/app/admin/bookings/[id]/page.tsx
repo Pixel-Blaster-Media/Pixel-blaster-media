@@ -124,9 +124,21 @@ export default async function BookingDetailPage({
   const profile = booking.profiles;
   const meta = BOOKING_STATUSES[booking.status];
   const transitions = nextBookingStatuses(booking.status);
+  const otherDeliverables = (deliverables ?? []).filter(
+    (d) => d.source !== "fotello",
+  );
+  const readyDeliverables = (deliverables ?? []).filter((d) => d.ready_at);
+  const fullAddress = [
+    property?.street_address,
+    booking.unit_number ? `Unit ${booking.unit_number}` : null,
+    property?.city,
+    property?.postal_code,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <Link
           href="/admin/bookings"
@@ -141,176 +153,271 @@ export default async function BookingDetailPage({
         </span>
       </div>
 
-      <header>
-        <h1 className="text-2xl font-bold text-white">
-          {property?.street_address ?? "—"}
-        </h1>
-        <p className="mt-1 text-sm text-ink-muted">
-          {[property?.city, property?.postal_code].filter(Boolean).join(" ")}
-          {booking.scheduled_at
-            ? ` · ${new Date(booking.scheduled_at).toLocaleString()}`
-            : " · no date set"}
-        </p>
-      </header>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Panel title="Realtor">
-          <Row label="Name" value={profile?.full_name ?? "—"} />
-          <Row
-            label="Email"
-            value={
-              profile?.email ? (
-                <a
-                  href={`mailto:${profile.email}`}
-                  className="text-brand-light underline"
-                >
-                  {profile.email}
-                </a>
-              ) : (
-                "—"
-              )
-            }
+      <header className="rounded-lg border border-white/10 bg-ink-soft/50 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+              Booking workspace
+            </p>
+            <h1 className="mt-1 text-2xl font-bold text-white">
+              {property?.street_address ?? "—"}
+            </h1>
+            <p className="mt-1 text-sm text-ink-muted">
+              {[property?.city, property?.postal_code].filter(Boolean).join(" ")}
+              {booking.scheduled_at
+                ? ` · ${formatDateTime(booking.scheduled_at)}`
+                : " · no date set"}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {profile?.phone ? (
+              <a
+                href={`tel:${profile.phone}`}
+                className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-light"
+              >
+                Call realtor
+              </a>
+            ) : null}
+            {profile?.email ? (
+              <a
+                href={`mailto:${profile.email}`}
+                className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-white hover:border-brand-light"
+              >
+                Email
+              </a>
+            ) : null}
+            {fullAddress ? (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                  fullAddress,
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-white hover:border-brand-light"
+              >
+                Map
+              </a>
+            ) : null}
+            <Link
+              href="/admin/today"
+              className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-white hover:border-brand-light"
+            >
+              Today
+            </Link>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-2 md:grid-cols-3">
+          <SummaryStat label="Ready links" value={`${readyDeliverables.length}`} />
+          <SummaryStat
+            label="Realtor"
+            value={profile?.full_name ?? profile?.email ?? "Unknown"}
           />
-          <Row label="Phone" value={profile?.phone ?? "—"} />
-          <Row label="Brokerage" value={profile?.brokerage ?? "—"} />
-        </Panel>
-
-        <Panel title="Shoot">
-          <Row
+          <SummaryStat
             label="Services"
             value={booking.services.map(labelForService).join(", ") || "—"}
           />
-          <Row
-            label="Add-ons"
-            value={
-              booking.add_ons.length
-                ? booking.add_ons.map(labelForAddOn).join(", ")
-                : "—"
-            }
+        </div>
+      </header>
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <main className="space-y-6">
+          <BookingActions
+            bookingId={booking.id}
+            currentStatus={booking.status}
+            transitions={transitions}
+            deliverables={deliverables ?? []}
           />
-          <Row
-            label="Square footage"
-            value={booking.square_footage ? `${booking.square_footage}` : "—"}
+
+          <section className="space-y-4">
+            <SectionIntro
+              eyebrow="Media"
+              title="Upload and sync deliverables"
+              body="Use Fotello for photo galleries, iGUIDE for tours and floor plans, and video links for YouTube/Drive/Dropbox deliveries."
+            />
+            <FotelloSection
+              bookingId={booking.id}
+              initialListingId={booking.fotello_listing_id}
+              deliverables={(deliverables ?? [])
+                .filter((d) => d.source === "fotello")
+                .map((d) => ({
+                  id: d.id,
+                  external_id: d.external_id,
+                  status: d.metadata?.status ?? null,
+                  shotType: d.metadata?.shot_type ?? null,
+                  syncedAt: d.metadata?.last_synced_at ?? d.created_at,
+                }))}
+            />
+
+            <IGuideSection
+              bookingId={booking.id}
+              initialIGuideId={booking.iguide_id}
+              initialPortalId={booking.iguide_portal_id}
+              portalApiConfigured={await hasPortalCredentials()}
+              job={iguideJob ?? null}
+            />
+          </section>
+
+          <InvoiceSection
+            bookingId={booking.id}
+            initial={{
+              id: booking.quickbooks_invoice_id,
+              number: booking.quickbooks_invoice_number,
+              url: booking.quickbooks_invoice_url,
+              status: booking.quickbooks_invoice_status,
+              totalCents: booking.quickbooks_invoice_total_cents,
+              syncedAt: booking.quickbooks_invoice_synced_at,
+            }}
           />
-          <Row
-            label="Unit #"
-            value={booking.unit_number ? booking.unit_number : "—"}
-          />
-          <Row
-            label="Occupancy"
-            value={
-              booking.is_vacant === "vacant"
-                ? "Vacant"
-                : booking.is_vacant === "partial"
-                  ? "Partially occupied"
-                  : booking.is_vacant === "occupied"
-                    ? "Occupied"
-                    : "—"
-            }
-          />
-          <Row
-            label="Basement"
-            value={
-              booking.include_basement == null
-                ? "—"
-                : booking.include_basement
-                  ? "Include"
-                  : "Skip"
-            }
-          />
-        </Panel>
-      </div>
+        </main>
 
-      {booking.client_notes ? (
-        <Panel title="Realtor notes">
-          <p className="whitespace-pre-wrap text-sm text-ink-muted">
-            {booking.client_notes}
-          </p>
-        </Panel>
-      ) : null}
+        <aside className="space-y-4 lg:sticky lg:top-16 lg:self-start">
+          <Panel title="Realtor">
+            <Row label="Name" value={profile?.full_name ?? "—"} />
+            <Row
+              label="Email"
+              value={
+                profile?.email ? (
+                  <a
+                    href={`mailto:${profile.email}`}
+                    className="text-brand-light underline"
+                  >
+                    {profile.email}
+                  </a>
+                ) : (
+                  "—"
+                )
+              }
+            />
+            <Row label="Phone" value={profile?.phone ?? "—"} />
+            <Row label="Brokerage" value={profile?.brokerage ?? "—"} />
+          </Panel>
 
-      <BookingActions
-        bookingId={booking.id}
-        currentStatus={booking.status}
-        transitions={transitions}
-        deliverables={deliverables ?? []}
-      />
+          <Panel title="Shoot details">
+            <Row
+              label="Services"
+              value={booking.services.map(labelForService).join(", ") || "—"}
+            />
+            <Row
+              label="Add-ons"
+              value={
+                booking.add_ons.length
+                  ? booking.add_ons.map(labelForAddOn).join(", ")
+                  : "—"
+              }
+            />
+            <Row
+              label="Square footage"
+              value={booking.square_footage ? `${booking.square_footage}` : "—"}
+            />
+            <Row label="Unit #" value={booking.unit_number ?? "—"} />
+            <Row
+              label="Occupancy"
+              value={
+                booking.is_vacant === "vacant"
+                  ? "Vacant"
+                  : booking.is_vacant === "partial"
+                    ? "Partially occupied"
+                    : booking.is_vacant === "occupied"
+                      ? "Occupied"
+                      : "—"
+              }
+            />
+            <Row
+              label="Basement"
+              value={
+                booking.include_basement == null
+                  ? "—"
+                  : booking.include_basement
+                    ? "Include"
+                    : "Skip"
+              }
+            />
+          </Panel>
 
-      <IGuideSection
-        bookingId={booking.id}
-        initialIGuideId={booking.iguide_id}
-        initialPortalId={booking.iguide_portal_id}
-        portalApiConfigured={await hasPortalCredentials()}
-        job={iguideJob ?? null}
-      />
+          {booking.client_notes || booking.internal_notes ? (
+            <Panel title="Notes">
+              {booking.client_notes ? (
+                <Note title="Realtor" body={booking.client_notes} />
+              ) : null}
+              {booking.internal_notes ? (
+                <Note title="Internal" body={booking.internal_notes} />
+              ) : null}
+            </Panel>
+          ) : null}
 
-      <FotelloSection
-        bookingId={booking.id}
-        initialListingId={booking.fotello_listing_id}
-        deliverables={(deliverables ?? [])
-          .filter((d) => d.source === "fotello")
-          .map((d) => ({
-            id: d.id,
-            external_id: d.external_id,
-            status: d.metadata?.status ?? null,
-            shotType: d.metadata?.shot_type ?? null,
-            syncedAt: d.metadata?.last_synced_at ?? d.created_at,
-          }))}
-      />
-
-      <InvoiceSection
-        bookingId={booking.id}
-        initial={{
-          id: booking.quickbooks_invoice_id,
-          number: booking.quickbooks_invoice_number,
-          url: booking.quickbooks_invoice_url,
-          status: booking.quickbooks_invoice_status,
-          totalCents: booking.quickbooks_invoice_total_cents,
-          syncedAt: booking.quickbooks_invoice_synced_at,
-        }}
-      />
-
-      {(() => {
-        const otherDeliverables = (deliverables ?? []).filter(
-          (d) => d.source !== "fotello",
-        );
-        return (
-          <Panel title="Deliverables">
+          <Panel title="Delivery links">
             {otherDeliverables.length > 0 ? (
               <ul className="divide-y divide-white/5">
                 {otherDeliverables.map((d) => (
-                  <li
-                    key={d.id}
-                    className="flex items-start justify-between gap-3 py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-white">
-                        {deliverableTypeLabel(d.type)}
-                        <span className="ml-2 text-[10px] uppercase tracking-wider text-ink-muted">
-                          {d.source}
-                        </span>
-                      </p>
-                      <a
-                        href={d.url}
-                        target="_blank"
-                        rel="noopener"
-                        className="mt-0.5 block truncate text-xs text-brand-light underline"
-                      >
-                        {d.url}
-                      </a>
-                    </div>
+                  <li key={d.id} className="py-2">
+                    <p className="text-sm font-semibold text-white">
+                      {deliverableTypeLabel(d.type)}
+                      <span className="ml-2 text-[10px] uppercase tracking-wider text-ink-muted">
+                        {d.source}
+                      </span>
+                    </p>
+                    <a
+                      href={d.url}
+                      target="_blank"
+                      rel="noopener"
+                      className="mt-0.5 block truncate text-xs text-brand-light underline"
+                    >
+                      {d.url}
+                    </a>
                   </li>
                 ))}
               </ul>
             ) : (
               <p className="text-sm text-ink-muted">
-                No non-Fotello deliverables yet. Fotello galleries are
-                managed in the Fotello section above.
+                Video, iGUIDE, floor plan, and manual links will appear here.
+                Fotello galleries are managed in the Fotello section.
               </p>
             )}
           </Panel>
-        );
-      })()}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function SummaryStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-white/10 bg-ink/50 p-3">
+      <p className="text-[10px] uppercase tracking-wider text-ink-muted">
+        {label}
+      </p>
+      <p className="mt-1 truncate text-sm font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function SectionIntro({
+  eyebrow,
+  title,
+  body,
+}: {
+  eyebrow: string;
+  title: string;
+  body: string;
+}) {
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+        {eyebrow}
+      </p>
+      <h2 className="mt-1 text-xl font-semibold text-white">{title}</h2>
+      <p className="mt-1 text-sm text-ink-muted">{body}</p>
+    </div>
+  );
+}
+
+function Note({ title, body }: { title: string; body: string }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+        {title}
+      </p>
+      <p className="mt-1 whitespace-pre-wrap text-sm text-ink-muted">{body}</p>
     </div>
   );
 }
@@ -345,4 +452,11 @@ function Row({
       <span className="text-right text-white">{value}</span>
     </div>
   );
+}
+
+function formatDateTime(iso: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(iso));
 }

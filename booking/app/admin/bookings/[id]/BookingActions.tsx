@@ -75,14 +75,25 @@ export default function BookingActions({
   const showCancel = isCancellable(currentStatus);
 
   return (
-    <div className="space-y-6 rounded-lg border border-brand/20 bg-brand/5 p-4">
-      <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
-          Status
-        </h2>
-        <p className="mt-1 text-xs text-ink-muted">
-          Current: {BOOKING_STATUSES[currentStatus].label}
+    <div className="space-y-5 rounded-lg border border-brand/20 bg-brand/5 p-4">
+      <header>
+        <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
+          Job controls
         </p>
+        <h2 className="mt-1 text-lg font-semibold text-white">
+          Move, deliver, and add links
+        </h2>
+      </header>
+
+      <section className="rounded-md border border-white/10 bg-ink-soft/50 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold text-white">Status</h3>
+            <p className="mt-0.5 text-xs text-ink-muted">
+              Current: {BOOKING_STATUSES[currentStatus].label}
+            </p>
+          </div>
+        </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {forwardOnly.length === 0 && !showCancel ? (
             <p className="text-xs text-ink-muted">
@@ -117,54 +128,43 @@ export default function BookingActions({
             {error}
           </p>
         ) : null}
-      </div>
+      </section>
 
-      <hr className="border-white/10" />
-
-      <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
-          Video link
-        </h2>
+      <section className="rounded-md border border-white/10 bg-ink-soft/50 p-3">
+        <h3 className="text-sm font-semibold text-white">Video link</h3>
         <p className="mt-1 text-xs text-ink-muted">
           Paste a YouTube, Dropbox, Google Drive, Vimeo, or direct video link.
           It will show in the realtor portal under Video.
         </p>
         <VideoLinkForm bookingId={bookingId} />
-      </div>
+      </section>
 
-      <hr className="border-white/10" />
-
-      <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
-          Delivery email
-        </h2>
+      <section className="rounded-md border border-white/10 bg-ink-soft/50 p-3">
+        <h3 className="text-sm font-semibold text-white">Delivery email</h3>
         <p className="mt-1 text-xs text-ink-muted">
           Email the realtor when their ready media links are available in the
           portal. This can only be sent once per realtor for this booking.
         </p>
         <DeliveryEmailButton bookingId={bookingId} />
-      </div>
+      </section>
 
-      <hr className="border-white/10" />
+      <details className="rounded-md border border-white/10 bg-ink-soft/50 p-3">
+        <summary className="cursor-pointer text-sm font-semibold text-white">
+          Advanced manual links
+        </summary>
+        <div className="mt-3">
+          <p className="text-xs text-ink-muted">
+            Fallback for unusual links. Fotello/iGUIDE normally use their own
+            sections.
+          </p>
+          <ManualDeliverableForm bookingId={bookingId} />
+        </div>
 
-      <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
-          Add a deliverable
-        </h2>
-        <p className="mt-1 text-xs text-ink-muted">
-          Manual entry — paste an iGuide tour URL, a Fotello gallery URL, or
-          any other delivery link. Phase 4/5 will sync these automatically.
-        </p>
-        <ManualDeliverableForm bookingId={bookingId} />
-      </div>
-
-      {deliverables.length > 0 ? (
-        <>
-          <hr className="border-white/10" />
+        {deliverables.length > 0 ? (
           <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
-              Manage existing
-            </h2>
+            <h3 className="mt-5 text-sm font-semibold text-white">
+              Manage existing links
+            </h3>
             <ul className="mt-3 space-y-2">
               {deliverables.map((d) => (
                 <li
@@ -183,8 +183,8 @@ export default function BookingActions({
               ))}
             </ul>
           </div>
-        </>
-      ) : null}
+        ) : null}
+      </details>
     </div>
   );
 }
