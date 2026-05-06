@@ -154,7 +154,7 @@ export default function CalendarWeekView({
                     <button
                       key={slot}
                       type="button"
-                      aria-label={`Add block ${day.label} ${formatTime(
+                      aria-label={`Select ${day.label} ${formatTime(
                         hour,
                         minute,
                       )}`}
@@ -225,7 +225,7 @@ export default function CalendarWeekView({
       </div>
 
       {selected ? (
-        <div className="rounded-lg border border-brand/20 bg-brand/5 p-4">
+        <div className="fixed inset-x-4 bottom-4 z-50 max-h-[82vh] overflow-y-auto rounded-lg border border-brand/30 bg-ink-soft p-4 shadow-2xl shadow-black/50 md:left-auto md:w-[560px]">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-white">
