@@ -105,17 +105,21 @@ export default async function PortalIndex({
   }
 
   if (!properties || properties.length === 0) {
-    return <EmptyState archivedView={archivedView} />;
+    return (
+      <div className="realtor-theme">
+        <EmptyState archivedView={archivedView} />
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="realtor-theme space-y-6">
       {params.password_updated === "1" ? (
         <section className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 p-4">
-          <p className="text-sm font-semibold text-white">
+          <p className="text-sm font-semibold text-realtor-text">
             Your password has been updated.
           </p>
-          <p className="mt-1 text-xs text-ink-muted">
+          <p className="mt-1 text-xs text-realtor-muted">
             Use this password next time you sign in to your media portal.
           </p>
         </section>
@@ -123,18 +127,18 @@ export default async function PortalIndex({
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+          <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
             Realtor portal
           </p>
-          <h1 className="mt-1 text-3xl font-bold text-white">My listings</h1>
-          <p className="mt-2 max-w-2xl text-sm text-ink-muted">
+          <h1 className="mt-1 text-3xl font-bold text-realtor-text">My listings</h1>
+          <p className="mt-2 max-w-2xl text-sm text-realtor-muted">
             Open a listing to grab photos, tours, floor plans, video links, and
             property website links in one place.
           </p>
         </div>
         <Link
           href="/portal/book"
-          className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light"
+          className="rounded-md bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary-light"
         >
           Book another shoot →
         </Link>
@@ -164,8 +168,8 @@ export default async function PortalIndex({
 
           return (
             <li key={p.id}>
-              <article className="group overflow-hidden rounded-xl border border-white/10 bg-ink-soft/50 transition hover:border-brand/40 hover:bg-ink-soft">
-                <div className="aspect-[4/3] w-full overflow-hidden bg-black/40">
+              <article className="realtor-elevated-panel group overflow-hidden rounded-2xl transition hover:border-realtor-primary/40">
+                <div className="aspect-[4/3] w-full overflow-hidden bg-realtor-surface-muted">
                   {thumb ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
@@ -175,17 +179,17 @@ export default async function PortalIndex({
                       loading="lazy"
                     />
                   ) : (
-                    <div className="flex h-full items-center justify-center text-xs text-ink-muted">
+                    <div className="flex h-full items-center justify-center text-xs text-realtor-muted">
                       No preview yet
                     </div>
                   )}
                 </div>
                 <div className="space-y-3 p-4">
                   <div>
-                    <p className="font-semibold text-white">
+                    <p className="font-semibold text-realtor-text">
                       {p.street_address}
                     </p>
-                    <p className="text-xs text-ink-muted">
+                    <p className="text-xs text-realtor-muted">
                       {[p.city, p.postal_code].filter(Boolean).join(" ")}
                     </p>
                   </div>
@@ -197,21 +201,21 @@ export default async function PortalIndex({
                         {meta.label}
                       </span>
                       {dateLabel ? (
-                        <span className="text-[11px] text-ink-muted">
+                        <span className="text-[11px] text-realtor-muted">
                           {dateLabel}
                         </span>
                       ) : null}
                     </div>
                   ) : null}
                   <MediaChips media={media} />
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/5 pt-3 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-realtor-primary/10 pt-3 text-xs">
                     <Link
                       href={`/portal/${p.id}`}
-                      className="font-semibold text-brand-light hover:text-white"
+                      className="font-semibold text-realtor-primary hover:text-realtor-text"
                     >
                       Open media →
                     </Link>
-                    <span className="text-ink-muted md:ml-auto">
+                    <span className="text-realtor-muted md:ml-auto">
                       {media.readyCount > 0
                         ? `${media.readyCount} item${media.readyCount === 1 ? "" : "s"} ready`
                         : "Media will appear here"}
@@ -220,7 +224,7 @@ export default async function PortalIndex({
                   <div className="flex flex-wrap items-center gap-2">
                     <Link
                       href={similarHref}
-                      className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-light"
+                      className="rounded-md bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-realtor-primary-light"
                     >
                       Book similar shoot
                     </Link>
@@ -254,8 +258,8 @@ function PortalTab({
       className={
         "rounded-md border px-3 py-1.5 text-xs font-semibold transition " +
         (active
-          ? "border-brand-light bg-brand/15 text-brand-light"
-          : "border-white/10 text-ink-muted hover:border-white/30 hover:text-white")
+          ? "border-realtor-primary bg-realtor-primary/15 text-realtor-primary"
+          : "border-realtor-primary/15 text-realtor-muted hover:border-realtor-primary/35 hover:text-realtor-text")
       }
     >
       {children}
@@ -284,7 +288,7 @@ function MediaChips({ media }: { media: PropertyMediaSummary }) {
 
   if (chips.length === 0) {
     return (
-      <p className="rounded-md border border-dashed border-white/10 bg-black/20 px-3 py-2 text-xs text-ink-muted">
+      <p className="rounded-md border border-dashed border-realtor-primary/15 bg-realtor-surface-muted/70 px-3 py-2 text-xs text-realtor-muted">
         Nothing delivered yet.
       </p>
     );
@@ -295,7 +299,7 @@ function MediaChips({ media }: { media: PropertyMediaSummary }) {
       {chips.map((chip) => (
         <span
           key={chip}
-          className="rounded-full border border-brand-light/25 bg-brand/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-light"
+          className="rounded-full border border-realtor-primary/25 bg-realtor-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary"
         >
           {chip}
         </span>
@@ -332,23 +336,23 @@ function buildSimilarBookingHref(
 
 function EmptyState({ archivedView }: { archivedView: boolean }) {
   return (
-    <div className="mx-auto max-w-lg rounded-xl border border-dashed border-white/10 bg-ink-soft/40 p-8 text-center">
-      <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+    <div className="mx-auto max-w-lg rounded-xl border border-dashed border-realtor-primary/15 bg-realtor-surface-muted/75 p-8 text-center">
+      <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
         {archivedView ? "Archive is empty" : "Nothing here yet"}
       </p>
-      <h1 className="mt-3 text-2xl font-bold text-white">
+      <h1 className="mt-3 text-2xl font-bold text-realtor-text">
         {archivedView
           ? "Archived listings will appear here"
           : "Your listings will appear here"}
       </h1>
-      <p className="mt-3 text-sm text-ink-muted">
+      <p className="mt-3 text-sm text-realtor-muted">
         {archivedView
           ? "Archive old shoots from the active dashboard when you want to keep things tidy."
           : "Once we've confirmed a shoot for you, it'll show up as a listing with photos, virtual tour, and floor plan — all in one place."}
       </p>
       <a
         href={archivedView ? "/portal" : "/book"}
-        className="mt-6 inline-block rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light"
+        className="mt-6 inline-block rounded-md bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary-light"
       >
         {archivedView ? "Back to active listings" : "Book a shoot"}
       </a>

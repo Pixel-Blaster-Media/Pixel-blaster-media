@@ -108,7 +108,7 @@ export default function ServicePicker({
   return (
     <div className={isPending ? "opacity-60" : ""}>
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+        <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
           Bundles
         </p>
         <ul className="mt-3 grid gap-2 md:grid-cols-2">
@@ -121,10 +121,10 @@ export default function ServicePicker({
                   onClick={() => selectBundle(b.slug)}
                   aria-pressed={on}
                   className={
-                    "flex w-full items-baseline justify-between gap-3 rounded-md border px-3 py-2 text-left text-sm transition " +
+                    "flex w-full items-baseline justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition " +
                     (on
-                      ? "border-brand-light bg-brand/15 text-brand-light"
-                      : "border-white/15 text-white/80 hover:border-white/40")
+                      ? "realtor-choice-selected text-realtor-primary"
+                      : "realtor-choice text-realtor-muted hover:border-realtor-primary/45")
                   }
                   title={b.description}
                 >
@@ -139,7 +139,7 @@ export default function ServicePicker({
                   </span>
                 </button>
                 {sqftRuleText(b) && on ? (
-                  <p className="mt-1 px-1 text-[11px] text-brand-light">
+                  <p className="mt-1 px-1 text-[11px] text-realtor-primary">
                     {sqftRuleText(b)}
                   </p>
                 ) : null}
@@ -150,7 +150,7 @@ export default function ServicePicker({
       </div>
 
       <div className="mt-5">
-        <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+        <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
           A-la-carte
         </p>
         <ul className="mt-3 flex flex-wrap gap-2">
@@ -165,8 +165,8 @@ export default function ServicePicker({
                   className={
                     "rounded-full border px-4 py-2 text-sm transition " +
                     (on
-                      ? "border-brand-light bg-brand/20 text-brand-light"
-                      : "border-white/15 text-white/80 hover:border-white/40")
+                      ? "border-realtor-primary bg-realtor-primary/20 text-realtor-primary"
+                      : "border-realtor-primary/20 bg-realtor-surface text-realtor-muted hover:border-realtor-primary/45")
                   }
                   title={a.description}
                 >
@@ -177,7 +177,7 @@ export default function ServicePicker({
                   <MediaBadges item={a} className="ml-2 inline-flex" />
                 </button>
                 {sqftRuleText(a) && on ? (
-                  <p className="mt-1 px-1 text-[11px] text-brand-light">
+                  <p className="mt-1 px-1 text-[11px] text-realtor-primary">
                     {sqftRuleText(a)}
                   </p>
                 ) : null}
@@ -189,7 +189,7 @@ export default function ServicePicker({
 
       {visibleAddons.length > 0 ? (
         <div className="mt-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
             Add-ons
           </p>
           <ul className="mt-3 flex flex-wrap gap-2">
@@ -204,8 +204,8 @@ export default function ServicePicker({
                     className={
                       "rounded-md border px-3 py-1.5 text-xs transition " +
                       (on
-                        ? "border-brand-light bg-brand/15 text-brand-light"
-                        : "border-white/10 text-white/70 hover:border-white/30")
+                        ? "border-realtor-primary bg-realtor-primary/15 text-realtor-primary"
+                        : "border-realtor-primary/15 bg-realtor-surface text-realtor-muted hover:border-realtor-primary/35")
                     }
                     title={a.description}
                   >
@@ -242,7 +242,7 @@ function MediaBadges({
       {badges.map((badge) => (
         <span
           key={badge}
-          className="rounded-full border border-brand-light/25 bg-brand/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-brand-light"
+          className="rounded-full border border-realtor-primary/25 bg-realtor-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-realtor-primary"
         >
           {badge}
         </span>

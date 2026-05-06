@@ -190,6 +190,29 @@ body:has(.realtor-theme) .site-footer {
   color: var(--realtor-muted);
 }
 
+body:has(.realtor-theme) .portal-header {
+  border-color: var(--realtor-border);
+}
+
+body:has(.realtor-theme) .portal-kicker,
+body:has(.realtor-theme) .portal-nav-link:hover,
+body:has(.realtor-theme) .portal-sign-out:hover {
+  color: var(--realtor-primary);
+}
+
+body:has(.realtor-theme) .portal-user {
+  color: var(--realtor-text);
+}
+
+body:has(.realtor-theme) .portal-nav-link,
+body:has(.realtor-theme) .portal-sign-out {
+  color: var(--realtor-muted);
+}
+
+body:has(.realtor-theme) .portal-sign-out {
+  border-color: var(--realtor-border);
+}
+
 .realtor-theme .address-autocomplete-label,
 .realtor-theme .address-autocomplete-helper {
   color: var(--realtor-muted);

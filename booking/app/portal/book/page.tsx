@@ -90,20 +90,20 @@ export default async function PortalBookPage({
   const selectedLabel = selectedItems.map((it) => it.name).join(", ");
 
   return (
-    <div className="space-y-10">
-      <Link href="/portal" className="text-xs text-ink-muted hover:text-white">
+    <div className="realtor-theme space-y-10">
+      <Link href="/portal" className="text-xs text-realtor-muted hover:text-realtor-text">
         ← My listings
       </Link>
 
       <header>
-        <h1 className="text-3xl font-bold text-white">Book a shoot</h1>
-        <p className="mt-2 text-sm text-ink-muted">
+        <h1 className="text-3xl font-bold text-realtor-text">Book a shoot</h1>
+        <p className="mt-2 text-sm text-realtor-muted">
           Pick what you need, find a time, confirm. Confirmed bookings land
           directly on the photographer&apos;s calendar — no back-and-forth.
         </p>
       </header>
 
-      <section className="rounded-xl border border-white/10 bg-ink-soft/50 p-5">
+      <section className="realtor-elevated-panel rounded-2xl p-5">
         <ServicePicker
           selectedSlugs={selectedSlugs}
           selectedAddOnSlugs={filteredAddOnSlugs}
@@ -112,10 +112,10 @@ export default async function PortalBookPage({
           addons={addons}
         />
         {selectedSlugs.length > 0 ? (
-          <p className="mt-5 border-t border-white/5 pt-4 text-xs text-ink-muted">
-            On-site: <span className="text-white">~{duration} min</span>
+          <p className="mt-5 border-t border-realtor-primary/10 pt-4 text-xs text-realtor-muted">
+            On-site: <span className="text-realtor-text">~{duration} min</span>
             {" · "}
-            <span className="text-white">
+            <span className="text-realtor-text">
               ${(totalPriceCents / 100).toFixed(0)}
             </span>
             {" · "}
@@ -126,7 +126,7 @@ export default async function PortalBookPage({
 
       {selectedSlugs.length > 0 ? (
         <section>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-realtor-primary">
             Pick a time
           </h2>
           <div className="mt-4">
@@ -139,8 +139,8 @@ export default async function PortalBookPage({
       ) : null}
 
       {selectedSlot && whenLabel && selectedSlugs.length > 0 ? (
-        <section className="rounded-xl border border-brand/20 bg-brand/5 p-5">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
+        <section className="realtor-green-panel rounded-2xl p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-realtor-primary">
             Property details
           </h2>
           <div className="mt-4">

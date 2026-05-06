@@ -28,12 +28,12 @@ export default function SlotPicker({
 
   if (daysOfSlots.every((d) => d.slots.length === 0)) {
     return (
-      <p className="rounded-lg border border-dashed border-white/10 bg-ink-soft/40 p-4 text-sm text-ink-muted">
+      <p className="realtor-warm-panel rounded-xl p-4 text-sm text-realtor-muted">
         No open slots in this range. The next 4 weeks might be booked solid
         — try picking fewer services, or email{" "}
         <a
           href="mailto:Info@PixelBlasterMedia.com"
-          className="text-brand-light underline"
+          className="text-realtor-primary underline"
         >
           Info@PixelBlasterMedia.com
         </a>{" "}
@@ -43,15 +43,15 @@ export default function SlotPicker({
   }
 
   return (
-    <div className="space-y-6">
-      <p className="text-xs text-ink-muted">
+    <div className="realtor-warm-panel space-y-6 rounded-2xl p-4">
+      <p className="text-xs text-realtor-muted">
         All times are shown in {BUSINESS_TZ_DISPLAY}.
       </p>
       {daysOfSlots.map((day) => (
-        <div key={day.dateLabel}>
-          <p className="text-sm font-semibold text-white">{day.dateLabel}</p>
+        <div key={day.dateLabel} className="rounded-xl bg-realtor-surface/70 p-3">
+          <p className="text-sm font-semibold text-realtor-text">{day.dateLabel}</p>
           {day.slots.length === 0 ? (
-            <p className="mt-1 text-xs text-ink-muted">
+            <p className="mt-1 text-xs text-realtor-muted">
               No slots — day off or fully booked.
             </p>
           ) : (
@@ -64,8 +64,8 @@ export default function SlotPicker({
                     className={
                       "rounded-md border px-3 py-1.5 text-xs transition " +
                       (selectedSlot === s.start
-                        ? "border-brand-light bg-brand/20 text-brand-light"
-                        : "border-white/10 text-white/80 hover:border-white/30 hover:text-white")
+                        ? "border-realtor-primary bg-realtor-primary/20 text-realtor-primary"
+                        : "border-realtor-primary/15 bg-realtor-surface text-realtor-muted hover:border-realtor-primary/35 hover:text-realtor-text")
                     }
                   >
                     {s.timeLabel}

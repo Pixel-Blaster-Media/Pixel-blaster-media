@@ -36,7 +36,7 @@ export default function ArchiveListingButton({
             if (!res.ok) setError(res.error ?? "Could not update listing.");
           });
         }}
-        className="rounded-md border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/80 hover:border-brand-light hover:text-brand-light disabled:opacity-50"
+        className="rounded-md border border-realtor-primary/20 px-3 py-1.5 text-xs font-semibold text-realtor-muted hover:border-realtor-primary hover:text-realtor-primary disabled:opacity-50"
       >
         {pending ? "Working..." : archived ? "Restore" : "Archive"}
       </button>

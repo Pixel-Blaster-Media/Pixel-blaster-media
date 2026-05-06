@@ -36,14 +36,14 @@ export default function BookingConfirmForm({
       ))}
       <input type="hidden" name="slot" value={slot} />
 
-      <p className="text-sm text-ink-muted">
-        You&apos;re booking <span className="text-white">{whenLabel}</span>.
+      <p className="text-sm text-realtor-muted">
+        You&apos;re booking <span className="text-realtor-text">{whenLabel}</span>.
       </p>
 
       <div className="grid gap-4 md:grid-cols-2">
         <label className="block md:col-span-2">
-          <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
-            Property address <span className="text-brand-light">*</span>
+          <span className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
+            Property address <span className="text-realtor-primary">*</span>
           </span>
           <input
             name="street_address"
@@ -51,22 +51,22 @@ export default function BookingConfirmForm({
             required
             placeholder="123 King St W"
             defaultValue={initialFields?.streetAddress ?? ""}
-            className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
         </label>
         <label className="block">
-          <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+          <span className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
             City
           </span>
           <input
             name="city"
             type="text"
             defaultValue={initialFields?.city ?? "Hamilton"}
-            className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
         </label>
         <label className="block">
-          <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+          <span className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
             Postal code
           </span>
           <input
@@ -74,11 +74,11 @@ export default function BookingConfirmForm({
             type="text"
             placeholder="L8P 4S8"
             defaultValue={initialFields?.postalCode ?? ""}
-            className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
         </label>
         <label className="block md:col-span-2">
-          <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+          <span className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
             Approx. square footage
           </span>
           <input
@@ -88,22 +88,22 @@ export default function BookingConfirmForm({
             step={1}
             placeholder="2500"
             defaultValue={initialFields?.squareFootage ?? ""}
-            className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
-          <span className="mt-1 block text-[11px] leading-relaxed text-ink-muted">
+          <span className="mt-1 block text-[11px] leading-relaxed text-realtor-muted">
             Include finished basement or lower-level space if iGUIDE should
             measure it. This affects iGUIDE pricing.
           </span>
         </label>
         <label className="block md:col-span-2">
-          <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+          <span className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
             Notes (optional)
           </span>
           <textarea
             name="notes"
             rows={3}
             placeholder="Tenant occupied, vacant, pets, gate code, etc."
-            className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
         </label>
       </div>
@@ -125,7 +125,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="rounded-md bg-brand px-5 py-2.5 font-semibold text-white hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-60"
+      className="rounded-md bg-realtor-primary px-5 py-2.5 font-semibold text-white hover:bg-realtor-primary-light disabled:cursor-not-allowed disabled:opacity-60"
     >
       {pending ? "Booking…" : "Confirm booking"}
     </button>

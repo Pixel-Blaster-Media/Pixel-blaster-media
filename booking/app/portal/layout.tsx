@@ -18,27 +18,27 @@ export default async function PortalLayout({
   }
 
   return (
-    <div className="min-h-[60vh]">
-      <header className="mb-10 flex flex-wrap items-center justify-between gap-3 border-b border-white/5 pb-4">
+    <div className="portal-layout min-h-[60vh]">
+      <header className="portal-header mb-10 flex flex-wrap items-center justify-between gap-3 border-b border-white/5 pb-4">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.2em] text-brand-light">
+          <p className="portal-kicker text-[11px] uppercase tracking-[0.2em] text-brand-light">
             Your portal
           </p>
-          <p className="text-sm text-white">
+          <p className="portal-user text-sm text-white">
             {user.fullName ?? user.email}
           </p>
         </div>
         <nav className="flex items-center gap-3 text-sm">
           <Link
             href="/portal"
-            className="text-ink-muted transition hover:text-white"
+            className="portal-nav-link text-ink-muted transition hover:text-white"
           >
             My listings
           </Link>
           <form action={signOut}>
             <button
               type="submit"
-              className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-ink-muted hover:border-white/30 hover:text-white"
+              className="portal-sign-out rounded-md border border-white/10 px-3 py-1.5 text-xs text-ink-muted hover:border-white/30 hover:text-white"
             >
               Sign out
             </button>
