@@ -8,7 +8,11 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
 
 import LinkEventForm from "./LinkEventForm";
-import { ignoreIGuideWebhookEvents, linkIGuidePortalTour } from "./actions";
+import {
+  ignoreIGuideWebhookEvents,
+  linkIGuidePortalTour,
+  linkManualIGuideToBooking,
+} from "./actions";
 
 export const metadata = { title: "iGUIDE Review" };
 export const dynamic = "force-dynamic";
@@ -229,6 +233,52 @@ export default async function IGuideReviewPage({
           ) : null}
         </section>
       ) : null}
+
+      <section className="rounded-lg border border-brand-light/20 bg-brand/10 p-4">
+        <div>
+          <h2 className="text-sm font-semibold text-white">
+            Link an iGUIDE manually
+          </h2>
+          <p className="mt-1 text-xs text-ink-muted">
+            If portal search is blocked, paste the public tour URL, unbranded
+            URL, manage URL, alias, or Portal ID here. Pick the booking and
+            the site will save it and try to sync deliverables.
+          </p>
+        </div>
+        <form
+          action={linkManualIGuideToBooking}
+          className="mt-4 grid gap-2 lg:grid-cols-[minmax(220px,1fr)_minmax(260px,420px)_auto]"
+        >
+          <input
+            type="text"
+            name="iguide_ref"
+            required
+            placeholder="Paste iGUIDE link, alias, or Portal ID"
+            className="rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+          />
+          <select
+            name="booking_id"
+            required
+            className="min-w-0 rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            defaultValue=""
+          >
+            <option value="" disabled>
+              Pick booking
+            </option>
+            {bookingOptions.map((booking) => (
+              <option key={booking.id} value={booking.id}>
+                {booking.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light"
+          >
+            Link + sync
+          </button>
+        </form>
+      </section>
 
       <section className="rounded-lg border border-white/10 bg-ink-soft/40 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
