@@ -9,13 +9,22 @@ import {
 import { requireUser } from "@/lib/auth/require-user";
 import {
   iguideEmbedUrl,
+  iguideFloorplanMetricPdfUrl,
+  iguideFloorplanPdfUrl,
+  iguideUnbrandedUrl,
+  iguideViewerUrl,
   parseIGuideAlias,
 } from "@/lib/integrations/iguide/parse-id";
+import {
+  fetchIGuideRESO,
+  type IGuideRESOResponse,
+} from "@/lib/integrations/iguide/client";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type {
   BookingStatus,
   DeliverableSource,
   DeliverableType,
+  Json,
 } from "@/lib/supabase/database.types";
 
 import CancelBookingButton from "./CancelBookingButton";
@@ -45,6 +54,7 @@ interface DeliverableRow {
   source: DeliverableSource;
   url: string;
   thumbnail_url: string | null;
+  metadata: Json | null;
   ready_at: string | null;
   created_at: string;
 }
@@ -73,7 +83,7 @@ export default async function PropertyDetailPage({
   const { data: deliverables } = await supabase
     .from("deliverables")
     .select(
-      "id, booking_id, type, source, url, thumbnail_url, ready_at, created_at",
+      "id, booking_id, type, source, url, thumbnail_url, metadata, ready_at, created_at",
     )
     .eq("property_id", property.id)
     .order("created_at", { ascending: false })
@@ -89,6 +99,8 @@ export default async function PropertyDetailPage({
   const videos = (deliverables ?? []).filter(
     (d) => d.type === "video" || d.type === "aerial",
   );
+  const iGuideAlias = pickIGuideAlias(tour, floorPlan);
+  const iGuideReso = iGuideAlias ? await fetchOptionalIGuideRESO(iGuideAlias) : null;
 
   const latestBooking = pickLatest(property.bookings);
   const statusMeta = latestBooking
@@ -214,6 +226,15 @@ export default async function PropertyDetailPage({
         />
       )}
 
+      {iGuideAlias ? (
+        <IGuideDeliverySheet
+          alias={iGuideAlias}
+          tour={tour ?? null}
+          floorPlan={floorPlan ?? null}
+          reso={iGuideReso}
+        />
+      ) : null}
+
       {gallery.length > 0 ? (
         <section className="space-y-6">
           <SectionHeader title="Photos" />
@@ -262,6 +283,194 @@ export default async function PropertyDetailPage({
 function tourEmbedUrl(url: string): string {
   const alias = parseIGuideAlias(url);
   return alias ? iguideEmbedUrl(alias) : url;
+}
+
+async function fetchOptionalIGuideRESO(
+  alias: string,
+): Promise<IGuideRESOResponse | null> {
+  const res = await fetchIGuideRESO(alias);
+  return res.ok && res.data ? res.data : null;
+}
+
+function pickIGuideAlias(
+  tour: DeliverableRow | undefined,
+  floorPlan: DeliverableRow | undefined,
+): string | null {
+  return (
+    metadataString(tour?.metadata, "alias") ??
+    metadataString(floorPlan?.metadata, "alias") ??
+    (tour ? parseIGuideAlias(tour.url) : null) ??
+    (floorPlan ? parseIGuideAlias(floorPlan.url) : null)
+  );
+}
+
+function IGuideDeliverySheet({
+  alias,
+  tour,
+  floorPlan,
+  reso,
+}: {
+  alias: string;
+  tour: DeliverableRow | null;
+  floorPlan: DeliverableRow | null;
+  reso: IGuideRESOResponse | null;
+}) {
+  const brandedUrl = metadataString(tour?.metadata, "branded_url") ?? iguideViewerUrl(alias);
+  const unbrandedUrl =
+    metadataString(tour?.metadata, "unbranded_url") ?? iguideUnbrandedUrl(alias);
+  const pdfImperial =
+    metadataString(floorPlan?.metadata, "pdf_imperial") ??
+    (floorPlan?.url.includes("floorplan_imperial") ? floorPlan.url : null) ??
+    iguideFloorplanPdfUrl(alias);
+  const pdfMetric =
+    metadataString(floorPlan?.metadata, "pdf_metric") ??
+    (floorPlan?.url.includes("floorplan_metric") ? floorPlan.url : null) ??
+    iguideFloorplanMetricPdfUrl(alias);
+
+  const links = [
+    { label: "Branded tour", url: brandedUrl },
+    { label: "Unbranded tour", url: unbrandedUrl },
+    { label: "Floor plan PDF (feet)", url: pdfImperial },
+    { label: "Floor plan PDF (meters)", url: pdfMetric },
+    {
+      label: "Property overview PDF (feet)",
+      url: `https://youriguide.com/${alias}/doc/branded_property_overview_imperial.pdf`,
+    },
+    {
+      label: "Property overview PDF (meters)",
+      url: `https://youriguide.com/${alias}/doc/branded_property_overview_metric.pdf`,
+    },
+  ];
+
+  const tools = [
+    {
+      label: "Feature sheet creator",
+      url: `https://manage.youriguide.com/feature_sheet/?g=${alias}`,
+    },
+    {
+      label: "Embedding tool",
+      url: `https://manage.youriguide.com/embed/${alias}/`,
+    },
+    {
+      label: "Create virtual showing",
+      url: `https://show.youriguide.com/create?url=${encodeURIComponent(
+        iguideViewerUrl(alias),
+      )}`,
+    },
+  ];
+
+  const areaRows = floorAreaRows(reso);
+
+  return (
+    <section className="space-y-4">
+      <SectionHeader title="iGUIDE delivery links" source="iguide" />
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="rounded-xl border border-white/10 bg-ink-soft/50 p-4">
+          <p className="text-xs text-ink-muted">
+            Check your MLS/board policy before using branded virtual tours.
+          </p>
+          <div className="mt-4 grid gap-2">
+            {links.map((link) => (
+              <LinkRow key={link.label} label={link.label} url={link.url} />
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-ink-soft/50 p-4">
+          <h3 className="text-sm font-semibold text-white">Tools</h3>
+          <div className="mt-3 grid gap-2">
+            {tools.map((tool) => (
+              <LinkRow key={tool.label} label={tool.label} url={tool.url} compact />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {areaRows.length > 0 ? (
+        <div className="rounded-xl border border-white/10 bg-ink-soft/50 p-4">
+          <h3 className="text-sm font-semibold text-white">Floor area information</h3>
+          <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {areaRows.map((row) => (
+              <div key={row.label}>
+                <dt className="text-xs uppercase tracking-wider text-ink-muted">
+                  {row.label}
+                </dt>
+                <dd className="mt-1 text-sm font-semibold text-white">
+                  {row.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function LinkRow({
+  label,
+  url,
+  compact = false,
+}: {
+  label: string;
+  url: string;
+  compact?: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-white/10 bg-ink/40 p-2">
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-white">{label}</p>
+        {!compact ? (
+          <p className="mt-0.5 truncate text-[11px] text-ink-muted">{url}</p>
+        ) : null}
+      </div>
+      <div className="flex gap-2">
+        <CopyLinkButton url={url} label="Copy" />
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener"
+          className="rounded-md bg-brand px-2.5 py-1 text-xs font-semibold text-white hover:bg-brand-light"
+        >
+          Open ↗
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function metadataString(metadata: Json | null | undefined, key: string): string | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+  const value = metadata[key];
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function floorAreaRows(reso: IGuideRESOResponse | null): Array<{
+  label: string;
+  value: string;
+}> {
+  if (!reso) return [];
+  return [
+    ["Interior area", reso.AboveGradeInteriorArea],
+    ["Exterior area", reso.AboveGradeExteriorArea],
+    ["Below grade interior", reso.BelowGradeInteriorArea],
+    ["Below grade exterior", reso.BelowGradeExteriorArea],
+    ["Finished area", reso.AboveGradeFinishedArea],
+    ["Living area", reso.LivingArea],
+  ]
+    .filter((row): row is [string, number] => typeof row[1] === "number")
+    .map(([label, value]) => ({
+      label,
+      value: `${formatNumber(value)} sq ft`,
+    }));
+}
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
 function SectionHeader({
