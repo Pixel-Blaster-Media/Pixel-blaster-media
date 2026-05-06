@@ -17,6 +17,7 @@ import {
   addManualDeliverable,
   cancelBookingAsAdmin,
   deleteDeliverable,
+  sendDeliveryReadyEmail,
   updateBookingStatus,
 } from "./actions";
 
@@ -122,6 +123,32 @@ export default function BookingActions({
 
       <div>
         <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
+          Video link
+        </h2>
+        <p className="mt-1 text-xs text-ink-muted">
+          Paste a YouTube, Dropbox, Google Drive, Vimeo, or direct video link.
+          It will show in the realtor portal under Video.
+        </p>
+        <VideoLinkForm bookingId={bookingId} />
+      </div>
+
+      <hr className="border-white/10" />
+
+      <div>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
+          Delivery email
+        </h2>
+        <p className="mt-1 text-xs text-ink-muted">
+          Email the realtor when their ready media links are available in the
+          portal. This can only be sent once per realtor for this booking.
+        </p>
+        <DeliveryEmailButton bookingId={bookingId} />
+      </div>
+
+      <hr className="border-white/10" />
+
+      <div>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
           Add a deliverable
         </h2>
         <p className="mt-1 text-xs text-ink-muted">
@@ -157,6 +184,100 @@ export default function BookingActions({
             </ul>
           </div>
         </>
+      ) : null}
+    </div>
+  );
+}
+
+function VideoLinkForm({ bookingId }: { bookingId: string }) {
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [okMessage, setOkMessage] = useState<string | null>(null);
+
+  return (
+    <form
+      id={`video-link-${bookingId}`}
+      className="mt-3 grid gap-2 md:grid-cols-[1fr_auto]"
+      action={(formData) => {
+        setError(null);
+        setOkMessage(null);
+        startTransition(async () => {
+          const res = await addManualDeliverable(bookingId, formData);
+          if (!res.ok) {
+            setError(res.error ?? "Could not add video link.");
+            return;
+          }
+          setOkMessage("Video link added.");
+          (document.getElementById(
+            `video-link-${bookingId}`,
+          ) as HTMLFormElement | null)?.reset();
+        });
+      }}
+    >
+      <input type="hidden" name="type" value="video" />
+      <input
+        name="url"
+        type="url"
+        placeholder="https://youtube.com/... or https://drive.google.com/..."
+        required
+        className="rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
+      />
+      <button
+        type="submit"
+        disabled={isPending}
+        className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+      >
+        {isPending ? "Adding..." : "Add video"}
+      </button>
+      {error ? (
+        <p className="md:col-span-2 text-sm text-red-300" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {okMessage ? (
+        <p className="md:col-span-2 text-xs text-emerald-300">{okMessage}</p>
+      ) : null}
+    </form>
+  );
+}
+
+function DeliveryEmailButton({ bookingId }: { bookingId: string }) {
+  const [isPending, startTransition] = useTransition();
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        disabled={isPending}
+        onClick={() => {
+          setMessage(null);
+          setError(null);
+          startTransition(async () => {
+            const res = await sendDeliveryReadyEmail(bookingId);
+            if (!res.ok) {
+              setError(res.error ?? "Could not send delivery email.");
+              return;
+            }
+            setMessage(
+              res.skipped
+                ? "Delivery email was already sent."
+                : "Delivery email sent.",
+            );
+          });
+        }}
+        className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+      >
+        {isPending ? "Sending..." : "Send delivery email"}
+      </button>
+      {error ? (
+        <p className="mt-2 text-sm text-red-300" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {message ? (
+        <p className="mt-2 text-xs text-emerald-300">{message}</p>
       ) : null}
     </div>
   );

@@ -211,6 +211,63 @@ export function shootConfirmedEmail({
   };
 }
 
+export function deliveryReadyEmail({
+  contactName,
+  streetAddress,
+  portalLink,
+  deliverables,
+}: {
+  contactName: string;
+  streetAddress: string;
+  portalLink: string;
+  deliverables: Array<{ label: string; url: string }>;
+}) {
+  const firstName = contactName.split(" ")[0] || contactName;
+  const links = deliverables
+    .map(
+      (deliverable) =>
+        `<li><a href="${escape(deliverable.url)}" style="color:${BRAND_TEAL}">${escape(deliverable.label)}</a></li>`,
+    )
+    .join("");
+
+  const html = `
+    <!doctype html>
+    <html><head><meta charset="utf-8"><style>${baseStyles}
+      .cta {
+        display: inline-block;
+        padding: 12px 20px;
+        margin: 20px 0;
+        background: ${BRAND_TEAL};
+        color: #fff !important;
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: 600;
+      }
+      a { color:${BRAND_TEAL}; }
+    </style></head>
+    <body><div class="wrap">
+      <p><span class="pill">Media ready</span></p>
+      <h1>Your listing media is ready, ${escape(firstName)}.</h1>
+      <p>The media for <strong>${escape(streetAddress)}</strong> is now available in your portal.</p>
+
+      <p><a href="${escape(portalLink)}" class="cta">Open your media →</a></p>
+
+      ${
+        links
+          ? `<h2>Included links</h2><ul>${links}</ul>`
+          : ""
+      }
+
+      <p class="meta">Reply to this email if anything needs attention or if you'd like changes.</p>
+    </div></body></html>
+  `;
+
+  return {
+    subject: `Your listing media is ready — ${streetAddress}`,
+    html,
+  };
+}
+
 function escape(s: string): string {
   return s
     .replace(/&/g, "&amp;")

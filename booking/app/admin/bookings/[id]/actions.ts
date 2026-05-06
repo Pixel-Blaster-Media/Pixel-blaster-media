@@ -3,8 +3,13 @@
 import { revalidatePath } from "next/cache";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { nextBookingStatuses } from "@/lib/booking/booking-status";
+import {
+  deliverableTypeLabel,
+  nextBookingStatuses,
+} from "@/lib/booking/booking-status";
 import { cancelBooking } from "@/lib/booking/cancel";
+import { sendEmail } from "@/lib/email/resend";
+import { deliveryReadyEmail } from "@/lib/email/templates";
 import {
   createEnhance,
   createListing,
@@ -88,6 +93,26 @@ interface BookingForInvoiceRow {
     phone: string | null;
     brokerage: string | null;
   } | null;
+}
+
+interface BookingForDeliveryEmailRow {
+  id: string;
+  property_id: string;
+  properties: {
+    street_address: string;
+  } | null;
+  profiles: {
+    email: string;
+    full_name: string | null;
+  } | null;
+}
+
+interface ReadyDeliverableRow {
+  id: string;
+  type: DeliverableType;
+  url: string;
+  source: string;
+  ready_at: string | null;
 }
 
 const VALID_DELIVERABLE_TYPES: DeliverableType[] = [
@@ -235,6 +260,96 @@ export async function deleteDeliverable(
     .eq("id", deliverableId);
 
   if (error) return { ok: false, error: error.message };
+  revalidatePath(`/admin/bookings/${bookingId}`);
+  return { ok: true };
+}
+
+export async function sendDeliveryReadyEmail(
+  bookingId: string,
+): Promise<ActionResult & { skipped?: boolean }> {
+  await requireAdmin();
+  const service = getServiceSupabase();
+
+  const { data: booking, error: bookingError } = await service
+    .from("bookings")
+    .select("id, property_id, properties(street_address), profiles(email, full_name)")
+    .eq("id", bookingId)
+    .single<BookingForDeliveryEmailRow>();
+
+  if (bookingError || !booking) {
+    return { ok: false, error: "Booking not found." };
+  }
+  if (!booking.properties) {
+    return { ok: false, error: "Booking has no property." };
+  }
+  if (!booking.profiles) {
+    return { ok: false, error: "Booking has no realtor email." };
+  }
+
+  const { data: existing } = await service
+    .from("booking_notifications")
+    .select("id")
+    .eq("booking_id", booking.id)
+    .eq("kind", "delivery_ready")
+    .eq("recipient_email", booking.profiles.email)
+    .maybeSingle<{ id: string }>();
+
+  if (existing) {
+    return { ok: true, skipped: true };
+  }
+
+  const { data: deliverables } = await service
+    .from("deliverables")
+    .select("id, type, url, source, ready_at")
+    .eq("booking_id", booking.id)
+    .not("ready_at", "is", null)
+    .returns<ReadyDeliverableRow[]>();
+
+  const ready = (deliverables ?? []).filter(
+    (deliverable) => deliverable.url && deliverable.url !== "about:blank",
+  );
+  if (ready.length === 0) {
+    return {
+      ok: false,
+      error: "No ready deliverables yet. Add a video link or wait for Fotello/iGUIDE to finish.",
+    };
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const portalLink = appUrl
+    ? `${appUrl}/portal/${booking.property_id}`
+    : `/portal/${booking.property_id}`;
+  const email = deliveryReadyEmail({
+    contactName: booking.profiles.full_name ?? booking.profiles.email,
+    streetAddress: booking.properties.street_address,
+    portalLink,
+    deliverables: ready.map((deliverable) => ({
+      label: deliverableTypeLabel(deliverable.type),
+      url:
+        deliverable.source === "fotello"
+          ? `${appUrl}/api/fotello/embed/${deliverable.id}`
+          : deliverable.url,
+    })),
+  });
+
+  const sent = await sendEmail({
+    to: booking.profiles.email,
+    subject: email.subject,
+    html: email.html,
+  });
+  if (!sent.ok) return { ok: false, error: sent.error ?? "Email failed." };
+
+  const { error: notificationError } = await service
+    .from("booking_notifications")
+    .insert({
+      booking_id: booking.id,
+      kind: "delivery_ready",
+      recipient_email: booking.profiles.email,
+    });
+  if (notificationError && notificationError.code !== "23505") {
+    return { ok: false, error: notificationError.message };
+  }
+
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true };
 }

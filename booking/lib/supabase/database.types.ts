@@ -496,6 +496,25 @@ interface BookingLineItemsTable {
   Relationships: [];
 }
 
+interface BookingNotificationsTable {
+  Row: {
+    id: string;
+    booking_id: string;
+    kind: string;
+    sent_at: string;
+    recipient_email: string;
+  };
+  Insert: {
+    id?: string;
+    booking_id: string;
+    kind: string;
+    sent_at?: string;
+    recipient_email: string;
+  };
+  Update: Partial<BookingNotificationsTable["Insert"]>;
+  Relationships: [];
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -510,6 +529,7 @@ export interface Database {
       service_prices: ServicePricesTable;
       catalog_items: CatalogItemsTable;
       booking_line_items: BookingLineItemsTable;
+      booking_notifications: BookingNotificationsTable;
       google_calendar_connection: GoogleCalendarConnectionTable;
       integration_credentials: IntegrationCredentialsTable;
       iguide_jobs: IGuideJobsTable;
