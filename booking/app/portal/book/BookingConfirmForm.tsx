@@ -4,18 +4,25 @@ import { useFormState, useFormStatus } from "react-dom";
 
 import { createSelfBooking, type SelfBookResult } from "./actions";
 
-const initial: SelfBookResult | null = null;
+const initial: SelfBookResult | undefined = undefined;
 
 export default function BookingConfirmForm({
   serviceSlugs,
   addOnSlugs,
   slot,
   whenLabel,
+  initial: initialFields,
 }: {
   serviceSlugs: string[];
   addOnSlugs: string[];
   slot: string;
   whenLabel: string;
+  initial?: {
+    streetAddress?: string;
+    city?: string;
+    postalCode?: string;
+    squareFootage?: string;
+  };
 }) {
   const [state, formAction] = useFormState(createSelfBooking, initial);
 
@@ -43,6 +50,7 @@ export default function BookingConfirmForm({
             type="text"
             required
             placeholder="123 King St W"
+            defaultValue={initialFields?.streetAddress ?? ""}
             className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
         </label>
@@ -53,7 +61,7 @@ export default function BookingConfirmForm({
           <input
             name="city"
             type="text"
-            defaultValue="Hamilton"
+            defaultValue={initialFields?.city ?? "Hamilton"}
             className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
         </label>
@@ -65,6 +73,7 @@ export default function BookingConfirmForm({
             name="postal_code"
             type="text"
             placeholder="L8P 4S8"
+            defaultValue={initialFields?.postalCode ?? ""}
             className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
         </label>
@@ -78,6 +87,7 @@ export default function BookingConfirmForm({
             min={0}
             step={1}
             placeholder="2500"
+            defaultValue={initialFields?.squareFootage ?? ""}
             className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
           <span className="mt-1 block text-[11px] leading-relaxed text-ink-muted">

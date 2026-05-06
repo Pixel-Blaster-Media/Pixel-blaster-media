@@ -30,7 +30,7 @@ export interface SelfBookResult {
  * (status = 'confirmed').
  */
 export async function createSelfBooking(
-  _prev: SelfBookResult | null,
+  _prev: SelfBookResult | undefined,
   formData: FormData,
 ): Promise<SelfBookResult> {
   const user = await requireUser("/portal/book");
@@ -123,7 +123,17 @@ export async function createSelfBooking(
     .maybeSingle<InsertedRow>();
 
   let propertyId: string | null = existing?.id ?? null;
-  if (!propertyId) {
+  if (propertyId) {
+    await supabase
+      .from("properties")
+      .update({
+        city: city || null,
+        postal_code: postalCode || null,
+        archived_at: null,
+      })
+      .eq("id", propertyId)
+      .eq("owner_id", user.userId);
+  } else {
     const { data: created, error: propErr } = await supabase
       .from("properties")
       .insert({

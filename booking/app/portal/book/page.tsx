@@ -22,7 +22,15 @@ export const dynamic = "force-dynamic";
 export default async function PortalBookPage({
   searchParams,
 }: {
-  searchParams: Promise<{ services?: string; add_ons?: string; slot?: string }>;
+  searchParams: Promise<{
+    services?: string;
+    add_ons?: string;
+    slot?: string;
+    street_address?: string;
+    city?: string;
+    postal_code?: string;
+    square_footage?: string;
+  }>;
 }) {
   const params = await searchParams;
   await requireUser("/portal/book");
@@ -141,6 +149,12 @@ export default async function PortalBookPage({
               addOnSlugs={filteredAddOnSlugs}
               slot={selectedSlot}
               whenLabel={whenLabel}
+              initial={{
+                streetAddress: params.street_address ?? "",
+                city: params.city ?? "Hamilton",
+                postalCode: params.postal_code ?? "",
+                squareFootage: params.square_footage ?? "",
+              }}
             />
           </div>
         </section>

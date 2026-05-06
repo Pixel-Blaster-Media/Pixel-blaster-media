@@ -10,6 +10,8 @@ import type {
   DeliverableType,
 } from "@/lib/supabase/database.types";
 
+import ArchiveListingButton from "./ArchiveListingButton";
+
 export const metadata: Metadata = { title: "My listings" };
 export const dynamic = "force-dynamic";
 
@@ -18,10 +20,14 @@ interface PropertyRow {
   street_address: string;
   city: string | null;
   postal_code: string | null;
+  archived_at: string | null;
   bookings: {
     id: string;
     status: BookingStatus;
     scheduled_at: string | null;
+    services: string[];
+    add_ons: string[];
+    square_footage: number | null;
     created_at: string;
   }[];
 }
@@ -44,20 +50,29 @@ interface PropertyMediaSummary {
   hasVideo: boolean;
 }
 
-export default async function PortalIndex() {
+export default async function PortalIndex({
+  searchParams,
+}: {
+  searchParams: Promise<{ archived?: string }>;
+}) {
+  const params = await searchParams;
   const user = await requireUser("/portal");
   const supabase = await getServerSupabase();
+  const archivedView = params.archived === "1";
 
   // RLS scopes these selects to the current user — realtors only see
   // their own properties / bookings / deliverables.
-  const { data: properties } = await supabase
+  let query = supabase
     .from("properties")
     .select(
-      "id, street_address, city, postal_code, bookings(id, status, scheduled_at, created_at)",
+      "id, street_address, city, postal_code, archived_at, bookings(id, status, scheduled_at, services, add_ons, square_footage, created_at)",
     )
     .eq("owner_id", user.userId)
-    .order("created_at", { ascending: false })
-    .returns<PropertyRow[]>();
+    .order("created_at", { ascending: false });
+  query = archivedView
+    ? query.not("archived_at", "is", null)
+    : query.is("archived_at", null);
+  const { data: properties } = await query.returns<PropertyRow[]>();
 
   // Pull media summary separately to keep the primary property select simple.
   const propertyIds = (properties ?? []).map((p) => p.id);
@@ -90,7 +105,7 @@ export default async function PortalIndex() {
   }
 
   if (!properties || properties.length === 0) {
-    return <EmptyState />;
+    return <EmptyState archivedView={archivedView} />;
   }
 
   return (
@@ -114,6 +129,15 @@ export default async function PortalIndex() {
         </Link>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        <PortalTab href="/portal" active={!archivedView}>
+          Active listings
+        </PortalTab>
+        <PortalTab href="/portal?archived=1" active={archivedView}>
+          Archived
+        </PortalTab>
+      </div>
+
       <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {properties.map((p) => {
           const latestBooking = pickLatestBooking(p.bookings);
@@ -125,13 +149,11 @@ export default async function PortalIndex() {
           const dateLabel = latestBooking?.scheduled_at
             ? formatDate(latestBooking.scheduled_at)
             : null;
+          const similarHref = buildSimilarBookingHref(p, latestBooking);
 
           return (
             <li key={p.id}>
-              <Link
-                href={`/portal/${p.id}`}
-                className="group block overflow-hidden rounded-xl border border-white/10 bg-ink-soft/50 transition hover:border-brand/40 hover:bg-ink-soft"
-              >
+              <article className="group overflow-hidden rounded-xl border border-white/10 bg-ink-soft/50 transition hover:border-brand/40 hover:bg-ink-soft">
                 <div className="aspect-[4/3] w-full overflow-hidden bg-black/40">
                   {thumb ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
@@ -148,12 +170,14 @@ export default async function PortalIndex() {
                   )}
                 </div>
                 <div className="space-y-3 p-4">
-                  <p className="font-semibold text-white">
-                    {p.street_address}
-                  </p>
-                  <p className="text-xs text-ink-muted">
-                    {[p.city, p.postal_code].filter(Boolean).join(" ")}
-                  </p>
+                  <div>
+                    <p className="font-semibold text-white">
+                      {p.street_address}
+                    </p>
+                    <p className="text-xs text-ink-muted">
+                      {[p.city, p.postal_code].filter(Boolean).join(" ")}
+                    </p>
+                  </div>
                   {meta ? (
                     <div className="flex flex-wrap items-center gap-2">
                       <span
@@ -169,23 +193,62 @@ export default async function PortalIndex() {
                     </div>
                   ) : null}
                   <MediaChips media={media} />
-                  <div className="flex items-center justify-between border-t border-white/5 pt-3 text-xs">
-                    <span className="text-ink-muted">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/5 pt-3 text-xs">
+                    <Link
+                      href={`/portal/${p.id}`}
+                      className="font-semibold text-brand-light hover:text-white"
+                    >
+                      Open media →
+                    </Link>
+                    <span className="text-ink-muted md:ml-auto">
                       {media.readyCount > 0
                         ? `${media.readyCount} item${media.readyCount === 1 ? "" : "s"} ready`
                         : "Media will appear here"}
                     </span>
-                    <span className="font-semibold text-brand-light">
-                      Open media →
-                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href={similarHref}
+                      className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-light"
+                    >
+                      Book similar shoot
+                    </Link>
+                    <ArchiveListingButton
+                      propertyId={p.id}
+                      archived={Boolean(p.archived_at)}
+                    />
                   </div>
                 </div>
-              </Link>
+              </article>
             </li>
           );
         })}
       </ul>
     </div>
+  );
+}
+
+function PortalTab({
+  href,
+  active,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={
+        "rounded-md border px-3 py-1.5 text-xs font-semibold transition " +
+        (active
+          ? "border-brand-light bg-brand/15 text-brand-light"
+          : "border-white/10 text-ink-muted hover:border-white/30 hover:text-white")
+      }
+    >
+      {children}
+    </Link>
   );
 }
 
@@ -239,24 +302,44 @@ function formatDate(iso: string): string {
   }).format(new Date(iso));
 }
 
-function EmptyState() {
+function buildSimilarBookingHref(
+  property: PropertyRow,
+  booking: PropertyRow["bookings"][number] | null,
+): string {
+  const params = new URLSearchParams();
+  if (booking?.services.length) params.set("services", booking.services.join(","));
+  if (booking?.add_ons.length) params.set("add_ons", booking.add_ons.join(","));
+  params.set("street_address", property.street_address);
+  if (property.city) params.set("city", property.city);
+  if (property.postal_code) params.set("postal_code", property.postal_code);
+  if (booking?.square_footage) {
+    params.set("square_footage", String(booking.square_footage));
+  }
+  const qs = params.toString();
+  return qs ? `/portal/book?${qs}` : "/portal/book";
+}
+
+function EmptyState({ archivedView }: { archivedView: boolean }) {
   return (
     <div className="mx-auto max-w-lg rounded-xl border border-dashed border-white/10 bg-ink-soft/40 p-8 text-center">
       <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
-        Nothing here yet
+        {archivedView ? "Archive is empty" : "Nothing here yet"}
       </p>
       <h1 className="mt-3 text-2xl font-bold text-white">
-        Your listings will appear here
+        {archivedView
+          ? "Archived listings will appear here"
+          : "Your listings will appear here"}
       </h1>
       <p className="mt-3 text-sm text-ink-muted">
-        Once we've confirmed a shoot for you, it'll show up as a listing with
-        photos, virtual tour, and floor plan — all in one place.
+        {archivedView
+          ? "Archive old shoots from the active dashboard when you want to keep things tidy."
+          : "Once we've confirmed a shoot for you, it'll show up as a listing with photos, virtual tour, and floor plan — all in one place."}
       </p>
       <a
-        href="/book"
+        href={archivedView ? "/portal" : "/book"}
         className="mt-6 inline-block rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light"
       >
-        Book a shoot
+        {archivedView ? "Back to active listings" : "Book a shoot"}
       </a>
     </div>
   );

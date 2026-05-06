@@ -80,6 +80,7 @@ interface PropertiesTable {
     postal_code: string | null;
     mls_number: string | null;
     notes: string | null;
+    archived_at: string | null;
     created_at: string;
     updated_at: string;
   };
@@ -92,6 +93,7 @@ interface PropertiesTable {
     postal_code?: string | null;
     mls_number?: string | null;
     notes?: string | null;
+    archived_at?: string | null;
   };
   Update: Partial<PropertiesTable["Insert"]>;
   Relationships: [];
