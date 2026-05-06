@@ -16,7 +16,7 @@ export default function VideoLinksSection({ bookingId }: { bookingId: string }) 
           Both show clearly in the realtor portal and delivery email.
         </p>
       </div>
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-3 2xl:grid-cols-2">
         <VideoLinkForm
           bookingId={bookingId}
           deliveryKind="download"
@@ -64,7 +64,7 @@ function VideoLinkForm({
   return (
     <form
       id={`video-link-${deliveryKind}-${bookingId}`}
-      className="rounded-md border border-white/10 bg-ink/30 p-3"
+      className="min-w-0 rounded-md border border-white/10 bg-ink/30 p-3"
       action={(formData) => {
         setError(null);
         setOkMessage(null);
@@ -86,18 +86,18 @@ function VideoLinkForm({
       <input type="hidden" name="delivery_label" value={deliveryLabel} />
       <p className="text-xs font-semibold text-white">{title}</p>
       <p className="mt-1 text-[11px] text-ink-muted">{helper}</p>
-      <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+      <div className="mt-2 grid gap-2">
         <input
           name="url"
           type="url"
           placeholder={placeholder}
           required
-          className="rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
+          className="min-w-0 rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
         />
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+          className="w-full rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
         >
           {isPending ? "Adding..." : buttonLabel}
         </button>
