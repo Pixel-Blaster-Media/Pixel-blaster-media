@@ -19,6 +19,7 @@ import {
   parseIGuideAlias,
   parseIGuidePortalId,
 } from "@/lib/integrations/iguide/parse-id";
+import { getCredential } from "@/lib/integrations/credentials";
 import { createIGuide as createIGuideInPortal } from "@/lib/integrations/iguide/portal-client";
 import {
   recordIGuideCreateJob,
@@ -578,6 +579,11 @@ export async function createIGuideForBooking(
     };
   }
 
+  const webhookConfig = await buildIGuideWebhookConfig();
+  if (!webhookConfig.ok) {
+    return { ok: false, error: webhookConfig.error };
+  }
+
   const result = await createIGuideInPortal({
     type: "standard",
     industry: "residential",
@@ -590,6 +596,7 @@ export async function createIGuideForBooking(
       streetName: address.streetName,
       ...(booking.unit_number ? { unit: booking.unit_number } : {}),
     },
+    webhooks: webhookConfig.webhooks,
   });
 
   if (!result.ok || !result.data) {
@@ -631,6 +638,62 @@ export async function createIGuideForBooking(
     portalId: result.data.id,
     workOrderId: result.data.workOrderId ?? null,
   };
+}
+
+async function buildIGuideWebhookConfig(): Promise<
+  | {
+      ok: true;
+      webhooks: Array<{
+        event: "*";
+        url: string;
+      }>;
+    }
+  | { ok: false; error: string }
+> {
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").trim().replace(/\/+$/, "");
+  const secret = await getCredential(
+    "iguide",
+    "webhook_secret",
+    "IGUIDE_WEBHOOK_SECRET",
+  );
+
+  if (!appUrl) {
+    return {
+      ok: false,
+      error:
+        "NEXT_PUBLIC_APP_URL is required before creating iGUIDEs from the app so iGUIDE knows where to send webhooks.",
+    };
+  }
+  if (!secret) {
+    return {
+      ok: false,
+      error:
+        "iGUIDE webhook secret is missing. Add it in Integrations or set IGUIDE_WEBHOOK_SECRET before creating iGUIDEs from the app.",
+    };
+  }
+
+  const webhookUrl = new URL("/api/integrations/iguide/webhook", appUrl);
+  webhookUrl.searchParams.set("secret", normalizeWebhookSecret(secret));
+
+  return {
+    ok: true,
+    webhooks: [
+      {
+        event: "*",
+        url: webhookUrl.toString(),
+      },
+    ],
+  };
+}
+
+function normalizeWebhookSecret(value: string): string {
+  const trimmed = value.trim();
+  try {
+    const url = new URL(trimmed);
+    return url.searchParams.get("secret")?.trim() || trimmed;
+  } catch {
+    return trimmed;
+  }
 }
 
 function buildIGuideAddress(streetAddress: string): {

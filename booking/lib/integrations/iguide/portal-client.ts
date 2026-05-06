@@ -271,6 +271,10 @@ export interface IGuideCreateInput {
     streetNumber: string;
     unit?: string;
   };
+  webhooks?: Array<{
+    event: "*" | "ready" | string;
+    url: string;
+  }>;
 }
 
 export interface IGuideCreateResponse {
