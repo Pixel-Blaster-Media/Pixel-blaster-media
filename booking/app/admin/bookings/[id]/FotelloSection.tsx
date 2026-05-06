@@ -40,8 +40,6 @@ export default function FotelloSection({
   const [trackError, setTrackError] = useState<string | null>(null);
   const [trackOk, setTrackOk] = useState<string | null>(null);
 
-  const [uploadShotType, setUploadShotType] =
-    useState<"interior" | "exterior">("interior");
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -126,7 +124,6 @@ export default function FotelloSection({
         bookingId,
         prepared.uploads.map((upload) => upload.id),
         prepared.listingId,
-        uploadShotType,
       );
       if (!started.ok) {
         setUploadError(started.error ?? "Could not start Fotello enhancement.");
@@ -170,7 +167,7 @@ export default function FotelloSection({
           Pick photos from this shoot and Fotello will enhance them under this
           booking's listing.
         </p>
-        <div className="mt-3 grid gap-2 md:grid-cols-[1fr_140px_auto]">
+        <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto]">
           <input
             type="file"
             name="photos"
@@ -179,17 +176,6 @@ export default function FotelloSection({
             disabled={uploading}
             className="rounded-md border border-white/10 bg-ink px-3 py-2 text-sm text-white file:mr-3 file:rounded file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white disabled:opacity-60"
           />
-          <select
-            value={uploadShotType}
-            onChange={(e) =>
-              setUploadShotType(e.target.value as "interior" | "exterior")
-            }
-            disabled={uploading}
-            className="rounded-md border border-white/10 bg-ink px-3 py-2 text-sm text-white disabled:opacity-60"
-          >
-            <option value="interior">Interior</option>
-            <option value="exterior">Exterior</option>
-          </select>
           <button
             type="submit"
             disabled={uploading}
@@ -343,7 +329,6 @@ function TrackedEnhanceRow({
           {deliverable.external_id ?? "—"}
         </p>
         <p className="mt-0.5 text-[11px] text-ink-muted">
-          {deliverable.shotType ?? "?"} ·{" "}
           {deliverable.syncedAt
             ? `synced ${new Date(deliverable.syncedAt).toLocaleTimeString()}`
             : "never synced"}

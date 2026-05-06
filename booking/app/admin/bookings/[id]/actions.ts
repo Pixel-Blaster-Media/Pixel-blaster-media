@@ -608,7 +608,6 @@ export async function startFotelloEnhance(
   bookingId: string,
   uploadIds: string[],
   listingId: string,
-  shotType: FotelloShotType,
 ): Promise<ActionResult & { enhanceId?: string; status?: string }> {
   await requireAdmin();
 
@@ -619,9 +618,6 @@ export async function startFotelloEnhance(
   }
   if (!cleanListingId) {
     return { ok: false, error: "Missing Fotello listing ID." };
-  }
-  if (shotType !== "interior" && shotType !== "exterior") {
-    return { ok: false, error: "Pick interior or exterior." };
   }
 
   const service = getServiceSupabase();
@@ -648,7 +644,6 @@ export async function startFotelloEnhance(
     const enhance = await createEnhance({
       uploadIds: cleanUploadIds,
       listingId: cleanListingId,
-      shotType,
     });
     const result = await syncEnhance({
       enhanceId: enhance.id,
@@ -657,7 +652,6 @@ export async function startFotelloEnhance(
         property_id: booking.property_id,
         fotello_listing_id: cleanListingId,
       },
-      shotType,
     });
 
     revalidatePath(`/admin/bookings/${bookingId}`);
