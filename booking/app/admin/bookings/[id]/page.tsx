@@ -22,6 +22,7 @@ import type {
 } from "@/lib/supabase/database.types";
 
 import BookingActions from "./BookingActions";
+import BookingWorkspaceTabs from "./BookingWorkspaceTabs";
 import FotelloSection from "./FotelloSection";
 import IGuideSection from "./IGuideSection";
 import InvoiceSection from "./InvoiceSection";
@@ -141,6 +142,7 @@ export default async function BookingDetailPage({
   const meta = BOOKING_STATUSES[booking.status];
   const transitions = nextBookingStatuses(booking.status);
   const readyDeliverables = (deliverables ?? []).filter((d) => d.ready_at);
+  const portalApiConfigured = await hasPortalCredentials();
   const deliveryLinks = buildDeliveryLinks(
     readyDeliverables.map((deliverable) => ({
       id: deliverable.id,
@@ -243,60 +245,64 @@ export default async function BookingDetailPage({
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <main className="space-y-6">
-          <BookingActions
-            bookingId={booking.id}
-            currentStatus={booking.status}
-            transitions={transitions}
-            deliverables={deliverables ?? []}
-            deliveryEmailSentAt={deliveryNotification?.sent_at ?? null}
-          />
-
-          <section className="space-y-4">
-            <SectionIntro
-              eyebrow="Media"
-              title="Upload and sync deliverables"
-              body="Use Fotello for photo galleries, iGUIDE for tours and floor plans, and video links for YouTube/Drive/Dropbox deliveries."
-            />
-            <FotelloSection
-              bookingId={booking.id}
-              initialListingId={booking.fotello_listing_id}
-              deliverables={(deliverables ?? [])
-                .filter((d) => d.source === "fotello")
-                .map((d) => ({
-                  id: d.id,
-                  external_id: d.external_id,
-                  url: d.url,
-                  status: metadataString(d.metadata, "status"),
-                  deliveryKind: metadataString(d.metadata, "delivery_kind"),
-                  shotType: metadataString(d.metadata, "shot_type"),
-                  syncedAt:
-                    metadataString(d.metadata, "last_synced_at") ??
-                    d.created_at,
-                }))}
-            />
-
-            <VideoLinksSection bookingId={booking.id} />
-
-            <IGuideSection
-              bookingId={booking.id}
-              initialIGuideId={booking.iguide_id}
-              initialPortalId={booking.iguide_portal_id}
-              portalApiConfigured={await hasPortalCredentials()}
-              job={iguideJob ?? null}
-            />
-          </section>
-
-          <InvoiceSection
-            bookingId={booking.id}
-            initial={{
-              id: booking.quickbooks_invoice_id,
-              number: booking.quickbooks_invoice_number,
-              url: booking.quickbooks_invoice_url,
-              status: booking.quickbooks_invoice_status,
-              totalCents: booking.quickbooks_invoice_total_cents,
-              syncedAt: booking.quickbooks_invoice_synced_at,
-            }}
+        <main>
+          <BookingWorkspaceTabs
+            job={
+              <BookingActions
+                bookingId={booking.id}
+                currentStatus={booking.status}
+                transitions={transitions}
+                deliverables={deliverables ?? []}
+                deliveryEmailSentAt={deliveryNotification?.sent_at ?? null}
+              />
+            }
+            media={
+              <>
+                <SectionIntro
+                  eyebrow="Media"
+                  title="Upload and sync deliverables"
+                  body="Use Fotello for photo galleries, iGUIDE for tours and floor plans, and video links for YouTube/Drive/Dropbox deliveries."
+                />
+                <FotelloSection
+                  bookingId={booking.id}
+                  initialListingId={booking.fotello_listing_id}
+                  deliverables={(deliverables ?? [])
+                    .filter((d) => d.source === "fotello")
+                    .map((d) => ({
+                      id: d.id,
+                      external_id: d.external_id,
+                      url: d.url,
+                      status: metadataString(d.metadata, "status"),
+                      deliveryKind: metadataString(d.metadata, "delivery_kind"),
+                      shotType: metadataString(d.metadata, "shot_type"),
+                      syncedAt:
+                        metadataString(d.metadata, "last_synced_at") ??
+                        d.created_at,
+                    }))}
+                />
+                <VideoLinksSection bookingId={booking.id} />
+                <IGuideSection
+                  bookingId={booking.id}
+                  initialIGuideId={booking.iguide_id}
+                  initialPortalId={booking.iguide_portal_id}
+                  portalApiConfigured={portalApiConfigured}
+                  job={iguideJob ?? null}
+                />
+              </>
+            }
+            invoice={
+              <InvoiceSection
+                bookingId={booking.id}
+                initial={{
+                  id: booking.quickbooks_invoice_id,
+                  number: booking.quickbooks_invoice_number,
+                  url: booking.quickbooks_invoice_url,
+                  status: booking.quickbooks_invoice_status,
+                  totalCents: booking.quickbooks_invoice_total_cents,
+                  syncedAt: booking.quickbooks_invoice_synced_at,
+                }}
+              />
+            }
           />
         </main>
 
