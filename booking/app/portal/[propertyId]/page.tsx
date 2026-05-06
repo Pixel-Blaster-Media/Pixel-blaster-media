@@ -89,14 +89,27 @@ export default async function PropertyDetailPage({
     .order("created_at", { ascending: false })
     .returns<DeliverableRow[]>();
 
-  const tour = (deliverables ?? []).find((d) => d.type === "virtual_tour");
-  const floorPlan = (deliverables ?? []).find((d) => d.type === "floor_plan");
+  const readyDeliverables = (deliverables ?? []).filter((d) => d.ready_at);
+  const fotelloPropertyWebsites = readyDeliverables.filter((d) => {
+    const kind = metadataString(d.metadata, "delivery_kind");
+    return (
+      d.source === "fotello" &&
+      (kind === "branded_property_website" ||
+        kind === "unbranded_property_website")
+    );
+  });
+  const tour = readyDeliverables.find(
+    (d) =>
+      d.type === "virtual_tour" &&
+      !(d.source === "fotello" && metadataString(d.metadata, "delivery_kind")),
+  );
+  const floorPlan = readyDeliverables.find((d) => d.type === "floor_plan");
   // Only show galleries that have actually been published — in-progress
   // Fotello enhances are tracked but not shown to the realtor yet.
-  const gallery = (deliverables ?? []).filter(
+  const gallery = readyDeliverables.filter(
     (d) => d.type === "photo_gallery" && d.ready_at,
   );
-  const videos = (deliverables ?? []).filter(
+  const videos = readyDeliverables.filter(
     (d) => d.type === "video" || d.type === "aerial",
   );
   const videoDownloads = videos.filter((video) => !isStreamingVideoUrl(video.url));
@@ -110,6 +123,13 @@ export default async function PropertyDetailPage({
   const statusMeta = latestBooking
     ? BOOKING_STATUSES[latestBooking.status]
     : null;
+  const readySummary = {
+    photos: gallery.length,
+    tour: Boolean(tour),
+    floorPlan: Boolean(floorPlan),
+    video: videos.length,
+    websites: fotelloPropertyWebsites.length,
+  };
 
   return (
     <div className="space-y-8">
@@ -169,6 +189,8 @@ export default async function PropertyDetailPage({
           </div>
         ) : null}
       </header>
+
+      <DeliveryOverview summary={readySummary} />
 
       {/* Virtual tour — the marquee deliverable. Renders our own iframe
           rather than the stored embed_html so we never inject arbitrary
@@ -257,6 +279,17 @@ export default async function PropertyDetailPage({
         />
       ) : null}
 
+      {fotelloPropertyWebsites.length > 0 ? (
+        <section className="space-y-3">
+          <SectionHeader title="Property websites" source="fotello" />
+          <div className="grid gap-3 md:grid-cols-2">
+            {fotelloPropertyWebsites.map((link) => (
+              <ManualGallery key={link.id} deliverable={link} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {gallery.length > 0 ? (
         <section className="space-y-6">
           <SectionHeader title="Photos" />
@@ -277,6 +310,74 @@ export default async function PropertyDetailPage({
         />
       ) : null}
     </div>
+  );
+}
+
+function DeliveryOverview({
+  summary,
+}: {
+  summary: {
+    photos: number;
+    tour: boolean;
+    floorPlan: boolean;
+    video: number;
+    websites: number;
+  };
+}) {
+  const items = [
+    {
+      label: "Photos",
+      ready: summary.photos > 0,
+      detail: summary.photos > 0 ? `${summary.photos} gallery/link` : "Pending",
+    },
+    {
+      label: "Virtual tour",
+      ready: summary.tour,
+      detail: summary.tour ? "Ready" : "Pending",
+    },
+    {
+      label: "Floor plans",
+      ready: summary.floorPlan,
+      detail: summary.floorPlan ? "Ready" : "Pending",
+    },
+    {
+      label: "Video",
+      ready: summary.video > 0,
+      detail: summary.video > 0 ? `${summary.video} link` : "Pending",
+    },
+    {
+      label: "Property websites",
+      ready: summary.websites > 0,
+      detail: summary.websites > 0 ? `${summary.websites} link` : "Optional",
+    },
+  ];
+
+  return (
+    <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      {items.map((item) => (
+        <div
+          key={item.label}
+          className={
+            "rounded-lg border p-3 " +
+            (item.ready
+              ? "border-brand-light/25 bg-brand/10"
+              : "border-white/10 bg-ink-soft/40")
+          }
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+            {item.label}
+          </p>
+          <p
+            className={
+              "mt-1 text-sm font-semibold " +
+              (item.ready ? "text-brand-light" : "text-white/70")
+            }
+          >
+            {item.detail}
+          </p>
+        </div>
+      ))}
+    </section>
   );
 }
 

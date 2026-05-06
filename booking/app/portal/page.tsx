@@ -4,7 +4,11 @@ import type { Metadata } from "next";
 import { BOOKING_STATUSES } from "@/lib/booking/booking-status";
 import { requireUser } from "@/lib/auth/require-user";
 import { getServerSupabase } from "@/lib/supabase/server";
-import type { BookingStatus } from "@/lib/supabase/database.types";
+import type {
+  BookingStatus,
+  DeliverableSource,
+  DeliverableType,
+} from "@/lib/supabase/database.types";
 
 export const metadata: Metadata = { title: "My listings" };
 export const dynamic = "force-dynamic";
@@ -24,8 +28,20 @@ interface PropertyRow {
 
 interface DeliverableRow {
   property_id: string;
+  type: DeliverableType;
+  source: DeliverableSource;
+  ready_at: string | null;
   thumbnail_url: string | null;
   created_at: string;
+}
+
+interface PropertyMediaSummary {
+  readyCount: number;
+  pendingCount: number;
+  hasPhotos: boolean;
+  hasTour: boolean;
+  hasFloorPlan: boolean;
+  hasVideo: boolean;
 }
 
 export default async function PortalIndex() {
@@ -43,16 +59,15 @@ export default async function PortalIndex() {
     .order("created_at", { ascending: false })
     .returns<PropertyRow[]>();
 
-  // Pull one thumbnail per property from the most-recent deliverable
-  // that has one. Separate query to keep the primary select simple.
+  // Pull media summary separately to keep the primary property select simple.
   const propertyIds = (properties ?? []).map((p) => p.id);
   const thumbnails = new Map<string, string>();
+  const mediaByProperty = new Map<string, PropertyMediaSummary>();
   if (propertyIds.length > 0) {
     const { data: deliverables } = await supabase
       .from("deliverables")
-      .select("property_id, thumbnail_url, created_at")
+      .select("property_id, type, source, ready_at, thumbnail_url, created_at")
       .in("property_id", propertyIds)
-      .not("thumbnail_url", "is", null)
       .order("created_at", { ascending: false })
       .returns<DeliverableRow[]>();
 
@@ -60,6 +75,17 @@ export default async function PortalIndex() {
       if (d.thumbnail_url && !thumbnails.has(d.property_id)) {
         thumbnails.set(d.property_id, d.thumbnail_url);
       }
+      const current =
+        mediaByProperty.get(d.property_id) ?? emptyMediaSummary();
+      if (d.ready_at) current.readyCount += 1;
+      else current.pendingCount += 1;
+      if (d.ready_at && d.type === "photo_gallery") current.hasPhotos = true;
+      if (d.ready_at && d.type === "virtual_tour") current.hasTour = true;
+      if (d.ready_at && d.type === "floor_plan") current.hasFloorPlan = true;
+      if (d.ready_at && (d.type === "video" || d.type === "aerial")) {
+        current.hasVideo = true;
+      }
+      mediaByProperty.set(d.property_id, current);
     }
   }
 
@@ -68,9 +94,18 @@ export default async function PortalIndex() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-white">My listings</h1>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+            Realtor portal
+          </p>
+          <h1 className="mt-1 text-3xl font-bold text-white">My listings</h1>
+          <p className="mt-2 max-w-2xl text-sm text-ink-muted">
+            Open a listing to grab photos, tours, floor plans, video links, and
+            property website links in one place.
+          </p>
+        </div>
         <Link
           href="/portal/book"
           className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light"
@@ -86,6 +121,10 @@ export default async function PortalIndex() {
             ? BOOKING_STATUSES[latestBooking.status]
             : null;
           const thumb = thumbnails.get(p.id);
+          const media = mediaByProperty.get(p.id) ?? emptyMediaSummary();
+          const dateLabel = latestBooking?.scheduled_at
+            ? formatDate(latestBooking.scheduled_at)
+            : null;
 
           return (
             <li key={p.id}>
@@ -108,7 +147,7 @@ export default async function PortalIndex() {
                     </div>
                   )}
                 </div>
-                <div className="space-y-1 p-4">
+                <div className="space-y-3 p-4">
                   <p className="font-semibold text-white">
                     {p.street_address}
                   </p>
@@ -116,12 +155,30 @@ export default async function PortalIndex() {
                     {[p.city, p.postal_code].filter(Boolean).join(" ")}
                   </p>
                   {meta ? (
-                    <span
-                      className={`mt-2 inline-block rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${meta.pill}`}
-                    >
-                      {meta.label}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`inline-block rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${meta.pill}`}
+                      >
+                        {meta.label}
+                      </span>
+                      {dateLabel ? (
+                        <span className="text-[11px] text-ink-muted">
+                          {dateLabel}
+                        </span>
+                      ) : null}
+                    </div>
                   ) : null}
+                  <MediaChips media={media} />
+                  <div className="flex items-center justify-between border-t border-white/5 pt-3 text-xs">
+                    <span className="text-ink-muted">
+                      {media.readyCount > 0
+                        ? `${media.readyCount} item${media.readyCount === 1 ? "" : "s"} ready`
+                        : "Media will appear here"}
+                    </span>
+                    <span className="font-semibold text-brand-light">
+                      Open media →
+                    </span>
+                  </div>
                 </div>
               </Link>
             </li>
@@ -130,6 +187,56 @@ export default async function PortalIndex() {
       </ul>
     </div>
   );
+}
+
+function emptyMediaSummary(): PropertyMediaSummary {
+  return {
+    readyCount: 0,
+    pendingCount: 0,
+    hasPhotos: false,
+    hasTour: false,
+    hasFloorPlan: false,
+    hasVideo: false,
+  };
+}
+
+function MediaChips({ media }: { media: PropertyMediaSummary }) {
+  const chips = [
+    media.hasPhotos ? "Photos" : null,
+    media.hasTour ? "Tour" : null,
+    media.hasFloorPlan ? "Floor plan" : null,
+    media.hasVideo ? "Video" : null,
+  ].filter((chip): chip is string => Boolean(chip));
+
+  if (chips.length === 0) {
+    return (
+      <p className="rounded-md border border-dashed border-white/10 bg-black/20 px-3 py-2 text-xs text-ink-muted">
+        Nothing delivered yet.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {chips.map((chip) => (
+        <span
+          key={chip}
+          className="rounded-full border border-brand-light/25 bg-brand/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-light"
+        >
+          {chip}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function formatDate(iso: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(iso));
 }
 
 function EmptyState() {
