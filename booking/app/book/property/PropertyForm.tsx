@@ -127,6 +127,7 @@ export default function PropertyForm({
           placeholder="e.g. 2000"
           value={sqft}
           onChange={setSqft}
+          helper="For iGUIDE measuring, include finished basement or lower-level space if it should be measured. This affects iGUIDE pricing."
         />
       </div>
 
@@ -214,6 +215,7 @@ function Field({
   value,
   onChange,
   error,
+  helper,
   inputMode,
   min,
 }: {
@@ -225,6 +227,7 @@ function Field({
   value: string;
   onChange: (v: string) => void;
   error?: string;
+  helper?: string;
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
   min?: number;
 }) {
@@ -248,6 +251,11 @@ function Field({
           (error ? "border-red-400/60" : "border-white/10")
         }
       />
+      {helper ? (
+        <span className="mt-1 block text-[11px] leading-relaxed text-ink-muted">
+          {helper}
+        </span>
+      ) : null}
       {error ? (
         <span className="mt-1 block text-xs text-red-300">{error}</span>
       ) : null}

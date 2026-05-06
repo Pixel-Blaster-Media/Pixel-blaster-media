@@ -411,7 +411,7 @@ function helperForStatus(args: {
     return "Address suggestions are not configured yet — type manually.";
   }
   if (args.keyProblem === "invalid") {
-    return "Address suggestions need a clean Google Places browser key — type manually.";
+    return "Google Places key looks mis-copied. Re-paste the clean browser key from Google Cloud, or type manually.";
   }
   if (args.status === "auth_error") {
     return "Google Places is blocked by key/API/referrer settings — type manually.";

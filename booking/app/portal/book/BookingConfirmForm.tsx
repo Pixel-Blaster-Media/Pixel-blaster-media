@@ -80,6 +80,10 @@ export default function BookingConfirmForm({
             placeholder="2500"
             className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
+          <span className="mt-1 block text-[11px] leading-relaxed text-ink-muted">
+            Include finished basement or lower-level space if iGUIDE should
+            measure it. This affects iGUIDE pricing.
+          </span>
         </label>
         <label className="block md:col-span-2">
           <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
