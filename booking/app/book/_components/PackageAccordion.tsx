@@ -169,6 +169,7 @@ export default function PackageAccordion({
                   <span className="text-[11px] uppercase tracking-wider text-ink-muted">
                     {formatMinutes(b.duration_minutes)}
                   </span>
+                  <MediaBadges item={b} />
                   {sqftRuleText(b) ? (
                     <span className="rounded-md border border-brand-light/20 bg-brand/10 px-2 py-1 text-[11px] text-brand-light">
                       {sqftRuleText(b)}
@@ -237,6 +238,7 @@ export default function PackageAccordion({
                   <span className="text-[11px] uppercase tracking-wider text-ink-muted">
                     {formatMinutes(a.duration_minutes)}
                   </span>
+                  <MediaBadges item={a} />
                   {sqftRuleText(a) ? (
                     <span className="rounded-md border border-brand-light/20 bg-brand/10 px-2 py-1 text-[11px] text-brand-light">
                       {sqftRuleText(a)}
@@ -407,6 +409,27 @@ function ContinueButton() {
     >
       Continue →
     </a>
+  );
+}
+
+function MediaBadges({ item }: { item: CatalogItemDTO }) {
+  const badges = [
+    item.is_photo ? "Photos" : null,
+    item.is_video ? "Video" : null,
+  ].filter((badge): badge is string => Boolean(badge));
+  if (badges.length === 0) return null;
+
+  return (
+    <span className="flex flex-wrap gap-1.5">
+      {badges.map((badge) => (
+        <span
+          key={badge}
+          className="rounded-full border border-brand-light/25 bg-brand/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-light"
+        >
+          {badge}
+        </span>
+      ))}
+    </span>
   );
 }
 

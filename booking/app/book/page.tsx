@@ -77,6 +77,7 @@ function toDTO(r: CatalogItemRow): CatalogItemDTO {
     overage_increment_sqft: r.overage_increment_sqft,
     overage_price_cents: r.overage_price_cents,
     kind: r.kind,
+    is_photo: r.is_photo,
     is_video: r.is_video,
     require_has_video: r.require_has_video,
     display_order: r.display_order,

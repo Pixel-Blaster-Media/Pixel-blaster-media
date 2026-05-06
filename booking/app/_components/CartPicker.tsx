@@ -21,6 +21,7 @@ export interface CatalogItemDTO {
   is_video: boolean;
   require_has_video: boolean;
   display_order: number;
+  is_photo: boolean;
   badge: string | null;
   highlight: boolean;
   ideal_for: string | null;
@@ -181,6 +182,7 @@ export default function CartPicker({
                   <span className="text-xs uppercase tracking-wider text-ink-muted">
                     {formatMinutes(b.duration_minutes)}
                   </span>
+                  <MediaBadges item={b} />
                   {b.description ? (
                     <p className="whitespace-pre-wrap text-xs text-ink-muted">
                       {b.description}
@@ -215,6 +217,7 @@ export default function CartPicker({
                       {(a.price_cents / 100).toFixed(0)}
                     </span>
                   </p>
+                  <MediaBadges item={a} className="mt-1" />
                   {a.description ? (
                     <p className="mt-0.5 whitespace-pre-wrap text-xs text-ink-muted">
                       {a.description}
@@ -336,6 +339,33 @@ export default function CartPicker({
         <input type="hidden" name={totalCentsInputName} value={totalCents} />
       ) : null}
     </div>
+  );
+}
+
+function MediaBadges({
+  item,
+  className = "",
+}: {
+  item: CatalogItemDTO;
+  className?: string;
+}) {
+  const badges = [
+    item.is_photo ? "Photos" : null,
+    item.is_video ? "Video" : null,
+  ].filter((b): b is string => Boolean(b));
+  if (badges.length === 0) return null;
+
+  return (
+    <span className={`flex flex-wrap gap-1.5 ${className}`}>
+      {badges.map((badge) => (
+        <span
+          key={badge}
+          className="rounded-full border border-brand-light/25 bg-brand/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-light"
+        >
+          {badge}
+        </span>
+      ))}
+    </span>
   );
 }
 

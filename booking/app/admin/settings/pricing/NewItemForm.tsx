@@ -213,14 +213,24 @@ export default function NewItemForm({ kind }: { kind: CatalogItemKind }) {
             <span>Only when cart has video</span>
           </label>
         ) : (
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              name="is_video"
-              className="h-4 w-4 accent-brand-light"
-            />
-            <span>Counts as video</span>
-          </label>
+          <>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="is_photo"
+                className="h-4 w-4 accent-brand-light"
+              />
+              <span>Shows Photos badge</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="is_video"
+                className="h-4 w-4 accent-brand-light"
+              />
+              <span>Shows Video badge</span>
+            </label>
+          </>
         )}
       </div>
 

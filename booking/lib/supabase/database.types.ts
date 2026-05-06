@@ -449,6 +449,7 @@ interface CatalogItemsTable {
     taxable: boolean;
     active: boolean;
     display_order: number;
+    is_photo: boolean;
     is_video: boolean;
     require_has_video: boolean;
     badge: string | null;
@@ -472,6 +473,7 @@ interface CatalogItemsTable {
     taxable?: boolean;
     active?: boolean;
     display_order?: number;
+    is_photo?: boolean;
     is_video?: boolean;
     require_has_video?: boolean;
     badge?: string | null;

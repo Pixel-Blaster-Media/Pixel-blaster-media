@@ -128,7 +128,12 @@ export default function ServicePicker({
                   }
                   title={b.description}
                 >
-                  <span className="truncate font-semibold">{b.name}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold">
+                      {b.name}
+                    </span>
+                    <MediaBadges item={b} className="mt-1" />
+                  </span>
                   <span className="text-xs opacity-80">
                     ${(b.price_cents / 100).toFixed(0)} · {b.duration_minutes}m
                   </span>
@@ -169,6 +174,7 @@ export default function ServicePicker({
                   <span className="ml-2 text-[10px] opacity-70">
                     ${(a.price_cents / 100).toFixed(0)} · {a.duration_minutes}m
                   </span>
+                  <MediaBadges item={a} className="ml-2 inline-flex" />
                 </button>
                 {sqftRuleText(a) && on ? (
                   <p className="mt-1 px-1 text-[11px] text-brand-light">
@@ -215,6 +221,33 @@ export default function ServicePicker({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function MediaBadges({
+  item,
+  className = "",
+}: {
+  item: CatalogItemDTO;
+  className?: string;
+}) {
+  const badges = [
+    item.is_photo ? "Photos" : null,
+    item.is_video ? "Video" : null,
+  ].filter((badge): badge is string => Boolean(badge));
+  if (badges.length === 0) return null;
+
+  return (
+    <span className={`flex flex-wrap gap-1 ${className}`}>
+      {badges.map((badge) => (
+        <span
+          key={badge}
+          className="rounded-full border border-brand-light/25 bg-brand/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-brand-light"
+        >
+          {badge}
+        </span>
+      ))}
+    </span>
   );
 }
 

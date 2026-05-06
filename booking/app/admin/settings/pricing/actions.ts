@@ -104,6 +104,7 @@ export async function createCatalogItem(
     display_order: displayOrder,
     taxable: formData.get("taxable") === "on",
     active: formData.get("active") !== null ? formData.get("active") === "on" : true,
+    is_photo: kind !== "addon" && formData.get("is_photo") === "on",
     is_video: kind !== "addon" && formData.get("is_video") === "on",
     require_has_video:
       kind === "addon" && formData.get("require_has_video") === "on",
@@ -167,6 +168,7 @@ export async function updateCatalogItem(
     display_order: displayOrder,
     taxable: formData.get("taxable") === "on",
     active: formData.get("active") === "on",
+    is_photo: kind !== "addon" && formData.get("is_photo") === "on",
     is_video: kind !== "addon" && formData.get("is_video") === "on",
     require_has_video:
       kind === "addon" && formData.get("require_has_video") === "on",
