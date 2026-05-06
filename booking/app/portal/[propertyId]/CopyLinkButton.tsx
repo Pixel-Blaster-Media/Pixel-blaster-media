@@ -41,7 +41,7 @@ export default function CopyLinkButton({
         href={url}
         target="_blank"
         rel="noopener"
-        className="rounded-md border border-white/15 px-3 py-1.5 text-xs text-white/80 hover:border-white/40"
+        className="rounded-md border border-realtor-primary/20 px-3 py-1.5 text-xs text-realtor-muted hover:border-realtor-primary/45"
       >
         Open link ↗
       </a>
@@ -52,7 +52,7 @@ export default function CopyLinkButton({
     <button
       type="button"
       onClick={onCopy}
-      className="rounded-md border border-white/15 px-3 py-1.5 text-xs text-white/80 transition hover:border-brand-light hover:text-brand-light"
+      className="rounded-md border border-realtor-primary/20 px-3 py-1.5 text-xs text-realtor-muted transition hover:border-realtor-primary hover:text-realtor-primary"
     >
       {copied ? "✓ Copied" : label}
     </button>

@@ -136,36 +136,36 @@ export default async function PropertyDetailPage({
   };
 
   return (
-    <div className="space-y-8">
+    <div className="realtor-theme space-y-8">
       <Link
         href="/portal"
-        className="text-xs text-ink-muted hover:text-white"
+        className="text-xs text-realtor-muted hover:text-realtor-text"
       >
         ← My listings
       </Link>
 
       {query.booked === "1" ? (
         <section className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 p-4">
-          <p className="text-sm font-semibold text-white">
+          <p className="text-sm font-semibold text-realtor-text">
             Your booking is confirmed.
           </p>
-          <p className="mt-1 text-xs text-ink-muted">
+          <p className="mt-1 text-xs text-realtor-muted">
             You are signed in now. To come back later, use the same email and
             password from the booking form at the sign-in page.
           </p>
         </section>
       ) : null}
 
-      <header className="rounded-lg border border-white/10 bg-ink-soft/50 p-5">
-        <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+      <header className="realtor-elevated-panel rounded-2xl p-5">
+        <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
           Media delivery
         </p>
         <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white">
+            <h1 className="text-3xl font-bold text-realtor-text">
               {property.street_address}
             </h1>
-            <p className="mt-1 text-sm text-ink-muted">
+            <p className="mt-1 text-sm text-realtor-muted">
               {[property.city, property.postal_code].filter(Boolean).join(" ")}
             </p>
           </div>
@@ -174,7 +174,7 @@ export default async function PropertyDetailPage({
               href={tour.url}
               target="_blank"
               rel="noopener"
-              className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light"
+              className="rounded-md bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary-light"
             >
               Open virtual tour ↗
             </a>
@@ -188,7 +188,7 @@ export default async function PropertyDetailPage({
               {statusMeta.label}
             </span>
             {latestBooking.scheduled_at ? (
-              <span className="text-ink-muted">
+              <span className="text-realtor-muted">
                 {new Date(latestBooking.scheduled_at).toLocaleString()}
               </span>
             ) : null}
@@ -225,14 +225,14 @@ export default async function PropertyDetailPage({
                   href={tour.url}
                   target="_blank"
                   rel="noopener"
-                  className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-light"
+                  className="rounded-md bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-realtor-primary-light"
                 >
                   Open tour ↗
                 </a>
               </div>
             }
           />
-          <div className="overflow-hidden rounded-xl border border-white/10 bg-black">
+          <div className="overflow-hidden rounded-2xl border border-realtor-primary/15 bg-realtor-text shadow-lg shadow-realtor-primary/10">
             <div className="aspect-[16/10] w-full">
               <iframe
                 src={tourEmbedUrl(tour.url)}
@@ -266,17 +266,17 @@ export default async function PropertyDetailPage({
               />
             }
           />
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-ink-soft/50 p-4">
+          <div className="realtor-warm-panel flex flex-wrap items-center gap-3 rounded-2xl p-4">
             <a
               href={iGuideDownloadUrl(floorPlan.url)}
               target="_blank"
               rel="noopener"
               download
-              className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light"
+              className="rounded-md bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary-light"
             >
               Download floor plan PDF
             </a>
-            <p className="text-xs text-ink-muted">
+            <p className="text-xs text-realtor-muted">
               Measured floor plan, ready to drop into your listing.
             </p>
           </div>
@@ -378,17 +378,17 @@ function DeliveryOverview({
           className={
             "rounded-lg border p-3 " +
             (item.ready
-              ? "border-brand-light/25 bg-brand/10"
-              : "border-white/10 bg-ink-soft/40")
+              ? "border-realtor-primary/25 bg-realtor-primary/10"
+              : "border-realtor-primary/15 bg-realtor-surface-muted/75")
           }
         >
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
             {item.label}
           </p>
           <p
             className={
               "mt-1 text-sm font-semibold " +
-              (item.ready ? "text-brand-light" : "text-white/70")
+              (item.ready ? "text-realtor-primary" : "text-realtor-muted")
             }
           >
             {item.detail}
@@ -486,9 +486,9 @@ function IGuideDeliverySheet({
     <section className="space-y-4">
       <SectionHeader title="iGUIDE delivery links" source="iguide" />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_320px]">
-        <div className="rounded-lg border border-white/10 bg-ink-soft/50 p-4">
-          <h3 className="text-sm font-semibold text-white">Tour links</h3>
-          <p className="text-xs text-ink-muted">
+        <div className="realtor-elevated-panel rounded-2xl p-4">
+          <h3 className="text-sm font-semibold text-realtor-text">Tour links</h3>
+          <p className="text-xs text-realtor-muted">
             Check your MLS/board policy before using branded virtual tours.
           </p>
           <div className="mt-3 grid gap-2">
@@ -498,9 +498,9 @@ function IGuideDeliverySheet({
           </div>
         </div>
 
-        <div className="rounded-lg border border-white/10 bg-ink-soft/50 p-4">
-          <h3 className="text-sm font-semibold text-white">Downloads</h3>
-          <p className="text-xs text-ink-muted">
+        <div className="realtor-warm-panel rounded-2xl p-4">
+          <h3 className="text-sm font-semibold text-realtor-text">Downloads</h3>
+          <p className="text-xs text-realtor-muted">
             Floor plans and overview PDFs for listing paperwork.
           </p>
           <div className="mt-3 grid gap-2">
@@ -516,8 +516,8 @@ function IGuideDeliverySheet({
           </div>
         </div>
 
-        <div className="rounded-lg border border-white/10 bg-ink-soft/50 p-4">
-          <h3 className="text-sm font-semibold text-white">Tools</h3>
+        <div className="realtor-green-panel rounded-2xl p-4">
+          <h3 className="text-sm font-semibold text-realtor-text">Tools</h3>
           <div className="mt-3 grid gap-2">
             {tools.map((tool) => (
               <LinkRow key={tool.label} label={tool.label} url={tool.url} compact />
@@ -527,15 +527,15 @@ function IGuideDeliverySheet({
       </div>
 
       {areaRows.length > 0 ? (
-        <div className="rounded-xl border border-white/10 bg-ink-soft/50 p-4">
-          <h3 className="text-sm font-semibold text-white">Floor area information</h3>
+        <div className="realtor-elevated-panel rounded-2xl p-4">
+          <h3 className="text-sm font-semibold text-realtor-text">Floor area information</h3>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {areaRows.map((row) => (
               <div key={row.label}>
-                <dt className="text-xs uppercase tracking-wider text-ink-muted">
+                <dt className="text-xs uppercase tracking-wider text-realtor-muted">
                   {row.label}
                 </dt>
-                <dd className="mt-1 text-sm font-semibold text-white">
+                <dd className="mt-1 text-sm font-semibold text-realtor-text">
                   {row.value}
                 </dd>
               </div>
@@ -562,11 +562,11 @@ function LinkRow({
 }) {
   const href = download ? iGuideDownloadUrl(url) : url;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-white/10 bg-ink/40 p-2">
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-realtor-primary/15 bg-realtor-surface-muted/80 p-2">
       <div className="min-w-0">
-        <p className="text-xs font-semibold text-white">{label}</p>
+        <p className="text-xs font-semibold text-realtor-text">{label}</p>
         {!compact ? (
-          <p className="mt-0.5 truncate text-[11px] text-ink-muted">{url}</p>
+          <p className="mt-0.5 truncate text-[11px] text-realtor-muted">{url}</p>
         ) : null}
       </div>
       <div className="flex gap-2">
@@ -576,7 +576,7 @@ function LinkRow({
           target="_blank"
           rel="noopener"
           download={download}
-          className="rounded-md bg-brand px-2.5 py-1 text-xs font-semibold text-white hover:bg-brand-light"
+          className="rounded-md bg-realtor-primary px-2.5 py-1 text-xs font-semibold text-white hover:bg-realtor-primary-light"
         >
           {actionLabel}
         </a>
@@ -633,22 +633,22 @@ function VideoGroup({
   actionLabel: string;
 }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-ink-soft/50 p-4">
-      <h3 className="text-sm font-semibold text-white">{title}</h3>
-      <p className="mt-1 text-xs text-ink-muted">{description}</p>
+    <div className="realtor-elevated-panel rounded-2xl p-4">
+      <h3 className="text-sm font-semibold text-realtor-text">{title}</h3>
+      <p className="mt-1 text-xs text-realtor-muted">{description}</p>
       {videos.length > 0 ? (
         <ul className="mt-3 grid gap-2">
           {videos.map((video) => (
             <li
               key={video.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-white/10 bg-ink/40 p-2"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-realtor-primary/15 bg-realtor-surface-muted/80 p-2"
             >
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-white">
+                <p className="text-xs font-semibold text-realtor-text">
                   {metadataString(video.metadata, "delivery_label") ??
                     deliverableTypeLabel(video.type)}
                 </p>
-                <p className="mt-0.5 truncate text-[11px] text-ink-muted">
+                <p className="mt-0.5 truncate text-[11px] text-realtor-muted">
                   {video.url}
                 </p>
               </div>
@@ -659,7 +659,7 @@ function VideoGroup({
                   target="_blank"
                   rel="noopener"
                   download={actionLabel === "Download"}
-                  className="rounded-md bg-brand px-2.5 py-1 text-xs font-semibold text-white hover:bg-brand-light"
+                  className="rounded-md bg-realtor-primary px-2.5 py-1 text-xs font-semibold text-white hover:bg-realtor-primary-light"
                 >
                   {actionLabel}
                 </a>
@@ -668,7 +668,7 @@ function VideoGroup({
           ))}
         </ul>
       ) : (
-        <p className="mt-3 rounded-md border border-dashed border-white/10 bg-ink/30 p-3 text-xs text-ink-muted">
+        <p className="mt-3 rounded-md border border-dashed border-realtor-primary/15 bg-realtor-surface-muted/70 p-3 text-xs text-realtor-muted">
           {empty}
         </p>
       )}
@@ -739,11 +739,11 @@ function SectionHeader({
   return (
     <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
       <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-realtor-primary">
           {title}
         </h2>
         {source ? (
-          <p className="text-[10px] uppercase tracking-wider text-ink-muted">
+          <p className="text-[10px] uppercase tracking-wider text-realtor-muted">
             via {source}
           </p>
         ) : null}
@@ -763,7 +763,7 @@ function EmptySection({
   return (
     <section>
       <SectionHeader title={title} />
-      <p className="rounded-xl border border-dashed border-white/10 bg-ink-soft/40 p-4 text-sm text-ink-muted">
+      <p className="rounded-xl border border-dashed border-realtor-primary/15 bg-realtor-surface-muted/75 p-4 text-sm text-realtor-muted">
         {message}
       </p>
     </section>
@@ -779,9 +779,9 @@ function EmptySection({
 function FotelloGallery({ deliverable }: { deliverable: DeliverableRow }) {
   const embedSrc = `/api/fotello/embed/${deliverable.id}`;
   return (
-    <div className="overflow-hidden rounded-xl border border-white/10 bg-ink-soft/50">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 px-4 py-2">
-        <p className="text-xs text-ink-muted">
+    <div className="realtor-elevated-panel overflow-hidden rounded-2xl">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-realtor-primary/10 px-4 py-2">
+        <p className="text-xs text-realtor-muted">
           via fotello
         </p>
         <div className="flex gap-2">
@@ -790,13 +790,13 @@ function FotelloGallery({ deliverable }: { deliverable: DeliverableRow }) {
             href={embedSrc}
             target="_blank"
             rel="noopener"
-            className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-light"
+            className="rounded-md bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-realtor-primary-light"
           >
             Open ↗
           </a>
         </div>
       </div>
-      <div className="bg-black">
+      <div className="bg-realtor-text">
         <div className="aspect-[16/10] w-full">
           <iframe
             src={embedSrc}
@@ -815,10 +815,10 @@ function ManualGallery({ deliverable }: { deliverable: DeliverableRow }) {
   const label =
     metadataString(deliverable.metadata, "delivery_label") ?? "Photo gallery";
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-ink-soft/50 p-4">
+    <div className="realtor-elevated-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4">
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-white">{label}</p>
-        <p className="mt-0.5 truncate text-xs text-ink-muted">
+        <p className="text-sm font-semibold text-realtor-text">{label}</p>
+        <p className="mt-0.5 truncate text-xs text-realtor-muted">
           {deliverable.url}
         </p>
       </div>
@@ -828,7 +828,7 @@ function ManualGallery({ deliverable }: { deliverable: DeliverableRow }) {
           href={deliverable.url}
           target="_blank"
           rel="noopener"
-          className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-light"
+          className="rounded-md bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-realtor-primary-light"
         >
           Open ↗
         </a>

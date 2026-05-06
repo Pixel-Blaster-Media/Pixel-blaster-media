@@ -35,7 +35,7 @@ export default function CancelBookingButton({
         type="button"
         disabled={isPending}
         onClick={onClick}
-        className="rounded-md border border-red-400/40 px-3 py-1 text-[11px] uppercase tracking-wider text-red-200 hover:border-red-300 hover:bg-red-500/10 disabled:opacity-60"
+        className="rounded-md border border-red-500/35 px-3 py-1 text-[11px] uppercase tracking-wider text-red-700 hover:border-red-500 hover:bg-red-500/10 disabled:opacity-60"
       >
         {isPending ? "Cancelling…" : "Cancel booking"}
       </button>

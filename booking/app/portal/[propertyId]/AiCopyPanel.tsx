@@ -56,16 +56,16 @@ export default function AiCopyPanel({ propertyId }: { propertyId: string }) {
   }
 
   return (
-    <section className="rounded-xl border border-brand/20 bg-brand/5 p-4">
+    <section className="realtor-green-panel rounded-2xl p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-light">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-realtor-primary">
             AI copy assistant
           </p>
-          <h2 className="mt-1 text-lg font-semibold text-white">
+          <h2 className="mt-1 text-lg font-semibold text-realtor-text">
             Draft listing copy from this media
           </h2>
-          <p className="mt-1 max-w-2xl text-xs text-ink-muted">
+          <p className="mt-1 max-w-2xl text-xs text-realtor-muted">
             Generates editable drafts from the listing details and delivered
             media. Always review before posting to MLS or social.
           </p>
@@ -74,7 +74,7 @@ export default function AiCopyPanel({ propertyId }: { propertyId: string }) {
           type="button"
           disabled={!draft}
           onClick={copyDraft}
-          className="rounded-md border border-white/15 px-3 py-1.5 text-xs font-semibold text-white hover:border-brand-light hover:text-brand-light disabled:opacity-40"
+          className="rounded-md border border-realtor-primary/20 px-3 py-1.5 text-xs font-semibold text-realtor-text hover:border-realtor-primary hover:text-realtor-primary disabled:opacity-40"
         >
           Copy draft
         </button>
@@ -90,14 +90,14 @@ export default function AiCopyPanel({ propertyId }: { propertyId: string }) {
             className={
               "rounded-lg border p-3 text-left transition disabled:opacity-60 " +
               (active === option.kind
-                ? "border-brand-light bg-brand/15"
-                : "border-white/10 bg-ink-soft/50 hover:border-brand/40")
+                ? "border-realtor-primary bg-realtor-primary/15"
+                : "border-realtor-primary/15 bg-realtor-surface/85 hover:border-realtor-primary/40")
             }
           >
-            <span className="block text-sm font-semibold text-white">
+            <span className="block text-sm font-semibold text-realtor-text">
               {option.label}
             </span>
-            <span className="mt-1 block text-[11px] text-ink-muted">
+            <span className="mt-1 block text-[11px] text-realtor-muted">
               {option.description}
             </span>
           </button>
@@ -113,10 +113,10 @@ export default function AiCopyPanel({ propertyId }: { propertyId: string }) {
             ? "Writing..."
             : "Choose a draft type above. Your generated copy will appear here."
         }
-        className="mt-4 w-full rounded-lg border border-white/10 bg-ink px-3 py-3 text-sm leading-relaxed text-white placeholder-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+        className="realtor-field mt-4 w-full rounded-lg px-3 py-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-realtor-primary/60"
       />
       {message ? (
-        <p className="mt-2 text-xs text-emerald-300">{message}</p>
+        <p className="mt-2 text-xs text-emerald-700">{message}</p>
       ) : null}
       {error ? (
         <p className="mt-2 text-xs text-red-300" role="alert">
