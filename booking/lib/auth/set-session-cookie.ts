@@ -102,7 +102,7 @@ export function setSupabaseSessionCookie(tokens: SessionTokens, email: string) {
     name: cookieBase,
     value: encoded,
     httpOnly: false,
-    secure: true,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 400,
