@@ -146,7 +146,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
       <div className="grid gap-3 md:grid-cols-2">
         <label className="flex flex-col gap-1">
           <span className="text-[10px] uppercase tracking-wider text-ink-muted">
-            Badge
+            Marketing badge
           </span>
           <input
             name="badge"
@@ -166,6 +166,50 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
             className="rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
           />
         </label>
+      </div>
+
+      <div className="rounded-md border border-white/10 bg-black/20 p-3">
+        <p className="text-[10px] uppercase tracking-wider text-ink-muted">
+          Booking-card labels
+        </p>
+        <p className="mt-1 text-[11px] text-ink-muted">
+          These are just visual labels on the booking page. They do not upload
+          or deliver media.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-4 text-xs text-ink-muted">
+          {isAddon ? (
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="require_has_video"
+                defaultChecked={item.require_has_video}
+                className="h-4 w-4 accent-brand-light"
+              />
+              <span>Only show this add-on when video is selected</span>
+            </label>
+          ) : (
+            <>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="is_photo"
+                  defaultChecked={item.is_photo}
+                  className="h-4 w-4 accent-brand-light"
+                />
+                <span>Show Photos label</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="is_video"
+                  defaultChecked={item.is_video}
+                  className="h-4 w-4 accent-brand-light"
+                />
+                <span>Show Video label</span>
+              </label>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="rounded-md border border-white/10 bg-black/20 p-3">
@@ -262,38 +306,6 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
           />
           <span>Highlight in booking flow</span>
         </label>
-        {isAddon ? (
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              name="require_has_video"
-              defaultChecked={item.require_has_video}
-              className="h-4 w-4 accent-brand-light"
-            />
-            <span>Only when cart has video</span>
-          </label>
-        ) : (
-          <>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                name="is_photo"
-                defaultChecked={item.is_photo}
-                className="h-4 w-4 accent-brand-light"
-              />
-              <span>Shows Photos badge</span>
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                name="is_video"
-                defaultChecked={item.is_video}
-                className="h-4 w-4 accent-brand-light"
-              />
-              <span>Shows Video badge</span>
-            </label>
-          </>
-        )}
         <code className="ml-auto text-[10px] text-ink-muted">
           slug: {item.slug}
         </code>
