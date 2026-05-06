@@ -27,13 +27,17 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen page-backdrop">
         <AuthSessionHandler />
-        <header className="border-b border-white/5">
+        <header className="site-header border-b border-white/5">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
             <Link href="/" className="flex items-center gap-2 font-semibold">
-              <span className="text-white">Pixel Blaster</span>
-              <span className="text-brand-light">Booking</span>
+              <span className="site-brand-primary text-white">
+                Pixel Blaster
+              </span>
+              <span className="site-brand-accent text-brand-light">
+                Booking
+              </span>
             </Link>
-            <nav className="flex items-center gap-6 text-sm text-ink-muted">
+            <nav className="site-nav flex items-center gap-6 text-sm text-ink-muted">
               <Link href="/book" className="hover:text-white">
                 Book
               </Link>
@@ -49,8 +53,10 @@ export default function RootLayout({
             </nav>
           </div>
         </header>
-        <main className="mx-auto max-w-6xl px-6 py-12">{children}</main>
-        <footer className="mt-24 border-t border-white/5">
+        <main className="site-main mx-auto max-w-6xl px-6 py-12">
+          {children}
+        </main>
+        <footer className="site-footer mt-24 border-t border-white/5">
           <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-2 px-6 py-8 text-xs text-ink-muted md:flex-row md:items-center">
             <p>
               © {new Date().getFullYear()} Pixel Blaster Media · Hamilton, ON ·

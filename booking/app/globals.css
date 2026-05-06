@@ -107,3 +107,36 @@ a {
   border: 1px solid var(--realtor-border);
   background: color-mix(in srgb, var(--realtor-surface-muted) 70%, white);
 }
+
+body:has(.realtor-theme) {
+  background: var(--realtor-bg);
+  color: var(--realtor-text);
+}
+
+body.page-backdrop:has(.realtor-theme) {
+  background:
+    radial-gradient(900px 420px at 10% -12%, rgba(111, 154, 120, 0.16), transparent 58%),
+    radial-gradient(700px 360px at 98% 6%, rgba(199, 177, 122, 0.14), transparent 60%),
+    var(--realtor-bg);
+}
+
+body:has(.realtor-theme) .site-header,
+body:has(.realtor-theme) .site-footer {
+  border-color: var(--realtor-border);
+  background: color-mix(in srgb, var(--realtor-bg) 86%, white);
+}
+
+body:has(.realtor-theme) .site-brand-primary,
+body:has(.realtor-theme) .site-nav a:hover {
+  color: var(--realtor-text);
+}
+
+body:has(.realtor-theme) .site-brand-accent,
+body:has(.realtor-theme) .site-nav a {
+  color: var(--realtor-primary);
+}
+
+body:has(.realtor-theme) .site-footer {
+  margin-top: 0;
+  color: var(--realtor-muted);
+}
