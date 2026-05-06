@@ -1,10 +1,14 @@
 import Link from "next/link";
 
+import {
+  listIGuides,
+  type IGuideListItem,
+} from "@/lib/integrations/iguide/portal-client";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
 
 import LinkEventForm from "./LinkEventForm";
-import { ignoreIGuideWebhookEvents } from "./actions";
+import { ignoreIGuideWebhookEvents, linkIGuidePortalTour } from "./actions";
 
 export const metadata = { title: "iGUIDE Review" };
 export const dynamic = "force-dynamic";
@@ -46,15 +50,17 @@ interface LinkedIGuideBookingRow extends BookingOptionRow {
 export default async function IGuideReviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; q?: string }>;
 }) {
   const params = await searchParams;
   const view = params.view === "all" ? "all" : "likely";
+  const portalQuery = (params.q ?? "").trim();
   const supabase = await getServerSupabase();
   const [
     { data: events, error },
     { data: bookings },
     { data: linkedBookings },
+    portalTours,
   ] = await Promise.all([
     supabase
       .from("iguide_webhook_events")
@@ -83,6 +89,7 @@ export default async function IGuideReviewPage({
       .order("scheduled_at", { ascending: false, nullsFirst: false })
       .limit(50)
       .returns<LinkedIGuideBookingRow[]>(),
+    listIGuides(),
   ]);
 
   if (error) {
@@ -123,6 +130,10 @@ export default async function IGuideReviewPage({
     (item) => !item.suggested && !item.hasSamePostal,
   );
   const visibleItems = view === "all" ? reviewItems : likelyItems;
+  const visiblePortalTours = filterPortalTours(
+    portalTours.data ?? [],
+    portalQuery,
+  ).slice(0, 30);
 
   return (
     <div className="space-y-6">
@@ -218,6 +229,77 @@ export default async function IGuideReviewPage({
           ) : null}
         </section>
       ) : null}
+
+      <section className="rounded-lg border border-white/10 bg-ink-soft/40 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-white">
+              Search your iGUIDE portal
+            </h2>
+            <p className="mt-1 text-xs text-ink-muted">
+              Use this when an iGUIDE exists in your portal but did not arrive
+              through the webhook. Pick the booking, then link and sync it.
+            </p>
+          </div>
+          <Link
+            href="/admin/settings/integrations"
+            className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-ink-muted hover:border-white/30 hover:text-white"
+          >
+            iGUIDE settings
+          </Link>
+        </div>
+
+        <form className="mt-4 grid gap-2 md:grid-cols-[1fr_auto]">
+          <input
+            type="search"
+            name="q"
+            defaultValue={portalQuery}
+            placeholder="Search address, alias, or Portal ID"
+            className="rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+          />
+          <button
+            type="submit"
+            className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light"
+          >
+            Search
+          </button>
+        </form>
+
+        {!portalTours.ok ? (
+          <div className="mt-4 rounded-md border border-amber-300/30 bg-amber-400/10 p-4">
+            <p className="text-sm font-semibold text-amber-100">
+              Portal search needs one more iGUIDE permission.
+            </p>
+            <p className="mt-1 text-xs text-amber-100/80">
+              iGUIDE accepted the credentials, but this token is not allowed to
+              list your portal iGUIDEs. Create or update the iGUIDE API token
+              with the <code>iguide.list</code> scope, then save the new Client
+              ID and Token in integrations.
+            </p>
+            {portalTours.error ? (
+              <p className="mt-2 text-[11px] text-amber-100/70">
+                iGUIDE said: {portalTours.error}
+              </p>
+            ) : null}
+          </div>
+        ) : visiblePortalTours.length > 0 ? (
+          <ul className="mt-4 space-y-2">
+            {visiblePortalTours.map((tour) => (
+              <PortalTourRow
+                key={tour.id}
+                tour={tour}
+                bookings={bookingOptions}
+              />
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-4 rounded-md border border-dashed border-white/10 px-4 py-6 text-center text-sm text-ink-muted">
+            {portalQuery
+              ? "No portal iGUIDEs matched that search."
+              : "No portal iGUIDEs came back from iGUIDE yet."}
+          </p>
+        )}
+      </section>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <nav className="flex gap-1 text-xs">
@@ -358,6 +440,69 @@ function InfoBox({ title, body }: { title: string; body: string }) {
   );
 }
 
+function PortalTourRow({
+  tour,
+  bookings,
+}: {
+  tour: IGuideListItem;
+  bookings: Array<{ id: string; label: string }>;
+}) {
+  return (
+    <li className="rounded-md border border-white/10 bg-black/20 p-3">
+      <div className="grid gap-3 md:grid-cols-[1fr_minmax(260px,420px)]">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-white">
+            {tour.address || tour.alias || tour.id}
+          </p>
+          <p className="mt-1 truncate text-xs text-ink-muted">
+            Portal ID:{" "}
+            <code className="rounded bg-black/30 px-1 py-0.5 text-[11px] text-white/90">
+              {tour.id}
+            </code>
+            {tour.alias ? ` · ${tour.alias}` : ""}
+            {tour.status ? ` · ${tour.status}` : ""}
+          </p>
+          {tour.manageUrl ? (
+            <a
+              href={tour.manageUrl}
+              target="_blank"
+              rel="noopener"
+              className="mt-1 inline-block text-xs text-brand-light underline"
+            >
+              Open in iGUIDE
+            </a>
+          ) : null}
+        </div>
+        <form action={linkIGuidePortalTour} className="grid gap-2 sm:grid-cols-[1fr_auto]">
+          <input type="hidden" name="portal_id" value={tour.id} />
+          <input type="hidden" name="alias" value={tour.alias ?? ""} />
+          <select
+            name="booking_id"
+            required
+            className="min-w-0 rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            defaultValue=""
+          >
+            <option value="" disabled>
+              Pick booking
+            </option>
+            {bookings.map((booking) => (
+              <option key={booking.id} value={booking.id}>
+                {booking.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            className="rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light"
+          >
+            Link + sync
+          </button>
+        </form>
+      </div>
+    </li>
+  );
+}
+
 function statusCopy(status: string): { label: string; classes: string } {
   if (status === "failed") {
     return {
@@ -465,4 +610,17 @@ function normalizeAddress(value: string | null | undefined): string {
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
+}
+
+function filterPortalTours(
+  tours: IGuideListItem[],
+  query: string,
+): IGuideListItem[] {
+  if (!query) return tours;
+  const q = normalizeAddress(query);
+  return tours.filter((tour) =>
+    normalizeAddress(
+      [tour.id, tour.alias, tour.address, tour.status].filter(Boolean).join(" "),
+    ).includes(q),
+  );
 }

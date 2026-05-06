@@ -240,6 +240,17 @@ export interface IGuideSubaccount {
   emailHint?: string;
 }
 
+export interface IGuideListItem {
+  id: string;
+  alias?: string | null;
+  address?: string | null;
+  status?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  manageUrl?: string | null;
+  raw?: Record<string, unknown>;
+}
+
 export interface IGuideCreateInput {
   type: "standard" | string;
   industry: "residential" | string;
@@ -364,6 +375,29 @@ export async function getAssetUrls(
 }
 
 /**
+ * List iGUIDEs available to the configured Portal API credentials.
+ *
+ * Scope: iguide.list. iGUIDE has changed the exact response shape over
+ * time, so normalize the common array/object wrappers into a small shape
+ * the admin UI can search and link safely.
+ */
+export async function listIGuides(): Promise<PortalResult<IGuideListItem[]>> {
+  const result = await portalFetch<unknown>("/iguides");
+  if (!result.ok) {
+    return {
+      ok: false,
+      status: result.status,
+      error: result.error,
+    };
+  }
+  return {
+    ok: true,
+    status: result.status,
+    data: normalizeIGuideList(result.data),
+  };
+}
+
+/**
  * List the realtor sub-accounts (editors) on our master iGuide account.
  * We'll eventually use this to auto-match tours to Pixel Blaster profiles
  * by email.
@@ -372,4 +406,81 @@ export async function getAssetUrls(
  */
 export async function listSubaccounts(): Promise<PortalResult<IGuideSubaccount[]>> {
   return portalFetch<IGuideSubaccount[]>("/userinfo/subaccounts");
+}
+
+function normalizeIGuideList(value: unknown): IGuideListItem[] {
+  const rows = extractIGuideArray(value);
+  return rows
+    .map((row) => normalizeIGuideListItem(row))
+    .filter((row): row is IGuideListItem => Boolean(row?.id));
+}
+
+function extractIGuideArray(value: unknown): Record<string, unknown>[] {
+  if (Array.isArray(value)) {
+    return value.filter(isRecord);
+  }
+  if (!isRecord(value)) return [];
+  const candidates = [
+    value.iguides,
+    value.items,
+    value.data,
+    value.results,
+    value.records,
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate.filter(isRecord);
+  }
+  return [];
+}
+
+function normalizeIGuideListItem(
+  row: Record<string, unknown>,
+): IGuideListItem | null {
+  const id = firstString(row, ["id", "iguideId", "iguide_id"]);
+  if (!id) return null;
+
+  const property = isRecord(row.property) ? row.property : null;
+  const urls = isRecord(row.urls) ? row.urls : null;
+  const address =
+    firstString(row, ["address", "fullAddress", "propertyAddress"]) ??
+    (property
+      ? firstString(property, ["fullAddress", "address", "formattedAddress"]) ??
+        [
+          firstString(property, ["streetNumber"]),
+          firstString(property, ["streetName"]),
+          firstString(property, ["city"]),
+          firstString(property, ["postalCode"]),
+        ]
+          .filter(Boolean)
+          .join(" ")
+      : null);
+
+  return {
+    id,
+    alias: firstString(row, ["alias", "iguideAlias", "slug"]),
+    address: address || null,
+    status: firstString(row, ["status", "state"]),
+    createdAt: firstString(row, ["createdAt", "created_at", "created"]),
+    updatedAt: firstString(row, ["updatedAt", "updated_at", "modifiedAt"]),
+    manageUrl:
+      firstString(row, ["manageUrl", "editUrl"]) ??
+      firstString(urls, ["manageUrl"]),
+    raw: row,
+  };
+}
+
+function firstString(
+  row: Record<string, unknown> | null,
+  keys: string[],
+): string | null {
+  if (!row) return null;
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }

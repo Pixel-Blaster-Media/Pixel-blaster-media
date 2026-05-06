@@ -4,7 +4,10 @@ import { revalidatePath } from "next/cache";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import type { IGuideReadyEvent } from "@/lib/integrations/iguide/portal-client";
-import { syncIGuideFromReadyEvent } from "@/lib/integrations/iguide/sync";
+import {
+  syncIGuideForBooking,
+  syncIGuideFromReadyEvent,
+} from "@/lib/integrations/iguide/sync";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
 
@@ -132,6 +135,45 @@ export async function ignoreIGuideWebhookEvents(
     .in("id", eventIds);
 
   revalidatePath("/admin/iguide");
+}
+
+export async function linkIGuidePortalTour(
+  formData: FormData,
+): Promise<void> {
+  await requireAdmin();
+
+  const bookingId = String(formData.get("booking_id") ?? "");
+  const portalId = String(formData.get("portal_id") ?? "").trim();
+  const alias = String(formData.get("alias") ?? "").trim() || null;
+  if (!bookingId || !portalId) return;
+
+  const supabase = getServiceSupabase();
+  const { data: booking } = await supabase
+    .from("bookings")
+    .select("id, property_id, iguide_id, iguide_portal_id")
+    .eq("id", bookingId)
+    .single<BookingRow>();
+
+  if (!booking) return;
+
+  const { error } = await supabase
+    .from("bookings")
+    .update({
+      iguide_portal_id: portalId,
+      ...(alias ? { iguide_id: alias } : {}),
+    })
+    .eq("id", booking.id);
+
+  if (!error) {
+    await syncIGuideForBooking({
+      ...booking,
+      iguide_portal_id: portalId,
+      iguide_id: alias ?? booking.iguide_id,
+    });
+  }
+
+  revalidatePath("/admin/iguide");
+  revalidatePath(`/admin/bookings/${booking.id}`);
 }
 
 function toReadyEvent(value: Json): IGuideReadyEvent | null {
