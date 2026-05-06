@@ -7,7 +7,7 @@ import {
   BUSINESS_TZ,
   isSlotAvailable,
 } from "@/lib/booking/availability";
-import { getActiveCatalog } from "@/lib/booking/catalog";
+import { getActiveCatalog, getCatalogItemPrice } from "@/lib/booking/catalog";
 import { sendEmail } from "@/lib/email/resend";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
 import { getServiceSupabase } from "@/lib/supabase/server";
@@ -46,7 +46,12 @@ export async function createSelfBooking(
     ((formData.get("street_address") as string | null) ?? "").trim();
   const city = ((formData.get("city") as string | null) ?? "").trim();
   const postalCode = ((formData.get("postal_code") as string | null) ?? "").trim();
+  const squareFootageRaw =
+    ((formData.get("square_footage") as string | null) ?? "").trim();
   const notes = ((formData.get("notes") as string | null) ?? "").trim();
+  const squareFootage = squareFootageRaw
+    ? Math.max(0, Math.trunc(Number(squareFootageRaw)))
+    : null;
 
   if (serviceSlugs.length === 0) {
     return { ok: false, error: "Pick at least one service." };
@@ -155,6 +160,7 @@ export async function createSelfBooking(
       services: legacyServices,
       add_ons: legacyAddons,
       client_notes: notes || null,
+      square_footage: squareFootage,
     })
     .select("id")
     .single<InsertedRow>();
@@ -169,6 +175,22 @@ export async function createSelfBooking(
       };
     }
     return { ok: false, error: "Could not save booking. Try again." };
+  }
+
+  const bookingLineItems = [...validServices, ...validAddons].map((item) => ({
+    booking_id: booking.id,
+    catalog_item_id: item.id,
+    quantity: 1,
+    unit_price_cents: getCatalogItemPrice(item, squareFootage).totalPriceCents,
+    unit_duration_minutes: item.duration_minutes,
+  }));
+  if (bookingLineItems.length > 0) {
+    const { error: lineErr } = await supabase
+      .from("booking_line_items")
+      .insert(bookingLineItems);
+    if (lineErr) {
+      console.warn("[selfBook] booking line items insert failed", lineErr);
+    }
   }
 
   // Push the event to Google Calendar (best-effort — a failure here doesn't
@@ -191,6 +213,7 @@ export async function createSelfBooking(
           `Realtor: ${realtor}\nEmail: ${user.email}\n` +
           `Services: ${serviceLabels}\n` +
           (addonLabels ? `Add-ons: ${addonLabels}\n` : "") +
+          (squareFootage ? `Size: ~${squareFootage} sqft\n` : "") +
           (notes ? `\nNotes:\n${notes}\n` : ""),
         startISO: slotStart.toISOString(),
         endISO: endAt.toISOString(),

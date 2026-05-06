@@ -11,7 +11,7 @@ import {
   BUSINESS_TZ,
   isSlotAvailable,
 } from "@/lib/booking/availability";
-import { getActiveCatalog } from "@/lib/booking/catalog";
+import { getActiveCatalog, getCatalogItemPrice } from "@/lib/booking/catalog";
 import { sendEmail } from "@/lib/email/resend";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
 import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
@@ -257,6 +257,22 @@ export async function createPublicBooking(
       ok: false,
       errors: { _form: "Could not save booking. Try again." },
     };
+  }
+
+  const bookingLineItems = [...validServices, ...validAddons].map((item) => ({
+    booking_id: booking.id,
+    catalog_item_id: item.id,
+    quantity: 1,
+    unit_price_cents: getCatalogItemPrice(item, squareFootage).totalPriceCents,
+    unit_duration_minutes: item.duration_minutes,
+  }));
+  if (bookingLineItems.length > 0) {
+    const { error: lineErr } = await supabase
+      .from("booking_line_items")
+      .insert(bookingLineItems);
+    if (lineErr) {
+      console.warn("[book] booking line items insert failed", lineErr);
+    }
   }
 
   // -------- Google Calendar event (best-effort) --------

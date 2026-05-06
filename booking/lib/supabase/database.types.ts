@@ -442,6 +442,10 @@ interface CatalogItemsTable {
     description: string;
     duration_minutes: number;
     price_cents: number;
+    sqft_pricing_enabled: boolean;
+    included_sqft: number | null;
+    overage_increment_sqft: number | null;
+    overage_price_cents: number | null;
     taxable: boolean;
     active: boolean;
     display_order: number;
@@ -461,6 +465,10 @@ interface CatalogItemsTable {
     description?: string;
     duration_minutes?: number;
     price_cents?: number;
+    sqft_pricing_enabled?: boolean;
+    included_sqft?: number | null;
+    overage_increment_sqft?: number | null;
+    overage_price_cents?: number | null;
     taxable?: boolean;
     active?: boolean;
     display_order?: number;

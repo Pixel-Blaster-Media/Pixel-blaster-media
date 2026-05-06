@@ -169,6 +169,11 @@ export default function PackageAccordion({
                   <span className="text-[11px] uppercase tracking-wider text-ink-muted">
                     {formatMinutes(b.duration_minutes)}
                   </span>
+                  {sqftRuleText(b) ? (
+                    <span className="rounded-md border border-brand-light/20 bg-brand/10 px-2 py-1 text-[11px] text-brand-light">
+                      {sqftRuleText(b)}
+                    </span>
+                  ) : null}
                   {b.description ? (
                     <p className="whitespace-pre-wrap text-xs text-ink-muted">
                       {b.description}
@@ -232,6 +237,11 @@ export default function PackageAccordion({
                   <span className="text-[11px] uppercase tracking-wider text-ink-muted">
                     {formatMinutes(a.duration_minutes)}
                   </span>
+                  {sqftRuleText(a) ? (
+                    <span className="rounded-md border border-brand-light/20 bg-brand/10 px-2 py-1 text-[11px] text-brand-light">
+                      {sqftRuleText(a)}
+                    </span>
+                  ) : null}
                   {a.description ? (
                     <p className="whitespace-pre-wrap text-xs text-ink-muted">
                       {a.description}
@@ -457,4 +467,18 @@ function formatMinutes(minutes: number): string {
   const hours = minutes / 60;
   if (Number.isInteger(hours)) return `${hours}h`;
   return `${Math.floor(hours)}h ${minutes % 60}min`;
+}
+
+function sqftRuleText(item: CatalogItemDTO): string | null {
+  if (
+    !item.sqft_pricing_enabled ||
+    !item.included_sqft ||
+    !item.overage_increment_sqft ||
+    !item.overage_price_cents
+  ) {
+    return null;
+  }
+  return `Includes ${item.included_sqft.toLocaleString()} sqft; +$${(
+    item.overage_price_cents / 100
+  ).toFixed(0)} per ${item.overage_increment_sqft.toLocaleString()} sqft after.`;
 }

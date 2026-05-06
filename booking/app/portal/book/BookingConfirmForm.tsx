@@ -70,6 +70,19 @@ export default function BookingConfirmForm({
         </label>
         <label className="block md:col-span-2">
           <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+            Approx. square footage
+          </span>
+          <input
+            name="square_footage"
+            type="number"
+            min={0}
+            step={1}
+            placeholder="2500"
+            className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+          />
+        </label>
+        <label className="block md:col-span-2">
+          <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
             Notes (optional)
           </span>
           <textarea

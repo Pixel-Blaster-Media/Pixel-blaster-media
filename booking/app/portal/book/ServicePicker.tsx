@@ -133,6 +133,11 @@ export default function ServicePicker({
                     ${(b.price_cents / 100).toFixed(0)} · {b.duration_minutes}m
                   </span>
                 </button>
+                {sqftRuleText(b) && on ? (
+                  <p className="mt-1 px-1 text-[11px] text-brand-light">
+                    {sqftRuleText(b)}
+                  </p>
+                ) : null}
               </li>
             );
           })}
@@ -165,6 +170,11 @@ export default function ServicePicker({
                     ${(a.price_cents / 100).toFixed(0)} · {a.duration_minutes}m
                   </span>
                 </button>
+                {sqftRuleText(a) && on ? (
+                  <p className="mt-1 px-1 text-[11px] text-brand-light">
+                    {sqftRuleText(a)}
+                  </p>
+                ) : null}
               </li>
             );
           })}
@@ -206,4 +216,18 @@ export default function ServicePicker({
       ) : null}
     </div>
   );
+}
+
+function sqftRuleText(item: CatalogItemDTO): string | null {
+  if (
+    !item.sqft_pricing_enabled ||
+    !item.included_sqft ||
+    !item.overage_increment_sqft ||
+    !item.overage_price_cents
+  ) {
+    return null;
+  }
+  return `Includes ${item.included_sqft.toLocaleString()} sqft; +$${(
+    item.overage_price_cents / 100
+  ).toFixed(0)} per ${item.overage_increment_sqft.toLocaleString()} sqft after.`;
 }

@@ -127,6 +127,72 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
         </label>
       </div>
 
+      <div className="rounded-md border border-white/10 bg-black/20 p-3">
+        <label className="flex items-center gap-2 text-xs text-ink-muted">
+          <input
+            type="checkbox"
+            name="sqft_pricing_enabled"
+            defaultChecked={item.sqft_pricing_enabled}
+            className="h-4 w-4 accent-brand-light"
+          />
+          <span>Charge square-footage overage</span>
+        </label>
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] uppercase tracking-wider text-ink-muted">
+              Included sqft
+            </span>
+            <input
+              name="included_sqft"
+              type="number"
+              min={1}
+              step="1"
+              defaultValue={item.included_sqft ?? ""}
+              placeholder="2500"
+              className="rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] uppercase tracking-wider text-ink-muted">
+              Extra sqft step
+            </span>
+            <input
+              name="overage_increment_sqft"
+              type="number"
+              min={1}
+              step="1"
+              defaultValue={item.overage_increment_sqft ?? ""}
+              placeholder="500"
+              className="rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] uppercase tracking-wider text-ink-muted">
+              Price per step
+            </span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-ink-muted">$</span>
+              <input
+                name="overage_price_dollars"
+                type="number"
+                min={0}
+                step="0.01"
+                defaultValue={
+                  item.overage_price_cents == null
+                    ? ""
+                    : (item.overage_price_cents / 100).toFixed(2)
+                }
+                placeholder="40.00"
+                className="w-full rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
+              />
+            </div>
+          </label>
+        </div>
+        <p className="mt-2 text-[11px] text-ink-muted">
+          Example: $200 includes 2,500 sqft, then +$40 every 500 sqft.
+        </p>
+      </div>
+
       <div className="flex flex-wrap items-center gap-4 text-xs text-ink-muted">
         <label className="flex items-center gap-2">
           <input

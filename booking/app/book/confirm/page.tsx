@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { getActiveCatalog } from "@/lib/booking/catalog";
+import { getActiveCatalog, getCatalogItemPrice } from "@/lib/booking/catalog";
 import { formatSlotLabel } from "@/lib/booking/slot-display";
 import {
   parseWizardState,
@@ -53,9 +53,14 @@ export default async function BookStep4Page({
     .map((s) => bySlug.get(s))
     .filter((x): x is NonNullable<typeof x> => !!x);
 
-  const totalCents =
-    selectedItems.reduce((n, i) => n + i.price_cents, 0) +
-    selectedAddons.reduce((n, a) => n + a.price_cents, 0);
+  const pricedItems = [...selectedItems, ...selectedAddons].map((item) => ({
+    item,
+    price: getCatalogItemPrice(item, state.squareFootage),
+  }));
+  const totalCents = pricedItems.reduce(
+    (n, row) => n + row.price.totalPriceCents,
+    0,
+  );
   const duration = Math.max(
     selectedItems.reduce((n, i) => n + i.duration_minutes, 0) +
       selectedAddons.reduce((n, a) => n + a.duration_minutes, 0),
@@ -136,6 +141,24 @@ export default async function BookStep4Page({
             />
           ) : null}
           <Row label="When" value={whenLabel} />
+          {pricedItems.some((row) => row.price.overageCents > 0) ? (
+            <Row
+              label="Sqft pricing"
+              value={
+                <span className="space-y-1">
+                  {pricedItems
+                    .filter((row) => row.price.overageCents > 0)
+                    .map((row) => (
+                      <span key={row.item.id} className="block">
+                        {row.item.name}: +$
+                        {(row.price.overageCents / 100).toFixed(0)} for{" "}
+                        {state.squareFootage?.toLocaleString()} sqft
+                      </span>
+                    ))}
+                </span>
+              }
+            />
+          ) : null}
           <Row
             label="Total"
             value={

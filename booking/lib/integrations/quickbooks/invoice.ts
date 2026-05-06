@@ -10,6 +10,14 @@ type ServicePriceRow = Database["public"]["Tables"]["service_prices"]["Row"];
 type ConnectionRow =
   Database["public"]["Tables"]["quickbooks_connection"]["Row"];
 
+interface BookingLineItemForInvoice {
+  quantity: number;
+  unit_price_cents: number;
+  catalog_items: {
+    name: string;
+  } | null;
+}
+
 /**
  * Build + submit a QuickBooks Online invoice for one of our bookings.
  *
@@ -123,32 +131,51 @@ export async function createInvoiceForBooking(
     };
   }
 
-  // Prices
-  const { data: priceRows, error: priceErr } = await supabase
-    .from("service_prices")
-    .select("service_id, price_cents, taxable")
-    .returns<ServicePriceRow[]>();
-  if (priceErr) return { ok: false, error: priceErr.message };
-
-  const priceByService = new Map(
-    (priceRows ?? []).map((r) => [r.service_id, r.price_cents]),
-  );
-
   const lineItems: { description: string; amountCents: number }[] = [];
-  for (const sid of input.services) {
-    const cents = priceByService.get(sid) ?? 0;
-    if (cents === 0) {
-      return {
-        ok: false,
-        error: `Price for "${labelForService(sid)}" is $0 — set a real price in /admin/settings/pricing first.`,
-      };
+
+  const { data: snapshotLines, error: snapshotErr } = await supabase
+    .from("booking_line_items")
+    .select("quantity, unit_price_cents, catalog_items(name)")
+    .eq("booking_id", input.bookingId)
+    .returns<BookingLineItemForInvoice[]>();
+  if (snapshotErr) return { ok: false, error: snapshotErr.message };
+
+  if (snapshotLines && snapshotLines.length > 0) {
+    for (const line of snapshotLines) {
+      if (line.unit_price_cents > 0) {
+        lineItems.push({
+          description: line.catalog_items?.name ?? "Booking item",
+          amountCents: line.unit_price_cents * Math.max(1, line.quantity),
+        });
+      }
     }
-    lineItems.push({ description: labelForService(sid), amountCents: cents });
-  }
-  for (const aid of input.addOns) {
-    const cents = priceByService.get(aid) ?? 0;
-    if (cents > 0) {
-      lineItems.push({ description: labelForAddOn(aid), amountCents: cents });
+  } else {
+    // Fallback for old bookings that predate booking_line_items.
+    const { data: priceRows, error: priceErr } = await supabase
+      .from("service_prices")
+      .select("service_id, price_cents, taxable")
+      .returns<ServicePriceRow[]>();
+    if (priceErr) return { ok: false, error: priceErr.message };
+
+    const priceByService = new Map(
+      (priceRows ?? []).map((r) => [r.service_id, r.price_cents]),
+    );
+
+    for (const sid of input.services) {
+      const cents = priceByService.get(sid) ?? 0;
+      if (cents === 0) {
+        return {
+          ok: false,
+          error: `Price for "${labelForService(sid)}" is $0 — set a real price in /admin/settings/pricing first.`,
+        };
+      }
+      lineItems.push({ description: labelForService(sid), amountCents: cents });
+    }
+    for (const aid of input.addOns) {
+      const cents = priceByService.get(aid) ?? 0;
+      if (cents > 0) {
+        lineItems.push({ description: labelForAddOn(aid), amountCents: cents });
+      }
     }
   }
 

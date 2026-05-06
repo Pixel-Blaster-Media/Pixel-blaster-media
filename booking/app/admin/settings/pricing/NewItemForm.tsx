@@ -139,6 +139,43 @@ export default function NewItemForm({ kind }: { kind: CatalogItemKind }) {
         </label>
       </div>
 
+      <div className="rounded-md border border-white/10 bg-black/20 p-3">
+        <label className="flex items-center gap-2 text-xs text-ink-muted">
+          <input
+            type="checkbox"
+            name="sqft_pricing_enabled"
+            className="h-4 w-4 accent-brand-light"
+          />
+          <span>Charge square-footage overage</span>
+        </label>
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <input
+            name="included_sqft"
+            type="number"
+            min={1}
+            step="1"
+            placeholder="Included sqft"
+            className="rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
+          />
+          <input
+            name="overage_increment_sqft"
+            type="number"
+            min={1}
+            step="1"
+            placeholder="Extra step sqft"
+            className="rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
+          />
+          <input
+            name="overage_price_dollars"
+            type="number"
+            min={0}
+            step="0.01"
+            placeholder="$ per step"
+            className="rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
+          />
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center gap-4 text-xs text-ink-muted">
         <label className="flex items-center gap-2">
           <input

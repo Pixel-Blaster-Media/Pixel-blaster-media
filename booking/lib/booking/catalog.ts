@@ -79,6 +79,15 @@ export interface CartTotals {
   hasVideo: boolean;
 }
 
+export interface PriceBreakdown {
+  basePriceCents: number;
+  overageCents: number;
+  totalPriceCents: number;
+  overageSqft: number;
+  overageUnits: number;
+  ruleLabel: string | null;
+}
+
 /**
  * Compute totals from a cart against a catalog snapshot. Unknown ids are
  * ignored — a stale id on the client shouldn't crash the server.
@@ -86,6 +95,7 @@ export interface CartTotals {
 export function computeCartTotals(
   cart: readonly CartLine[],
   catalog: Catalog,
+  squareFootage: number | null = null,
 ): CartTotals {
   const byId = new Map<string, CatalogItemRow>();
   for (const r of catalog.bundles) byId.set(r.id, r);
@@ -100,7 +110,7 @@ export function computeCartTotals(
     const item = byId.get(line.catalogItemId);
     if (!item) continue;
     const qty = Math.max(1, line.quantity);
-    totalPriceCents += item.price_cents * qty;
+    totalPriceCents += getCatalogItemPrice(item, squareFootage).totalPriceCents * qty;
     totalDurationMinutes += item.duration_minutes * qty;
     if (item.is_video) hasVideo = true;
   }
@@ -152,6 +162,57 @@ export function validateCart(
   }
 
   return null;
+}
+
+export function getCatalogItemPrice(
+  item: CatalogItemRow,
+  squareFootage: number | null | undefined,
+): PriceBreakdown {
+  const basePriceCents = item.price_cents;
+  const ruleLabel = formatSqftPricingRule(item);
+  if (
+    !item.sqft_pricing_enabled ||
+    !item.included_sqft ||
+    !item.overage_increment_sqft ||
+    !item.overage_price_cents ||
+    !squareFootage ||
+    squareFootage <= item.included_sqft
+  ) {
+    return {
+      basePriceCents,
+      overageCents: 0,
+      totalPriceCents: basePriceCents,
+      overageSqft: 0,
+      overageUnits: 0,
+      ruleLabel,
+    };
+  }
+
+  const overageSqft = squareFootage - item.included_sqft;
+  const overageUnits = Math.ceil(overageSqft / item.overage_increment_sqft);
+  const overageCents = overageUnits * item.overage_price_cents;
+  return {
+    basePriceCents,
+    overageCents,
+    totalPriceCents: basePriceCents + overageCents,
+    overageSqft,
+    overageUnits,
+    ruleLabel,
+  };
+}
+
+export function formatSqftPricingRule(item: CatalogItemRow): string | null {
+  if (
+    !item.sqft_pricing_enabled ||
+    !item.included_sqft ||
+    !item.overage_increment_sqft ||
+    !item.overage_price_cents
+  ) {
+    return null;
+  }
+  return `Includes up to ${item.included_sqft.toLocaleString()} sq ft. +${formatPrice(
+    item.overage_price_cents,
+  )} per extra ${item.overage_increment_sqft.toLocaleString()} sq ft.`;
 }
 
 export function formatPrice(cents: number): string {

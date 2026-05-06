@@ -13,6 +13,10 @@ export interface CatalogItemDTO {
   description: string;
   duration_minutes: number;
   price_cents: number;
+  sqft_pricing_enabled: boolean;
+  included_sqft: number | null;
+  overage_increment_sqft: number | null;
+  overage_price_cents: number | null;
   kind: "bundle" | "a_la_carte" | "addon";
   is_video: boolean;
   require_has_video: boolean;

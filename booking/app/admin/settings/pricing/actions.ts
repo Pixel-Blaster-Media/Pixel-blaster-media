@@ -82,6 +82,8 @@ export async function createCatalogItem(
   );
   if (displayOrder === null)
     return { ok: false, error: "Invalid display order." };
+  const sqftPricing = parseSqftPricing(formData);
+  if (!sqftPricing.ok) return { ok: false, error: sqftPricing.error };
 
   const description =
     ((formData.get("description") as string | null) ?? "").trim();
@@ -97,6 +99,7 @@ export async function createCatalogItem(
     highlight: formData.get("highlight") === "on",
     ideal_for: idealFor || null,
     price_cents: priceCents,
+    ...sqftPricing.fields,
     duration_minutes: duration,
     display_order: displayOrder,
     taxable: formData.get("taxable") === "on",
@@ -146,6 +149,8 @@ export async function updateCatalogItem(
   );
   if (displayOrder === null)
     return { ok: false, error: "Invalid display order." };
+  const sqftPricing = parseSqftPricing(formData);
+  if (!sqftPricing.ok) return { ok: false, error: sqftPricing.error };
 
   const badge = ((formData.get("badge") as string | null) ?? "").trim();
   const idealFor = ((formData.get("ideal_for") as string | null) ?? "").trim();
@@ -157,6 +162,7 @@ export async function updateCatalogItem(
     highlight: formData.get("highlight") === "on",
     ideal_for: idealFor || null,
     price_cents: priceCents,
+    ...sqftPricing.fields,
     duration_minutes: duration,
     display_order: displayOrder,
     taxable: formData.get("taxable") === "on",
@@ -175,6 +181,55 @@ export async function updateCatalogItem(
 
   revalidatePath("/admin/settings/pricing");
   return { ok: true };
+}
+
+function parseSqftPricing(
+  formData: FormData,
+):
+  | { ok: true; fields: Pick<CatalogItemUpdate, "sqft_pricing_enabled" | "included_sqft" | "overage_increment_sqft" | "overage_price_cents"> }
+  | { ok: false; error: string } {
+  const enabled = formData.get("sqft_pricing_enabled") === "on";
+  if (!enabled) {
+    return {
+      ok: true,
+      fields: {
+        sqft_pricing_enabled: false,
+        included_sqft: null,
+        overage_increment_sqft: null,
+        overage_price_cents: null,
+      },
+    };
+  }
+
+  const includedSqft = parseIntSafe(
+    (formData.get("included_sqft") as string | null) ?? "",
+    1,
+  );
+  const overageIncrementSqft = parseIntSafe(
+    (formData.get("overage_increment_sqft") as string | null) ?? "",
+    1,
+  );
+  const overagePriceCents = parseDollarsToCents(
+    (formData.get("overage_price_dollars") as string | null) ?? "",
+  );
+  if (includedSqft === null) {
+    return { ok: false, error: "Invalid included square footage." };
+  }
+  if (overageIncrementSqft === null) {
+    return { ok: false, error: "Invalid overage square-foot increment." };
+  }
+  if (overagePriceCents === null) {
+    return { ok: false, error: "Invalid overage price." };
+  }
+  return {
+    ok: true,
+    fields: {
+      sqft_pricing_enabled: true,
+      included_sqft: includedSqft,
+      overage_increment_sqft: overageIncrementSqft,
+      overage_price_cents: overagePriceCents,
+    },
+  };
 }
 
 export async function deleteCatalogItem(id: string): Promise<ActionResult> {
