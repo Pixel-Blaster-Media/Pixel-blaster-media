@@ -7,6 +7,7 @@ import {
 } from "@/lib/booking/catalog";
 import { parseWizardState } from "@/lib/booking/wizard-state";
 
+import AIPackageRecommender from "./_components/AIPackageRecommender";
 import PackageAccordion from "./_components/PackageAccordion";
 import Stepper from "./_components/Stepper";
 
@@ -52,6 +53,12 @@ export default async function BookStep1Page({
           selection includes video.
         </p>
       </section>
+
+      <AIPackageRecommender
+        bundles={bundles}
+        aLaCarte={aLaCarte}
+        addons={addons}
+      />
 
       <PackageAccordion
         bundles={bundles}

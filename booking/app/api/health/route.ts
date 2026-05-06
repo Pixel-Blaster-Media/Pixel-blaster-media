@@ -8,7 +8,7 @@ export function GET() {
   return NextResponse.json({
     ok: true,
     service: "pixel-blaster-booking",
-    phase: 1,
+    status: "booking-and-delivery-portal",
     timestamp: new Date().toISOString(),
   });
 }

@@ -11,7 +11,8 @@ export const metadata: Metadata = {
   description:
     "Book real estate photography, iGuide virtual tours, and floor plans with Pixel Blaster Media. Realtors: access photos, tours, and deliverables in one place.",
   robots: {
-    // Phase 1 is not ready for search engines. Flip this once booking is live.
+    // Keep the standalone booking app out of search while it lives on a
+    // temporary Vercel URL. Flip this on once the public domain is ready.
     index: false,
     follow: false,
   },
@@ -57,7 +58,7 @@ export default function RootLayout({
             </p>
             <p>
               Booking portal —{" "}
-              <span className="text-ink-muted/70">Phase 1 scaffold</span>
+              <span className="text-ink-muted/70">client booking + delivery</span>
             </p>
           </div>
         </footer>
