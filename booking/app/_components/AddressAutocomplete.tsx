@@ -65,6 +65,13 @@ type Suggestion = {
   text: string;
 };
 
+type AutocompleteStatus =
+  | "idle"
+  | "ok"
+  | "auth_error"
+  | "quota_error"
+  | "network_error";
+
 const MIN_QUERY_LENGTH = 3;
 const DEBOUNCE_MS = 250;
 
@@ -89,7 +96,7 @@ export default function AddressAutocomplete({
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(-1);
-  const [fetchDisabled, setFetchDisabled] = useState(false);
+  const [status, setStatus] = useState<AutocompleteStatus>("idle");
 
   // One session token per "typing session" so Google bills a session
   // (autocomplete + details) as a single billable event per their docs.
@@ -110,13 +117,19 @@ export default function AddressAutocomplete({
   }, [onChange]);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const keyProblem = getKeyProblem(apiKey);
 
   // Debounced suggestion fetch.
   useEffect(() => {
-    if (!apiKey || fetchDisabled) return;
+    if (keyProblem || !apiKey) {
+      setSuggestions([]);
+      setIsOpen(false);
+      return;
+    }
     const q = value.trim();
     if (q.length < MIN_QUERY_LENGTH) {
       setSuggestions([]);
+      setStatus("idle");
       return;
     }
     const controller = new AbortController();
@@ -139,12 +152,11 @@ export default function AddressAutocomplete({
           },
         );
         if (!res.ok) {
-          // Swallow — 403 (key rejected) / 429 (quota) / etc. should
-          // silently stop showing suggestions, not break typing.
-          if (res.status === 403 || res.status === 401) {
-            setFetchDisabled(true);
-          }
+          if (res.status === 401 || res.status === 403) setStatus("auth_error");
+          else if (res.status === 429) setStatus("quota_error");
+          else setStatus("network_error");
           setSuggestions([]);
+          setIsOpen(false);
           return;
         }
         const data = (await res.json()) as {
@@ -164,17 +176,19 @@ export default function AddressAutocomplete({
         setSuggestions(next);
         setIsOpen(next.length > 0);
         setHighlighted(-1);
+        setStatus("ok");
       } catch (err) {
         if ((err as Error).name === "AbortError") return;
-        // Network error — swallow, plain input still works.
+        setStatus("network_error");
         setSuggestions([]);
+        setIsOpen(false);
       }
     }, DEBOUNCE_MS);
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [value, apiKey, sessionToken, fetchDisabled]);
+  }, [value, apiKey, sessionToken, keyProblem]);
 
   // Click outside → close the dropdown.
   useEffect(() => {
@@ -255,15 +269,12 @@ export default function AddressAutocomplete({
     if (!isOpen && v.length >= MIN_QUERY_LENGTH) setIsOpen(true);
   }
 
-  const helperText = !apiKey
-    ? "Just type the address manually."
-    : fetchDisabled
-      ? "Autocomplete offline — type the address manually."
-      : value.length < MIN_QUERY_LENGTH
-        ? "Start typing — we'll suggest full addresses."
-        : suggestions.length === 0
-          ? "No matches yet — keep typing."
-          : "Pick a suggestion or keep typing.";
+  const helperText = helperForStatus({
+    keyProblem,
+    status,
+    valueLength: value.length,
+    suggestionCount: suggestions.length,
+  });
 
   return (
     <div ref={containerRef} className="relative">
@@ -381,4 +392,41 @@ function parsePlace(place: {
     postal_code,
     formatted_address: place.formattedAddress ?? street_address,
   };
+}
+
+function getKeyProblem(apiKey: string | undefined): "missing" | "invalid" | null {
+  if (!apiKey) return "missing";
+  if (!/^[\x20-\x7E]+$/.test(apiKey)) return "invalid";
+  if (!/^AIza[0-9A-Za-z_-]{20,}$/.test(apiKey)) return "invalid";
+  return null;
+}
+
+function helperForStatus(args: {
+  keyProblem: "missing" | "invalid" | null;
+  status: AutocompleteStatus;
+  valueLength: number;
+  suggestionCount: number;
+}): string {
+  if (args.keyProblem === "missing") {
+    return "Address suggestions are not configured yet — type manually.";
+  }
+  if (args.keyProblem === "invalid") {
+    return "Address suggestions need a clean Google Places browser key — type manually.";
+  }
+  if (args.status === "auth_error") {
+    return "Google Places is blocked by key/API/referrer settings — type manually.";
+  }
+  if (args.status === "quota_error") {
+    return "Google Places quota or billing needs attention — type manually.";
+  }
+  if (args.status === "network_error") {
+    return "Autocomplete is offline right now — type manually.";
+  }
+  if (args.valueLength < MIN_QUERY_LENGTH) {
+    return "Start typing — we'll suggest full addresses.";
+  }
+  if (args.status === "ok" && args.suggestionCount === 0) {
+    return "No address matches found.";
+  }
+  return "Pick a suggestion or keep typing.";
 }
