@@ -61,6 +61,15 @@ interface BookingWithIGuideRow {
   iguide_portal_id: string | null;
 }
 
+interface ExistingIGuideBookingRow {
+  id: string;
+  scheduled_at: string | null;
+  properties: {
+    street_address: string;
+    city: string | null;
+  } | null;
+}
+
 interface BookingForIGuideCreateRow {
   id: string;
   property_id: string;
@@ -447,6 +456,28 @@ export async function saveIGuideId(
   const service = getServiceSupabase();
   const update: BookingUpdatePayload = {};
   if (portalId) {
+    const { data: existing, error: existingError } = await service
+      .from("bookings")
+      .select("id, scheduled_at, properties(street_address, city)")
+      .eq("iguide_portal_id", portalId)
+      .neq("id", bookingId)
+      .maybeSingle<ExistingIGuideBookingRow>();
+
+    if (existingError) return { ok: false, error: existingError.message };
+    if (existing) {
+      const address = [
+        existing.properties?.street_address,
+        existing.properties?.city,
+      ]
+        .filter(Boolean)
+        .join(", ");
+      return {
+        ok: false,
+        error: `That iGUIDE is already linked to another booking${
+          address ? ` for ${address}` : ""
+        }. Open /admin/bookings/${existing.id} and clear its iGUIDE link first if this tour belongs here instead.`,
+      };
+    }
     update.iguide_portal_id = portalId;
   }
   if (alias) {
