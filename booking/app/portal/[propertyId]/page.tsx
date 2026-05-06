@@ -29,6 +29,7 @@ import type {
 
 import CancelBookingButton from "./CancelBookingButton";
 import CopyLinkButton from "./CopyLinkButton";
+import AiCopyPanel from "./AiCopyPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -191,6 +192,8 @@ export default async function PropertyDetailPage({
       </header>
 
       <DeliveryOverview summary={readySummary} />
+
+      <AiCopyPanel propertyId={property.id} />
 
       {/* Virtual tour — the marquee deliverable. Renders our own iframe
           rather than the stored embed_html so we never inject arbitrary
