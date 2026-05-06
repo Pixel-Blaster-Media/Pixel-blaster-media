@@ -130,7 +130,15 @@ async function portalFetch<T>(
         ? String((parsed as { error: unknown }).error)
         : undefined) ??
       `iGuide returned ${res.status}.`;
-    return { ok: false, status: res.status, error: msg };
+    const debugInfo =
+      parsed && typeof parsed === "object" && "debugInfo" in parsed
+        ? String((parsed as { debugInfo: unknown }).debugInfo)
+        : null;
+    return {
+      ok: false,
+      status: res.status,
+      error: debugInfo ? `${msg} (${debugInfo})` : msg,
+    };
   }
 
   return { ok: true, status: res.status, data: parsed as T };

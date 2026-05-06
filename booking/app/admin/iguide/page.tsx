@@ -268,13 +268,14 @@ export default async function IGuideReviewPage({
         {!portalTours.ok ? (
           <div className="mt-4 rounded-md border border-amber-300/30 bg-amber-400/10 p-4">
             <p className="text-sm font-semibold text-amber-100">
-              Portal search needs one more iGUIDE permission.
+              iGUIDE is blocking portal search for this token.
             </p>
             <p className="mt-1 text-xs text-amber-100/80">
-              iGUIDE accepted the credentials, but this token is not allowed to
-              list your portal iGUIDEs. Create or update the iGUIDE API token
-              with the <code>iguide.list</code> scope, then save the new Client
-              ID and Token in integrations.
+              The credentials are saved and iGUIDE accepts them, but their API
+              is refusing the portal list endpoint. If your token already has
+              <code className="mx-1">iguide.list</code> checked, ask iGUIDE
+              whether this account/app role is allowed to list iGUIDEs through
+              <code className="mx-1">GET /iguides</code>.
             </p>
             {portalTours.error ? (
               <p className="mt-2 text-[11px] text-amber-100/70">
