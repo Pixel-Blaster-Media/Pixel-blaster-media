@@ -38,6 +38,11 @@ interface BookingOptionRow {
   } | null;
 }
 
+interface LinkedIGuideBookingRow extends BookingOptionRow {
+  iguide_id: string | null;
+  iguide_portal_id: string | null;
+}
+
 export default async function IGuideReviewPage({
   searchParams,
 }: {
@@ -46,7 +51,11 @@ export default async function IGuideReviewPage({
   const params = await searchParams;
   const view = params.view === "all" ? "all" : "likely";
   const supabase = await getServerSupabase();
-  const [{ data: events, error }, { data: bookings }] = await Promise.all([
+  const [
+    { data: events, error },
+    { data: bookings },
+    { data: linkedBookings },
+  ] = await Promise.all([
     supabase
       .from("iguide_webhook_events")
       .select(
@@ -65,6 +74,15 @@ export default async function IGuideReviewPage({
       .order("scheduled_at", { ascending: false, nullsFirst: false })
       .limit(200)
       .returns<BookingOptionRow[]>(),
+    supabase
+      .from("bookings")
+      .select(
+        "id, scheduled_at, status, iguide_id, iguide_portal_id, properties(street_address, city, postal_code), profiles(full_name, email)",
+      )
+      .or("iguide_id.not.is.null,iguide_portal_id.not.is.null")
+      .order("scheduled_at", { ascending: false, nullsFirst: false })
+      .limit(50)
+      .returns<LinkedIGuideBookingRow[]>(),
   ]);
 
   if (error) {
@@ -116,26 +134,90 @@ export default async function IGuideReviewPage({
           iGUIDEs needing a booking
         </h1>
         <p className="mt-2 max-w-3xl text-sm text-ink-muted">
-          This page is only for iGUIDEs the site could not safely match by
-          itself. Pick the booking it belongs to, or hide it if it is not your
-          shoot.
+          Review iGUIDEs the site could not safely match by itself, and quickly
+          confirm which bookings already have iGUIDE media attached.
         </p>
       </header>
 
       <div className="grid gap-3 md:grid-cols-3">
         <InfoBox
-          title="What shows up here"
-          body="New ready webhooks from iGUIDE that did not clearly match one booking."
+          title="Needs review"
+          body={`${reviewItems.length} incoming iGUIDE event${
+            reviewItems.length === 1 ? "" : "s"
+          } still need a booking decision.`}
         />
         <InfoBox
-          title="What does not"
-          body="Old portal tours will not appear unless iGUIDE sends a new ready webhook."
+          title="Already linked"
+          body={`${linkedBookings?.length ?? 0} booking${
+            (linkedBookings?.length ?? 0) === 1 ? "" : "s"
+          } already have an iGUIDE alias or portal ID saved.`}
         />
         <InfoBox
-          title="Random shoots"
-          body="If another account or editor sends events to this webhook, hide them with Not my shoot."
+          title="Why random shoots appear"
+          body="The webhook can receive events from the iGUIDE account/app that sends to this URL. Hide anything that is not your shoot."
         />
       </div>
+
+      {linkedBookings && linkedBookings.length > 0 ? (
+        <section className="rounded-lg border border-white/10 bg-ink-soft/40 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-white">
+                Bookings already linked to iGUIDE
+              </h2>
+              <p className="mt-1 text-xs text-ink-muted">
+                These will not show in the review queue because the site already
+                knows which booking they belong to.
+              </p>
+            </div>
+            <Link
+              href="/admin/bookings"
+              className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-ink-muted hover:border-white/30 hover:text-white"
+            >
+              Open bookings
+            </Link>
+          </div>
+          <ul className="mt-4 grid gap-2 md:grid-cols-2">
+            {linkedBookings.slice(0, 6).map((booking) => (
+              <li
+                key={booking.id}
+                className="rounded-md border border-white/10 bg-black/20 p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-white">
+                      {formatBookingAddress(booking)}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-ink-muted">
+                      {booking.profiles?.full_name ??
+                        booking.profiles?.email ??
+                        "No realtor"}{" "}
+                      · {formatBookingDate(booking.scheduled_at)}
+                    </p>
+                    <p className="mt-1 truncate text-[11px] text-ink-muted">
+                      {booking.iguide_portal_id
+                        ? `Portal ${booking.iguide_portal_id}`
+                        : "No portal ID"}
+                      {booking.iguide_id ? ` · ${booking.iguide_id}` : ""}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/admin/bookings/${booking.id}`}
+                    className="shrink-0 rounded-md bg-brand px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-brand-light"
+                  >
+                    Open
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {linkedBookings.length > 6 ? (
+            <p className="mt-3 text-xs text-ink-muted">
+              Showing the newest 6 linked bookings.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <nav className="flex gap-1 text-xs">
@@ -239,11 +321,21 @@ export default async function IGuideReviewPage({
           })}
         </ul>
       ) : (
-        <p className="rounded-lg border border-dashed border-white/10 bg-ink-soft/40 px-4 py-8 text-center text-sm text-ink-muted">
-          {view === "likely" && unrelatedItems.length > 0
-            ? "No likely matches. The remaining iGUIDEs look unrelated to current bookings."
-            : "Nothing to review. If an iGUIDE comes in and the site cannot match it, it will show up here."}
-        </p>
+        <div className="rounded-lg border border-dashed border-white/10 bg-ink-soft/40 px-4 py-8 text-center">
+          <p className="text-sm text-ink-muted">
+            {view === "likely" && unrelatedItems.length > 0
+              ? "No likely matches. The remaining iGUIDEs look unrelated to current bookings."
+              : "Nothing to review. If an iGUIDE comes in and the site cannot match it, it will show up here."}
+          </p>
+          {view === "likely" && unrelatedItems.length > 0 ? (
+            <Link
+              href="/admin/iguide?view=all"
+              className="mt-3 inline-flex rounded-md border border-white/10 px-3 py-1.5 text-xs text-brand-light hover:border-brand-light"
+            >
+              See all unmatched iGUIDEs
+            </Link>
+          ) : null}
+        </div>
       )}
 
       <p className="text-xs text-ink-muted">
@@ -286,18 +378,26 @@ function statusCopy(status: string): { label: string; classes: string } {
 }
 
 function formatBookingLabel(booking: BookingOptionRow): string {
-  const address = [
-    booking.properties?.street_address,
-    booking.properties?.city,
-    booking.properties?.postal_code,
-  ]
-    .filter(Boolean)
-    .join(", ");
+  const address = formatBookingAddress(booking);
   const realtor = booking.profiles?.full_name ?? booking.profiles?.email ?? "No realtor";
-  const date = booking.scheduled_at
-    ? new Date(booking.scheduled_at).toLocaleDateString()
-    : "No date";
+  const date = formatBookingDate(booking.scheduled_at);
   return `${address || "No address"} - ${realtor} - ${date}`;
+}
+
+function formatBookingAddress(booking: BookingOptionRow): string {
+  return (
+    [
+      booking.properties?.street_address,
+      booking.properties?.city,
+      booking.properties?.postal_code,
+    ]
+      .filter(Boolean)
+      .join(", ") || "No address"
+  );
+}
+
+function formatBookingDate(value: string | null): string {
+  return value ? new Date(value).toLocaleDateString() : "No date";
 }
 
 function eventDetails(payload: Json): {

@@ -183,7 +183,10 @@ export async function saveIntegrationCredentials(
   for (const [k, v] of Object.entries(rawFields)) {
     if (!allowed.has(k)) continue;
     if (typeof v !== "string") continue;
-    fields[k] = v;
+    fields[k] =
+      provider === "iguide" && k === "webhook_secret"
+        ? normalizeIGuideWebhookSecret(v)
+        : v;
   }
 
   if (Object.keys(fields).length === 0) {
@@ -234,6 +237,17 @@ export async function testIGuideCredentials(): Promise<{
     ok: true,
     appIdLast4: result.data.appId.slice(-4),
   };
+}
+
+function normalizeIGuideWebhookSecret(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  try {
+    const url = new URL(trimmed);
+    return url.searchParams.get("secret")?.trim() || trimmed;
+  } catch {
+    return trimmed;
+  }
 }
 
 /**

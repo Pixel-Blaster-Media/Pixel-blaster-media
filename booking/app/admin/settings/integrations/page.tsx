@@ -318,7 +318,7 @@ export default async function IntegrationsPage({
               name: "webhook_secret",
               label: "Webhook secret",
               helper:
-                "You choose this. Use a long random value, save it here, then put the same value after secret= in the webhook URL.",
+                "You choose this. Use a long random value and put the same value after secret= in iGUIDE. If you paste the whole webhook URL here by mistake, we will save just the secret.",
             },
           ]}
           statuses={{

@@ -44,7 +44,8 @@ export async function POST(request: NextRequest) {
   }
 
   const provided = request.nextUrl.searchParams.get("secret");
-  if (!provided || !timingSafeEqual(provided, expected)) {
+  const expectedSecret = normalizeWebhookSecret(expected);
+  if (!provided || !timingSafeEqual(provided, expectedSecret)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
@@ -100,6 +101,16 @@ function timingSafeEqual(a: string, b: string): boolean {
     mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
   }
   return mismatch === 0;
+}
+
+function normalizeWebhookSecret(value: string): string {
+  const trimmed = value.trim();
+  try {
+    const url = new URL(trimmed);
+    return url.searchParams.get("secret")?.trim() || trimmed;
+  } catch {
+    return trimmed;
+  }
 }
 
 /**
