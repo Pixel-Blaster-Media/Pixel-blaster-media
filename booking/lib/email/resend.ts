@@ -14,6 +14,8 @@ import { getCredential } from "@/lib/integrations/credentials";
 
 interface SendEmailArgs {
   to: string | string[];
+  cc?: string | string[];
+  bcc?: string | string[];
   subject: string;
   html: string;
   /** Plain-text fallback. Auto-derived from html if omitted. */
@@ -51,6 +53,12 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
       body: JSON.stringify({
         from,
         to: Array.isArray(args.to) ? args.to : [args.to],
+        ...(args.cc
+          ? { cc: Array.isArray(args.cc) ? args.cc : [args.cc] }
+          : {}),
+        ...(args.bcc
+          ? { bcc: Array.isArray(args.bcc) ? args.bcc : [args.bcc] }
+          : {}),
         subject: args.subject,
         html: args.html,
         text: args.text ?? stripHtml(args.html),

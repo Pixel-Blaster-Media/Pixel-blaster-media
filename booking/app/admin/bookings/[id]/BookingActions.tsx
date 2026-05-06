@@ -196,6 +196,7 @@ function DeliveryEmailButton({
 }) {
   const [isPending, startTransition] = useTransition();
   const [sentAt, setSentAt] = useState(initialSentAt);
+  const [extraRecipients, setExtraRecipients] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const hasBeenSent = Boolean(sentAt);
@@ -207,6 +208,20 @@ function DeliveryEmailButton({
           Already sent {formatSentAt(sentAt)}.
         </p>
       ) : null}
+      <label className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">
+        Extra recipients
+      </label>
+      <textarea
+        value={extraRecipients}
+        onChange={(event) => setExtraRecipients(event.target.value)}
+        rows={2}
+        placeholder="teammate@example.com, assistant@example.com"
+        className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60"
+      />
+      <p className="mt-1 text-[11px] text-ink-muted">
+        Separate emails with commas or spaces. You&apos;ll be copied
+        automatically.
+      </p>
       <button
         type="button"
         disabled={isPending}
@@ -214,7 +229,10 @@ function DeliveryEmailButton({
           setMessage(null);
           setError(null);
           startTransition(async () => {
-            const res = await sendDeliveryReadyEmail(bookingId);
+            const res = await sendDeliveryReadyEmail(
+              bookingId,
+              extraRecipients,
+            );
             if (!res.ok) {
               setError(res.error ?? "Could not send delivery email.");
               return;
@@ -222,12 +240,12 @@ function DeliveryEmailButton({
             if (res.sentAt) setSentAt(res.sentAt);
             setMessage(
               res.resent
-                ? "Delivery email resent."
-                : "Delivery email sent.",
+                ? `Delivery email resent to ${res.recipientCount ?? 1} recipient(s).`
+                : `Delivery email sent to ${res.recipientCount ?? 1} recipient(s).`,
             );
           });
         }}
-        className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+        className="mt-3 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
       >
         {isPending
           ? "Sending..."

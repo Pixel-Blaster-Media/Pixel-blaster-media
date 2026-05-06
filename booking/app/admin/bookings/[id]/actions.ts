@@ -274,8 +274,11 @@ export async function deleteDeliverable(
 
 export async function sendDeliveryReadyEmail(
   bookingId: string,
-): Promise<ActionResult & { resent?: boolean; sentAt?: string }> {
-  await requireAdmin();
+  extraRecipientsInput = "",
+): Promise<
+  ActionResult & { resent?: boolean; sentAt?: string; recipientCount?: number }
+> {
+  const admin = await requireAdmin();
   const service = getServiceSupabase();
 
   const { data: booking, error: bookingError } = await service
@@ -319,6 +322,13 @@ export async function sendDeliveryReadyEmail(
     };
   }
 
+  const primaryRecipient = booking.profiles.email;
+  const extraRecipients = parseRecipientEmails(extraRecipientsInput);
+  const ccRecipients = uniqueEmails([
+    admin.email,
+    ...extraRecipients,
+  ]).filter((email) => email.toLowerCase() !== primaryRecipient.toLowerCase());
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   const portalLink = appUrl
     ? `${appUrl}/portal/${booking.property_id}`
@@ -331,21 +341,25 @@ export async function sendDeliveryReadyEmail(
   });
 
   const sent = await sendEmail({
-    to: booking.profiles.email,
+    to: primaryRecipient,
+    ...(ccRecipients.length > 0 ? { cc: ccRecipients } : {}),
     subject: email.subject,
     html: email.html,
   });
   if (!sent.ok) return { ok: false, error: sent.error ?? "Email failed." };
 
   const sentAt = new Date().toISOString();
-  const { error: notificationError } = await service
-    .from("booking_notifications")
-    .upsert({
+  const notificationRows = [primaryRecipient, ...ccRecipients].map(
+    (recipientEmail) => ({
       booking_id: booking.id,
       kind: "delivery_ready",
-      recipient_email: booking.profiles.email,
+      recipient_email: recipientEmail,
       sent_at: sentAt,
-    }, {
+    }),
+  );
+  const { error: notificationError } = await service
+    .from("booking_notifications")
+    .upsert(notificationRows, {
       onConflict: "booking_id,kind,recipient_email",
     });
   if (notificationError && notificationError.code !== "23505") {
@@ -353,7 +367,34 @@ export async function sendDeliveryReadyEmail(
   }
 
   revalidatePath(`/admin/bookings/${bookingId}`);
-  return { ok: true, resent: Boolean(existing), sentAt };
+  return {
+    ok: true,
+    resent: Boolean(existing),
+    sentAt,
+    recipientCount: notificationRows.length,
+  };
+}
+
+function parseRecipientEmails(input: string): string[] {
+  return uniqueEmails(
+    input
+      .split(/[\s,;]+/)
+      .map((email) => email.trim())
+      .filter(Boolean)
+      .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)),
+  );
+}
+
+function uniqueEmails(emails: string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const email of emails) {
+    const key = email.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(email);
+  }
+  return unique;
 }
 
 /**
