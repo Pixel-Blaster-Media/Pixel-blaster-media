@@ -12,6 +12,7 @@ import type { UserRole } from "@/lib/supabase/database.types";
 
 import Stepper from "../_components/Stepper";
 import ConfirmForm from "./ConfirmForm";
+import ConfirmUpsellPanel from "./ConfirmUpsellPanel";
 
 export const metadata: Metadata = {
   title: "Book a shoot · confirm",
@@ -100,6 +101,19 @@ export default async function BookStep4Page({
           </p>
         )}
       </section>
+
+      <ConfirmUpsellPanel
+        state={state}
+        catalog={[...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(
+          (item) => ({
+            slug: item.slug,
+            name: item.name,
+            price_cents: item.price_cents,
+            duration_minutes: item.duration_minutes,
+            require_has_video: item.require_has_video,
+          }),
+        )}
+      />
 
       {/* Summary */}
       <section className="rounded-xl border border-white/10 bg-ink-soft/50 p-4 text-sm">
