@@ -35,11 +35,13 @@ export default function BookingActions({
   currentStatus,
   transitions,
   deliverables,
+  deliveryEmailSentAt,
 }: {
   bookingId: string;
   currentStatus: BookingStatus;
   transitions: BookingStatus[];
   deliverables: DeliverableSummary[];
+  deliveryEmailSentAt: string | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -145,7 +147,10 @@ export default function BookingActions({
           Email the realtor when their ready media links are available in the
           portal. This can only be sent once per realtor for this booking.
         </p>
-        <DeliveryEmailButton bookingId={bookingId} />
+        <DeliveryEmailButton
+          bookingId={bookingId}
+          initialSentAt={deliveryEmailSentAt}
+        />
       </section>
 
       <details className="rounded-md border border-white/10 bg-ink-soft/50 p-3">
@@ -243,13 +248,26 @@ function VideoLinkForm({ bookingId }: { bookingId: string }) {
   );
 }
 
-function DeliveryEmailButton({ bookingId }: { bookingId: string }) {
+function DeliveryEmailButton({
+  bookingId,
+  initialSentAt,
+}: {
+  bookingId: string;
+  initialSentAt: string | null;
+}) {
   const [isPending, startTransition] = useTransition();
+  const [sentAt, setSentAt] = useState(initialSentAt);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const hasBeenSent = Boolean(sentAt);
 
   return (
     <div className="mt-3">
+      {sentAt ? (
+        <p className="mb-2 text-xs text-emerald-300">
+          Already sent {formatSentAt(sentAt)}.
+        </p>
+      ) : null}
       <button
         type="button"
         disabled={isPending}
@@ -262,16 +280,21 @@ function DeliveryEmailButton({ bookingId }: { bookingId: string }) {
               setError(res.error ?? "Could not send delivery email.");
               return;
             }
+            if (res.sentAt) setSentAt(res.sentAt);
             setMessage(
-              res.skipped
-                ? "Delivery email was already sent."
+              res.resent
+                ? "Delivery email resent."
                 : "Delivery email sent.",
             );
           });
         }}
         className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
       >
-        {isPending ? "Sending..." : "Send delivery email"}
+        {isPending
+          ? "Sending..."
+          : hasBeenSent
+            ? "Resend delivery email"
+            : "Send delivery email"}
       </button>
       {error ? (
         <p className="mt-2 text-sm text-red-300" role="alert">
@@ -283,6 +306,15 @@ function DeliveryEmailButton({ bookingId }: { bookingId: string }) {
       ) : null}
     </div>
   );
+}
+
+function formatSentAt(iso: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(iso));
 }
 
 function ManualDeliverableForm({ bookingId }: { bookingId: string }) {

@@ -266,7 +266,7 @@ export async function deleteDeliverable(
 
 export async function sendDeliveryReadyEmail(
   bookingId: string,
-): Promise<ActionResult & { skipped?: boolean }> {
+): Promise<ActionResult & { resent?: boolean; sentAt?: string }> {
   await requireAdmin();
   const service = getServiceSupabase();
 
@@ -293,10 +293,6 @@ export async function sendDeliveryReadyEmail(
     .eq("kind", "delivery_ready")
     .eq("recipient_email", booking.profiles.email)
     .maybeSingle<{ id: string }>();
-
-  if (existing) {
-    return { ok: true, skipped: true };
-  }
 
   const { data: deliverables } = await service
     .from("deliverables")
@@ -339,19 +335,23 @@ export async function sendDeliveryReadyEmail(
   });
   if (!sent.ok) return { ok: false, error: sent.error ?? "Email failed." };
 
+  const sentAt = new Date().toISOString();
   const { error: notificationError } = await service
     .from("booking_notifications")
-    .insert({
+    .upsert({
       booking_id: booking.id,
       kind: "delivery_ready",
       recipient_email: booking.profiles.email,
+      sent_at: sentAt,
+    }, {
+      onConflict: "booking_id,kind,recipient_email",
     });
   if (notificationError && notificationError.code !== "23505") {
     return { ok: false, error: notificationError.message };
   }
 
   revalidatePath(`/admin/bookings/${bookingId}`);
-  return { ok: true };
+  return { ok: true, resent: Boolean(existing), sentAt };
 }
 
 /**

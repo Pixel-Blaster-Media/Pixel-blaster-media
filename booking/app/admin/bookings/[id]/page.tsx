@@ -82,6 +82,10 @@ interface IGuideJobRow {
   match_source: string;
 }
 
+interface BookingNotificationRow {
+  sent_at: string;
+}
+
 export default async function BookingDetailPage({
   params,
 }: {
@@ -94,6 +98,7 @@ export default async function BookingDetailPage({
     { data: booking, error: bookErr },
     { data: deliverables },
     { data: iguideJob },
+    { data: deliveryNotification },
   ] =
     await Promise.all([
       supabase
@@ -116,6 +121,14 @@ export default async function BookingDetailPage({
         .select("status, work_order_id, default_view_id, match_source")
         .eq("booking_id", id)
         .maybeSingle<IGuideJobRow>(),
+      supabase
+        .from("booking_notifications")
+        .select("sent_at")
+        .eq("booking_id", id)
+        .eq("kind", "delivery_ready")
+        .order("sent_at", { ascending: false })
+        .limit(1)
+        .maybeSingle<BookingNotificationRow>(),
     ]);
 
   if (bookErr || !booking) notFound();
@@ -226,6 +239,7 @@ export default async function BookingDetailPage({
             currentStatus={booking.status}
             transitions={transitions}
             deliverables={deliverables ?? []}
+            deliveryEmailSentAt={deliveryNotification?.sent_at ?? null}
           />
 
           <section className="space-y-4">
