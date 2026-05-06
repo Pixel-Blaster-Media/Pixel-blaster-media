@@ -154,8 +154,10 @@ export default function BookingActions({
         </summary>
         <div className="mt-3">
           <p className="text-xs text-ink-muted">
-            Fallback for unusual links. Fotello/iGUIDE normally use their own
-            sections.
+            Fallback for unusual public links like video, Drive, Dropbox,
+            floor plan, or iGUIDE URLs. Fotello does not usually give you a
+            permanent link to paste here; use the Fotello upload section
+            instead.
           </p>
           <ManualDeliverableForm bookingId={bookingId} />
         </div>

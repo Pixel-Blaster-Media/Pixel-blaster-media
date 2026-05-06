@@ -35,7 +35,6 @@ export default function FotelloSection({
   const [listingError, setListingError] = useState<string | null>(null);
 
   const [enhanceInput, setEnhanceInput] = useState("");
-  const [shotType, setShotType] = useState<"interior" | "exterior">("interior");
   const [trackingPending, startTracking] = useTransition();
   const [trackError, setTrackError] = useState<string | null>(null);
   const [trackOk, setTrackOk] = useState<string | null>(null);
@@ -63,7 +62,7 @@ export default function FotelloSection({
     setTrackError(null);
     setTrackOk(null);
     startTracking(async () => {
-      const res = await trackFotelloEnhance(bookingId, enhanceInput, shotType);
+      const res = await trackFotelloEnhance(bookingId, enhanceInput, "interior");
       if (!res.ok) {
         setTrackError(res.error ?? "Track failed.");
         return;
@@ -152,9 +151,9 @@ export default function FotelloSection({
           Fotello
         </h2>
         <p className="mt-1 text-xs text-ink-muted">
-          Track the Fotello listing + each enhance you kicked off. We poll
-          Fotello for status; when an enhance completes its gallery shows up
-          on the realtor's portal page automatically.
+          Upload photos here and we will send them to Fotello, track the
+          enhancement, and show the finished gallery in the realtor portal
+          automatically.
         </p>
       </div>
 
@@ -224,6 +223,10 @@ export default function FotelloSection({
             {listingError}
           </p>
         ) : null}
+        <p className="mt-1 text-xs text-ink-muted">
+          Optional fallback only. Most jobs create this automatically when you
+          upload photos above.
+        </p>
       </div>
 
       {/* Track a new enhance */}
@@ -231,7 +234,11 @@ export default function FotelloSection({
         <p className="text-xs font-medium uppercase tracking-wider text-ink-muted">
           Track an enhance
         </p>
-        <div className="mt-2 grid gap-2 md:grid-cols-[1fr_140px_auto]">
+        <p className="mt-1 text-xs text-ink-muted">
+          Backup option for an existing Fotello job if you already have the
+          enhance ID. Fotello may not show a public gallery link.
+        </p>
+        <div className="mt-2 grid gap-2 md:grid-cols-[1fr_auto]">
           <input
             type="text"
             value={enhanceInput}
@@ -239,16 +246,6 @@ export default function FotelloSection({
             placeholder="Enhance ID from Fotello"
             className="rounded-md border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
           />
-          <select
-            value={shotType}
-            onChange={(e) =>
-              setShotType(e.target.value as "interior" | "exterior")
-            }
-            className="rounded-md border border-white/10 bg-ink px-3 py-2 text-sm text-white"
-          >
-            <option value="interior">Interior</option>
-            <option value="exterior">Exterior</option>
-          </select>
           <button
             type="button"
             disabled={trackingPending || !enhanceInput.trim()}
