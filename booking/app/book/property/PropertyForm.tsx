@@ -151,9 +151,10 @@ export default function PropertyForm({
       </section>
 
       <fieldset className="realtor-warm-panel rounded-2xl p-4">
-        <legend className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
+        <legend className="sr-only">Is the property occupied?</legend>
+        <p className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
           Is the property occupied?
-        </legend>
+        </p>
         <div className="mt-2 grid gap-2 md:grid-cols-3">
           <RadioCard
             name="vacant"
@@ -183,9 +184,10 @@ export default function PropertyForm({
       </fieldset>
 
       <fieldset className="realtor-warm-panel rounded-2xl p-4">
-        <legend className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
+        <legend className="sr-only">Include basement in the shoot?</legend>
+        <p className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
           Include basement in the shoot?
-        </legend>
+        </p>
         <div className="mt-2 grid gap-2 md:grid-cols-2">
           <RadioCard
             name="basement"

@@ -85,10 +85,6 @@ a {
   color: var(--realtor-text);
 }
 
-.realtor-theme a {
-  color: var(--realtor-primary);
-}
-
 .realtor-backdrop {
   background:
     linear-gradient(180deg, rgba(247, 244, 237, 0.96), rgba(241, 234, 223, 0.9)),
