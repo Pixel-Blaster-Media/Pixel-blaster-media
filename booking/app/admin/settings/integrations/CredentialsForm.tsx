@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   clearIntegrationCredentials,
@@ -42,6 +43,7 @@ export default function CredentialsForm({
   fields,
   statuses,
 }: CredentialsFormProps) {
+  const router = useRouter();
   const [values, setValues] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<
     { kind: "ok" | "err"; text: string } | null
@@ -68,6 +70,7 @@ export default function CredentialsForm({
       if (res.ok) {
         setMessage({ kind: "ok", text: "Saved. Takes effect immediately." });
         setValues({});
+        router.refresh();
       } else {
         setMessage({
           kind: "err",
@@ -89,6 +92,36 @@ export default function CredentialsForm({
       const res = await clearIntegrationCredentials(provider, [field]);
       if (res.ok) {
         setMessage({ kind: "ok", text: "Cleared." });
+        router.refresh();
+      } else {
+        setMessage({
+          kind: "err",
+          text: res.error ?? "Could not clear.",
+        });
+      }
+    });
+  }
+
+  function clearAllFields() {
+    const savedFields = fields
+      .filter((field) => statuses[field.name]?.source === "db")
+      .map((field) => field.name);
+    if (savedFields.length === 0) {
+      setMessage({ kind: "err", text: "There are no saved values to clear." });
+      return;
+    }
+    if (
+      !confirm(
+        `Clear all saved ${provider} values? Environment values, if any, will still be used.`,
+      )
+    ) {
+      return;
+    }
+    startTransition(async () => {
+      const res = await clearIntegrationCredentials(provider, savedFields);
+      if (res.ok) {
+        setMessage({ kind: "ok", text: "All saved values cleared." });
+        router.refresh();
       } else {
         setMessage({
           kind: "err",
@@ -144,13 +177,23 @@ export default function CredentialsForm({
         </p>
       ) : null}
 
-      <button
-        type="submit"
-        disabled={isPending}
-        className="rounded-md bg-brand px-4 py-1.5 text-xs font-semibold text-white hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {isPending ? "Saving…" : "Save credentials"}
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="rounded-md bg-brand px-4 py-1.5 text-xs font-semibold text-white hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isPending ? "Saving…" : "Save credentials"}
+        </button>
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={clearAllFields}
+          className="rounded-md border border-red-300/30 px-4 py-1.5 text-xs font-semibold text-red-200 hover:border-red-300 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Clear all saved
+        </button>
+      </div>
     </form>
   );
 }
