@@ -96,8 +96,8 @@ export default async function BookStep4Page({
           </p>
         ) : (
           <p className="mt-1 text-sm text-ink-muted">
-            Create an account or sign in — your booking lands on both of our
-            calendars automatically.
+            Enter your contact info and choose a password. That same password
+            gets you back into your private portal later.
           </p>
         )}
       </section>

@@ -62,10 +62,13 @@ interface DeliverableRow {
 
 export default async function PropertyDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ propertyId: string }>;
+  searchParams: Promise<{ booked?: string }>;
 }) {
   const { propertyId } = await params;
+  const query = await searchParams;
   await requireUser(`/portal/${propertyId}`);
   const supabase = await getServerSupabase();
 
@@ -140,6 +143,18 @@ export default async function PropertyDetailPage({
       >
         ← My listings
       </Link>
+
+      {query.booked === "1" ? (
+        <section className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 p-4">
+          <p className="text-sm font-semibold text-white">
+            Your booking is confirmed.
+          </p>
+          <p className="mt-1 text-xs text-ink-muted">
+            You are signed in now. To come back later, use the same email and
+            password from the booking form at the sign-in page.
+          </p>
+        </section>
+      ) : null}
 
       <header className="rounded-lg border border-white/10 bg-ink-soft/50 p-5">
         <p className="text-xs uppercase tracking-[0.2em] text-brand-light">

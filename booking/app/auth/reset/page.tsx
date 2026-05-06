@@ -45,7 +45,7 @@ export default async function ResetPage({
 
       <p className="border-t border-white/5 pt-4 text-xs text-ink-muted">
         Remembered it?{" "}
-        <Link href="/auth/password" className="text-brand-light underline">
+        <Link href="/auth/sign-in" className="text-brand-light underline">
           Sign in with your password
         </Link>
         .

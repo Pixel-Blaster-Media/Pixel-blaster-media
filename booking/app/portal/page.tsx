@@ -53,7 +53,7 @@ interface PropertyMediaSummary {
 export default async function PortalIndex({
   searchParams,
 }: {
-  searchParams: Promise<{ archived?: string }>;
+  searchParams: Promise<{ archived?: string; password_updated?: string }>;
 }) {
   const params = await searchParams;
   const user = await requireUser("/portal");
@@ -110,6 +110,17 @@ export default async function PortalIndex({
 
   return (
     <div className="space-y-6">
+      {params.password_updated === "1" ? (
+        <section className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 p-4">
+          <p className="text-sm font-semibold text-white">
+            Your password has been updated.
+          </p>
+          <p className="mt-1 text-xs text-ink-muted">
+            Use this password next time you sign in to your media portal.
+          </p>
+        </section>
+      ) : null}
+
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-brand-light">

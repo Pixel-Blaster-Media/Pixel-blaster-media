@@ -89,84 +89,100 @@ export default function ConfirmForm({
       />
 
       {profile ? null : (
-        <fieldset className="grid gap-4 md:grid-cols-2">
+        <fieldset className="rounded-xl border border-white/10 bg-ink-soft/35 p-4">
           <legend className="sr-only">Your contact info</legend>
-          <Field
-            label="Full name"
-            name="contact_name"
-            required
-            autoComplete="name"
-            error={formState?.errors?.contact_name}
-          />
-          <Field
-            label="Brokerage"
-            name="brokerage"
-            placeholder="Royal LePage, Re/Max, etc."
-            autoComplete="organization"
-          />
-          <Field
-            label="Email"
-            name="contact_email"
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => handleEmailChange(e.currentTarget.value)}
-            onBlur={handleEmailBlur}
-            error={formState?.errors?.contact_email}
-          />
-          <Field
-            label="Phone"
-            name="contact_phone"
-            type="tel"
-            autoComplete="tel"
-            placeholder="(905) 555-0123"
-            error={formState?.errors?.contact_phone}
-          />
-          <div className="md:col-span-2">
-            <label className="block">
-              <span className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-ink-muted">
-                <span>
-                  {mode === "existing" ? "Password" : "Create a password"}
-                  <span className="text-brand-light"> *</span>
+          <div className="mb-4">
+            <p className="text-sm font-semibold text-white">
+              Your portal login
+            </p>
+            <p className="mt-1 text-xs text-ink-muted">
+              We use this to confirm the booking and create your private media
+              portal. Use an email you can access later.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field
+              label="Full name"
+              name="contact_name"
+              required
+              autoComplete="name"
+              error={formState?.errors?.contact_name}
+            />
+            <Field
+              label="Brokerage"
+              name="brokerage"
+              placeholder="Royal LePage, Re/Max, etc."
+              autoComplete="organization"
+            />
+            <Field
+              label="Email"
+              name="contact_email"
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => handleEmailChange(e.currentTarget.value)}
+              onBlur={handleEmailBlur}
+              error={formState?.errors?.contact_email}
+            />
+            <Field
+              label="Phone"
+              name="contact_phone"
+              type="tel"
+              autoComplete="tel"
+              placeholder="(905) 555-0123"
+              error={formState?.errors?.contact_phone}
+            />
+            <div className="md:col-span-2">
+              <label className="block">
+                <span className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-ink-muted">
+                  <span>
+                    {mode === "existing" ? "Password" : "Create a password"}
+                    <span className="text-brand-light"> *</span>
+                  </span>
+                  {mode === "existing" ? (
+                    <Link
+                      href="/auth/reset"
+                      className="text-[11px] normal-case tracking-normal text-brand-light hover:underline"
+                    >
+                      Forgot password?
+                    </Link>
+                  ) : null}
                 </span>
-                {mode === "existing" ? (
-                  <Link
-                    href="/auth/reset"
-                    className="text-[11px] normal-case tracking-normal text-brand-light hover:underline"
-                  >
-                    Forgot password?
-                  </Link>
+                <input
+                  name="password"
+                  type="password"
+                  required
+                  autoComplete={
+                    mode === "existing" ? "current-password" : "new-password"
+                  }
+                  minLength={8}
+                  className={
+                    "mt-1 w-full rounded-md border bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
+                    (formState?.errors?.password
+                      ? "border-red-400/60"
+                      : "border-white/10")
+                  }
+                />
+                <span className="mt-1 block text-[11px] text-ink-muted">
+                  {mode === "existing"
+                    ? "We found your account. Enter your password to finish this booking."
+                    : mode === "new"
+                      ? "Save this password. You'll use it to return for photos, tours, invoices, and future bookings."
+                      : "8+ characters. If this email is new, we'll create your portal account. If it exists, we'll sign you in."}
+                </span>
+                {formState?.errors?.password ? (
+                  <span className="mt-1 block text-xs text-red-300">
+                    {formState.errors.password}
+                  </span>
                 ) : null}
-              </span>
-              <input
-                name="password"
-                type="password"
-                required
-                autoComplete={
-                  mode === "existing" ? "current-password" : "new-password"
-                }
-                minLength={8}
-                className={
-                  "mt-1 w-full rounded-md border bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
-                  (formState?.errors?.password
-                    ? "border-red-400/60"
-                    : "border-white/10")
-                }
-              />
-              <span className="mt-1 block text-[11px] text-ink-muted">
-                {mode === "existing"
-                  ? "We found an account for this email. Sign in to complete your booking."
-                  : mode === "new"
-                    ? "You'll be able to sign in later to see all your bookings and reschedule."
-                    : "8+ characters. We'll either sign you in or create your account."}
-              </span>
-              {formState?.errors?.password ? (
-                <span className="mt-1 block text-xs text-red-300">
-                  {formState.errors.password}
-                </span>
-              ) : null}
-            </label>
+              </label>
+              <div className="mt-3 rounded-md border border-brand-light/20 bg-brand/10 p-3 text-xs text-ink-muted">
+                After you confirm, you can always come back through{" "}
+                <span className="font-semibold text-white">Sign in</span> using
+                this email and password. No magic link required.
+              </div>
+            </div>
           </div>
         </fieldset>
       )}

@@ -355,7 +355,12 @@ export async function createPublicBooking(
         <p>
           You can view and manage this booking anytime at
           <a href="${appUrl}/portal">${appUrl || "your client portal"}</a>.
-          Just sign in with ${escapeHtml(userEmail)} and the password you used to book.
+          Sign in with ${escapeHtml(userEmail)} and the password you used when booking.
+        </p>
+        <p>
+          Keep that password handy — it is how you can return later to see
+          photos, iGUIDE tours, floor plans, video links, invoices, and future
+          bookings in one place.
         </p>
         <p>— Pixel Blaster Media</p>
       `,
