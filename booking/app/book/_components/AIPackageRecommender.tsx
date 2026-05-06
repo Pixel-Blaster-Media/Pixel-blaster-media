@@ -20,12 +20,6 @@ interface Recommendation {
   notes: string[];
 }
 
-const EXAMPLES = [
-  "Vacant 1,200 sqft condo in Burlington, just need MLS photos and floor plan.",
-  "2,400 sqft detached home in Ancaster, occupied, want strong marketing and social video.",
-  "Luxury acreage listing with a pool, drone would help, seller wants maximum exposure.",
-];
-
 export default function AIPackageRecommender({ bundles, aLaCarte, addons }: Props) {
   const router = useRouter();
   const params = useSearchParams();
@@ -82,22 +76,6 @@ export default function AIPackageRecommender({ bundles, aLaCarte, addons }: Prop
           placeholder="Example: 2,200 sqft detached home in Hamilton, occupied, basement included, realtor wants photos, iGUIDE, drone, and maybe a reel for Instagram."
           className="w-full rounded-lg border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
         />
-        <div className="flex flex-wrap gap-2">
-          {EXAMPLES.map((example) => (
-            <button
-              key={example}
-              type="button"
-              onClick={() => {
-                setDescription(example);
-                const next = buildRecommendation(example, bySlug);
-                setRecommendation(next);
-              }}
-              className="rounded-full border border-white/10 px-3 py-1 text-left text-[11px] text-ink-muted transition hover:border-brand-light/50 hover:text-white"
-            >
-              Try: {example}
-            </button>
-          ))}
-        </div>
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
