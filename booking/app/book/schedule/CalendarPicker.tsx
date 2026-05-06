@@ -105,7 +105,7 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
 
   if (!hasAnySlots) {
     return (
-      <div className="rounded-xl border border-dashed border-white/15 bg-ink-soft/40 p-6 text-sm text-ink-muted">
+      <div className="rounded-xl border border-dashed border-realtor-primary/20 bg-realtor-surface-muted/70 p-6 text-sm text-realtor-muted">
         No openings in the next 4 weeks. Try a different service combo or
         email{" "}
         <a
@@ -127,12 +127,12 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
           type="button"
           onClick={() => setCursor(addMonths(cursor, -1))}
           disabled={!canGoPrev}
-          className="rounded-md border border-white/10 px-3 py-1.5 text-sm text-white/80 hover:border-white/30 disabled:cursor-not-allowed disabled:opacity-30"
+          className="rounded-md border border-realtor-primary/15 px-3 py-1.5 text-sm text-realtor-muted hover:border-realtor-primary/35 disabled:cursor-not-allowed disabled:opacity-30"
           aria-label="Previous month"
         >
           ←
         </button>
-        <p className="text-sm font-semibold uppercase tracking-wider text-white">
+        <p className="text-sm font-semibold uppercase tracking-wider text-realtor-text">
           {cursor.toLocaleDateString("en-US", {
             month: "long",
             year: "numeric",
@@ -142,7 +142,7 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
           type="button"
           onClick={() => setCursor(addMonths(cursor, 1))}
           disabled={!canGoNext}
-          className="rounded-md border border-white/10 px-3 py-1.5 text-sm text-white/80 hover:border-white/30 disabled:cursor-not-allowed disabled:opacity-30"
+          className="rounded-md border border-realtor-primary/15 px-3 py-1.5 text-sm text-realtor-muted hover:border-realtor-primary/35 disabled:cursor-not-allowed disabled:opacity-30"
           aria-label="Next month"
         >
           →
@@ -150,7 +150,7 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
       </div>
 
       {/* Day-of-week header */}
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
           <div key={d} className="py-1">
             {d}
@@ -176,12 +176,12 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
               className={
                 "relative aspect-square rounded-md border text-sm transition " +
                 (!inMonth
-                  ? "border-transparent text-white/20"
+                  ? "border-transparent text-realtor-muted/40"
                   : isSelected
                     ? "border-brand-light bg-brand/20 text-brand-light"
                     : hasSlots
-                      ? "border-white/10 text-white hover:border-brand-light/60 hover:bg-brand/10"
-                      : "border-white/5 text-white/30")
+                      ? "border-realtor-primary/15 text-realtor-text hover:border-brand-light/60 hover:bg-brand/10"
+                      : "border-realtor-primary/10 text-realtor-muted/60")
               }
             >
               {cell.date ? cell.date.getDate() : ""}
@@ -201,7 +201,7 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
 
       {/* Slots for picked day */}
       {visibleSlots ? (
-        <div className="rounded-lg border border-white/10 bg-ink-soft/40 p-4">
+        <div className="rounded-lg border border-realtor-primary/15 bg-realtor-surface-muted/70 p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
             {formatDayLabel(openDayKey ?? "")}
           </p>
@@ -215,7 +215,7 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
                     "rounded-md border px-3 py-1.5 text-sm transition " +
                     (selectedSlot === s.start
                       ? "border-brand-light bg-brand/20 text-brand-light"
-                      : "border-white/15 text-white/90 hover:border-brand-light/60 hover:bg-brand/10")
+                      : "border-realtor-primary/20 text-realtor-text/90 hover:border-brand-light/60 hover:bg-brand/10")
                   }
                 >
                   {s.timeLabel}
@@ -225,7 +225,7 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
           </ul>
         </div>
       ) : (
-        <p className="text-xs text-ink-muted">
+        <p className="text-xs text-realtor-muted">
           Click a day to see open times.
         </p>
       )}

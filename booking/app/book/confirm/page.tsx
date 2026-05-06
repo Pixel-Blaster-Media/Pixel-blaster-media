@@ -83,19 +83,19 @@ export default async function BookStep4Page({
       <Stepper current={4} state={state} />
 
       <section>
-        <h2 className="text-lg font-semibold text-white md:text-xl">
+        <h2 className="text-lg font-semibold text-realtor-text md:text-xl">
           Review + confirm
         </h2>
         {profile ? (
-          <p className="mt-1 text-sm text-ink-muted">
+          <p className="mt-1 text-sm text-realtor-muted">
             Signed in as{" "}
-            <span className="text-white">
+            <span className="text-realtor-text">
               {profile.fullName ?? profile.email}
             </span>
             . One click and you&apos;re booked.
           </p>
         ) : (
-          <p className="mt-1 text-sm text-ink-muted">
+          <p className="mt-1 text-sm text-realtor-muted">
             Enter your contact info and choose a password. That same password
             gets you back into your private portal later.
           </p>
@@ -116,7 +116,7 @@ export default async function BookStep4Page({
       />
 
       {/* Summary */}
-      <section className="rounded-xl border border-white/10 bg-ink-soft/50 p-4 text-sm">
+      <section className="rounded-xl border border-realtor-primary/15 bg-realtor-surface/80 p-4 text-sm">
         <dl className="space-y-2">
           <Row
             label="Services"
@@ -124,7 +124,7 @@ export default async function BookStep4Page({
               <span>
                 {selectedItems.map((s) => s.name).join(", ")}
                 {selectedAddons.length ? (
-                  <span className="text-ink-muted">
+                  <span className="text-realtor-muted">
                     {" · "}
                     {selectedAddons.map((a) => a.name).join(", ")}
                   </span>
@@ -165,7 +165,7 @@ export default async function BookStep4Page({
                     </span>
                   ) : null}
                   {state.shootNotes ? (
-                    <span className="block text-ink-muted">
+                    <span className="block text-realtor-muted">
                       {state.shootNotes}
                     </span>
                   ) : null}
@@ -196,17 +196,17 @@ export default async function BookStep4Page({
             label="Total"
             value={
               <span>
-                <span className="font-semibold text-white">
+                <span className="font-semibold text-realtor-text">
                   ${(totalCents / 100).toFixed(0)}
                 </span>
-                <span className="text-ink-muted">
+                <span className="text-realtor-muted">
                   {" · "}~{duration} min on-site
                 </span>
               </span>
             }
           />
         </dl>
-        <p className="mt-3 border-t border-white/5 pt-3 text-[11px] text-ink-muted">
+        <p className="mt-3 border-t border-realtor-primary/10 pt-3 text-[11px] text-realtor-muted">
           Payment happens after the shoot. We&apos;ll adjust if the sqft or
           details need tweaking. Travel is included within roughly 30 km of
           the core service area; outside that, any travel fee is reviewed
@@ -222,10 +222,10 @@ export default async function BookStep4Page({
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex flex-wrap gap-2">
-      <dt className="w-24 shrink-0 text-[11px] uppercase tracking-wider text-ink-muted">
+      <dt className="w-24 shrink-0 text-[11px] uppercase tracking-wider text-realtor-muted">
         {label}
       </dt>
-      <dd className="min-w-0 flex-1 text-white/90">{value}</dd>
+      <dd className="min-w-0 flex-1 text-realtor-text/90">{value}</dd>
     </div>
   );
 }

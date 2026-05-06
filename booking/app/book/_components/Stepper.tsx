@@ -34,12 +34,12 @@ export default function Stepper({
           step.id <= completeness.maxReachable;
 
         const chipClass = isCurrent
-          ? "border-brand-light bg-brand/20 text-brand-light"
+          ? "border-realtor-primary bg-realtor-primary/15 text-realtor-primary"
           : isDone
-            ? "border-emerald-400/50 bg-emerald-400/10 text-emerald-200"
+            ? "border-emerald-700/40 bg-emerald-700/10 text-emerald-700"
             : isReachable
-              ? "border-white/20 text-white/70 hover:border-white/40"
-              : "border-white/10 text-white/30";
+              ? "border-realtor-primary/25 text-realtor-text/70 hover:border-realtor-primary/45"
+              : "border-realtor-primary/15 text-realtor-text/30";
 
         const content = (
           <div
@@ -54,7 +54,7 @@ export default function Stepper({
                 (isDone
                   ? "bg-emerald-400/20"
                   : isCurrent
-                    ? "bg-brand-light/20"
+                    ? "bg-realtor-primary-light/20"
                     : "bg-white/10")
               }
             >

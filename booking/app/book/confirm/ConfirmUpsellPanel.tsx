@@ -129,15 +129,15 @@ export default function ConfirmUpsellPanel({
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
             Recommended for this property
           </p>
-          <h3 className="mt-1 text-base font-semibold text-white">
+          <h3 className="mt-1 text-base font-semibold text-realtor-text">
             Smart final check before booking
           </h3>
-          <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+          <p className="mt-1 text-xs leading-relaxed text-realtor-muted">
             Based on the address/details and what you selected, these may help market this listing better.
           </p>
         </div>
         {propertySignals.shortLabel ? (
-          <span className="rounded-full border border-white/10 bg-ink/40 px-3 py-1 text-[11px] text-ink-muted">
+          <span className="rounded-full border border-realtor-primary/15 bg-realtor-surface-muted/80 px-3 py-1 text-[11px] text-realtor-muted">
             {propertySignals.shortLabel}
           </span>
         ) : null}
@@ -152,18 +152,18 @@ export default function ConfirmUpsellPanel({
               key={upgrade.slug}
               type="button"
               onClick={() => addService(upgrade.slug)}
-              className="rounded-lg border border-white/10 bg-ink/50 p-3 text-left transition hover:border-brand-light/60 hover:bg-brand/15"
+              className="rounded-lg border border-realtor-primary/15 bg-realtor-surface/85 p-3 text-left transition hover:border-brand-light/60 hover:bg-brand/15"
             >
               <span className="text-[10px] font-semibold uppercase tracking-wider text-brand-light/90">
                 {upgrade.eyebrow}
               </span>
               <span className="mt-1 flex items-start justify-between gap-3">
-                <span className="font-semibold text-white">{upgrade.title}</span>
+                <span className="font-semibold text-realtor-text">{upgrade.title}</span>
                 <span className="shrink-0 font-semibold text-brand-light">
                   +${(item.price_cents / 100).toFixed(0)}
                 </span>
               </span>
-              <span className="mt-1 block text-[11px] leading-relaxed text-ink-muted">
+              <span className="mt-1 block text-[11px] leading-relaxed text-realtor-muted">
                 {upgrade.reason}
               </span>
               <span className="mt-3 inline-flex rounded-full border border-brand-light/25 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-light">

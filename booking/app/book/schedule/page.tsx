@@ -50,10 +50,10 @@ export default async function BookStep3Page({
       <Stepper current={3} state={state} />
 
       <section>
-        <h2 className="text-lg font-semibold text-white md:text-xl">
+        <h2 className="text-lg font-semibold text-realtor-text md:text-xl">
           When works for you?
         </h2>
-        <p className="mt-1 text-sm text-ink-muted">
+        <p className="mt-1 text-sm text-realtor-muted">
           Days with a green dot have openings. Pick a day to see its open
           times, then pick a time to move on.
         </p>

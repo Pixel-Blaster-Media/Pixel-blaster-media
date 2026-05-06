@@ -32,10 +32,10 @@ export default async function BookStep2Page({
       <Stepper current={2} state={state} />
 
       <section>
-        <h2 className="text-lg font-semibold text-white md:text-xl">
+        <h2 className="text-lg font-semibold text-realtor-text md:text-xl">
           Tell us about the property
         </h2>
-        <p className="mt-1 text-sm text-ink-muted">
+        <p className="mt-1 text-sm text-realtor-muted">
           Start typing — we&apos;ll suggest full addresses. Add unit /
           square footage and a couple of on-site details so we show up
           prepared.

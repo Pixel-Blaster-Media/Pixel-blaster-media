@@ -149,7 +149,7 @@ export default function PropertyForm({
       </div>
 
       <fieldset>
-        <legend className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+        <legend className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
           Is the property occupied?
         </legend>
         <div className="mt-2 grid gap-2 md:grid-cols-3">
@@ -181,7 +181,7 @@ export default function PropertyForm({
       </fieldset>
 
       <fieldset>
-        <legend className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+        <legend className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
           Include basement in the shoot?
         </legend>
         <div className="mt-2 grid gap-2 md:grid-cols-2">
@@ -209,10 +209,10 @@ export default function PropertyForm({
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
             Must-have shots
           </p>
-          <h3 className="mt-1 text-base font-semibold text-white">
+          <h3 className="mt-1 text-base font-semibold text-realtor-text">
             Anything specific we should make sure to capture?
           </h3>
-          <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+          <p className="mt-1 text-sm leading-relaxed text-realtor-muted">
             This helps avoid the classic “I wish we got that angle” problem. Pick anything important and add notes if there’s a specific feature or request.
           </p>
         </div>
@@ -235,8 +235,8 @@ export default function PropertyForm({
                 className={
                   "rounded-xl border p-3 text-left transition " +
                   (selected
-                    ? "border-brand-light bg-brand/20 text-white shadow-sm shadow-brand/10"
-                    : "border-white/10 bg-ink/35 text-white/90 hover:border-brand-light/45 hover:bg-brand/10")
+                    ? "border-brand-light bg-brand/20 text-realtor-text shadow-sm shadow-brand/10"
+                    : "border-realtor-primary/15 bg-realtor-surface-muted/80 text-realtor-text/90 hover:border-brand-light/45 hover:bg-brand/10")
                 }
               >
                 <span className="flex items-center gap-2 text-sm font-semibold">
@@ -246,14 +246,14 @@ export default function PropertyForm({
                       "flex h-5 w-5 items-center justify-center rounded-full border text-[10px] " +
                       (selected
                         ? "border-brand-light bg-brand-light/20 text-brand-light"
-                        : "border-white/20 text-white/40")
+                        : "border-realtor-primary/25 text-realtor-muted/70")
                     }
                   >
                     {selected ? "✓" : "+"}
                   </span>
                   {option.label}
                 </span>
-                <span className="mt-1 block pl-7 text-xs leading-relaxed text-ink-muted">
+                <span className="mt-1 block pl-7 text-xs leading-relaxed text-realtor-muted">
                   {option.helper}
                 </span>
               </button>
@@ -262,7 +262,7 @@ export default function PropertyForm({
         </div>
 
         <label className="mt-4 block">
-          <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+          <span className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
             Specific shot notes (optional)
           </span>
           <textarea
@@ -270,16 +270,16 @@ export default function PropertyForm({
             value={shootNotes}
             onChange={(e) => setShootNotes(e.currentTarget.value)}
             placeholder="Example: Please highlight the new kitchen, backyard pergola, and the view from the primary bedroom."
-            className="mt-1 w-full rounded-xl border border-white/10 bg-ink/45 px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface/85 px-3 py-2 text-realtor-text placeholder-realtor-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
         </label>
       </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-realtor-primary/10 pt-5">
         <button
           type="button"
           onClick={() => router.back()}
-          className="rounded-md border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-white/30"
+          className="rounded-md border border-realtor-primary/20 px-4 py-2 text-sm text-realtor-muted hover:border-realtor-primary/35"
         >
           ← Back
         </button>
@@ -321,7 +321,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+      <span className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
         {label}
         {required ? <span className="text-brand-light"> *</span> : null}
       </span>
@@ -335,12 +335,12 @@ function Field({
         inputMode={inputMode}
         min={min}
         className={
-          "mt-1 w-full rounded-md border bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
-          (error ? "border-red-400/60" : "border-white/10")
+          "mt-1 w-full rounded-md border bg-realtor-surface px-3 py-2 text-realtor-text placeholder-realtor-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
+          (error ? "border-red-400/60" : "border-realtor-primary/15")
         }
       />
       {helper ? (
-        <span className="mt-1 block text-[11px] leading-relaxed text-ink-muted">
+        <span className="mt-1 block text-[11px] leading-relaxed text-realtor-muted">
           {helper}
         </span>
       ) : null}
@@ -373,7 +373,7 @@ function RadioCard<T extends string>({
         "flex cursor-pointer flex-col gap-1 rounded-lg border p-3 transition " +
         (selected
           ? "border-brand-light bg-brand/10"
-          : "border-white/10 hover:border-brand/60")
+          : "border-realtor-primary/15 hover:border-brand/60")
       }
     >
       <input
@@ -384,8 +384,8 @@ function RadioCard<T extends string>({
         onChange={() => onSelect(value)}
         className="sr-only"
       />
-      <span className="text-sm font-semibold text-white">{label}</span>
-      <span className="text-xs text-ink-muted">{helper}</span>
+      <span className="text-sm font-semibold text-realtor-text">{label}</span>
+      <span className="text-xs text-realtor-muted">{helper}</span>
     </label>
   );
 }

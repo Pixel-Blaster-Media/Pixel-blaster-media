@@ -4,13 +4,43 @@
 
 :root {
   --brand: #1a7f8e;
+  --brand-rgb: 26 127 142;
   --brand-light: #22a4b5;
+  --brand-light-rgb: 34 164 181;
   --brand-dark: #0d5f6b;
+  --brand-dark-rgb: 13 95 107;
   --brand-glow: rgba(34, 164, 181, 0.12);
   --brand-border: rgba(34, 164, 181, 0.3);
   --ink: #0b0f10;
+  --ink-rgb: 11 15 16;
   --ink-soft: #11181b;
+  --ink-soft-rgb: 17 24 27;
   --ink-muted: #8a979c;
+  --ink-muted-rgb: 138 151 156;
+  --realtor-bg: #f7f4ed;
+  --realtor-bg-rgb: 247 244 237;
+  --realtor-bg-soft: #ede6d9;
+  --realtor-bg-soft-rgb: 237 230 217;
+  --realtor-surface: #fffdf8;
+  --realtor-surface-rgb: 255 253 248;
+  --realtor-surface-muted: #f1eadf;
+  --realtor-surface-muted-rgb: 241 234 223;
+  --realtor-text: #23332b;
+  --realtor-text-rgb: 35 51 43;
+  --realtor-muted: #6f7a70;
+  --realtor-muted-rgb: 111 122 112;
+  --realtor-primary: #315f45;
+  --realtor-primary-rgb: 49 95 69;
+  --realtor-primary-light: #6f9a78;
+  --realtor-primary-light-rgb: 111 154 120;
+  --realtor-primary-dark: #244735;
+  --realtor-primary-dark-rgb: 36 71 53;
+  --realtor-accent: #c7b17a;
+  --realtor-accent-rgb: 199 177 122;
+  --realtor-blush: #dfb8aa;
+  --realtor-blush-rgb: 223 184 170;
+  --realtor-border: rgba(49, 95, 69, 0.16);
+  --realtor-shadow: 0 18px 45px -32px rgba(35, 51, 43, 0.38);
 }
 
 html,
@@ -35,4 +65,45 @@ a {
     radial-gradient(1200px 600px at 80% -10%, var(--brand-glow), transparent 60%),
     radial-gradient(900px 500px at -10% 110%, var(--brand-glow), transparent 55%),
     var(--ink);
+}
+
+.realtor-theme {
+  --brand: var(--realtor-primary);
+  --brand-rgb: var(--realtor-primary-rgb);
+  --brand-light: var(--realtor-primary-light);
+  --brand-light-rgb: var(--realtor-primary-light-rgb);
+  --brand-dark: var(--realtor-primary-dark);
+  --brand-dark-rgb: var(--realtor-primary-dark-rgb);
+  --brand-glow: rgba(49, 95, 69, 0.12);
+  --brand-border: var(--realtor-border);
+  --ink: var(--realtor-bg);
+  --ink-rgb: var(--realtor-bg-rgb);
+  --ink-soft: var(--realtor-surface);
+  --ink-soft-rgb: var(--realtor-surface-rgb);
+  --ink-muted: var(--realtor-muted);
+  --ink-muted-rgb: var(--realtor-muted-rgb);
+  color: var(--realtor-text);
+}
+
+.realtor-theme a {
+  color: var(--realtor-primary);
+}
+
+.realtor-backdrop {
+  background:
+    linear-gradient(180deg, rgba(247, 244, 237, 0.96), rgba(241, 234, 223, 0.9)),
+    radial-gradient(900px 420px at 12% -12%, rgba(111, 154, 120, 0.2), transparent 58%),
+    radial-gradient(700px 360px at 98% 8%, rgba(199, 177, 122, 0.18), transparent 60%),
+    var(--realtor-bg);
+}
+
+.realtor-panel {
+  border: 1px solid var(--realtor-border);
+  background: color-mix(in srgb, var(--realtor-surface) 92%, white);
+  box-shadow: var(--realtor-shadow);
+}
+
+.realtor-soft-panel {
+  border: 1px solid var(--realtor-border);
+  background: color-mix(in srgb, var(--realtor-surface-muted) 70%, white);
 }

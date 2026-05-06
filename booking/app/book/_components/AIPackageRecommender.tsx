@@ -49,21 +49,21 @@ export default function AIPackageRecommender({ bundles, aLaCarte, addons }: Prop
   }
 
   return (
-    <section className="rounded-xl border border-brand/30 bg-brand/10 p-4 shadow-lg shadow-black/10">
+    <section className="rounded-xl border border-brand/30 bg-realtor-primary/10 p-4 shadow-lg shadow-black/10">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-light">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-realtor-primary">
             AI package guide
           </p>
-          <h3 className="mt-1 text-lg font-semibold text-white">
+          <h3 className="mt-1 text-lg font-semibold text-realtor-text">
             Not sure what to book?
           </h3>
-          <p className="mt-1 max-w-2xl text-sm text-ink-muted">
+          <p className="mt-1 max-w-2xl text-sm text-realtor-muted">
             Describe the listing in plain English and we&apos;ll recommend the best
             package before you start clicking around.
           </p>
         </div>
-        <span className="rounded-full border border-brand-light/30 bg-brand/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-brand-light">
+        <span className="rounded-full border border-realtor-primary/30 bg-realtor-primary/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-realtor-primary">
           Beta
         </span>
       </div>
@@ -74,47 +74,47 @@ export default function AIPackageRecommender({ bundles, aLaCarte, addons }: Prop
           onChange={(e) => setDescription(e.currentTarget.value)}
           rows={4}
           placeholder="Example: 2,200 sqft detached home in Hamilton, occupied, basement included, realtor wants photos, iGUIDE, drone, and maybe a reel for Instagram."
-          className="w-full rounded-lg border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+          className="w-full rounded-lg border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text placeholder-realtor-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
         />
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={recommend}
             disabled={description.trim().length < 8}
-            className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md bg-realtor-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-realtor-primary-light disabled:cursor-not-allowed disabled:opacity-50"
           >
             Recommend my package
           </button>
-          <p className="text-xs text-ink-muted">
+          <p className="text-xs text-realtor-muted">
             You can still edit the selection manually after applying it.
           </p>
         </div>
       </div>
 
       {recommendation ? (
-        <div className="mt-4 rounded-lg border border-white/10 bg-ink/70 p-4">
+        <div className="mt-4 rounded-lg border border-realtor-primary/15 bg-realtor-surface/80 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-wider text-ink-muted">
+              <p className="text-xs uppercase tracking-wider text-realtor-muted">
                 Recommended
               </p>
-              <h4 className="mt-1 text-base font-semibold text-white">
+              <h4 className="mt-1 text-base font-semibold text-realtor-text">
                 {recommendation.title}
               </h4>
-              <p className="mt-1 text-sm text-ink-muted">
+              <p className="mt-1 text-sm text-realtor-muted">
                 {recommendation.reasoning}
               </p>
             </div>
-            <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-300">
+            <span className="rounded-full border border-emerald-700/30 bg-emerald-700/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
               {recommendation.confidence} fit
             </span>
           </div>
 
           {recommendation.notes.length > 0 ? (
-            <ul className="mt-3 grid gap-1 text-xs text-ink-muted md:grid-cols-2">
+            <ul className="mt-3 grid gap-1 text-xs text-realtor-muted md:grid-cols-2">
               {recommendation.notes.map((note) => (
                 <li key={note} className="flex gap-2">
-                  <span className="text-brand-light">•</span>
+                  <span className="text-realtor-primary">•</span>
                   <span>{note}</span>
                 </li>
               ))}
@@ -125,11 +125,11 @@ export default function AIPackageRecommender({ bundles, aLaCarte, addons }: Prop
             <button
               type="button"
               onClick={() => applyRecommendation()}
-              className="rounded-md bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:bg-brand-light hover:text-white"
+              className="rounded-md bg-realtor-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-realtor-primary-light"
             >
               Apply this package
             </button>
-            <p className="text-xs text-ink-muted">
+            <p className="text-xs text-realtor-muted">
               This will select the package below and keep you on this page.
             </p>
           </div>

@@ -93,13 +93,13 @@ export default function ConfirmForm({
       <input type="hidden" name="shoot_notes" value={state.shootNotes} />
 
       {profile ? null : (
-        <fieldset className="rounded-xl border border-white/10 bg-ink-soft/35 p-4">
+        <fieldset className="rounded-xl border border-realtor-primary/15 bg-realtor-surface-muted/70 p-4">
           <legend className="sr-only">Your contact info</legend>
           <div className="mb-4">
-            <p className="text-sm font-semibold text-white">
+            <p className="text-sm font-semibold text-realtor-text">
               Your portal login
             </p>
-            <p className="mt-1 text-xs text-ink-muted">
+            <p className="mt-1 text-xs text-realtor-muted">
               We use this to confirm the booking and create your private media
               portal. Use an email you can access later.
             </p>
@@ -139,7 +139,7 @@ export default function ConfirmForm({
             />
             <div className="md:col-span-2">
               <label className="block">
-                <span className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-ink-muted">
+                <span className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-realtor-muted">
                   <span>
                     {mode === "existing" ? "Password" : "Create a password"}
                     <span className="text-brand-light"> *</span>
@@ -162,13 +162,13 @@ export default function ConfirmForm({
                   }
                   minLength={8}
                   className={
-                    "mt-1 w-full rounded-md border bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
+                    "mt-1 w-full rounded-md border bg-realtor-surface px-3 py-2 text-realtor-text placeholder-realtor-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
                     (formState?.errors?.password
                       ? "border-red-400/60"
-                      : "border-white/10")
+                      : "border-realtor-primary/15")
                   }
                 />
-                <span className="mt-1 block text-[11px] text-ink-muted">
+                <span className="mt-1 block text-[11px] text-realtor-muted">
                   {mode === "existing"
                     ? "We found your account. Enter your password to finish this booking."
                     : mode === "new"
@@ -181,9 +181,9 @@ export default function ConfirmForm({
                   </span>
                 ) : null}
               </label>
-              <div className="mt-3 rounded-md border border-brand-light/20 bg-brand/10 p-3 text-xs text-ink-muted">
+              <div className="mt-3 rounded-md border border-brand-light/20 bg-brand/10 p-3 text-xs text-realtor-muted">
                 After you confirm, you can always come back through{" "}
-                <span className="font-semibold text-white">Sign in</span> using
+                <span className="font-semibold text-realtor-text">Sign in</span> using
                 this email and password. No magic link required.
               </div>
             </div>
@@ -193,14 +193,14 @@ export default function ConfirmForm({
 
       {/* Optional notes — for either path. */}
       <label className="block">
-        <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+        <span className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
           Anything we should know? (optional)
         </span>
         <textarea
           name="notes"
           rows={3}
           placeholder="Pets, gate code, lockbox, etc."
-          className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+          className="mt-1 w-full rounded-md border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-realtor-text placeholder-realtor-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
         />
       </label>
 
@@ -210,10 +210,10 @@ export default function ConfirmForm({
         </p>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-realtor-primary/10 pt-5">
         <Link
           href={`/book/schedule?${buildQuery(state)}`}
-          className="rounded-md border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-white/30"
+          className="rounded-md border border-realtor-primary/20 px-4 py-2 text-sm text-realtor-muted hover:border-realtor-primary/35"
         >
           ← Back
         </Link>
@@ -261,7 +261,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+      <span className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
         {label}
         {required ? <span className="text-brand-light"> *</span> : null}
       </span>
@@ -275,8 +275,8 @@ function Field({
         onChange={onChange}
         onBlur={onBlur}
         className={
-          "mt-1 w-full rounded-md border bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
-          (error ? "border-red-400/60" : "border-white/10")
+          "mt-1 w-full rounded-md border bg-realtor-surface px-3 py-2 text-realtor-text placeholder-realtor-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
+          (error ? "border-red-400/60" : "border-realtor-primary/15")
         }
       />
       {error ? (

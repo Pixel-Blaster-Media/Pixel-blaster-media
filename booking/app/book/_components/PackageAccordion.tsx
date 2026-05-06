@@ -123,10 +123,10 @@ export default function PackageAccordion({
       <section className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h3 className="text-base font-semibold text-white">
+            <h3 className="text-base font-semibold text-realtor-text">
               Start with a package
             </h3>
-            <p className="mt-1 text-sm text-ink-muted">
+            <p className="mt-1 text-sm text-realtor-muted">
               Pick the closest fit. You can open details before choosing, or
               build a custom order below.
             </p>
@@ -140,7 +140,7 @@ export default function PackageAccordion({
                 );
                 updateUrl(withoutBundles, selectedAddOnSlugs);
               }}
-              className="text-xs text-ink-muted underline hover:text-brand-light"
+              className="text-xs text-realtor-muted underline hover:text-realtor-primary"
             >
               Clear package
             </button>
@@ -157,43 +157,43 @@ export default function PackageAccordion({
                   className={
                     "flex h-full min-w-0 flex-col rounded-lg border p-4 transition " +
                     (selected
-                      ? "border-brand-light bg-brand/10"
+                      ? "border-realtor-primary bg-realtor-primary/10"
                       : b.highlight
-                        ? "border-brand/40 bg-brand/5 hover:border-brand-light hover:bg-brand/10"
-                        : "border-white/10 bg-ink-soft/50 hover:border-brand/60 hover:bg-ink-soft")
+                        ? "border-realtor-primary/40 bg-realtor-primary/5 hover:border-realtor-primary hover:bg-realtor-primary/10"
+                        : "border-realtor-primary/15 realtor-panel hover:border-realtor-primary/50 hover:bg-realtor-surface")
                   }
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-base font-semibold text-white">
+                        <h4 className="text-base font-semibold text-realtor-text">
                           {b.name}
                         </h4>
                         {selected ? (
-                          <span className="rounded-full bg-brand-light px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-ink">
+                          <span className="rounded-full bg-realtor-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
                             Selected
                           </span>
                         ) : b.badge ? (
-                          <span className="rounded-full border border-brand-light/40 bg-brand/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-light">
+                          <span className="rounded-full border border-realtor-primary/40 bg-realtor-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">
                             {b.badge}
                           </span>
                         ) : null}
                       </div>
                       {b.ideal_for ? (
-                        <p className="mt-1 text-sm text-ink-muted">
+                        <p className="mt-1 text-sm text-realtor-muted">
                           {b.ideal_for}
                         </p>
                       ) : (
-                        <p className="mt-1 text-sm text-ink-muted">
+                        <p className="mt-1 text-sm text-realtor-muted">
                           {shortDescription(b.description)}
                         </p>
                       )}
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-lg font-bold text-brand-light">
+                      <p className="text-lg font-bold text-realtor-primary">
                         ${(b.price_cents / 100).toFixed(0)}
                       </p>
-                      <p className="text-[11px] uppercase tracking-wider text-ink-muted">
+                      <p className="text-[11px] uppercase tracking-wider text-realtor-muted">
                         {formatMinutes(b.duration_minutes)}
                       </p>
                     </div>
@@ -202,14 +202,14 @@ export default function PackageAccordion({
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <MediaBadges item={b} />
                     {sqftRuleText(b) ? (
-                      <span className="rounded-full border border-white/10 bg-ink/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+                      <span className="rounded-full border border-realtor-primary/15 bg-realtor-soft/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
                         Sqft pricing
                       </span>
                     ) : null}
                   </div>
 
                   {sqftRuleText(b) ? (
-                    <p className="mt-3 rounded-md border border-brand-light/20 bg-brand/10 px-2 py-1.5 text-xs text-brand-light">
+                    <p className="mt-3 rounded-md border border-realtor-primary/20 bg-realtor-primary/10 px-2 py-1.5 text-xs text-realtor-primary">
                       {sqftRuleText(b)}
                     </p>
                   ) : null}
@@ -226,8 +226,8 @@ export default function PackageAccordion({
                       className={
                         "rounded-md px-4 py-2 text-sm font-semibold transition " +
                         (selected
-                          ? "border border-brand-light/40 bg-brand/20 text-white"
-                          : "bg-brand text-white hover:bg-brand-light")
+                          ? "border border-realtor-primary/40 bg-realtor-primary/15 text-realtor-text"
+                          : "bg-realtor-primary text-white hover:bg-realtor-primary-light")
                       }
                     >
                       {selected ? "Package selected" : "Choose package"}
@@ -239,7 +239,7 @@ export default function PackageAccordion({
                           current === b.slug ? null : b.slug,
                         )
                       }
-                      className="rounded-md border border-white/10 px-4 py-2 text-sm text-white hover:border-brand-light"
+                      className="rounded-md border border-realtor-primary/15 px-4 py-2 text-sm text-realtor-text hover:border-realtor-primary"
                     >
                       {expanded ? "Hide details" : "View details"}
                     </button>
@@ -262,7 +262,7 @@ export default function PackageAccordion({
         }
         accent={hasALaCarte}
       >
-        <ul className="divide-y divide-white/5 rounded-lg border border-white/10 bg-ink/25">
+        <ul className="divide-y divide-white/5 rounded-lg border border-realtor-primary/15 bg-realtor-surface/60">
           {aLaCarte.map((a) => {
             const selected = selectedSlugs.includes(a.slug);
             const expanded = expandedSlug === a.slug || selected;
@@ -271,31 +271,31 @@ export default function PackageAccordion({
                 key={a.id}
                 className={
                   "p-3 transition " +
-                  (selected ? "bg-brand/10" : "hover:bg-white/[0.02]")
+                  (selected ? "bg-realtor-primary/10" : "hover:bg-realtor-primary/5")
                 }
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-semibold text-white">{a.name}</p>
+                      <p className="font-semibold text-realtor-text">{a.name}</p>
                       <MediaBadges item={a} />
                       {selected ? (
-                        <span className="rounded-full bg-brand-light px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-ink">
+                        <span className="rounded-full bg-realtor-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
                           Added
                         </span>
                       ) : null}
                     </div>
-                    <p className="mt-1 text-xs text-ink-muted">
+                    <p className="mt-1 text-xs text-realtor-muted">
                       {a.ideal_for ?? shortDescription(a.description)}
                     </p>
                     {expanded && a.description ? <PackageDetails item={a} /> : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-brand-light">
+                      <p className="text-sm font-semibold text-realtor-primary">
                         ${(a.price_cents / 100).toFixed(0)}
                       </p>
-                      <p className="text-[10px] uppercase tracking-wider text-ink-muted">
+                      <p className="text-[10px] uppercase tracking-wider text-realtor-muted">
                         {formatMinutes(a.duration_minutes)}
                       </p>
                     </div>
@@ -306,7 +306,7 @@ export default function PackageAccordion({
                           current === a.slug ? null : a.slug,
                         )
                       }
-                      className="rounded-md border border-white/10 px-3 py-2 text-xs text-white hover:border-brand-light"
+                      className="rounded-md border border-realtor-primary/15 px-3 py-2 text-xs text-realtor-text hover:border-realtor-primary"
                     >
                       Details
                     </button>
@@ -317,8 +317,8 @@ export default function PackageAccordion({
                       className={
                         "min-w-20 rounded-md px-3 py-2 text-xs font-semibold transition " +
                         (selected
-                          ? "border border-brand-light/40 bg-brand/20 text-white"
-                          : "bg-brand text-white hover:bg-brand-light")
+                          ? "border border-realtor-primary/40 bg-realtor-primary/15 text-realtor-text"
+                          : "bg-realtor-primary text-white hover:bg-realtor-primary-light")
                       }
                     >
                       {selected ? "Remove" : "Add"}
@@ -333,10 +333,10 @@ export default function PackageAccordion({
 
       {/* Add-ons — auto-reveal when the cart has a video item */}
       {visibleAddons.length > 0 ? (
-        <section className="rounded-lg border border-white/10 bg-ink-soft/40 p-4">
+        <section className="rounded-lg border border-realtor-primary/15 realtor-soft-panel p-4">
           <div>
-            <p className="text-sm font-semibold text-white">Add-ons</p>
-            <p className="mt-1 text-xs text-ink-muted">
+            <p className="text-sm font-semibold text-realtor-text">Add-ons</p>
+            <p className="mt-1 text-xs text-realtor-muted">
               These appear when they make sense for the services selected.
             </p>
           </div>
@@ -349,8 +349,8 @@ export default function PackageAccordion({
                     className={
                       "flex cursor-pointer items-start gap-3 rounded-md border p-3 transition " +
                       (selected
-                        ? "border-brand-light bg-brand/10"
-                        : "border-white/10 hover:border-brand/60")
+                        ? "border-realtor-primary bg-realtor-primary/10"
+                        : "border-realtor-primary/15 hover:border-realtor-primary/50")
                     }
                   >
                     <input
@@ -361,15 +361,15 @@ export default function PackageAccordion({
                     />
                     <div className="min-w-0 flex-1 text-sm">
                       <div className="flex items-baseline justify-between gap-3">
-                        <span className="font-semibold text-white">
+                        <span className="font-semibold text-realtor-text">
                           {a.name}
                         </span>
-                        <span className="font-semibold text-brand-light">
+                        <span className="font-semibold text-realtor-primary">
                           +${(a.price_cents / 100).toFixed(0)}
                         </span>
                       </div>
                       {a.description ? (
-                        <p className="mt-1 text-xs text-ink-muted">
+                        <p className="mt-1 text-xs text-realtor-muted">
                           {a.description}
                         </p>
                       ) : null}
@@ -384,13 +384,13 @@ export default function PackageAccordion({
 
       {/* Totals + continue */}
       {selectedSlugs.length > 0 ? (
-        <div className="sticky bottom-0 -mx-4 mt-4 border-t border-white/10 bg-ink/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:rounded-lg md:border md:bg-brand/5">
+        <div className="sticky bottom-0 -mx-4 mt-4 border-t border-realtor-primary/15 bg-realtor-surface/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:rounded-lg md:border md:bg-realtor-primary/5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm">
-              <span className="font-semibold text-white">
+              <span className="font-semibold text-realtor-text">
                 ${(totalCents / 100).toFixed(0)}
               </span>
-              <span className="text-ink-muted">
+              <span className="text-realtor-muted">
                 {" · "}~{totalMinutes} min on-site
               </span>
             </div>
@@ -410,7 +410,7 @@ function ContinueButton() {
   return (
     <a
       href={href}
-      className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-light"
+      className="rounded-md bg-realtor-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-realtor-primary-light"
     >
       Continue →
     </a>
@@ -429,7 +429,7 @@ function MediaBadges({ item }: { item: CatalogItemDTO }) {
       {badges.map((badge) => (
         <span
           key={badge}
-          className="rounded-full border border-brand-light/25 bg-brand/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-light"
+          className="rounded-full border border-realtor-primary/25 bg-realtor-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary"
         >
           {badge}
         </span>
@@ -441,18 +441,18 @@ function MediaBadges({ item }: { item: CatalogItemDTO }) {
 function PackageDetails({ item }: { item: CatalogItemDTO }) {
   const lines = descriptionLines(item.description);
   return (
-    <div className="mt-3 rounded-md border border-white/10 bg-ink/35 p-3">
+    <div className="mt-3 rounded-md border border-realtor-primary/15 bg-realtor-soft/50 p-3">
       {lines.length > 0 ? (
-        <ul className="grid gap-1.5 text-xs text-ink-muted sm:grid-cols-2">
+        <ul className="grid gap-1.5 text-xs text-realtor-muted sm:grid-cols-2">
           {lines.map((line) => (
             <li key={line} className="flex gap-2">
-              <span className="mt-0.5 text-brand-light">✓</span>
+              <span className="mt-0.5 text-realtor-primary">✓</span>
               <span>{line}</span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-xs text-ink-muted">
+        <p className="text-xs text-realtor-muted">
           Package details will appear here once configured.
         </p>
       )}
@@ -480,33 +480,33 @@ function AccordionSection({
       className={
         "rounded-xl border transition " +
         (accent
-          ? "border-brand/30 bg-brand/5"
-          : "border-white/10 bg-ink-soft/40")
+          ? "border-brand/30 bg-realtor-primary/5"
+          : "border-realtor-primary/15 realtor-soft-panel")
       }
     >
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 rounded-xl px-4 py-3 text-left transition hover:bg-white/[0.03]"
+        className="flex w-full items-center justify-between gap-3 rounded-xl px-4 py-3 text-left transition hover:bg-realtor-primary/5"
       >
         <div>
-          <p className="text-sm font-semibold text-white">{title}</p>
-          <p className="text-[11px] uppercase tracking-wider text-ink-muted">
+          <p className="text-sm font-semibold text-realtor-text">{title}</p>
+          <p className="text-[11px] uppercase tracking-wider text-realtor-muted">
             {subtitle}
           </p>
         </div>
         <span
           aria-hidden="true"
           className={
-            "text-xs text-ink-muted transition " + (open ? "rotate-180" : "")
+            "text-xs text-realtor-muted transition " + (open ? "rotate-180" : "")
           }
         >
           ▾
         </span>
       </button>
       {open ? (
-        <div className="border-t border-white/5 px-4 pb-4 pt-3">{children}</div>
+        <div className="border-t border-realtor-primary/10 px-4 pb-4 pt-3">{children}</div>
       ) : null}
     </section>
   );

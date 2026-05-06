@@ -11,14 +11,24 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          DEFAULT: "#1a7f8e",
-          light: "#22a4b5",
-          dark: "#0d5f6b",
+          DEFAULT: "rgb(var(--brand-rgb) / <alpha-value>)",
+          light: "rgb(var(--brand-light-rgb) / <alpha-value>)",
+          dark: "rgb(var(--brand-dark-rgb) / <alpha-value>)",
         },
         ink: {
-          DEFAULT: "#0b0f10",
-          soft: "#11181b",
-          muted: "#8a979c",
+          DEFAULT: "rgb(var(--ink-rgb) / <alpha-value>)",
+          soft: "rgb(var(--ink-soft-rgb) / <alpha-value>)",
+          muted: "rgb(var(--ink-muted-rgb) / <alpha-value>)",
+        },
+        realtor: {
+          bg: "rgb(var(--realtor-bg-rgb) / <alpha-value>)",
+          soft: "rgb(var(--realtor-bg-soft-rgb) / <alpha-value>)",
+          surface: "rgb(var(--realtor-surface-rgb) / <alpha-value>)",
+          muted: "rgb(var(--realtor-muted-rgb) / <alpha-value>)",
+          text: "rgb(var(--realtor-text-rgb) / <alpha-value>)",
+          primary: "rgb(var(--realtor-primary-rgb) / <alpha-value>)",
+          accent: "rgb(var(--realtor-accent-rgb) / <alpha-value>)",
+          blush: "rgb(var(--realtor-blush-rgb) / <alpha-value>)",
         },
       },
       fontFamily: {

@@ -44,10 +44,10 @@ export default async function BookStep1Page({
       <Stepper current={1} state={state} />
 
       <section>
-        <h2 className="text-lg font-semibold text-white md:text-xl">
+        <h2 className="text-lg font-semibold text-realtor-text md:text-xl">
           What do you need?
         </h2>
-        <p className="mt-1 text-sm text-ink-muted">
+        <p className="mt-1 text-sm text-realtor-muted">
           Pick a bundle or build it out a-la-carte. Video add-ons (like
           &ldquo;put me on camera&rdquo;) appear automatically when your
           selection includes video.
