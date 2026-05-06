@@ -245,22 +245,28 @@ export function deliveryReadyEmail({
         font-weight: 600;
       }
       .link-card {
-        border: 1px solid #d7e3e6;
+        border: 1px solid #2b454b;
         border-radius: 8px;
         padding: 14px;
         margin: 12px 0;
-        background: #f7fbfc;
+        background: #102124;
       }
       .link-card h2 {
         margin: 0 0 8px;
         font-size: 16px;
+        color: #ffffff !important;
       }
       .link-card ul {
         margin: 0;
         padding-left: 18px;
+        color: #cfd6d8;
       }
       .link-card li {
         margin: 6px 0;
+        color: #cfd6d8;
+      }
+      .link-card a {
+        color: #3dd5e8 !important;
       }
       a { color:${BRAND_TEAL}; }
     </style></head>
