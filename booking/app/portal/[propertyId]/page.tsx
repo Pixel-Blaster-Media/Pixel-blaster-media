@@ -7,6 +7,10 @@ import {
   isCancellable,
 } from "@/lib/booking/booking-status";
 import { requireUser } from "@/lib/auth/require-user";
+import {
+  iguideEmbedUrl,
+  parseIGuideAlias,
+} from "@/lib/integrations/iguide/parse-id";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type {
   BookingStatus,
@@ -141,15 +145,27 @@ export default async function PropertyDetailPage({
           <SectionHeader
             title="Virtual tour"
             source={tour.source}
-            actions={<CopyLinkButton url={tour.url} label="Copy tour link" />}
+            actions={
+              <div className="flex gap-2">
+                <CopyLinkButton url={tour.url} label="Copy tour link" />
+                <a
+                  href={tour.url}
+                  target="_blank"
+                  rel="noopener"
+                  className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-light"
+                >
+                  Open tour ↗
+                </a>
+              </div>
+            }
           />
           <div className="overflow-hidden rounded-xl border border-white/10 bg-black">
             <div className="aspect-[16/10] w-full">
               <iframe
-                src={tour.url}
+                src={tourEmbedUrl(tour.url)}
                 title="Virtual tour"
                 className="h-full w-full border-0"
-                allow="fullscreen"
+                allowFullScreen
                 loading="lazy"
               />
             </div>
@@ -241,6 +257,11 @@ export default async function PropertyDetailPage({
       ) : null}
     </div>
   );
+}
+
+function tourEmbedUrl(url: string): string {
+  const alias = parseIGuideAlias(url);
+  return alias ? iguideEmbedUrl(alias) : url;
 }
 
 function SectionHeader({
