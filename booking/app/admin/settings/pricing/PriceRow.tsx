@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 
 import type { CatalogItemRow } from "@/lib/booking/catalog";
 
 import { deleteCatalogItem, updateCatalogItem } from "./actions";
 
 export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
+  const [open, setOpen] = useState(false);
   const [pending, startPending] = useTransition();
   const [deleting, startDeleting] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -15,20 +16,60 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
   const isAddon = item.kind === "addon";
 
   return (
-    <form
-      action={(fd) => {
-        setError(null);
-        setSaved(false);
-        startPending(async () => {
-          const res = await updateCatalogItem(fd);
-          if (!res.ok) setError(res.error ?? "Save failed.");
-          else setSaved(true);
-        });
-      }}
-      className="space-y-3"
-    >
-      <input type="hidden" name="id" value={item.id} />
-      <input type="hidden" name="kind" value={item.kind} />
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          className="min-w-0 flex-1 text-left"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-base font-semibold text-white">
+              {item.name}
+            </span>
+            {!item.active ? <Pill tone="muted">Inactive</Pill> : null}
+            {item.badge ? <Pill>{item.badge}</Pill> : null}
+            {item.is_photo ? <Pill>Photos</Pill> : null}
+            {item.is_video ? <Pill>Video</Pill> : null}
+            {item.require_has_video ? <Pill>Video add-on</Pill> : null}
+          </div>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted">
+            <span>{formatMoney(item.price_cents)}</span>
+            <span>{formatMinutes(item.duration_minutes)}</span>
+            {sqftSummary(item) ? <span>{sqftSummary(item)}</span> : null}
+            <span>Order {item.display_order}</span>
+          </div>
+          {item.ideal_for ? (
+            <p className="mt-1 truncate text-xs text-brand-light/85">
+              {item.ideal_for}
+            </p>
+          ) : null}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="self-start rounded-md border border-white/15 px-3 py-1.5 text-xs font-semibold text-white hover:border-brand-light hover:text-brand-light md:self-center"
+        >
+          {open ? "Hide details" : "Edit details"}
+        </button>
+      </div>
+
+      {open ? (
+        <form
+          action={(fd) => {
+            setError(null);
+            setSaved(false);
+            startPending(async () => {
+              const res = await updateCatalogItem(fd);
+              if (!res.ok) setError(res.error ?? "Save failed.");
+              else setSaved(true);
+            });
+          }}
+          className="space-y-3 border-t border-white/10 pt-4"
+        >
+          <input type="hidden" name="id" value={item.id} />
+          <input type="hidden" name="kind" value={item.kind} />
 
       <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
         <label className="flex flex-col gap-1">
@@ -293,6 +334,56 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
           </p>
         ) : null}
       </div>
-    </form>
+        </form>
+      ) : null}
+    </div>
   );
+}
+
+function Pill({
+  children,
+  tone = "brand",
+}: {
+  children: ReactNode;
+  tone?: "brand" | "muted";
+}) {
+  return (
+    <span
+      className={
+        "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider " +
+        (tone === "muted"
+          ? "border-white/10 bg-white/5 text-ink-muted"
+          : "border-brand-light/30 bg-brand/10 text-brand-light")
+      }
+    >
+      {children}
+    </span>
+  );
+}
+
+function formatMoney(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+function formatMinutes(minutes: number): string {
+  if (minutes === 0) return "No added time";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours} hr` : `${hours} hr ${rest} min`;
+}
+
+function sqftSummary(item: CatalogItemRow): string | null {
+  if (
+    !item.sqft_pricing_enabled ||
+    !item.included_sqft ||
+    !item.overage_increment_sqft ||
+    !item.overage_price_cents
+  ) {
+    return null;
+  }
+
+  return `Includes ${item.included_sqft.toLocaleString()} sqft, then +${formatMoney(
+    item.overage_price_cents,
+  )}/${item.overage_increment_sqft.toLocaleString()} sqft`;
 }
