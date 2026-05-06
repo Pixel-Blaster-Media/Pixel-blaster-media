@@ -13,6 +13,7 @@ import {
   iguideFloorplanPdfUrl,
   iguideUnbrandedUrl,
   iguideViewerUrl,
+  parseIGuideAlias,
 } from "./parse-id";
 import {
   getAssetUrls,
@@ -97,7 +98,7 @@ export async function syncIGuideForBooking(
       return persistFromAssetUrls({
         booking,
         portalId,
-        alias: alias ?? portalId,
+        fallbackAlias: alias ?? portalId,
         data: res.data,
       });
     }
@@ -185,15 +186,27 @@ export async function syncIGuideFromReadyEvent(
 async function persistFromAssetUrls({
   booking,
   portalId,
-  alias,
+  fallbackAlias,
   data,
 }: {
   booking: BookingTarget;
   portalId: string;
-  alias: string;
+  fallbackAlias: string;
   data: { languages?: Record<string, IGuideMediaUrls | undefined> };
 }): Promise<SyncIGuideResult> {
   const media = pickPreferredLanguage(data.languages);
+  const alias = deriveAliasFromMedia(media) ?? fallbackAlias;
+  if (alias !== fallbackAlias && booking.iguide_id !== alias) {
+    const { error } = await getServiceSupabase()
+      .from("bookings")
+      .update({ iguide_id: alias })
+      .eq("id", booking.id);
+    if (error) {
+      console.warn(
+        `[iguide.sync] Failed to backfill alias on booking ${booking.id}: ${error.message}`,
+      );
+    }
+  }
   const rows = buildDeliverableRowsFromMedia({
     bookingId: booking.id,
     propertyId: booking.property_id,
@@ -212,6 +225,29 @@ function pickPreferredLanguage(
   if (!languages) return {};
   // English when available; otherwise any first entry we find.
   return languages.en ?? Object.values(languages).find((v): v is IGuideMediaUrls => !!v) ?? {};
+}
+
+function deriveAliasFromMedia(media: IGuideMediaUrls): string | null {
+  const candidates = [
+    media.pdfImperial,
+    media.pdfMetric,
+    media.galleryFrontImage,
+    media.embedImage,
+    media.galleryZip,
+    media.galleryLowResZip,
+    media.offlineZip,
+    media.sphereZip,
+    media.svgZip,
+    media.dxfZip,
+    ...(media.jpgImperial ?? []).map((item) => item.url),
+    ...(media.jpgMetric ?? []).map((item) => item.url),
+  ];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const alias = parseIGuideAlias(candidate);
+    if (alias) return alias;
+  }
+  return null;
 }
 
 function buildDeliverableRowsFromMedia({

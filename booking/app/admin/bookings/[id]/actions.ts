@@ -18,6 +18,10 @@ import {
 } from "@/lib/integrations/fotello/client";
 import { syncEnhance } from "@/lib/integrations/fotello/sync";
 import {
+  iguideFloorplanMetricPdfUrl,
+  iguideFloorplanPdfUrl,
+  iguideUnbrandedUrl,
+  iguideViewerUrl,
   parseIGuideAlias,
   parseIGuidePortalId,
 } from "@/lib/integrations/iguide/parse-id";
@@ -34,6 +38,7 @@ import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
 import type {
   BookingStatus,
   DeliverableType,
+  Json,
 } from "@/lib/supabase/database.types";
 
 interface BookingStatusRow {
@@ -112,6 +117,7 @@ interface ReadyDeliverableRow {
   type: DeliverableType;
   url: string;
   source: string;
+  metadata: Json | null;
   ready_at: string | null;
 }
 
@@ -296,7 +302,7 @@ export async function sendDeliveryReadyEmail(
 
   const { data: deliverables } = await service
     .from("deliverables")
-    .select("id, type, url, source, ready_at")
+    .select("id, type, url, source, metadata, ready_at")
     .eq("booking_id", booking.id)
     .not("ready_at", "is", null)
     .returns<ReadyDeliverableRow[]>();
@@ -319,13 +325,7 @@ export async function sendDeliveryReadyEmail(
     contactName: booking.profiles.full_name ?? booking.profiles.email,
     streetAddress: booking.properties.street_address,
     portalLink,
-    deliverables: ready.map((deliverable) => ({
-      label: deliverableTypeLabel(deliverable.type),
-      url:
-        deliverable.source === "fotello"
-          ? `${appUrl}/api/fotello/embed/${deliverable.id}`
-          : deliverable.url,
-    })),
+    deliverables: buildDeliveryEmailLinks(ready, appUrl),
   });
 
   const sent = await sendEmail({
@@ -352,6 +352,85 @@ export async function sendDeliveryReadyEmail(
 
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true, resent: Boolean(existing), sentAt };
+}
+
+function buildDeliveryEmailLinks(
+  deliverables: ReadyDeliverableRow[],
+  appUrl: string,
+): Array<{ label: string; url: string }> {
+  const links: Array<{ label: string; url: string }> = [];
+  const seen = new Set<string>();
+
+  function add(label: string, url: string | null | undefined) {
+    if (!url || url === "about:blank" || seen.has(`${label}:${url}`)) return;
+    seen.add(`${label}:${url}`);
+    links.push({ label, url });
+  }
+
+  const iGuideAlias = findIGuideAlias(deliverables);
+  for (const deliverable of deliverables) {
+    if (deliverable.source === "iguide" && iGuideAlias) continue;
+    if (deliverable.source === "fotello") {
+      add(deliverableTypeLabel(deliverable.type), `${appUrl}/api/fotello/embed/${deliverable.id}`);
+      continue;
+    }
+    add(deliverableTypeLabel(deliverable.type), deliverable.url);
+  }
+
+  if (iGuideAlias) {
+    add("iGUIDE branded tour", iguideViewerUrl(iGuideAlias));
+    add("iGUIDE unbranded tour", iguideUnbrandedUrl(iGuideAlias));
+    add("Floor plan PDF (feet)", iguideFloorplanPdfUrl(iGuideAlias));
+    add("Floor plan PDF (meters)", iguideFloorplanMetricPdfUrl(iGuideAlias));
+    add(
+      "Property overview PDF (feet)",
+      `https://youriguide.com/${iGuideAlias}/doc/branded_property_overview_imperial.pdf`,
+    );
+    add(
+      "Property overview PDF (meters)",
+      `https://youriguide.com/${iGuideAlias}/doc/branded_property_overview_metric.pdf`,
+    );
+    add(
+      "Feature sheet creator",
+      `https://manage.youriguide.com/feature_sheet/?g=${iGuideAlias}`,
+    );
+    add("iGUIDE embed tool", `https://manage.youriguide.com/embed/${iGuideAlias}/`);
+    add(
+      "Create virtual showing",
+      `https://show.youriguide.com/create?url=${encodeURIComponent(
+        iguideViewerUrl(iGuideAlias),
+      )}`,
+    );
+  }
+
+  return links;
+}
+
+function findIGuideAlias(deliverables: ReadyDeliverableRow[]): string | null {
+  for (const deliverable of deliverables) {
+    if (deliverable.source !== "iguide") continue;
+    const candidates = [
+      metadataString(deliverable.metadata, "branded_url"),
+      metadataString(deliverable.metadata, "pdf_imperial"),
+      metadataString(deliverable.metadata, "pdf_metric"),
+      deliverable.url,
+      metadataString(deliverable.metadata, "alias"),
+    ];
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      const parsed = parseIGuideAlias(candidate);
+      if (parsed) return parsed;
+    }
+  }
+  return null;
+}
+
+function metadataString(metadata: Json | null, key: string): string | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+  const value = metadata[key];
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 /**
