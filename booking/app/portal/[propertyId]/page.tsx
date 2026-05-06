@@ -99,6 +99,10 @@ export default async function PropertyDetailPage({
   const videos = (deliverables ?? []).filter(
     (d) => d.type === "video" || d.type === "aerial",
   );
+  const videoDownloads = videos.filter((video) => !isStreamingVideoUrl(video.url));
+  const videoStreamingLinks = videos.filter((video) =>
+    isStreamingVideoUrl(video.url),
+  );
   const iGuideAlias = pickIGuideAlias(tour, floorPlan);
   const iGuideReso = iGuideAlias ? await fetchOptionalIGuideRESO(iGuideAlias) : null;
 
@@ -108,7 +112,7 @@ export default async function PropertyDetailPage({
     : null;
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <Link
         href="/portal"
         className="text-xs text-ink-muted hover:text-white"
@@ -116,15 +120,32 @@ export default async function PropertyDetailPage({
         ← My listings
       </Link>
 
-      <header>
-        <h1 className="text-3xl font-bold text-white">
-          {property.street_address}
-        </h1>
-        <p className="mt-1 text-sm text-ink-muted">
-          {[property.city, property.postal_code].filter(Boolean).join(" ")}
+      <header className="rounded-lg border border-white/10 bg-ink-soft/50 p-5">
+        <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+          Media delivery
         </p>
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-white">
+              {property.street_address}
+            </h1>
+            <p className="mt-1 text-sm text-ink-muted">
+              {[property.city, property.postal_code].filter(Boolean).join(" ")}
+            </p>
+          </div>
+          {tour ? (
+            <a
+              href={tour.url}
+              target="_blank"
+              rel="noopener"
+              className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light"
+            >
+              Open virtual tour ↗
+            </a>
+          ) : null}
+        </div>
         {statusMeta && latestBooking ? (
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
+          <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
             <span
               className={`rounded-full border px-2 py-0.5 uppercase tracking-wider ${statusMeta.pill}`}
             >
@@ -207,12 +228,13 @@ export default async function PropertyDetailPage({
           />
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-ink-soft/50 p-4">
             <a
-              href={floorPlan.url}
+              href={iGuideDownloadUrl(floorPlan.url)}
               target="_blank"
               rel="noopener"
+              download
               className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light"
             >
-              Open floor plan PDF ↗
+              Download floor plan PDF
             </a>
             <p className="text-xs text-ink-muted">
               Measured floor plan, ready to drop into your listing.
@@ -249,32 +271,10 @@ export default async function PropertyDetailPage({
       ) : null}
 
       {videos.length > 0 ? (
-        <section>
-          <SectionHeader title="Video" />
-          <ul className="grid gap-3 md:grid-cols-2">
-            {videos.map((v) => (
-              <li
-                key={v.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-ink-soft/50 p-4"
-              >
-                <p className="text-sm font-semibold text-white">
-                  {deliverableTypeLabel(v.type)}
-                </p>
-                <div className="flex gap-2">
-                  <CopyLinkButton url={v.url} />
-                  <a
-                    href={v.url}
-                    target="_blank"
-                    rel="noopener"
-                    className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-light"
-                  >
-                    Open ↗
-                  </a>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <VideoSection
+          downloads={videoDownloads}
+          streamingLinks={videoStreamingLinks}
+        />
       ) : null}
     </div>
   );
@@ -327,9 +327,11 @@ function IGuideDeliverySheet({
     (floorPlan?.url.includes("floorplan_metric") ? floorPlan.url : null) ??
     iguideFloorplanMetricPdfUrl(alias);
 
-  const links = [
+  const tourLinks = [
     { label: "Branded tour", url: brandedUrl },
     { label: "Unbranded tour", url: unbrandedUrl },
+  ];
+  const downloadLinks = [
     { label: "Floor plan PDF (feet)", url: pdfImperial },
     { label: "Floor plan PDF (meters)", url: pdfMetric },
     {
@@ -364,19 +366,38 @@ function IGuideDeliverySheet({
   return (
     <section className="space-y-4">
       <SectionHeader title="iGUIDE delivery links" source="iguide" />
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="rounded-xl border border-white/10 bg-ink-soft/50 p-4">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_320px]">
+        <div className="rounded-lg border border-white/10 bg-ink-soft/50 p-4">
+          <h3 className="text-sm font-semibold text-white">Tour links</h3>
           <p className="text-xs text-ink-muted">
             Check your MLS/board policy before using branded virtual tours.
           </p>
-          <div className="mt-4 grid gap-2">
-            {links.map((link) => (
+          <div className="mt-3 grid gap-2">
+            {tourLinks.map((link) => (
               <LinkRow key={link.label} label={link.label} url={link.url} />
             ))}
           </div>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-ink-soft/50 p-4">
+        <div className="rounded-lg border border-white/10 bg-ink-soft/50 p-4">
+          <h3 className="text-sm font-semibold text-white">Downloads</h3>
+          <p className="text-xs text-ink-muted">
+            Floor plans and overview PDFs for listing paperwork.
+          </p>
+          <div className="mt-3 grid gap-2">
+            {downloadLinks.map((link) => (
+              <LinkRow
+                key={link.label}
+                label={link.label}
+                url={link.url}
+                actionLabel="Download"
+                download
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-white/10 bg-ink-soft/50 p-4">
           <h3 className="text-sm font-semibold text-white">Tools</h3>
           <div className="mt-3 grid gap-2">
             {tools.map((tool) => (
@@ -411,11 +432,16 @@ function LinkRow({
   label,
   url,
   compact = false,
+  actionLabel = "Open ↗",
+  download = false,
 }: {
   label: string;
   url: string;
   compact?: boolean;
+  actionLabel?: string;
+  download?: boolean;
 }) {
+  const href = download ? iGuideDownloadUrl(url) : url;
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-white/10 bg-ink/40 p-2">
       <div className="min-w-0">
@@ -427,16 +453,125 @@ function LinkRow({
       <div className="flex gap-2">
         <CopyLinkButton url={url} label="Copy" />
         <a
-          href={url}
+          href={href}
           target="_blank"
           rel="noopener"
+          download={download}
           className="rounded-md bg-brand px-2.5 py-1 text-xs font-semibold text-white hover:bg-brand-light"
         >
-          Open ↗
+          {actionLabel}
         </a>
       </div>
     </div>
   );
+}
+
+function iGuideDownloadUrl(url: string): string {
+  return `/api/iguide/download?url=${encodeURIComponent(url)}`;
+}
+
+function VideoSection({
+  downloads,
+  streamingLinks,
+}: {
+  downloads: DeliverableRow[];
+  streamingLinks: DeliverableRow[];
+}) {
+  return (
+    <section className="space-y-4">
+      <SectionHeader title="Video" />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <VideoGroup
+          title="Downloadable video"
+          description="Use this for MLS uploads, social edits, or saving the final file."
+          empty="No downloadable video file has been added yet."
+          videos={downloads}
+          actionLabel="Download"
+        />
+        <VideoGroup
+          title="YouTube / viewing link"
+          description="Use this for easy sharing, embeds, or public video pages."
+          empty="No YouTube or viewing link has been added yet."
+          videos={streamingLinks}
+          actionLabel="Open video ↗"
+        />
+      </div>
+    </section>
+  );
+}
+
+function VideoGroup({
+  title,
+  description,
+  empty,
+  videos,
+  actionLabel,
+}: {
+  title: string;
+  description: string;
+  empty: string;
+  videos: DeliverableRow[];
+  actionLabel: string;
+}) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-ink-soft/50 p-4">
+      <h3 className="text-sm font-semibold text-white">{title}</h3>
+      <p className="mt-1 text-xs text-ink-muted">{description}</p>
+      {videos.length > 0 ? (
+        <ul className="mt-3 grid gap-2">
+          {videos.map((video) => (
+            <li
+              key={video.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-white/10 bg-ink/40 p-2"
+            >
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-white">
+                  {metadataString(video.metadata, "delivery_label") ??
+                    deliverableTypeLabel(video.type)}
+                </p>
+                <p className="mt-0.5 truncate text-[11px] text-ink-muted">
+                  {video.url}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <CopyLinkButton url={video.url} label="Copy" />
+                <a
+                  href={video.url}
+                  target="_blank"
+                  rel="noopener"
+                  download={actionLabel === "Download"}
+                  className="rounded-md bg-brand px-2.5 py-1 text-xs font-semibold text-white hover:bg-brand-light"
+                >
+                  {actionLabel}
+                </a>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 rounded-md border border-dashed border-white/10 bg-ink/30 p-3 text-xs text-ink-muted">
+          {empty}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function isStreamingVideoUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+    return [
+      "youtube.com",
+      "youtu.be",
+      "vimeo.com",
+      "player.vimeo.com",
+      "facebook.com",
+      "instagram.com",
+      "tiktok.com",
+    ].some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
+  } catch {
+    return false;
+  }
 }
 
 function metadataString(metadata: Json | null | undefined, key: string): string | null {

@@ -212,6 +212,10 @@ export async function addManualDeliverable(
   const url = ((formData.get("url") as string | null) ?? "").trim();
   const thumbnail =
     ((formData.get("thumbnail_url") as string | null) ?? "").trim() || null;
+  const deliveryKind =
+    ((formData.get("delivery_kind") as string | null) ?? "").trim() || null;
+  const deliveryLabel =
+    ((formData.get("delivery_label") as string | null) ?? "").trim() || null;
 
   if (!VALID_DELIVERABLE_TYPES.includes(type as DeliverableType)) {
     return { ok: false, error: "Pick a deliverable type." };
@@ -245,6 +249,10 @@ export async function addManualDeliverable(
     source: "manual",
     url,
     thumbnail_url: thumbnail,
+    metadata: {
+      ...(deliveryKind ? { delivery_kind: deliveryKind } : {}),
+      ...(deliveryLabel ? { delivery_label: deliveryLabel } : {}),
+    },
     ready_at: new Date().toISOString(),
   });
 
@@ -374,7 +382,7 @@ function buildDeliveryEmailLinks(
       add(deliverableTypeLabel(deliverable.type), `${appUrl}/api/fotello/embed/${deliverable.id}`);
       continue;
     }
-    add(deliverableTypeLabel(deliverable.type), deliverable.url);
+    add(deliveryEmailLabel(deliverable), deliverable.url);
   }
 
   if (iGuideAlias) {
@@ -404,6 +412,34 @@ function buildDeliveryEmailLinks(
   }
 
   return links;
+}
+
+function deliveryEmailLabel(deliverable: ReadyDeliverableRow): string {
+  const savedLabel = metadataString(deliverable.metadata, "delivery_label");
+  if (savedLabel) return savedLabel;
+  if (deliverable.type === "video" || deliverable.type === "aerial") {
+    return isStreamingVideoUrl(deliverable.url)
+      ? "YouTube / video link"
+      : "Video download";
+  }
+  return deliverableTypeLabel(deliverable.type);
+}
+
+function isStreamingVideoUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+    return [
+      "youtube.com",
+      "youtu.be",
+      "vimeo.com",
+      "player.vimeo.com",
+      "facebook.com",
+      "instagram.com",
+      "tiktok.com",
+    ].some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
+  } catch {
+    return false;
+  }
 }
 
 function findIGuideAlias(deliverables: ReadyDeliverableRow[]): string | null {
