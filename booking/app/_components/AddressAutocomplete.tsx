@@ -88,6 +88,7 @@ export default function AddressAutocomplete({
   const inputId = useId();
   const listboxId = `${inputId}-listbox`;
   const containerRef = useRef<HTMLDivElement>(null);
+  const selectedValueRef = useRef<string | null>(null);
 
   // Fully controlled: the input's value is `value`, which either the
   // user types or we set from a suggestion click. This avoids the
@@ -130,6 +131,13 @@ export default function AddressAutocomplete({
     if (q.length < MIN_QUERY_LENGTH) {
       setSuggestions([]);
       setStatus("idle");
+      return;
+    }
+    if (selectedValueRef.current === q) {
+      setSuggestions([]);
+      setIsOpen(false);
+      setHighlighted(-1);
+      setStatus("ok");
       return;
     }
     const controller = new AbortController();
@@ -204,6 +212,9 @@ export default function AddressAutocomplete({
   const pickPlace = useCallback(
     async (suggestion: Suggestion) => {
       setIsOpen(false);
+      setSuggestions([]);
+      setHighlighted(-1);
+      selectedValueRef.current = suggestion.text.trim();
       setValue(suggestion.text);
       onChangeRef.current?.(suggestion.text);
       if (!apiKey) return;
@@ -232,7 +243,11 @@ export default function AddressAutocomplete({
         // Display just the street line in the input — city / postal go
         // into their own fields. Keeps each piece editable.
         const display = parts.street_address || parts.formatted_address || suggestion.text;
+        selectedValueRef.current = display.trim();
         setValue(display);
+        setSuggestions([]);
+        setIsOpen(false);
+        setHighlighted(-1);
         onChangeRef.current?.(display);
         onPlaceRef.current(parts);
       } finally {
@@ -264,6 +279,7 @@ export default function AddressAutocomplete({
 
   function onType(e: ChangeEvent<HTMLInputElement>) {
     const v = e.target.value;
+    selectedValueRef.current = null;
     setValue(v);
     onChangeRef.current?.(v);
     if (!isOpen && v.length >= MIN_QUERY_LENGTH) setIsOpen(true);
