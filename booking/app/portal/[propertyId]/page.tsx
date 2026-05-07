@@ -803,26 +803,29 @@ function VideoGroup({
   actionLabel: string;
 }) {
   return (
-    <div className="realtor-elevated-panel rounded-2xl p-4">
+    <div className="realtor-elevated-panel min-w-0 rounded-2xl p-4">
       <h3 className="text-sm font-semibold text-realtor-text">{title}</h3>
       <p className="mt-1 text-xs text-realtor-muted">{description}</p>
       {videos.length > 0 ? (
-        <ul className="mt-3 grid gap-2">
+        <ul className="mt-3 grid min-w-0 gap-2">
           {videos.map((video) => (
             <li
               key={video.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-realtor-primary/15 bg-realtor-surface-muted/80 p-2"
+              className="grid min-w-0 gap-3 rounded-md border border-realtor-primary/15 bg-realtor-surface-muted/80 p-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
             >
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-realtor-text">
+              <div className="min-w-0 overflow-hidden">
+                <p className="truncate text-xs font-semibold text-realtor-text">
                   {metadataString(video.metadata, "delivery_label") ??
                     deliverableTypeLabel(video.type)}
                 </p>
-                <p className="mt-0.5 truncate text-[11px] text-realtor-muted">
+                <p
+                  className="mt-0.5 max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-realtor-muted"
+                  title={video.url}
+                >
                   {video.url}
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
                 <CopyLinkButton url={video.url} label="Copy" />
                 <a
                   href={video.url}
