@@ -30,6 +30,8 @@ export default async function PortalBookPage({
     city?: string;
     postal_code?: string;
     square_footage?: string;
+    repeat?: string;
+    from_property?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -88,6 +90,10 @@ export default async function PortalBookPage({
   const whenLabel = selectedSlot ? formatSlotLabel(new Date(selectedSlot)) : null;
 
   const selectedLabel = selectedItems.map((it) => it.name).join(", ");
+  const repeatAddress = [params.street_address, params.city]
+    .filter(Boolean)
+    .join(", ");
+  const isRepeatBooking = params.repeat === "1" && Boolean(repeatAddress);
 
   return (
     <div className="realtor-theme space-y-10">
@@ -102,6 +108,21 @@ export default async function PortalBookPage({
           directly on the photographer&apos;s calendar — no back-and-forth.
         </p>
       </header>
+
+      {isRepeatBooking ? (
+        <section className="realtor-green-panel rounded-3xl p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-realtor-primary">
+            Book again
+          </p>
+          <h2 className="mt-2 text-xl font-semibold text-realtor-text">
+            Starting from {repeatAddress}
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm text-realtor-muted">
+            We prefilled the services and property details from the last shoot.
+            Pick a new time below, and change anything before confirming.
+          </p>
+        </section>
+      ) : null}
 
       <section className="realtor-elevated-panel rounded-3xl p-5">
         <ServicePicker

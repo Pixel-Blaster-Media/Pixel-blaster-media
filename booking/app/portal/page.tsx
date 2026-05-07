@@ -322,6 +322,8 @@ function buildSimilarBookingHref(
   booking: PropertyRow["bookings"][number] | null,
 ): string {
   const params = new URLSearchParams();
+  params.set("repeat", "1");
+  params.set("from_property", property.id);
   if (booking?.services.length) params.set("services", booking.services.join(","));
   if (booking?.add_ons.length) params.set("add_ons", booking.add_ons.join(","));
   params.set("street_address", property.street_address);

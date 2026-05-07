@@ -44,6 +44,8 @@ interface PropertyRow {
     status: BookingStatus;
     scheduled_at: string | null;
     services: string[];
+    add_ons: string[];
+    square_footage: number | null;
     created_at: string;
     quickbooks_invoice_number: string | null;
     quickbooks_invoice_url: string | null;
@@ -81,7 +83,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, street_address, city, postal_code, owner_id, bookings(id, status, scheduled_at, services, created_at, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents)",
+      "id, street_address, city, postal_code, owner_id, bookings(id, status, scheduled_at, services, add_ons, square_footage, created_at, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents)",
     )
     .eq("id", propertyId)
     .maybeSingle<PropertyRow>();
@@ -128,6 +130,7 @@ export default async function PropertyDetailPage({
   const iGuideReso = iGuideAlias ? await fetchOptionalIGuideRESO(iGuideAlias) : null;
 
   const latestBooking = pickLatest(property.bookings);
+  const similarHref = buildSimilarBookingHref(property, latestBooking);
   const statusMeta = latestBooking
     ? BOOKING_STATUSES[latestBooking.status]
     : null;
@@ -174,16 +177,24 @@ export default async function PropertyDetailPage({
               {[property.city, property.postal_code].filter(Boolean).join(" ")}
             </p>
           </div>
-          {tour ? (
-            <a
-              href={tour.url}
-              target="_blank"
-              rel="noopener"
-              className="rounded-md bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary-light"
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={similarHref}
+              className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-realtor-primary/20 transition hover:bg-realtor-primary-light"
             >
-              Open virtual tour ↗
-            </a>
-          ) : null}
+              Book similar shoot
+            </Link>
+            {tour ? (
+              <a
+                href={tour.url}
+                target="_blank"
+                rel="noopener"
+                className="rounded-full border border-realtor-primary/20 bg-realtor-surface px-4 py-2 text-sm font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:text-realtor-text"
+              >
+                Open virtual tour ↗
+              </a>
+            ) : null}
+          </div>
         </div>
         {statusMeta && latestBooking ? (
           <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
@@ -933,4 +944,22 @@ function pickLatest(
     const bT = new Date(b.scheduled_at ?? b.created_at).getTime() || 0;
     return bT - aT;
   })[0];
+}
+
+function buildSimilarBookingHref(
+  property: PropertyRow,
+  booking: PropertyRow["bookings"][number] | null,
+): string {
+  const params = new URLSearchParams();
+  params.set("repeat", "1");
+  params.set("from_property", property.id);
+  if (booking?.services.length) params.set("services", booking.services.join(","));
+  if (booking?.add_ons.length) params.set("add_ons", booking.add_ons.join(","));
+  params.set("street_address", property.street_address);
+  if (property.city) params.set("city", property.city);
+  if (property.postal_code) params.set("postal_code", property.postal_code);
+  if (booking?.square_footage) {
+    params.set("square_footage", String(booking.square_footage));
+  }
+  return `/portal/book?${params.toString()}`;
 }
