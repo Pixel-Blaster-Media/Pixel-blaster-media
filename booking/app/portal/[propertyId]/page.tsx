@@ -486,7 +486,7 @@ function IGuideDeliverySheet({
     <section className="space-y-4">
       <SectionHeader title="iGUIDE delivery links" source="iguide" />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_320px]">
-        <div className="realtor-elevated-panel rounded-2xl p-4">
+        <div className="realtor-elevated-panel min-w-0 rounded-2xl p-4">
           <h3 className="text-sm font-semibold text-realtor-text">Tour links</h3>
           <p className="text-xs text-realtor-muted">
             Check your MLS/board policy before using branded virtual tours.
@@ -498,7 +498,7 @@ function IGuideDeliverySheet({
           </div>
         </div>
 
-        <div className="realtor-warm-panel rounded-2xl p-4">
+        <div className="realtor-warm-panel min-w-0 rounded-2xl p-4">
           <h3 className="text-sm font-semibold text-realtor-text">Downloads</h3>
           <p className="text-xs text-realtor-muted">
             Floor plans and overview PDFs for listing paperwork.
@@ -516,7 +516,7 @@ function IGuideDeliverySheet({
           </div>
         </div>
 
-        <div className="realtor-green-panel rounded-2xl p-4">
+        <div className="realtor-green-panel min-w-0 rounded-2xl p-4">
           <h3 className="text-sm font-semibold text-realtor-text">Tools</h3>
           <div className="mt-3 grid gap-2">
             {tools.map((tool) => (
@@ -562,21 +562,26 @@ function LinkRow({
 }) {
   const href = download ? iGuideDownloadUrl(url) : url;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-realtor-primary/15 bg-realtor-surface-muted/80 p-2">
-      <div className="min-w-0">
-        <p className="text-xs font-semibold text-realtor-text">{label}</p>
+    <div className="grid min-w-0 gap-3 rounded-2xl border border-realtor-primary/15 bg-realtor-surface-muted/80 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <div className="min-w-0 overflow-hidden">
+        <p className="truncate text-xs font-semibold text-realtor-text">{label}</p>
         {!compact ? (
-          <p className="mt-0.5 truncate text-[11px] text-realtor-muted">{url}</p>
+          <p
+            className="mt-0.5 max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-realtor-muted"
+            title={url}
+          >
+            {url}
+          </p>
         ) : null}
       </div>
-      <div className="flex gap-2">
+      <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
         <CopyLinkButton url={url} label="Copy" />
         <a
           href={href}
           target="_blank"
           rel="noopener"
           download={download}
-          className="rounded-md bg-realtor-primary px-2.5 py-1 text-xs font-semibold text-white hover:bg-realtor-primary-light"
+          className="rounded-md bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-realtor-primary-light"
         >
           {actionLabel}
         </a>
