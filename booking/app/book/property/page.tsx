@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
+import { getActiveCatalog } from "@/lib/booking/catalog";
 import {
   parseWizardState,
   stepCompleteness,
@@ -20,6 +21,7 @@ export default async function BookStep2Page({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const state = parseWizardState(await searchParams);
+  const catalog = await getActiveCatalog();
 
   // Guard — can't be here without step 1 done.
   if (!stepCompleteness(state).step1) {
@@ -43,6 +45,20 @@ export default async function BookStep2Page({
       </section>
 
       <PropertyForm
+        items={[...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(
+          (item) => ({
+            slug: item.slug,
+            name: item.name,
+            price_cents: item.price_cents,
+            duration_minutes: item.duration_minutes,
+            sqft_pricing_enabled: item.sqft_pricing_enabled,
+            included_sqft: item.included_sqft,
+            overage_increment_sqft: item.overage_increment_sqft,
+            overage_price_cents: item.overage_price_cents,
+          }),
+        )}
+        selectedSlugs={state.services}
+        selectedAddOnSlugs={state.addOns}
         initial={{
           address: state.streetAddress,
           unit: state.unitNumber,

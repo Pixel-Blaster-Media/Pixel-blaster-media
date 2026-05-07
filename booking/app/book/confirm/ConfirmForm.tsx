@@ -6,6 +6,9 @@ import { useFormState, useFormStatus } from "react-dom";
 
 import { checkEmailAction, createPublicBooking, type BookResult } from "../actions";
 import type { WizardState } from "@/lib/booking/wizard-state";
+import BookingTotalBar, {
+  type BookingTotalItem,
+} from "../_components/BookingTotalBar";
 
 const initial: BookResult | null = null;
 
@@ -25,9 +28,11 @@ interface ProfileLite {
 export default function ConfirmForm({
   state,
   profile,
+  items,
 }: {
   state: WizardState;
   profile: ProfileLite | null;
+  items: BookingTotalItem[];
 }) {
   const [formState, formAction] = useFormState(createPublicBooking, initial);
 
@@ -210,29 +215,47 @@ export default function ConfirmForm({
         </p>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-realtor-primary/10 pt-5">
+      <div className="flex flex-wrap items-center justify-start gap-3 border-t border-realtor-primary/10 pt-5">
         <Link
           href={`/book/schedule?${buildQuery(state)}`}
           className="rounded-full border border-realtor-primary/20 px-4 py-2 text-sm text-realtor-muted transition hover:border-realtor-primary/35 hover:bg-realtor-surface"
         >
           ← Back
         </Link>
-        <SubmitButton />
       </div>
+
+      <SubmitTotalBar
+        items={items}
+        selectedSlugs={state.services}
+        selectedAddOnSlugs={state.addOns}
+        squareFootage={state.squareFootage}
+      />
     </form>
   );
 }
 
-function SubmitButton() {
+function SubmitTotalBar({
+  items,
+  selectedSlugs,
+  selectedAddOnSlugs,
+  squareFootage,
+}: {
+  items: BookingTotalItem[];
+  selectedSlugs: string[];
+  selectedAddOnSlugs: string[];
+  squareFootage: number | null;
+}) {
   const { pending } = useFormStatus();
   return (
-    <button
-      type="submit"
+    <BookingTotalBar
+      items={items}
+      selectedSlugs={selectedSlugs}
+      selectedAddOnSlugs={selectedAddOnSlugs}
+      squareFootage={squareFootage}
+      submit
       disabled={pending}
-      className="rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-realtor-primary/20 transition hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-60"
-    >
-      {pending ? "Booking…" : "Confirm booking"}
-    </button>
+      ctaLabel={pending ? "Booking..." : "Confirm booking"}
+    />
   );
 }
 

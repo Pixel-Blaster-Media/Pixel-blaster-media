@@ -9,6 +9,7 @@ import {
 } from "@/lib/booking/wizard-state";
 
 import Stepper from "../_components/Stepper";
+import BookingTotalBar from "../_components/BookingTotalBar";
 import CalendarPicker from "./CalendarPicker";
 
 export const metadata: Metadata = {
@@ -62,6 +63,31 @@ export default async function BookStep3Page({
       <CalendarPicker
         daysOfSlots={daysOfSlots}
         selectedSlot={state.slot}
+      />
+
+      <BookingTotalBar
+        items={[...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(
+          (item) => ({
+            slug: item.slug,
+            name: item.name,
+            price_cents: item.price_cents,
+            duration_minutes: item.duration_minutes,
+            sqft_pricing_enabled: item.sqft_pricing_enabled,
+            included_sqft: item.included_sqft,
+            overage_increment_sqft: item.overage_increment_sqft,
+            overage_price_cents: item.overage_price_cents,
+          }),
+        )}
+        selectedSlugs={state.services}
+        selectedAddOnSlugs={state.addOns}
+        squareFootage={state.squareFootage}
+        href={
+          state.slot
+            ? `/book/confirm?${serializeForRedirect(state)}`
+            : undefined
+        }
+        disabled={!state.slot}
+        ctaLabel={state.slot ? "Continue" : "Pick a time"}
       />
     </>
   );

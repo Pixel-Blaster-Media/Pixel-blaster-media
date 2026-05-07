@@ -220,7 +220,22 @@ export default async function BookStep4Page({
         </p>
       </section>
 
-      <ConfirmForm state={state} profile={profile} />
+      <ConfirmForm
+        state={state}
+        profile={profile}
+        items={[...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(
+          (item) => ({
+            slug: item.slug,
+            name: item.name,
+            price_cents: item.price_cents,
+            duration_minutes: item.duration_minutes,
+            sqft_pricing_enabled: item.sqft_pricing_enabled,
+            included_sqft: item.included_sqft,
+            overage_increment_sqft: item.overage_increment_sqft,
+            overage_price_cents: item.overage_price_cents,
+          }),
+        )}
+      />
     </>
   );
 }

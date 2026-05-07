@@ -7,6 +7,9 @@ import AddressAutocomplete, {
   type PlaceParts,
 } from "@/app/_components/AddressAutocomplete";
 import type { VacancyState } from "@/lib/booking/wizard-state";
+import BookingTotalBar, {
+  type BookingTotalItem,
+} from "../_components/BookingTotalBar";
 
 const SHOT_REQUEST_OPTIONS = [
   { slug: "pool", label: "Pool / backyard", helper: "Outdoor features, patio, landscaping." },
@@ -29,8 +32,14 @@ const SHOT_REQUEST_OPTIONS = [
  * because Google doesn't populate it consistently.
  */
 export default function PropertyForm({
+  items,
+  selectedSlugs,
+  selectedAddOnSlugs,
   initial,
 }: {
+  items: BookingTotalItem[];
+  selectedSlugs: string[];
+  selectedAddOnSlugs: string[];
   initial: {
     address: string;
     unit: string;
@@ -56,6 +65,11 @@ export default function PropertyForm({
   const [shotRequests, setShotRequests] = useState<string[]>(initial.shotRequests);
   const [shootNotes, setShootNotes] = useState(initial.shootNotes);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const parsedSqft = sqft.trim() ? Number(sqft) : null;
+  const liveSquareFootage =
+    parsedSqft != null && Number.isFinite(parsedSqft) && parsedSqft > 0
+      ? Math.trunc(parsedSqft)
+      : null;
 
   function handlePlacePicked(parts: PlaceParts) {
     setAddress(parts.street_address || parts.formatted_address || address);
@@ -279,7 +293,7 @@ export default function PropertyForm({
         </label>
       </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-realtor-primary/10 pt-5">
+      <div className="flex flex-wrap items-center justify-start gap-3 border-t border-realtor-primary/10 pt-5">
         <button
           type="button"
           onClick={() => router.back()}
@@ -287,13 +301,17 @@ export default function PropertyForm({
         >
           ← Back
         </button>
-        <button
-          type="submit"
-          className="rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-realtor-primary/20 transition hover:bg-brand-light"
-        >
-          Continue →
-        </button>
       </div>
+
+      <BookingTotalBar
+        items={items}
+        selectedSlugs={selectedSlugs}
+        selectedAddOnSlugs={selectedAddOnSlugs}
+        squareFootage={liveSquareFootage}
+        submit
+        ctaLabel="Continue"
+        note="This updates as square footage changes."
+      />
     </form>
   );
 }

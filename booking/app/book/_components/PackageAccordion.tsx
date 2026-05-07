@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import type { CatalogItemDTO } from "@/app/_components/CartPicker";
+import BookingTotalBar from "./BookingTotalBar";
 
 /**
  * Step 1 picker — two collapsible sections (Bundles, A-La-Carte) plus
@@ -57,22 +58,6 @@ export default function PackageAccordion({
     (a) => !a.require_has_video || hasVideo,
   );
 
-  // Totals below the picker.
-  const selectedItems = selectedSlugs
-    .map((s) => bySlug.get(s))
-    .filter((x): x is CatalogItemDTO => !!x);
-  const selectedAddons = selectedAddOnSlugs
-    .map((s) => bySlug.get(s))
-    .filter((x): x is CatalogItemDTO => !!x);
-  const totalCents =
-    selectedItems.reduce((n, i) => n + i.price_cents, 0) +
-    selectedAddons.reduce((n, a) => n + a.price_cents, 0);
-  const totalMinutes = Math.max(
-    selectedItems.reduce((n, i) => n + i.duration_minutes, 0) +
-      selectedAddons.reduce((n, a) => n + a.duration_minutes, 0),
-    60,
-  );
-
   function updateUrl(nextServices: string[], nextAddons: string[]) {
     const next = new URLSearchParams(params.toString());
     // Prune addons that no longer qualify after the service change.
@@ -114,6 +99,11 @@ export default function PackageAccordion({
       : [...selectedAddOnSlugs, slug];
     updateUrl(selectedSlugs, next);
   }
+
+  const continueQuery = params.toString();
+  const continueHref = continueQuery
+    ? `/book/property?${continueQuery}`
+    : "/book/property";
 
   return (
     <div className="space-y-5">
@@ -379,41 +369,16 @@ export default function PackageAccordion({
         </section>
       ) : null}
 
-      {/* Totals + continue */}
-      {selectedSlugs.length > 0 ? (
-        <div className="sticky bottom-0 -mx-4 mt-4 border-t border-realtor-primary/15 bg-realtor-surface/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:rounded-2xl md:border md:bg-realtor-surface/95 md:p-4 md:shadow-lg md:shadow-realtor-primary/5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="text-sm">
-              <span className="text-xs uppercase tracking-wider text-realtor-muted">
-                Your shoot
-              </span>
-              <span className="ml-2 font-semibold text-realtor-text">
-                ${(totalCents / 100).toFixed(0)}
-              </span>
-              <span className="text-realtor-muted">
-                {" · "}~{totalMinutes} min on-site
-              </span>
-            </div>
-            <ContinueButton />
-          </div>
-        </div>
-      ) : null}
+      <BookingTotalBar
+        items={[...bundles, ...aLaCarte, ...addons]}
+        selectedSlugs={selectedSlugs}
+        selectedAddOnSlugs={selectedAddOnSlugs}
+        squareFootage={null}
+        href={continueHref}
+        ctaLabel="Continue"
+        note="Square footage adjustments appear after property details."
+      />
     </div>
-  );
-}
-
-function ContinueButton() {
-  const params = useSearchParams();
-  const qs = params.toString();
-  const href = qs ? `/book/property?${qs}` : "/book/property";
-  // Use a plain link for instant nav; Next.js handles the transition.
-  return (
-    <a
-      href={href}
-      className="rounded-full bg-realtor-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-realtor-primary/20 transition hover:bg-realtor-primary-light"
-    >
-      Continue →
-    </a>
   );
 }
 
