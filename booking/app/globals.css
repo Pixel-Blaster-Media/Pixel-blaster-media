@@ -313,3 +313,91 @@ body:has(.realtor-theme) .portal-sign-out {
   background: color-mix(in srgb, var(--realtor-primary) 10%, transparent);
   color: var(--realtor-primary-dark);
 }
+
+.admin-earth {
+  color: var(--realtor-text);
+}
+
+.admin-earth .text-white,
+.admin-earth .text-white\/90,
+.admin-earth .text-white\/80 {
+  color: var(--realtor-text) !important;
+}
+
+.admin-earth .text-ink-muted,
+.admin-earth .text-ink-muted\/80,
+.admin-earth .text-ink-muted\/70,
+.admin-earth .text-ink-muted\/60 {
+  color: var(--realtor-muted) !important;
+}
+
+.admin-earth .text-brand-light,
+.admin-earth .text-brand-light\/90,
+.admin-earth .text-brand-light\/85,
+.admin-earth .text-brand-light\/80 {
+  color: var(--realtor-primary) !important;
+}
+
+.admin-earth .border-white\/5,
+.admin-earth .border-white\/10,
+.admin-earth .border-white\/15,
+.admin-earth .border-white\/30 {
+  border-color: var(--realtor-border) !important;
+}
+
+.admin-earth .divide-white\/5 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--realtor-border) !important;
+}
+
+.admin-earth .bg-black\/20,
+.admin-earth .bg-black\/30,
+.admin-earth .bg-white\/5,
+.admin-earth .bg-white\/7,
+.admin-earth .bg-white\/\[0\.03\],
+.admin-earth .bg-white\/\[0\.035\] {
+  background: rgba(255, 253, 248, 0.58) !important;
+}
+
+.admin-earth .bg-ink,
+.admin-earth .bg-ink\/25,
+.admin-earth .bg-ink\/30,
+.admin-earth .bg-ink\/50 {
+  background: color-mix(in srgb, var(--realtor-bg) 84%, white) !important;
+}
+
+.admin-earth .bg-ink-soft,
+.admin-earth .bg-ink-soft\/40,
+.admin-earth .bg-ink-soft\/45,
+.admin-earth .bg-ink-soft\/50,
+.admin-earth .bg-ink-soft\/55,
+.admin-earth .bg-ink-soft\/60,
+.admin-earth .bg-ink-soft\/70 {
+  background: rgba(255, 253, 248, 0.86) !important;
+}
+
+.admin-earth .bg-brand.text-white,
+.admin-earth .bg-brand-light.text-white {
+  color: #fff !important;
+}
+
+.admin-earth .hover\:text-white:hover,
+.admin-earth .hover\:text-white\/90:hover {
+  color: var(--realtor-text) !important;
+}
+
+.admin-earth .hover\:bg-white\/5:hover,
+.admin-earth .hover\:bg-white\/7:hover,
+.admin-earth .hover\:bg-white\/\[0\.035\]:hover {
+  background: rgba(49, 95, 69, 0.08) !important;
+}
+
+.admin-earth input,
+.admin-earth textarea,
+.admin-earth select {
+  color: var(--realtor-text);
+}
+
+.admin-earth input::placeholder,
+.admin-earth textarea::placeholder {
+  color: var(--realtor-muted);
+}
