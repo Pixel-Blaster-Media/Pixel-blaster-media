@@ -121,10 +121,10 @@ export default function ServicePicker({
                   onClick={() => selectBundle(b.slug)}
                   aria-pressed={on}
                   className={
-                    "flex w-full items-baseline justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition " +
+                    "flex w-full items-start justify-between gap-3 rounded-2xl border p-3 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
                     (on
-                      ? "realtor-choice-selected text-realtor-primary"
-                      : "realtor-choice text-realtor-muted hover:border-realtor-primary/45")
+                      ? "realtor-service-tile-selected text-realtor-primary"
+                      : "realtor-service-tile text-realtor-muted hover:border-realtor-primary/45")
                   }
                   title={b.description}
                 >
@@ -134,7 +134,7 @@ export default function ServicePicker({
                     </span>
                     <MediaBadges item={b} className="mt-1" />
                   </span>
-                  <span className="text-xs opacity-80">
+                  <span className="shrink-0 rounded-full bg-realtor-surface-muted/70 px-2 py-0.5 text-xs text-realtor-primary ring-1 ring-realtor-primary/10">
                     ${(b.price_cents / 100).toFixed(0)} · {b.duration_minutes}m
                   </span>
                 </button>
@@ -153,7 +153,7 @@ export default function ServicePicker({
         <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
           A-la-carte
         </p>
-        <ul className="mt-3 flex flex-wrap gap-2">
+        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
           {aLaCarte.map((a) => {
             const on = selectedSlugs.includes(a.slug);
             return (
@@ -163,10 +163,10 @@ export default function ServicePicker({
                   onClick={() => toggleALaCarte(a.slug)}
                   aria-pressed={on}
                   className={
-                    "rounded-full border px-4 py-2 text-sm transition " +
+                    "w-full rounded-2xl border p-3 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
                     (on
-                      ? "border-realtor-primary bg-realtor-primary/20 text-realtor-primary"
-                      : "border-realtor-primary/20 bg-realtor-surface text-realtor-muted hover:border-realtor-primary/45")
+                      ? "realtor-service-tile-selected text-realtor-primary"
+                      : "realtor-service-tile text-realtor-muted hover:border-realtor-primary/45")
                   }
                   title={a.description}
                 >
@@ -192,7 +192,7 @@ export default function ServicePicker({
           <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
             Add-ons
           </p>
-          <ul className="mt-3 flex flex-wrap gap-2">
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
             {visibleAddons.map((a) => {
               const on = selectedAddOnSlugs.includes(a.slug);
               return (
@@ -202,10 +202,10 @@ export default function ServicePicker({
                     onClick={() => toggleAddon(a.slug)}
                     aria-pressed={on}
                     className={
-                      "rounded-md border px-3 py-1.5 text-xs transition " +
+                      "w-full rounded-2xl border p-3 text-left text-xs transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
                       (on
-                        ? "border-realtor-primary bg-realtor-primary/15 text-realtor-primary"
-                        : "border-realtor-primary/15 bg-realtor-surface text-realtor-muted hover:border-realtor-primary/35")
+                        ? "realtor-service-tile-selected text-realtor-primary"
+                        : "realtor-service-tile text-realtor-muted hover:border-realtor-primary/35")
                     }
                     title={a.description}
                   >

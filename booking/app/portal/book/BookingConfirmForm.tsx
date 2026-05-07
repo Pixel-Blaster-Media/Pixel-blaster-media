@@ -51,7 +51,7 @@ export default function BookingConfirmForm({
             required
             placeholder="123 King St W"
             defaultValue={initialFields?.streetAddress ?? ""}
-            className="realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
         </label>
         <label className="block">
@@ -62,7 +62,7 @@ export default function BookingConfirmForm({
             name="city"
             type="text"
             defaultValue={initialFields?.city ?? "Hamilton"}
-            className="realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
         </label>
         <label className="block">
@@ -74,7 +74,7 @@ export default function BookingConfirmForm({
             type="text"
             placeholder="L8P 4S8"
             defaultValue={initialFields?.postalCode ?? ""}
-            className="realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
         </label>
         <label className="block md:col-span-2">
@@ -88,7 +88,7 @@ export default function BookingConfirmForm({
             step={1}
             placeholder="2500"
             defaultValue={initialFields?.squareFootage ?? ""}
-            className="realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
           <span className="mt-1 block text-[11px] leading-relaxed text-realtor-muted">
             Include finished basement or lower-level space if iGUIDE should
@@ -103,7 +103,7 @@ export default function BookingConfirmForm({
             name="notes"
             rows={3}
             placeholder="Tenant occupied, vacant, pets, gate code, etc."
-            className="realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
         </label>
       </div>
@@ -125,7 +125,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="rounded-md bg-realtor-primary px-5 py-2.5 font-semibold text-white hover:bg-realtor-primary-light disabled:cursor-not-allowed disabled:opacity-60"
+      className="rounded-full bg-realtor-primary px-5 py-2.5 font-semibold text-white shadow-sm shadow-realtor-primary/20 transition hover:bg-realtor-primary-light disabled:cursor-not-allowed disabled:opacity-60"
     >
       {pending ? "Booking…" : "Confirm booking"}
     </button>

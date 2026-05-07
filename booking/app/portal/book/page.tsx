@@ -103,7 +103,7 @@ export default async function PortalBookPage({
         </p>
       </header>
 
-      <section className="realtor-elevated-panel rounded-2xl p-5">
+      <section className="realtor-elevated-panel rounded-3xl p-5">
         <ServicePicker
           selectedSlugs={selectedSlugs}
           selectedAddOnSlugs={filteredAddOnSlugs}
@@ -112,7 +112,7 @@ export default async function PortalBookPage({
           addons={addons}
         />
         {selectedSlugs.length > 0 ? (
-          <p className="mt-5 border-t border-realtor-primary/10 pt-4 text-xs text-realtor-muted">
+          <p className="mt-5 rounded-2xl border border-realtor-primary/10 bg-realtor-surface/55 p-3 text-xs text-realtor-muted">
             On-site: <span className="text-realtor-text">~{duration} min</span>
             {" · "}
             <span className="text-realtor-text">
@@ -139,7 +139,7 @@ export default async function PortalBookPage({
       ) : null}
 
       {selectedSlot && whenLabel && selectedSlugs.length > 0 ? (
-        <section className="realtor-green-panel rounded-2xl p-5">
+        <section className="realtor-green-panel rounded-3xl p-5">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-realtor-primary">
             Property details
           </h2>

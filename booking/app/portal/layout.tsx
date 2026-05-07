@@ -18,27 +18,27 @@ export default async function PortalLayout({
   }
 
   return (
-    <div className="portal-layout min-h-[60vh]">
-      <header className="portal-header mb-10 flex flex-wrap items-center justify-between gap-3 border-b border-white/5 pb-4">
+    <div className="portal-layout realtor-theme min-h-[60vh]">
+      <header className="portal-header realtor-elevated-panel mb-10 flex flex-wrap items-center justify-between gap-3 rounded-3xl p-4 md:p-5">
         <div>
-          <p className="portal-kicker text-[11px] uppercase tracking-[0.2em] text-brand-light">
+          <p className="portal-kicker text-[11px] uppercase tracking-[0.2em] text-realtor-primary">
             Your portal
           </p>
-          <p className="portal-user text-sm text-white">
+          <p className="portal-user mt-1 text-sm font-semibold text-realtor-text">
             {user.fullName ?? user.email}
           </p>
         </div>
         <nav className="flex items-center gap-3 text-sm">
           <Link
             href="/portal"
-            className="portal-nav-link text-ink-muted transition hover:text-white"
+            className="portal-nav-link rounded-full px-3 py-1.5 text-realtor-muted transition hover:bg-realtor-primary/10 hover:text-realtor-text"
           >
             My listings
           </Link>
           <form action={signOut}>
             <button
               type="submit"
-              className="portal-sign-out rounded-md border border-white/10 px-3 py-1.5 text-xs text-ink-muted hover:border-white/30 hover:text-white"
+              className="portal-sign-out rounded-full border border-realtor-primary/20 px-3 py-1.5 text-xs text-realtor-muted transition hover:border-realtor-primary/35 hover:bg-realtor-surface hover:text-realtor-text"
             >
               Sign out
             </button>

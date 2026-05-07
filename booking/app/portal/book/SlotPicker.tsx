@@ -28,7 +28,7 @@ export default function SlotPicker({
 
   if (daysOfSlots.every((d) => d.slots.length === 0)) {
     return (
-      <p className="realtor-warm-panel rounded-xl p-4 text-sm text-realtor-muted">
+      <p className="realtor-warm-panel rounded-3xl p-4 text-sm text-realtor-muted">
         No open slots in this range. The next 4 weeks might be booked solid
         — try picking fewer services, or email{" "}
         <a
@@ -43,29 +43,29 @@ export default function SlotPicker({
   }
 
   return (
-    <div className="realtor-warm-panel space-y-6 rounded-2xl p-4">
+    <div className="realtor-warm-panel space-y-6 rounded-3xl p-4">
       <p className="text-xs text-realtor-muted">
         All times are shown in {BUSINESS_TZ_DISPLAY}.
       </p>
       {daysOfSlots.map((day) => (
-        <div key={day.dateLabel} className="rounded-xl bg-realtor-surface/70 p-3">
+        <div key={day.dateLabel} className="rounded-2xl bg-realtor-surface/70 p-3 ring-1 ring-realtor-primary/10">
           <p className="text-sm font-semibold text-realtor-text">{day.dateLabel}</p>
           {day.slots.length === 0 ? (
             <p className="mt-1 text-xs text-realtor-muted">
               No slots — day off or fully booked.
             </p>
           ) : (
-            <ul className="mt-2 flex flex-wrap gap-2">
+            <ul className="mt-2 grid gap-2 sm:grid-cols-3">
               {day.slots.map((s) => (
                 <li key={s.start}>
                   <button
                     type="button"
                     onClick={() => pick(s.start)}
                     className={
-                      "rounded-md border px-3 py-1.5 text-xs transition " +
+                      "w-full rounded-full border px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
                       (selectedSlot === s.start
-                        ? "border-realtor-primary bg-realtor-primary/20 text-realtor-primary"
-                        : "border-realtor-primary/15 bg-realtor-surface text-realtor-muted hover:border-realtor-primary/35 hover:text-realtor-text")
+                        ? "border-realtor-primary bg-realtor-primary text-white"
+                        : "border-realtor-primary/15 bg-realtor-surface text-realtor-muted hover:border-realtor-primary/35 hover:bg-realtor-primary/10 hover:text-realtor-text")
                     }
                   >
                     {s.timeLabel}
