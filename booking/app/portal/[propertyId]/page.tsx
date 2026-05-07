@@ -24,9 +24,11 @@ import type {
   DeliverableSource,
   DeliverableType,
   Json,
+  ListingWebsiteTemplate,
 } from "@/lib/supabase/database.types";
 
 import CopyLinkButton from "./CopyLinkButton";
+import ListingWebsiteEditor from "./ListingWebsiteEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -64,8 +66,18 @@ interface DeliverableRow {
 }
 
 interface ListingWebsiteRow {
+  template: ListingWebsiteTemplate;
   slug: string;
   headline: string | null;
+  description: string | null;
+  feature_bullets: string[];
+  hero_image_url: string | null;
+  agent_name: string | null;
+  agent_email: string | null;
+  agent_phone: string | null;
+  brokerage_name: string | null;
+  cta_text: string | null;
+  cta_url: string | null;
   is_published: boolean;
 }
 
@@ -78,7 +90,7 @@ export default async function PropertyDetailPage({
 }) {
   const { propertyId } = await params;
   const query = await searchParams;
-  await requireUser(`/portal/${propertyId}`);
+  const user = await requireUser(`/portal/${propertyId}`);
   const supabase = await getServerSupabase();
 
   // RLS will ensure the row is only returned if the caller owns it (or
@@ -104,9 +116,10 @@ export default async function PropertyDetailPage({
 
   const { data: listingWebsite } = await supabase
     .from("listing_websites")
-    .select("slug, headline, is_published")
+    .select(
+      "template, slug, is_published, headline, description, feature_bullets, hero_image_url, agent_name, agent_email, agent_phone, brokerage_name, cta_text, cta_url",
+    )
     .eq("property_id", property.id)
-    .eq("is_published", true)
     .maybeSingle<ListingWebsiteRow>();
 
   const readyDeliverables = (deliverables ?? []).filter((d) => d.ready_at);
@@ -150,8 +163,17 @@ export default async function PropertyDetailPage({
     videos,
     propertyWebsites: fotelloPropertyWebsites,
     invoiceUrl: latestBooking?.quickbooks_invoice_url ?? null,
-    listingWebsite,
+    listingWebsite: listingWebsite?.is_published ? listingWebsite : null,
   });
+  const heroImageOptions = uniqueStrings(
+    readyDeliverables
+      .flatMap((deliverable) => [
+        deliverable.thumbnail_url,
+        isImageLikeUrl(deliverable.url) ? deliverable.url : null,
+      ])
+      .filter((url): url is string => Boolean(url)),
+  );
+  const defaultHeroImage = heroImageOptions[0] ?? "";
 
   return (
     <div className="realtor-theme space-y-8">
@@ -216,6 +238,20 @@ export default async function PropertyDetailPage({
             message="Media will appear here once photos, tours, floor plans, or video are delivered."
           />
         )}
+
+        <ListingWebsiteEditor
+          propertyId={property.id}
+          initial={listingWebsite ?? null}
+          defaults={{
+            slug: buildListingSlug(property.street_address, property.city ?? ""),
+            headline: `${property.street_address}${property.city ? `, ${property.city}` : ""}`,
+            agentName: user.fullName ?? "",
+            agentEmail: user.email,
+            heroImageUrl: defaultHeroImage,
+            heroImageOptions,
+            publicBaseUrl: process.env.NEXT_PUBLIC_APP_URL ?? "",
+          }}
+        />
 
         {gallery.length > 0 ? (
           <section className="space-y-6">
@@ -922,4 +958,36 @@ function pickLatest(
     const bT = new Date(b.scheduled_at ?? b.created_at).getTime() || 0;
     return bT - aT;
   })[0];
+}
+
+function buildListingSlug(address: string, city: string): string {
+  return [address, city]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function isImageLikeUrl(url: string): boolean {
+  try {
+    const pathname = new URL(url).pathname.toLowerCase();
+    return /\.(jpg|jpeg|png|webp|gif)$/.test(pathname);
+  } catch {
+    return false;
+  }
+}
+
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const value of values) {
+    if (seen.has(value)) continue;
+    seen.add(value);
+    unique.push(value);
+  }
+  return unique;
 }
