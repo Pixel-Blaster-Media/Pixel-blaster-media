@@ -255,11 +255,11 @@ export default async function PropertyDetailPage({
               />
             )}
 
-            {gallery.length > 0 ? (
-              <section className="space-y-6">
-                <SectionHeader title="Photos" />
-                {gallery.map((g) => (
-                  <IGuideGallery key={g.id} deliverable={g} />
+        {gallery.length > 0 ? (
+          <section id="photos" className="scroll-mt-6 space-y-6">
+            <SectionHeader title="Photos" />
+            {gallery.map((g) => (
+              <IGuideGallery key={g.id} deliverable={g} />
                 ))}
               </section>
             ) : null}
@@ -425,12 +425,10 @@ function buildQuickActions({
   }
   const photo = gallery[0];
   if (photo) {
-    const photoHref = preferredPhotoHref(photo);
     actions.push({
-      label: "Download photos",
+      label: "Photos",
       detail: photoDownloadDetail(photo),
-      href: photoHref,
-      download: isPhotoZipUrl(photoHref),
+      href: "#photos",
     });
   }
   if (tour) {
@@ -850,7 +848,9 @@ function metadataImageUrls(metadata: Json | null | undefined): string[] {
   }
   const value = metadata.image_urls;
   if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string");
+  return value.filter(
+    (item): item is string => typeof item === "string" && isImageLikeUrl(item),
+  );
 }
 
 function floorAreaRows(reso: IGuideRESOResponse | null): Array<{
@@ -999,32 +999,15 @@ function hasPhotoAsset(deliverable: DeliverableRow): boolean {
   );
 }
 
-function preferredPhotoHref(deliverable: DeliverableRow): string {
-  return (
-    metadataString(deliverable.metadata, "mls_photo_zip_url") ??
-    metadataString(deliverable.metadata, "high_res_photo_zip_url") ??
-    metadataImageUrls(deliverable.metadata)[0] ??
-    deliverable.url
-  );
-}
-
 function photoDownloadDetail(deliverable: DeliverableRow): string {
   if (metadataString(deliverable.metadata, "mls_photo_zip_url")) {
-    return "MLS / low-res photo ZIP";
+    return "MLS download available";
   }
   if (metadataString(deliverable.metadata, "high_res_photo_zip_url")) {
-    return "High-res photo ZIP";
+    return "High-res download available";
   }
   const count = metadataImageUrls(deliverable.metadata).length;
   return count > 1 ? `${count} iGUIDE gallery photos` : "iGUIDE gallery photo";
-}
-
-function isPhotoZipUrl(url: string): boolean {
-  try {
-    return new URL(url).pathname.toLowerCase().endsWith(".zip");
-  } catch {
-    return false;
-  }
 }
 
 function PhotoDownloadButtons({
