@@ -47,6 +47,12 @@ export type BookingRequestStatus =
 
 export type CatalogItemKind = "bundle" | "a_la_carte" | "addon";
 
+export type ListingWebsiteTemplate =
+  | "estate_cinematic"
+  | "clean_mls_plus"
+  | "modern_forest"
+  | "editorial_magazine";
+
 interface ProfilesTable {
   Row: {
     id: string;
@@ -527,6 +533,51 @@ interface BookingNotificationsTable {
   Relationships: [];
 }
 
+interface ListingWebsitesTable {
+  Row: {
+    id: string;
+    property_id: string;
+    booking_id: string | null;
+    owner_id: string;
+    template: ListingWebsiteTemplate;
+    slug: string;
+    is_published: boolean;
+    headline: string | null;
+    description: string | null;
+    feature_bullets: string[];
+    hero_image_url: string | null;
+    agent_name: string | null;
+    agent_email: string | null;
+    agent_phone: string | null;
+    brokerage_name: string | null;
+    cta_text: string | null;
+    cta_url: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  Insert: {
+    id?: string;
+    property_id: string;
+    booking_id?: string | null;
+    owner_id: string;
+    template?: ListingWebsiteTemplate;
+    slug: string;
+    is_published?: boolean;
+    headline?: string | null;
+    description?: string | null;
+    feature_bullets?: string[];
+    hero_image_url?: string | null;
+    agent_name?: string | null;
+    agent_email?: string | null;
+    agent_phone?: string | null;
+    brokerage_name?: string | null;
+    cta_text?: string | null;
+    cta_url?: string | null;
+  };
+  Update: Partial<ListingWebsitesTable["Insert"]>;
+  Relationships: [];
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -542,6 +593,7 @@ export interface Database {
       catalog_items: CatalogItemsTable;
       booking_line_items: BookingLineItemsTable;
       booking_notifications: BookingNotificationsTable;
+      listing_websites: ListingWebsitesTable;
       google_calendar_connection: GoogleCalendarConnectionTable;
       integration_credentials: IntegrationCredentialsTable;
       iguide_jobs: IGuideJobsTable;

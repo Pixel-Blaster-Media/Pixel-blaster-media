@@ -34,14 +34,10 @@ export default function BookingActions({
   bookingId,
   currentStatus,
   transitions,
-  deliverables,
-  deliveryEmailSentAt,
 }: {
   bookingId: string;
   currentStatus: BookingStatus;
   transitions: BookingStatus[];
-  deliverables: DeliverableSummary[];
-  deliveryEmailSentAt: string | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -80,10 +76,10 @@ export default function BookingActions({
     <div className="space-y-5 rounded-2xl border border-brand/20 bg-brand/5 p-4">
       <header>
         <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
-          Job controls
+          Job status
         </p>
         <h2 className="mt-1 text-lg font-semibold text-white">
-          Move the job and notify the realtor
+          Move the job through the pipeline
         </h2>
       </header>
 
@@ -132,58 +128,34 @@ export default function BookingActions({
         ) : null}
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-ink-soft/50 p-3">
-        <h3 className="text-sm font-semibold text-white">Delivery email</h3>
-        <p className="mt-1 text-xs text-ink-muted">
-          Email the realtor when their ready media links are available in the
-          portal. If they lose it, you can resend it any time.
-        </p>
-        <DeliveryEmailButton
-          bookingId={bookingId}
-          initialSentAt={deliveryEmailSentAt}
-        />
-      </section>
-
-      <details className="rounded-2xl border border-white/10 bg-ink-soft/50 p-3">
-        <summary className="cursor-pointer text-sm font-semibold text-white">
-          Advanced manual links
-        </summary>
-        <div className="mt-3">
-          <p className="text-xs text-ink-muted">
-            Fallback for unusual public links like video, Drive, Dropbox,
-            floor plan, or iGUIDE URLs. Fotello does not usually give you a
-            permanent link to paste here; use the Fotello upload section
-            instead.
-          </p>
-          <ManualDeliverableForm bookingId={bookingId} />
-        </div>
-
-        {deliverables.length > 0 ? (
-          <div>
-            <h3 className="mt-5 text-sm font-semibold text-white">
-              Manage existing links
-            </h3>
-            <ul className="mt-3 space-y-2">
-              {deliverables.map((d) => (
-                <li
-                  key={d.id}
-                  className="flex items-center justify-between gap-3 text-sm"
-                >
-                  <span className="truncate text-ink-muted">
-                    <span className="text-white">
-                      {deliverableTypeLabel(d.type)}
-                    </span>
-                    {" · "}
-                    <span className="text-xs">{d.source}</span>
-                  </span>
-                  <DeleteButton bookingId={bookingId} deliverableId={d.id} />
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </details>
     </div>
+  );
+}
+
+export function DeliveryEmailPanel({
+  bookingId,
+  deliveryEmailSentAt,
+}: {
+  bookingId: string;
+  deliveryEmailSentAt: string | null;
+}) {
+  return (
+    <section className="rounded-2xl border border-brand/20 bg-brand/5 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
+        Delivery email
+      </p>
+      <h2 className="mt-1 text-lg font-semibold text-white">
+        Send the finished media
+      </h2>
+      <p className="mt-1 text-xs text-ink-muted">
+        Email the realtor when their ready media links are available in the
+        portal. If they lose it, you can resend it any time.
+      </p>
+      <DeliveryEmailButton
+        bookingId={bookingId}
+        initialSentAt={deliveryEmailSentAt}
+      />
+    </section>
   );
 }
 
@@ -262,6 +234,56 @@ function DeliveryEmailButton({
         <p className="mt-2 text-xs text-emerald-300">{message}</p>
       ) : null}
     </div>
+  );
+}
+
+export function ManualLinksPanel({
+  bookingId,
+  deliverables,
+}: {
+  bookingId: string;
+  deliverables: DeliverableSummary[];
+}) {
+  return (
+    <details className="rounded-2xl border border-white/10 bg-ink-soft/50 p-4">
+      <summary className="cursor-pointer text-sm font-semibold text-white">
+        Advanced manual links
+      </summary>
+      <div className="mt-3">
+        <p className="text-xs text-ink-muted">
+          Fallback for unusual public links like video, Drive, Dropbox,
+          floor plan, or iGUIDE URLs. Fotello does not usually give you a
+          permanent link to paste here; use the Fotello upload section
+          instead.
+        </p>
+        <ManualDeliverableForm bookingId={bookingId} />
+      </div>
+
+      {deliverables.length > 0 ? (
+        <div>
+          <h3 className="mt-5 text-sm font-semibold text-white">
+            Manage existing links
+          </h3>
+          <ul className="mt-3 space-y-2">
+            {deliverables.map((d) => (
+              <li
+                key={d.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-ink/25 px-3 py-2 text-sm"
+              >
+                <span className="truncate text-ink-muted">
+                  <span className="text-white">
+                    {deliverableTypeLabel(d.type)}
+                  </span>
+                  {" · "}
+                  <span className="text-xs">{d.source}</span>
+                </span>
+                <DeleteButton bookingId={bookingId} deliverableId={d.id} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </details>
   );
 }
 

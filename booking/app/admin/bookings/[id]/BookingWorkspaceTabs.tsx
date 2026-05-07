@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 
-type WorkspaceTabId = "job" | "media" | "invoice";
+type WorkspaceTabId = "overview" | "media" | "website" | "delivery" | "billing";
 
 interface WorkspaceTab {
   id: WorkspaceTabId;
@@ -12,33 +12,49 @@ interface WorkspaceTab {
 }
 
 export default function BookingWorkspaceTabs({
-  job,
+  overview,
   media,
-  invoice,
+  website,
+  delivery,
+  billing,
 }: {
-  job: ReactNode;
+  overview: ReactNode;
   media: ReactNode;
-  invoice: ReactNode;
+  website: ReactNode;
+  delivery: ReactNode;
+  billing: ReactNode;
 }) {
-  const [active, setActive] = useState<WorkspaceTabId>("job");
+  const [active, setActive] = useState<WorkspaceTabId>("overview");
   const tabs: WorkspaceTab[] = [
     {
-      id: "job",
-      label: "Job",
-      helper: "Status, delivery email, and day-to-day controls.",
-      content: job,
+      id: "overview",
+      label: "Overview",
+      helper: "Status, cancellation, and the next job move.",
+      content: overview,
     },
     {
       id: "media",
       label: "Media",
-      helper: "Fotello, video links, iGUIDE, floor plans, and tour sync.",
+      helper: "Photos, video links, iGUIDE, and manual media links.",
       content: media,
     },
     {
-      id: "invoice",
-      label: "Invoice",
+      id: "website",
+      label: "Website",
+      helper: "Template, listing copy, contact details, and publish state.",
+      content: website,
+    },
+    {
+      id: "delivery",
+      label: "Delivery",
+      helper: "Preview links and send or resend the realtor email.",
+      content: delivery,
+    },
+    {
+      id: "billing",
+      label: "Billing",
       helper: "QuickBooks creation and invoice status.",
-      content: invoice,
+      content: billing,
     },
   ];
   const activeTab = tabs.find((tab) => tab.id === active) ?? tabs[0];
@@ -46,7 +62,7 @@ export default function BookingWorkspaceTabs({
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-white/10 bg-ink-soft/50 p-2">
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
           {tabs.map((tab) => {
             const selected = tab.id === active;
             return (

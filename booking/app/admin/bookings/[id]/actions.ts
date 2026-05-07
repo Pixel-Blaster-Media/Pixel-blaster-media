@@ -34,6 +34,7 @@ import type {
   BookingStatus,
   DeliverableType,
   Json,
+  ListingWebsiteTemplate,
 } from "@/lib/supabase/database.types";
 
 interface BookingStatusRow {
@@ -125,6 +126,22 @@ interface ReadyDeliverableRow {
   ready_at: string | null;
 }
 
+interface BookingForListingWebsiteRow {
+  id: string;
+  property_id: string;
+  owner_id: string;
+  properties: {
+    street_address: string;
+    city: string | null;
+  } | null;
+  profiles: {
+    email: string;
+    full_name: string | null;
+    phone: string | null;
+    brokerage: string | null;
+  } | null;
+}
+
 const VALID_DELIVERABLE_TYPES: DeliverableType[] = [
   "photo_gallery",
   "virtual_tour",
@@ -137,6 +154,13 @@ export interface ActionResult {
   ok: boolean;
   error?: string;
 }
+
+const LISTING_WEBSITE_TEMPLATES: ListingWebsiteTemplate[] = [
+  "estate_cinematic",
+  "clean_mls_plus",
+  "modern_forest",
+  "editorial_magazine",
+];
 
 /**
  * Move a booking forward in the status pipeline.
@@ -282,6 +306,111 @@ export async function deleteDeliverable(
   return { ok: true };
 }
 
+export async function saveListingWebsite(
+  bookingId: string,
+  formData: FormData,
+): Promise<ActionResult & { slug?: string; publicUrl?: string }> {
+  await requireAdmin();
+
+  const service = getServiceSupabase();
+  const { data: booking, error: bookingError } = await service
+    .from("bookings")
+    .select(
+      "id, property_id, owner_id, properties(street_address, city), profiles(email, full_name, phone, brokerage)",
+    )
+    .eq("id", bookingId)
+    .single<BookingForListingWebsiteRow>();
+
+  if (bookingError || !booking) return { ok: false, error: "Booking not found." };
+  if (!booking.properties) {
+    return { ok: false, error: "Booking needs a property before a website can be saved." };
+  }
+
+  const template = ((formData.get("template") as string | null) ??
+    "clean_mls_plus") as ListingWebsiteTemplate;
+  if (!LISTING_WEBSITE_TEMPLATES.includes(template)) {
+    return { ok: false, error: "Pick a valid website template." };
+  }
+
+  const existingSlug =
+    ((formData.get("existing_slug") as string | null) ?? "").trim();
+  const requestedSlug =
+    ((formData.get("slug") as string | null) ?? "").trim();
+  const slug = normalizeSlug(
+    requestedSlug ||
+      existingSlug ||
+      [booking.properties.street_address, booking.properties.city]
+        .filter(Boolean)
+        .join(" "),
+  );
+  if (!slug) return { ok: false, error: "Website slug is required." };
+
+  const headline = cleanOptional(formData.get("headline"));
+  const description = cleanOptional(formData.get("description"));
+  const heroImageUrl = cleanOptional(formData.get("hero_image_url"));
+  const agentName = cleanOptional(formData.get("agent_name"));
+  const agentEmail = cleanOptional(formData.get("agent_email"));
+  const agentPhone = cleanOptional(formData.get("agent_phone"));
+  const brokerageName = cleanOptional(formData.get("brokerage_name"));
+  const ctaText = cleanOptional(formData.get("cta_text")) ?? "Contact agent";
+  const ctaUrl = cleanOptional(formData.get("cta_url"));
+  const isPublished = formData.get("is_published") === "on";
+  const featureBullets = parseFeatureBullets(
+    (formData.get("feature_bullets") as string | null) ?? "",
+  );
+
+  for (const [label, value] of [
+    ["Hero image URL", heroImageUrl],
+    ["CTA URL", ctaUrl],
+  ] as const) {
+    if (value && !isSafePublicUrl(value)) {
+      return { ok: false, error: `${label} must start with https://, mailto:, or tel:.` };
+    }
+  }
+
+  const { data: slugOwner, error: slugError } = await service
+    .from("listing_websites")
+    .select("property_id")
+    .eq("slug", slug)
+    .maybeSingle<{ property_id: string }>();
+  if (slugError) return { ok: false, error: slugError.message };
+  if (slugOwner && slugOwner.property_id !== booking.property_id) {
+    return { ok: false, error: "That public URL is already in use. Try a slightly different slug." };
+  }
+
+  const { error } = await service.from("listing_websites").upsert(
+    {
+      property_id: booking.property_id,
+      booking_id: booking.id,
+      owner_id: booking.owner_id,
+      template,
+      slug,
+      is_published: isPublished,
+      headline,
+      description,
+      feature_bullets: featureBullets,
+      hero_image_url: heroImageUrl,
+      agent_name: agentName ?? booking.profiles?.full_name ?? null,
+      agent_email: agentEmail ?? booking.profiles?.email ?? null,
+      agent_phone: agentPhone ?? booking.profiles?.phone ?? null,
+      brokerage_name: brokerageName ?? booking.profiles?.brokerage ?? null,
+      cta_text: ctaText,
+      cta_url: ctaUrl,
+    },
+    { onConflict: "property_id" },
+  );
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/admin/bookings/${bookingId}`);
+  revalidatePath(`/listings/${slug}`);
+  return {
+    ok: true,
+    slug,
+    publicUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/listings/${slug}`,
+  };
+}
+
 export async function sendDeliveryReadyEmail(
   bookingId: string,
   extraRecipientsInput = "",
@@ -405,6 +534,46 @@ function uniqueEmails(emails: string[]): string[] {
     unique.push(email);
   }
   return unique;
+}
+
+function cleanOptional(value: FormDataEntryValue | null): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function normalizeSlug(input: string): string {
+  return input
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function parseFeatureBullets(input: string): string[] {
+  const seen = new Set<string>();
+  const bullets: string[] = [];
+  for (const line of input.split(/\r?\n/)) {
+    const cleaned = line.replace(/^[-*•]\s*/, "").trim();
+    if (!cleaned) continue;
+    const key = cleaned.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    bullets.push(cleaned);
+    if (bullets.length >= 8) break;
+  }
+  return bullets;
+}
+
+function isSafePublicUrl(url: string): boolean {
+  try {
+    if (url.startsWith("mailto:") || url.startsWith("tel:")) return true;
+    return new URL(url).protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 /**

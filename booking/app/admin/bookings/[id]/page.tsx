@@ -19,13 +19,18 @@ import type {
   DeliverableSource,
   DeliverableType,
   Json,
+  ListingWebsiteTemplate,
 } from "@/lib/supabase/database.types";
 
-import BookingActions from "./BookingActions";
+import BookingActions, {
+  DeliveryEmailPanel,
+  ManualLinksPanel,
+} from "./BookingActions";
 import BookingWorkspaceTabs from "./BookingWorkspaceTabs";
 import FotelloSection from "./FotelloSection";
 import IGuideSection from "./IGuideSection";
 import InvoiceSection from "./InvoiceSection";
+import ListingWebsiteSection from "./ListingWebsiteSection";
 import VideoLinksSection from "./VideoLinksSection";
 
 export const dynamic = "force-dynamic";
@@ -90,6 +95,22 @@ interface BookingNotificationRow {
   sent_at: string;
 }
 
+interface ListingWebsiteRow {
+  template: ListingWebsiteTemplate;
+  slug: string;
+  is_published: boolean;
+  headline: string | null;
+  description: string | null;
+  feature_bullets: string[];
+  hero_image_url: string | null;
+  agent_name: string | null;
+  agent_email: string | null;
+  agent_phone: string | null;
+  brokerage_name: string | null;
+  cta_text: string | null;
+  cta_url: string | null;
+}
+
 export default async function BookingDetailPage({
   params,
 }: {
@@ -103,6 +124,7 @@ export default async function BookingDetailPage({
     { data: deliverables },
     { data: iguideJob },
     { data: deliveryNotification },
+    { data: listingWebsite },
   ] =
     await Promise.all([
       supabase
@@ -133,6 +155,13 @@ export default async function BookingDetailPage({
         .order("sent_at", { ascending: false })
         .limit(1)
         .maybeSingle<BookingNotificationRow>(),
+      supabase
+        .from("listing_websites")
+        .select(
+          "template, slug, is_published, headline, description, feature_bullets, hero_image_url, agent_name, agent_email, agent_phone, brokerage_name, cta_text, cta_url",
+        )
+        .eq("booking_id", id)
+        .maybeSingle<ListingWebsiteRow>(),
     ]);
 
   if (bookErr || !booking) notFound();
@@ -161,6 +190,21 @@ export default async function BookingDetailPage({
   ]
     .filter(Boolean)
     .join(", ");
+  const firstHeroImage =
+    (deliverables ?? []).find((deliverable) => deliverable.thumbnail_url)
+      ?.thumbnail_url ??
+    (deliverables ?? []).find((deliverable) =>
+      isImageLikeUrl(deliverable.url),
+    )?.url ??
+    "";
+  const heroImageOptions = uniqueStrings(
+    (deliverables ?? [])
+      .flatMap((deliverable) => [
+        deliverable.thumbnail_url,
+        isImageLikeUrl(deliverable.url) ? deliverable.url : null,
+      ])
+      .filter((url): url is string => Boolean(url)),
+  );
 
   return (
     <div className="space-y-6">
@@ -247,14 +291,19 @@ export default async function BookingDetailPage({
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <main>
           <BookingWorkspaceTabs
-            job={
-              <BookingActions
-                bookingId={booking.id}
-                currentStatus={booking.status}
-                transitions={transitions}
-                deliverables={deliverables ?? []}
-                deliveryEmailSentAt={deliveryNotification?.sent_at ?? null}
-              />
+            overview={
+              <>
+                <SectionIntro
+                  eyebrow="Overview"
+                  title="What needs to happen next?"
+                  body="Use this area for the core job state: confirm, move forward, or cancel the booking."
+                />
+                <BookingActions
+                  bookingId={booking.id}
+                  currentStatus={booking.status}
+                  transitions={transitions}
+                />
+              </>
             }
             media={
               <>
@@ -288,20 +337,74 @@ export default async function BookingDetailPage({
                   portalApiConfigured={portalApiConfigured}
                   job={iguideJob ?? null}
                 />
+                <ManualLinksPanel
+                  bookingId={booking.id}
+                  deliverables={deliverables ?? []}
+                />
               </>
             }
-            invoice={
-              <InvoiceSection
-                bookingId={booking.id}
-                initial={{
-                  id: booking.quickbooks_invoice_id,
-                  number: booking.quickbooks_invoice_number,
-                  url: booking.quickbooks_invoice_url,
-                  status: booking.quickbooks_invoice_status,
-                  totalCents: booking.quickbooks_invoice_total_cents,
-                  syncedAt: booking.quickbooks_invoice_synced_at,
-                }}
-              />
+            website={
+              <>
+                <SectionIntro
+                  eyebrow="Website"
+                  title="Create a public listing launch page"
+                  body="Give the agent a polished, shareable website powered by the same media and listing details already attached to this job."
+                />
+                <ListingWebsiteSection
+                  bookingId={booking.id}
+                  initial={listingWebsite ?? null}
+                  defaults={{
+                    slug: buildListingSlug(
+                      property?.street_address ?? "listing",
+                      property?.city ?? "",
+                    ),
+                    headline: property?.street_address
+                      ? `${property.street_address}${property.city ? `, ${property.city}` : ""}`
+                      : "Featured listing",
+                    agentName: profile?.full_name ?? "",
+                    agentEmail: profile?.email ?? "",
+                    agentPhone: profile?.phone ?? "",
+                    brokerageName: profile?.brokerage ?? "",
+                    heroImageUrl: firstHeroImage,
+                    heroImageOptions,
+                    publicBaseUrl: process.env.NEXT_PUBLIC_APP_URL ?? "",
+                  }}
+                />
+              </>
+            }
+            delivery={
+              <>
+                <SectionIntro
+                  eyebrow="Delivery"
+                  title="Send the realtor their finished media"
+                  body="Preview the grouped links, add extra recipients, and resend the delivery email when agents misplace it."
+                />
+                <DeliveryEmailPanel
+                  bookingId={booking.id}
+                  deliveryEmailSentAt={deliveryNotification?.sent_at ?? null}
+                />
+                <DeliveryLinksPanel links={deliveryLinks} />
+              </>
+            }
+            billing={
+              <>
+                <SectionIntro
+                  eyebrow="Billing"
+                  title="Create or check the invoice"
+                  body="Keep invoicing separate from media delivery so it is easy to find when the job is ready to bill."
+                />
+                <InvoiceSection
+                  bookingId={booking.id}
+                  initial={{
+                    id: booking.quickbooks_invoice_id,
+                    number: booking.quickbooks_invoice_number,
+                    url: booking.quickbooks_invoice_url,
+                    status: booking.quickbooks_invoice_status,
+                    totalCents: booking.quickbooks_invoice_total_cents,
+                    syncedAt: booking.quickbooks_invoice_synced_at,
+                  }}
+                />
+              </>
             }
           />
         </main>
@@ -387,8 +490,6 @@ export default async function BookingDetailPage({
               ) : null}
             </Panel>
           ) : null}
-
-          <DeliveryLinksPanel links={deliveryLinks} />
         </aside>
       </div>
     </div>
@@ -783,4 +884,36 @@ function formatDateTime(iso: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(iso));
+}
+
+function buildListingSlug(address: string, city: string): string {
+  return [address, city]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function isImageLikeUrl(url: string): boolean {
+  try {
+    const pathname = new URL(url).pathname.toLowerCase();
+    return /\.(jpg|jpeg|png|webp|gif)$/.test(pathname);
+  } catch {
+    return false;
+  }
+}
+
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const value of values) {
+    if (seen.has(value)) continue;
+    seen.add(value);
+    unique.push(value);
+  }
+  return unique;
 }

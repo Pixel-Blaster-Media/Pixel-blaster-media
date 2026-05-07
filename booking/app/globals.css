@@ -417,3 +417,23 @@ body:has(.realtor-theme) .portal-sign-out {
 .admin-earth textarea::placeholder {
   color: var(--realtor-muted);
 }
+
+.admin-input {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid var(--realtor-border);
+  background: rgba(255, 253, 248, 0.9);
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--realtor-text);
+  outline: none;
+}
+
+.admin-input:focus {
+  border-color: rgba(49, 95, 69, 0.48);
+  box-shadow: 0 0 0 3px rgba(49, 95, 69, 0.12);
+}
+
+.admin-input::placeholder {
+  color: var(--realtor-muted);
+}
