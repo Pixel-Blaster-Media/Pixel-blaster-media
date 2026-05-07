@@ -45,9 +45,6 @@ export default function PackageAccordion({
     [selectedSlugs, aLaCarte],
   );
   const [aLaCarteOpen, setALaCarteOpen] = useState(hasALaCarte);
-  const [expandedSlug, setExpandedSlug] = useState<string | null>(
-    selectedSlugs[0] ?? null,
-  );
 
   const bySlug = useMemo(() => {
     const m = new Map<string, CatalogItemDTO>();
@@ -257,24 +254,43 @@ export default function PackageAccordion({
         }
         accent={hasALaCarte}
       >
-        <ul className="overflow-hidden rounded-xl border border-realtor-primary/15 bg-realtor-surface/80">
+        <ul className="grid gap-2">
           {aLaCarte.map((a) => {
             const selected = selectedSlugs.includes(a.slug);
-            const expanded = expandedSlug === a.slug || selected;
             return (
-              <li
-                key={a.id}
-                className={
-                  "border-b border-realtor-primary/10 p-3 transition last:border-b-0 " +
-                  (selected
-                    ? "bg-realtor-primary/10 shadow-[inset_4px_0_0_rgba(49,95,69,0.75)]"
-                    : "hover:bg-realtor-primary/5")
-                }
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
+              <li key={a.id}>
+                <article
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={selected}
+                  onClick={() => toggleALaCarte(a.slug)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      toggleALaCarte(a.slug);
+                    }
+                  }}
+                  className={
+                    "realtor-service-tile flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
+                    (selected ? "realtor-service-tile-selected" : "")
+                  }
+                >
+                  <span
+                    aria-hidden="true"
+                    className={
+                      "mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition " +
+                      (selected
+                        ? "border-realtor-primary bg-realtor-primary text-white shadow-sm"
+                        : "border-realtor-primary/25 bg-realtor-surface text-transparent")
+                    }
+                  >
+                    ✓
+                  </span>
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-semibold text-realtor-text">{a.name}</p>
+                    <div className="flex flex-wrap items-center gap-2 pr-2">
+                      <p className="font-semibold leading-5 text-realtor-text">
+                        {a.name}
+                      </p>
                       <MediaBadges item={a} />
                       {selected ? (
                         <span className="rounded-full bg-realtor-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
@@ -285,43 +301,16 @@ export default function PackageAccordion({
                     <p className="mt-1 text-xs text-realtor-muted">
                       {a.ideal_for ?? shortDescription(a.description)}
                     </p>
-                    {expanded && a.description ? <PackageDetails item={a} /> : null}
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <div className="rounded-lg bg-realtor-surface/70 px-2 py-1 text-right">
-                      <p className="text-sm font-bold text-realtor-primary">
-                        ${(a.price_cents / 100).toFixed(0)}
-                      </p>
-                      <p className="text-[10px] uppercase tracking-wider text-realtor-muted">
-                        {formatMinutes(a.duration_minutes)}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExpandedSlug((current) =>
-                          current === a.slug ? null : a.slug,
-                        )
-                      }
-                      className="rounded-md border border-realtor-primary/15 px-3 py-2 text-xs text-realtor-text hover:border-realtor-primary"
-                    >
-                      Details
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => toggleALaCarte(a.slug)}
-                      aria-pressed={selected}
-                      className={
-                        "min-w-20 rounded-lg px-3 py-2 text-xs font-semibold transition " +
-                        (selected
-                          ? "border border-realtor-primary/35 bg-realtor-surface text-realtor-primary"
-                          : "bg-realtor-primary text-white hover:bg-realtor-primary-light")
-                      }
-                    >
-                      {selected ? "Remove" : "Add"}
-                    </button>
+                  <div className="shrink-0 rounded-2xl bg-realtor-surface-muted/70 px-3 py-2 text-right ring-1 ring-realtor-primary/10">
+                    <p className="text-sm font-semibold text-realtor-text">
+                      ${(a.price_cents / 100).toFixed(0)}
+                    </p>
+                    <p className="text-[10px] uppercase tracking-wider text-realtor-muted">
+                      {formatMinutes(a.duration_minutes)}
+                    </p>
                   </div>
-                </div>
+                </article>
               </li>
             );
           })}
@@ -337,14 +326,14 @@ export default function PackageAccordion({
               These appear when they make sense for the services selected.
             </p>
           </div>
-          <ul className="mt-3 grid gap-2">
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
             {visibleAddons.map((a) => {
               const selected = selectedAddOnSlugs.includes(a.slug);
               return (
                 <li key={a.id}>
                   <label
                     className={
-                      "flex cursor-pointer items-start gap-3 rounded-lg p-3 transition " +
+                      "flex h-full cursor-pointer items-start gap-3 rounded-2xl p-3 transition " +
                       (selected
                         ? "realtor-choice-selected"
                         : "realtor-choice hover:border-realtor-primary/50")
@@ -354,8 +343,19 @@ export default function PackageAccordion({
                       type="checkbox"
                       checked={selected}
                       onChange={() => toggleAddon(a.slug)}
-                      className="mt-1 h-4 w-4 accent-brand"
+                      className="sr-only"
                     />
+                    <span
+                      aria-hidden="true"
+                      className={
+                        "mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold transition " +
+                        (selected
+                          ? "border-realtor-primary bg-realtor-primary text-white"
+                          : "border-realtor-primary/25 bg-realtor-surface text-transparent")
+                      }
+                    >
+                      ✓
+                    </span>
                     <div className="min-w-0 flex-1 text-sm">
                       <div className="flex items-baseline justify-between gap-3">
                         <span className="font-semibold text-realtor-text">
@@ -381,10 +381,13 @@ export default function PackageAccordion({
 
       {/* Totals + continue */}
       {selectedSlugs.length > 0 ? (
-        <div className="sticky bottom-0 -mx-4 mt-4 border-t border-realtor-primary/15 bg-realtor-surface/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:rounded-xl md:border md:bg-realtor-surface/95 md:shadow-lg md:shadow-realtor-primary/5">
+        <div className="sticky bottom-0 -mx-4 mt-4 border-t border-realtor-primary/15 bg-realtor-surface/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:rounded-2xl md:border md:bg-realtor-surface/95 md:p-4 md:shadow-lg md:shadow-realtor-primary/5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm">
-              <span className="font-semibold text-realtor-text">
+              <span className="text-xs uppercase tracking-wider text-realtor-muted">
+                Your shoot
+              </span>
+              <span className="ml-2 font-semibold text-realtor-text">
                 ${(totalCents / 100).toFixed(0)}
               </span>
               <span className="text-realtor-muted">
@@ -407,7 +410,7 @@ function ContinueButton() {
   return (
     <a
       href={href}
-      className="rounded-md bg-realtor-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-realtor-primary-light"
+      className="rounded-full bg-realtor-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-realtor-primary/20 transition hover:bg-realtor-primary-light"
     >
       Continue →
     </a>

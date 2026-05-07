@@ -196,6 +196,27 @@ a {
   content: none;
 }
 
+.realtor-service-tile {
+  border-color: rgba(49, 95, 69, 0.14);
+  background: rgba(255, 253, 248, 0.72);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.72) inset;
+}
+
+.realtor-service-tile:hover {
+  border-color: rgba(49, 95, 69, 0.32);
+  background: rgba(255, 253, 248, 0.9);
+}
+
+.realtor-service-tile-selected {
+  border-color: rgba(49, 95, 69, 0.58);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(246, 250, 244, 0.94)),
+    var(--realtor-surface);
+  box-shadow:
+    0 0 0 1px rgba(49, 95, 69, 0.1),
+    0 14px 32px -28px rgba(36, 71, 53, 0.42);
+}
+
 .realtor-field {
   border: 1px solid rgba(49, 95, 69, 0.18);
   background: rgba(255, 253, 248, 0.96);
