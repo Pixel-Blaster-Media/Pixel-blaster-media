@@ -167,13 +167,6 @@ export default async function PropertyDetailPage({
 
   return (
     <div className="realtor-theme space-y-8">
-      <Link
-        href="/portal"
-        className="text-xs text-realtor-muted hover:text-realtor-text"
-      >
-        ← My listings
-      </Link>
-
       {query.booked === "1" ? (
         <section className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 p-4">
           <p className="text-sm font-semibold text-realtor-text">
@@ -187,23 +180,23 @@ export default async function PropertyDetailPage({
       ) : null}
 
       <header className="realtor-elevated-panel rounded-3xl p-5 md:p-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
               Current listing media
             </p>
-            <h1 className="mt-2 text-3xl font-bold text-realtor-text md:text-4xl">
+            <h1 className="mt-2 break-words text-3xl font-bold text-realtor-text md:text-4xl">
               {property.street_address}
             </h1>
             <p className="mt-1 text-sm text-realtor-muted">
               {[property.city, property.postal_code].filter(Boolean).join(" ")}
             </p>
           </div>
-          <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/70 px-4 py-3 text-sm">
-            <p className="text-xs uppercase tracking-[0.2em] text-realtor-muted">
-              Booking
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
+          <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/70 px-4 py-3 text-sm lg:min-w-[260px]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs uppercase tracking-[0.2em] text-realtor-muted">
+                Booking
+              </p>
               {statusMeta ? (
                 <span
                   className={`rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-wider ${statusMeta.pill}`}
@@ -211,21 +204,20 @@ export default async function PropertyDetailPage({
                   {statusMeta.label}
                 </span>
               ) : null}
-              {latestBooking?.scheduled_at ? (
-                <span className="text-realtor-text">
-                  {formatDateTime(latestBooking.scheduled_at)}
-                </span>
-              ) : (
-                <span className="text-realtor-muted">Date to be confirmed</span>
-              )}
             </div>
+            <p className="mt-2 font-semibold text-realtor-text">
+              {latestBooking?.scheduled_at ? (
+                formatDateTime(latestBooking.scheduled_at)
+              ) : (
+                "Date to be confirmed"
+              )}
+            </p>
           </div>
         </div>
+        <PortalTabs propertyId={property.id} activeTab={activeTab} />
       </header>
 
       <main className="space-y-8">
-        <PortalTabs propertyId={property.id} activeTab={activeTab} />
-
         {activeTab === "website" ? (
           <ListingWebsiteEditor
             propertyId={property.id}
@@ -294,19 +286,16 @@ function PortalTabs({
   const tabs: Array<{
     id: "media" | "website";
     label: string;
-    helper: string;
     href: string;
   }> = [
     {
       id: "media",
       label: "Downloads & media",
-      helper: "Photos, tour, floor plans, video, and invoice.",
       href: `/portal/${propertyId}?tab=media`,
     },
     {
       id: "website",
       label: "Listing page",
-      helper: "Choose a design and publish a shareable property site.",
       href: `/portal/${propertyId}?tab=website`,
     },
   ];
@@ -314,7 +303,7 @@ function PortalTabs({
   return (
     <nav
       aria-label="Listing workspace"
-      className="realtor-elevated-panel grid gap-2 rounded-2xl p-2 md:grid-cols-2"
+      className="mt-5 grid gap-2 rounded-2xl border border-realtor-primary/15 bg-realtor-surface-muted/75 p-2 sm:grid-cols-2"
     >
       {tabs.map((tab) => {
         const selected = tab.id === activeTab;
@@ -328,13 +317,8 @@ function PortalTabs({
                 : "border-transparent bg-realtor-surface/60 text-realtor-text hover:border-realtor-primary/20"
             }`}
           >
-            <span className="block text-sm font-semibold">{tab.label}</span>
-            <span
-              className={`mt-1 block text-xs ${
-                selected ? "text-white/75" : "text-realtor-muted"
-              }`}
-            >
-              {tab.helper}
+            <span className="block text-center text-sm font-semibold">
+              {tab.label}
             </span>
           </Link>
         );
@@ -499,12 +483,10 @@ function PhotoDownloadsSection({ gallery }: { gallery: DeliverableRow[] }) {
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <PhotoDownloadCard
             title="MLS photos"
-            description="Compressed/low-res photo package for MLS uploads."
             url={mlsZipUrl}
           />
           <PhotoDownloadCard
             title="High-res photos"
-            description="Full-size photo package for print and future marketing."
             url={highResZipUrl}
             missingLabel="Waiting for the high-res ZIP."
           />
@@ -523,22 +505,18 @@ function PhotoDownloadsSection({ gallery }: { gallery: DeliverableRow[] }) {
 
 function PhotoDownloadCard({
   title,
-  description,
   url,
   missingLabel = "Waiting for the MLS ZIP.",
 }: {
   title: string;
-  description: string;
   url: string | null;
   missingLabel?: string;
 }) {
   return (
     <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface-muted/80 p-4">
       <h4 className="text-sm font-semibold text-realtor-text">{title}</h4>
-      <p className="mt-1 text-xs text-realtor-muted">{description}</p>
       {url ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <CopyLinkButton url={url} label="Copy" />
+        <div className="mt-3 flex flex-wrap gap-2">
           <a
             href={iGuideDownloadUrl(url)}
             target="_blank"
@@ -964,7 +942,7 @@ function SectionHeader({
 }) {
   return (
     <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-      <div>
+      <div className="flex flex-wrap items-baseline gap-2">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-realtor-primary">
           {title}
         </h2>
