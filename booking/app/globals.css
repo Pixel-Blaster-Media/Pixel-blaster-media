@@ -149,44 +149,51 @@ a {
 .realtor-package-card {
   position: relative;
   overflow: hidden;
+  border-color: rgba(49, 95, 69, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(255, 253, 248, 0.92)),
+    var(--realtor-surface);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 18px 42px -34px rgba(35, 51, 43, 0.34);
+}
+
+.realtor-package-card:hover {
+  border-color: rgba(49, 95, 69, 0.34);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 22px 48px -34px rgba(35, 51, 43, 0.42);
+  transform: translateY(-1px);
 }
 
 .realtor-package-card::before {
-  content: "";
-  position: absolute;
-  inset: auto 1rem 0 1rem;
-  height: 3px;
-  border-radius: 999px 999px 0 0;
-  background: rgba(199, 177, 122, 0.42);
+  content: none;
+}
+
+.realtor-package-card-featured {
+  border-color: rgba(199, 177, 122, 0.38);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.99), rgba(247, 243, 234, 0.94)),
+    var(--realtor-surface);
 }
 
 .realtor-package-card-selected {
-  border-color: rgba(36, 71, 53, 0.92);
+  border-color: rgba(49, 95, 69, 0.72);
   background:
-    radial-gradient(180px 120px at 100% 0%, rgba(199, 177, 122, 0.28), transparent 70%),
-    linear-gradient(135deg, var(--realtor-primary-dark), var(--realtor-primary));
-  color: white;
+    linear-gradient(180deg, rgba(255, 253, 248, 1), rgba(246, 250, 244, 0.96)),
+    var(--realtor-surface);
   box-shadow:
-    0 0 0 1px rgba(36, 71, 53, 0.18),
-    0 24px 54px -30px rgba(36, 71, 53, 0.7);
+    0 0 0 2px rgba(49, 95, 69, 0.16),
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 24px 54px -34px rgba(36, 71, 53, 0.5);
 }
 
 .realtor-package-card-selected::before {
-  inset: 0 0 auto 0;
-  height: 5px;
-  background: linear-gradient(90deg, var(--realtor-accent), var(--realtor-primary-light));
+  content: none;
 }
 
 .realtor-package-card-selected::after {
-  content: "";
-  position: absolute;
-  top: -60px;
-  right: -60px;
-  width: 150px;
-  height: 150px;
-  border-radius: 999px;
-  background: rgba(255, 253, 248, 0.08);
-  pointer-events: none;
+  content: none;
 }
 
 .realtor-field {

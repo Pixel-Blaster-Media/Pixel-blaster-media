@@ -165,103 +165,84 @@ export default function PackageAccordion({
                     }
                   }}
                   className={
-                    "realtor-package-card flex h-full min-w-0 cursor-pointer flex-col rounded-2xl border p-5 transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/45 " +
+                    "realtor-package-card flex h-full min-w-0 cursor-pointer flex-col rounded-2xl border p-5 transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
                     (selected
                       ? "realtor-package-card-selected"
                       : b.highlight
-                        ? "realtor-warm-panel hover:border-realtor-primary"
-                        : "realtor-elevated-panel hover:border-realtor-primary/50")
+                        ? "realtor-package-card-featured"
+                        : "")
                   }
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h4
-                          className={
-                            "text-base font-semibold " +
-                            (selected ? "text-white" : "text-realtor-text")
-                          }
-                        >
+                        <h4 className="text-base font-semibold text-realtor-text">
                           {b.name}
                         </h4>
-                        {selected ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white ring-1 ring-white/25">
-                            <span aria-hidden="true">✓</span>
-                            Selected
-                          </span>
-                        ) : b.badge ? (
+                        {b.badge ? (
                           <span className="rounded-full border border-realtor-primary/40 bg-realtor-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">
                             {b.badge}
                           </span>
                         ) : null}
                       </div>
                       {b.ideal_for ? (
-                        <p className={"mt-1 text-sm " + (selected ? "text-white/78" : "text-realtor-muted")}>
+                        <p className="mt-1 text-sm leading-5 text-realtor-muted">
                           {b.ideal_for}
                         </p>
                       ) : (
-                        <p className={"mt-1 text-sm " + (selected ? "text-white/78" : "text-realtor-muted")}>
+                        <p className="mt-1 text-sm leading-5 text-realtor-muted">
                           {shortDescription(b.description)}
                         </p>
                       )}
                     </div>
-                    <div
-                      className={
-                        "shrink-0 rounded-xl px-3 py-2 text-right " +
-                        (selected ? "bg-white/12 ring-1 ring-white/20" : "bg-realtor-surface/60")
-                      }
-                    >
-                      <p className={"text-xl font-bold " + (selected ? "text-white" : "text-realtor-primary")}>
-                        ${(b.price_cents / 100).toFixed(0)}
-                      </p>
-                      <p className={"text-[11px] uppercase tracking-wider " + (selected ? "text-white/65" : "text-realtor-muted")}>
-                        {formatMinutes(b.duration_minutes)}
-                      </p>
+                    <div className="flex shrink-0 items-start gap-3">
+                      <div className="rounded-2xl bg-realtor-surface-muted/70 px-3 py-2 text-right ring-1 ring-realtor-primary/10">
+                        <p className="text-xl font-semibold text-realtor-text">
+                          ${(b.price_cents / 100).toFixed(0)}
+                        </p>
+                        <p className="text-[11px] uppercase tracking-wider text-realtor-muted">
+                          {formatMinutes(b.duration_minutes)}
+                        </p>
+                      </div>
+                      <span
+                        aria-hidden="true"
+                        className={
+                          "mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition " +
+                          (selected
+                            ? "border-realtor-primary bg-realtor-primary text-white shadow-sm"
+                            : "border-realtor-primary/25 bg-realtor-surface text-transparent")
+                        }
+                      >
+                        ✓
+                      </span>
                     </div>
                   </div>
 
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <MediaBadges item={b} inverted={selected} />
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <MediaBadges item={b} />
                     {sqftRuleText(b) ? (
-                      <span
-                        className={
-                          "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider " +
-                          (selected
-                            ? "border-white/20 bg-white/10 text-white/75"
-                            : "border-realtor-primary/15 bg-realtor-soft/70 text-realtor-muted")
-                        }
-                      >
+                      <span className="rounded-full border border-realtor-primary/15 bg-realtor-soft/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
                         Sqft pricing
+                      </span>
+                    ) : null}
+                    {selected ? (
+                      <span className="rounded-full bg-realtor-primary px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
+                        Selected
                       </span>
                     ) : null}
                   </div>
 
                   {sqftRuleText(b) ? (
-                    <p
-                      className={
-                        "mt-3 rounded-lg border px-3 py-2 text-xs font-medium " +
-                        (selected
-                          ? "border-white/20 bg-white/10 text-white/82"
-                          : "border-realtor-primary/20 bg-realtor-primary/10 text-realtor-primary")
-                      }
-                    >
+                    <p className="mt-3 rounded-xl border border-realtor-primary/15 bg-realtor-primary/10 px-3 py-2 text-xs font-medium text-realtor-primary">
                       {sqftRuleText(b)}
                     </p>
                   ) : null}
 
                   {expanded && b.description ? (
-                    <PackageDetails item={b} inverted={selected} />
+                    <PackageDetails item={b} />
                   ) : null}
 
-                  <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-4">
-                    <span
-                      className={
-                        "text-xs font-semibold " +
-                        (selected ? "text-white" : "text-realtor-primary")
-                      }
-                    >
-                      {selected ? "Selected package" : "Click anywhere to select"}
-                    </span>
+                  <div className="mt-auto flex flex-wrap items-center justify-end gap-2 pt-4">
                     <button
                       type="button"
                       onClick={(event) => {
@@ -271,10 +252,7 @@ export default function PackageAccordion({
                         );
                       }}
                       className={
-                        "rounded-lg border px-4 py-2 text-sm transition " +
-                        (selected
-                          ? "border-white/20 bg-white/10 text-white hover:bg-white/15"
-                          : "border-realtor-primary/15 bg-realtor-surface/70 text-realtor-text hover:border-realtor-primary")
+                        "rounded-full border border-realtor-primary/15 bg-realtor-surface/70 px-4 py-2 text-sm text-realtor-text transition hover:border-realtor-primary hover:bg-realtor-surface"
                       }
                     >
                       {expanded ? "Hide details" : "View details"}
