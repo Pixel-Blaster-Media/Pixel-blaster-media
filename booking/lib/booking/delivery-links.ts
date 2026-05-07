@@ -61,12 +61,6 @@ export function buildDeliveryLinks(
         "High-res photos download",
         metadataString(deliverable.metadata, "high_res_photo_zip_url"),
       );
-      if (
-        !metadataString(deliverable.metadata, "mls_photo_zip_url") &&
-        !metadataString(deliverable.metadata, "high_res_photo_zip_url")
-      ) {
-        add("photos", "iGUIDE photo gallery", deliverable.url);
-      }
       continue;
     }
     if (deliverable.source === "iguide" && iGuideAlias) continue;
