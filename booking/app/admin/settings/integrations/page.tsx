@@ -244,7 +244,9 @@ export default async function IntegrationsPage({
             <h2 className="text-lg font-semibold text-white">iGUIDE</h2>
             <p className="mt-1 text-sm text-ink-muted">
               Connect this once so new iGUIDEs from your phone can be matched
-              to bookings and synced into deliverables.
+              to bookings and synced into deliverables. iGUIDE has confirmed
+              that listing every iGUIDE in your portal is not publicly available
+              through their API yet, so existing tours are linked manually.
             </p>
           </div>
           {iguideConfigured ? (
@@ -256,6 +258,19 @@ export default async function IntegrationsPage({
               Not configured
             </span>
           )}
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-amber-300/30 bg-amber-400/10 p-4">
+          <p className="text-sm font-semibold text-amber-100">
+            Important iGUIDE limitation
+          </p>
+          <p className="mt-1 text-xs text-amber-100/80">
+            Your credentials can still be valid even though portal search does
+            not work. iGUIDE support confirmed the list-all-iGUIDEs endpoint is
+            not exposed for customer use yet. For now, use webhooks for new
+            iGUIDEs and paste an existing tour URL, manage URL, alias, or Portal
+            ID on the booking/iGUIDE review page.
+          </p>
         </div>
 
         <div className="mt-4 rounded-2xl border border-brand-light/20 bg-brand/10 p-4">

@@ -1,16 +1,11 @@
 import Link from "next/link";
 
-import {
-  listIGuides,
-  type IGuideListItem,
-} from "@/lib/integrations/iguide/portal-client";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
 
 import LinkEventForm from "./LinkEventForm";
 import {
   ignoreIGuideWebhookEvents,
-  linkIGuidePortalTour,
   linkManualIGuideToBooking,
 } from "./actions";
 
@@ -54,17 +49,15 @@ interface LinkedIGuideBookingRow extends BookingOptionRow {
 export default async function IGuideReviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; q?: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
   const params = await searchParams;
   const view = params.view === "all" ? "all" : "likely";
-  const portalQuery = (params.q ?? "").trim();
   const supabase = await getServerSupabase();
   const [
     { data: events, error },
     { data: bookings },
     { data: linkedBookings },
-    portalTours,
   ] = await Promise.all([
     supabase
       .from("iguide_webhook_events")
@@ -93,7 +86,6 @@ export default async function IGuideReviewPage({
       .order("scheduled_at", { ascending: false, nullsFirst: false })
       .limit(50)
       .returns<LinkedIGuideBookingRow[]>(),
-    listIGuides(),
   ]);
 
   if (error) {
@@ -134,10 +126,6 @@ export default async function IGuideReviewPage({
     (item) => !item.suggested && !item.hasSamePostal,
   );
   const visibleItems = view === "all" ? reviewItems : likelyItems;
-  const visiblePortalTours = filterPortalTours(
-    portalTours.data ?? [],
-    portalQuery,
-  ).slice(0, 30);
 
   return (
     <div className="space-y-6">
@@ -168,8 +156,8 @@ export default async function IGuideReviewPage({
           } already have an iGUIDE alias or portal ID saved.`}
         />
         <InfoBox
-          title="Why random shoots appear"
-          body="The webhook can receive events from the iGUIDE account/app that sends to this URL. Hide anything that is not your shoot."
+          title="Portal list status"
+          body="iGUIDE confirmed their list-all-iGUIDEs endpoint is not public yet. Manual linking is the supported path for existing tours."
         />
       </div>
 
@@ -240,9 +228,9 @@ export default async function IGuideReviewPage({
             Link an iGUIDE manually
           </h2>
           <p className="mt-1 text-xs text-ink-muted">
-            If portal search is blocked, paste the public tour URL, unbranded
-            URL, manage URL, alias, or Portal ID here. Pick the booking and
-            the site will save it and try to sync deliverables.
+            For existing iGUIDEs, paste the public tour URL, unbranded URL,
+            manage URL, alias, or Portal ID here. Pick the booking and the site
+            will save it and try to sync deliverables.
           </p>
         </div>
         <form
@@ -284,11 +272,13 @@ export default async function IGuideReviewPage({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-white">
-              Search your iGUIDE portal
+              Portal search is not available yet
             </h2>
             <p className="mt-1 text-xs text-ink-muted">
-              Use this when an iGUIDE exists in your portal but did not arrive
-              through the webhook. Pick the booking, then link and sync it.
+              iGUIDE support confirmed that the endpoint for listing all tours
+              is not exposed for external/customer use yet, even though the
+              permission appears in API settings. They added this use case to
+              their development backlog.
             </p>
           </div>
           <Link
@@ -298,58 +288,17 @@ export default async function IGuideReviewPage({
             iGUIDE settings
           </Link>
         </div>
-
-        <form className="mt-4 grid gap-2 md:grid-cols-[1fr_auto]">
-          <input
-            type="search"
-            name="q"
-            defaultValue={portalQuery}
-            placeholder="Search address, alias, or Portal ID"
-            className="rounded-full border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
-          />
-          <button
-            type="submit"
-            className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light"
-          >
-            Search
-          </button>
-        </form>
-
-        {!portalTours.ok ? (
-          <div className="mt-4 rounded-xl border border-amber-300/30 bg-amber-400/10 p-4">
-            <p className="text-sm font-semibold text-amber-100">
-              iGUIDE is blocking portal search for this token.
-            </p>
-            <p className="mt-1 text-xs text-amber-100/80">
-              The credentials are saved and iGUIDE accepts them, but their API
-              is refusing the portal list endpoint. If your token already has
-              <code className="mx-1">iguide.list</code> checked, ask iGUIDE
-              whether this account/app role is allowed to list iGUIDEs through
-              <code className="mx-1">GET /iguides</code>.
-            </p>
-            {portalTours.error ? (
-              <p className="mt-2 text-[11px] text-amber-100/70">
-                iGUIDE said: {portalTours.error}
-              </p>
-            ) : null}
-          </div>
-        ) : visiblePortalTours.length > 0 ? (
-          <ul className="mt-4 space-y-2">
-            {visiblePortalTours.map((tour) => (
-              <PortalTourRow
-                key={tour.id}
-                tour={tour}
-                bookings={bookingOptions}
-              />
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-4 rounded-xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-ink-muted">
-            {portalQuery
-              ? "No portal iGUIDEs matched that search."
-              : "No portal iGUIDEs came back from iGUIDE yet."}
+        <div className="mt-4 rounded-2xl border border-amber-300/30 bg-amber-400/10 p-4">
+          <p className="text-sm font-semibold text-amber-100">
+            Current workflow
           </p>
-        )}
+          <p className="mt-1 text-xs text-amber-100/80">
+            New iGUIDEs can still arrive through webhooks going forward. For
+            existing tours, open the iGUIDE in your portal, copy the public tour
+            URL, manage URL, alias, or Portal ID, then paste it into the manual
+            link box above.
+          </p>
+        </div>
       </section>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -491,69 +440,6 @@ function InfoBox({ title, body }: { title: string; body: string }) {
   );
 }
 
-function PortalTourRow({
-  tour,
-  bookings,
-}: {
-  tour: IGuideListItem;
-  bookings: Array<{ id: string; label: string }>;
-}) {
-  return (
-    <li className="rounded-2xl border border-white/10 bg-black/20 p-3">
-      <div className="grid gap-3 md:grid-cols-[1fr_minmax(260px,420px)]">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-white">
-            {tour.address || tour.alias || tour.id}
-          </p>
-          <p className="mt-1 truncate text-xs text-ink-muted">
-            Portal ID:{" "}
-            <code className="rounded bg-black/30 px-1 py-0.5 text-[11px] text-white/90">
-              {tour.id}
-            </code>
-            {tour.alias ? ` · ${tour.alias}` : ""}
-            {tour.status ? ` · ${tour.status}` : ""}
-          </p>
-          {tour.manageUrl ? (
-            <a
-              href={tour.manageUrl}
-              target="_blank"
-              rel="noopener"
-              className="mt-1 inline-block text-xs text-brand-light underline"
-            >
-              Open in iGUIDE
-            </a>
-          ) : null}
-        </div>
-        <form action={linkIGuidePortalTour} className="grid gap-2 sm:grid-cols-[1fr_auto]">
-          <input type="hidden" name="portal_id" value={tour.id} />
-          <input type="hidden" name="alias" value={tour.alias ?? ""} />
-          <select
-            name="booking_id"
-            required
-            className="min-w-0 rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-light/60"
-            defaultValue=""
-          >
-            <option value="" disabled>
-              Pick booking
-            </option>
-            {bookings.map((booking) => (
-              <option key={booking.id} value={booking.id}>
-                {booking.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            className="rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light"
-          >
-            Link + sync
-          </button>
-        </form>
-      </div>
-    </li>
-  );
-}
-
 function statusCopy(status: string): { label: string; classes: string } {
   if (status === "failed") {
     return {
@@ -661,17 +547,4 @@ function normalizeAddress(value: string | null | undefined): string {
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
-}
-
-function filterPortalTours(
-  tours: IGuideListItem[],
-  query: string,
-): IGuideListItem[] {
-  if (!query) return tours;
-  const q = normalizeAddress(query);
-  return tours.filter((tour) =>
-    normalizeAddress(
-      [tour.id, tour.alias, tour.address, tour.status].filter(Boolean).join(" "),
-    ).includes(q),
-  );
 }

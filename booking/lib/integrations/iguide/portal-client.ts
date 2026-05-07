@@ -18,8 +18,9 @@ import { getCredential } from "@/lib/integrations/credentials";
  *
  *   - iguide.read   – asset URLs, editors, work-order status
  *   - iguide.events – re-fetch the ready event payload on demand
- *   - iguide.list   – list all tours on the account (reserved for the
- *                     future "pick a tour" UI — see `listIGuides`)
+ *   - iguide.list   – visible in iGUIDE's permission UI, but iGUIDE
+ *                     confirmed in May 2026 that GET /iguides is not
+ *                     exposed for external/customer use yet.
  *   - user.account  – list subaccounts (the realtor sub-logins)
  *
  * All endpoints return JSON unless noted. 4xx/5xx surface as
@@ -389,9 +390,10 @@ export async function getAssetUrls(
 /**
  * List iGUIDEs available to the configured Portal API credentials.
  *
- * Scope: iguide.list. iGUIDE has changed the exact response shape over
- * time, so normalize the common array/object wrappers into a small shape
- * the admin UI can search and link safely.
+ * iGUIDE support confirmed this endpoint is not publicly exposed for customer
+ * use yet, even though the iguide.list scope appears in their Portal API UI.
+ * Keep the normalizer below for the future roadmap item, but do not wire this
+ * into product UI until iGUIDE announces the endpoint is available.
  */
 export async function listIGuides(): Promise<PortalResult<IGuideListItem[]>> {
   const result = await portalFetch<unknown>("/iguides");
