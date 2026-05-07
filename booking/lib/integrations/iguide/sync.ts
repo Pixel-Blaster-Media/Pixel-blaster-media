@@ -181,6 +181,41 @@ export async function syncIGuideFromReadyEvent(
 
   await upsertIGuideJobFromReadyEvent(booking, event, matchSource);
 
+  // The ready webhook can be thinner than the authenticated asset-urls
+  // response for photo ZIPs. Once we know the immutable Portal ID, do one
+  // immediate Portal API refresh so the delivery page gets MLS/high-res photo
+  // downloads without relying on a second manual sync.
+  if (portalId && (await hasPortalCredentials())) {
+    const assetRes = await getAssetUrls(portalId);
+    if (assetRes.ok && assetRes.data) {
+      const enriched = await persistFromAssetUrls({
+        booking: {
+          ...booking,
+          iguide_id: alias,
+          iguide_portal_id: portalId,
+        },
+        portalId,
+        fallbackAlias: alias,
+        data: assetRes.data,
+      });
+      if (enriched.ok) {
+        return {
+          ok: true,
+          upserts: Math.max(upserts, enriched.upserts),
+          address: event.property?.fullAddress,
+          portalId,
+        };
+      }
+      console.warn(
+        `[iguide.sync] Ready-event asset enrichment failed for ${portalId}: ${enriched.error}`,
+      );
+    } else {
+      console.warn(
+        `[iguide.sync] Ready-event asset-urls refresh failed for ${portalId}: ${assetRes.error}`,
+      );
+    }
+  }
+
   return {
     ok: true,
     upserts,
