@@ -134,14 +134,14 @@ export default async function PropertyDetailPage({
   const statusMeta = latestBooking
     ? BOOKING_STATUSES[latestBooking.status]
     : null;
-  const readySummary = {
-    photos: gallery.length,
-    tour: Boolean(tour),
-    floorPlan: Boolean(floorPlan),
-    video: videos.length,
-    websites: fotelloPropertyWebsites.length,
-    invoice: Boolean(latestBooking?.quickbooks_invoice_url),
-  };
+  const quickActions = buildQuickActions({
+    gallery,
+    tour,
+    floorPlan,
+    videos,
+    propertyWebsites: fotelloPropertyWebsites,
+    invoiceUrl: latestBooking?.quickbooks_invoice_url ?? null,
+  });
 
   return (
     <div className="realtor-theme space-y-8">
@@ -222,131 +222,135 @@ export default async function PropertyDetailPage({
         ) : null}
       </header>
 
-      <MediaKitOverview summary={readySummary} />
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <main className="space-y-8">
+          {quickActions.length > 0 ? (
+            <QuickActionGrid actions={quickActions} />
+          ) : null}
 
-      <AiCopyPanel propertyId={property.id} />
+          {/* Virtual tour — the marquee deliverable. Renders our own iframe
+              rather than the stored embed_html so we never inject arbitrary
+              HTML, even from first-party sources. */}
+          {tour ? (
+            <section>
+              <SectionHeader
+                title="Virtual tour"
+                source={tour.source}
+                actions={
+                  <div className="flex gap-2">
+                    <CopyLinkButton url={tour.url} label="Copy tour link" />
+                    <a
+                      href={tour.url}
+                      target="_blank"
+                      rel="noopener"
+                      className="rounded-md bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-realtor-primary-light"
+                    >
+                      Open tour ↗
+                    </a>
+                  </div>
+                }
+              />
+              <div className="overflow-hidden rounded-2xl border border-realtor-primary/15 bg-realtor-text shadow-lg shadow-realtor-primary/10">
+                <div className="aspect-[16/10] w-full">
+                  <iframe
+                    src={tourEmbedUrl(tour.url)}
+                    title="Virtual tour"
+                    className="h-full w-full border-0"
+                    allowFullScreen
+                    loading="lazy"
+                  />
+                </div>
+              </div>
+            </section>
+          ) : null}
 
-      {/* Virtual tour — the marquee deliverable. Renders our own iframe
-          rather than the stored embed_html so we never inject arbitrary
-          HTML, even from first-party sources. */}
-      {tour ? (
-        <section>
-          <SectionHeader
-            title="Virtual tour"
-            source={tour.source}
-            actions={
-              <div className="flex gap-2">
-                <CopyLinkButton url={tour.url} label="Copy tour link" />
+          {gallery.length > 0 ? (
+            <section className="space-y-6">
+              <SectionHeader title="Photos" />
+              {gallery.map((g) =>
+                g.source === "fotello" && !metadataString(g.metadata, "delivery_kind") ? (
+                  <FotelloGallery key={g.id} deliverable={g} />
+                ) : (
+                  <ManualGallery key={g.id} deliverable={g} />
+                ),
+              )}
+            </section>
+          ) : null}
+
+          {videos.length > 0 ? (
+            <VideoSection
+              downloads={videoDownloads}
+              streamingLinks={videoStreamingLinks}
+            />
+          ) : null}
+
+          {iGuideAlias ? (
+            <IGuideDeliverySheet
+              alias={iGuideAlias}
+              tour={tour ?? null}
+              floorPlan={floorPlan ?? null}
+              reso={iGuideReso}
+            />
+          ) : floorPlan ? (
+            <section>
+              <SectionHeader
+                title="Floor plan"
+                source={floorPlan.source}
+                actions={
+                  <CopyLinkButton
+                    url={floorPlan.url}
+                    label="Copy floor plan link"
+                  />
+                }
+              />
+              <div className="realtor-warm-panel flex flex-wrap items-center gap-3 rounded-2xl p-4">
                 <a
-                  href={tour.url}
+                  href={iGuideDownloadUrl(floorPlan.url)}
                   target="_blank"
                   rel="noopener"
-                  className="rounded-md bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-realtor-primary-light"
+                  download
+                  className="rounded-md bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary-light"
                 >
-                  Open tour ↗
+                  Download floor plan PDF
                 </a>
+                <p className="text-xs text-realtor-muted">
+                  Measured floor plan, ready to drop into your listing.
+                </p>
               </div>
-            }
+            </section>
+          ) : null}
+
+          {fotelloPropertyWebsites.length > 0 ? (
+            <section className="space-y-3">
+              <SectionHeader title="Property websites" source="fotello" />
+              <div className="grid gap-3 md:grid-cols-2">
+                {fotelloPropertyWebsites.map((link) => (
+                  <ManualGallery key={link.id} deliverable={link} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {latestBooking?.quickbooks_invoice_url ? (
+            <InvoiceCard booking={latestBooking} />
+          ) : null}
+        </main>
+
+        <aside className="space-y-4 lg:sticky lg:top-8 lg:self-start">
+          <HelpfulPanel
+            readyCount={readyDeliverables.length}
+            hasAnythingReady={quickActions.length > 0}
           />
-          <div className="overflow-hidden rounded-2xl border border-realtor-primary/15 bg-realtor-text shadow-lg shadow-realtor-primary/10">
-            <div className="aspect-[16/10] w-full">
-              <iframe
-                src={tourEmbedUrl(tour.url)}
-                title="Virtual tour"
-                className="h-full w-full border-0"
-                allowFullScreen
-                loading="lazy"
-              />
+          <details className="realtor-green-panel rounded-2xl p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-realtor-text">
+              Marketing copy tools
+            </summary>
+            <div className="mt-4">
+              <AiCopyPanel propertyId={property.id} compact />
             </div>
-          </div>
-        </section>
-      ) : (
-        <EmptySection
-          title="Virtual tour"
-          message="Your virtual tour will appear here once we've published it."
-        />
-      )}
-
-      {/* Floor plan — keep it simple: open/download button. PDFs embed
-          awkwardly across browsers; we'd rather give the realtor a
-          clean download link they can forward. */}
-      {floorPlan ? (
-        <section>
-          <SectionHeader
-            title="Floor plan"
-            source={floorPlan.source}
-            actions={
-              <CopyLinkButton
-                url={floorPlan.url}
-                label="Copy floor plan link"
-              />
-            }
-          />
-          <div className="realtor-warm-panel flex flex-wrap items-center gap-3 rounded-2xl p-4">
-            <a
-              href={iGuideDownloadUrl(floorPlan.url)}
-              target="_blank"
-              rel="noopener"
-              download
-              className="rounded-md bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary-light"
-            >
-              Download floor plan PDF
-            </a>
-            <p className="text-xs text-realtor-muted">
-              Measured floor plan, ready to drop into your listing.
-            </p>
-          </div>
-        </section>
-      ) : (
-        <EmptySection
-          title="Floor plan"
-          message="Floor plan will appear here once iGuide has processed the measurements."
-        />
-      )}
-
-      {iGuideAlias ? (
-        <IGuideDeliverySheet
-          alias={iGuideAlias}
-          tour={tour ?? null}
-          floorPlan={floorPlan ?? null}
-          reso={iGuideReso}
-        />
-      ) : null}
-
-      {fotelloPropertyWebsites.length > 0 ? (
-        <section className="space-y-3">
-          <SectionHeader title="Property websites" source="fotello" />
-          <div className="grid gap-3 md:grid-cols-2">
-            {fotelloPropertyWebsites.map((link) => (
-              <ManualGallery key={link.id} deliverable={link} />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {gallery.length > 0 ? (
-        <section className="space-y-6">
-          <SectionHeader title="Photos" />
-          {gallery.map((g) =>
-            g.source === "fotello" && !metadataString(g.metadata, "delivery_kind") ? (
-              <FotelloGallery key={g.id} deliverable={g} />
-            ) : (
-              <ManualGallery key={g.id} deliverable={g} />
-            ),
-          )}
-        </section>
-      ) : null}
-
-      {videos.length > 0 ? (
-        <VideoSection
-          downloads={videoDownloads}
-          streamingLinks={videoStreamingLinks}
-        />
-      ) : null}
-
-      {latestBooking?.quickbooks_invoice_url ? (
-        <InvoiceCard booking={latestBooking} />
-      ) : null}
+          </details>
+        </aside>
+      </div>
     </div>
   );
 }
@@ -446,6 +450,140 @@ function MediaKitOverview({
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+interface QuickAction {
+  label: string;
+  detail: string;
+  href: string;
+  download?: boolean;
+}
+
+function buildQuickActions({
+  gallery,
+  tour,
+  floorPlan,
+  videos,
+  propertyWebsites,
+  invoiceUrl,
+}: {
+  gallery: DeliverableRow[];
+  tour: DeliverableRow | undefined;
+  floorPlan: DeliverableRow | undefined;
+  videos: DeliverableRow[];
+  propertyWebsites: DeliverableRow[];
+  invoiceUrl: string | null;
+}): QuickAction[] {
+  const actions: QuickAction[] = [];
+  const photo = gallery[0];
+  if (photo) {
+    actions.push({
+      label: "Open photos",
+      detail: gallery.length > 1 ? `${gallery.length} photo links` : "Photo gallery",
+      href:
+        photo.source === "fotello" && !metadataString(photo.metadata, "delivery_kind")
+          ? `/api/fotello/embed/${photo.id}`
+          : photo.url,
+    });
+  }
+  if (tour) {
+    actions.push({
+      label: "Open virtual tour",
+      detail: "Branded tour link",
+      href: tour.url,
+    });
+  }
+  if (floorPlan) {
+    actions.push({
+      label: "Download floor plan",
+      detail: "PDF floor plan",
+      href: iGuideDownloadUrl(floorPlan.url),
+      download: true,
+    });
+  }
+  if (videos[0]) {
+    actions.push({
+      label: "Open video",
+      detail: videos.length > 1 ? `${videos.length} video links` : "Video link",
+      href: videos[0].url,
+      download: !isStreamingVideoUrl(videos[0].url),
+    });
+  }
+  if (propertyWebsites[0]) {
+    actions.push({
+      label: "Open property website",
+      detail: "Shareable website",
+      href: propertyWebsites[0].url,
+    });
+  }
+  if (invoiceUrl) {
+    actions.push({
+      label: "Open invoice",
+      detail: "Billing link",
+      href: invoiceUrl,
+    });
+  }
+  return actions;
+}
+
+function QuickActionGrid({ actions }: { actions: QuickAction[] }) {
+  return (
+    <section className="realtor-elevated-panel rounded-2xl p-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
+            Ready now
+          </p>
+          <h2 className="mt-1 text-xl font-semibold text-realtor-text">
+            Grab the media you need
+          </h2>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {actions.map((action) => (
+          <a
+            key={`${action.label}:${action.href}`}
+            href={action.href}
+            target="_blank"
+            rel="noopener"
+            download={action.download}
+            className="group rounded-2xl border border-realtor-primary/15 bg-realtor-surface-muted/70 p-4 transition hover:border-realtor-primary/40 hover:bg-realtor-surface"
+          >
+            <span className="block text-sm font-semibold text-realtor-text group-hover:text-realtor-primary">
+              {action.label} →
+            </span>
+            <span className="mt-1 block text-xs text-realtor-muted">
+              {action.detail}
+            </span>
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function HelpfulPanel({
+  readyCount,
+  hasAnythingReady,
+}: {
+  readyCount: number;
+  hasAnythingReady: boolean;
+}) {
+  return (
+    <section className="realtor-warm-panel rounded-2xl p-4">
+      <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
+        Quick note
+      </p>
+      <h2 className="mt-2 text-lg font-semibold text-realtor-text">
+        {hasAnythingReady ? "Your media is ready below." : "Media will appear here."}
+      </h2>
+      <p className="mt-2 text-sm text-realtor-muted">
+        {hasAnythingReady
+          ? `There ${readyCount === 1 ? "is" : "are"} ${readyCount} ready item${readyCount === 1 ? "" : "s"} attached to this listing. Use the quick buttons or scroll for full details.`
+          : "Once photos, tours, floor plans, or video are delivered, they will show up on this page automatically."}
+      </p>
     </section>
   );
 }

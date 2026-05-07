@@ -169,13 +169,16 @@ export default async function PortalIndex({
           return (
             <li key={p.id}>
               <article className="realtor-package-card group flex h-full min-w-0 flex-col overflow-hidden rounded-3xl border transition hover:border-realtor-primary/40">
-                <div className="aspect-[4/3] w-full overflow-hidden bg-realtor-surface-muted">
+                <Link
+                  href={`/portal/${p.id}`}
+                  className="relative block aspect-[4/3] w-full overflow-hidden bg-realtor-surface-muted focus:outline-none focus:ring-2 focus:ring-realtor-primary/50"
+                >
                   {thumb ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={thumb}
                       alt=""
-                      className="h-full w-full object-cover transition group-hover:scale-[1.02]"
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
                       loading="lazy"
                     />
                   ) : (
@@ -183,7 +186,15 @@ export default async function PortalIndex({
                       No preview yet
                     </div>
                   )}
-                </div>
+                  <div className="absolute inset-0 flex items-center justify-center bg-realtor-text/0 transition duration-200 group-hover:bg-realtor-text/32">
+                    <span className="translate-y-2 rounded-full bg-realtor-surface px-4 py-2 text-sm font-semibold text-realtor-primary opacity-0 shadow-lg shadow-realtor-text/10 transition duration-200 group-hover:translate-y-0 group-hover:opacity-100">
+                      Open media →
+                    </span>
+                  </div>
+                  <span className="absolute left-3 top-3 rounded-full bg-realtor-surface/92 px-3 py-1 text-xs font-semibold text-realtor-primary shadow-sm">
+                    Open media
+                  </span>
+                </Link>
                 <div className="flex flex-1 flex-col space-y-3 p-4">
                   <div>
                     <p className="font-semibold text-realtor-text">
@@ -208,20 +219,12 @@ export default async function PortalIndex({
                     </div>
                   ) : null}
                   <MediaChips media={media} />
-                  <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-realtor-primary/10 pt-3 text-xs">
-                    <Link
-                      href={`/portal/${p.id}`}
-                      className="font-semibold text-realtor-primary hover:text-realtor-text"
-                    >
-                      Open media →
-                    </Link>
-                    <span className="text-realtor-muted md:ml-auto">
-                      {media.readyCount > 0
-                        ? `${media.readyCount} item${media.readyCount === 1 ? "" : "s"} ready`
-                        : "Media will appear here"}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <p className="mt-auto rounded-2xl border border-realtor-primary/10 bg-realtor-surface-muted/70 px-3 py-2 text-xs text-realtor-muted">
+                    {media.readyCount > 0
+                      ? `${media.readyCount} media item${media.readyCount === 1 ? "" : "s"} ready`
+                      : "Media will appear here after delivery."}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 border-t border-realtor-primary/10 pt-3">
                     <Link
                       href={similarHref}
                       className="rounded-full bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-realtor-primary/15 transition hover:bg-realtor-primary-light"

@@ -27,7 +27,13 @@ const OPTIONS: Array<{ kind: CopyKind; label: string; description: string }> = [
   },
 ];
 
-export default function AiCopyPanel({ propertyId }: { propertyId: string }) {
+export default function AiCopyPanel({
+  propertyId,
+  compact = false,
+}: {
+  propertyId: string;
+  compact?: boolean;
+}) {
   const [pending, startTransition] = useTransition();
   const [active, setActive] = useState<CopyKind>("mls_description");
   const [draft, setDraft] = useState("");
@@ -66,8 +72,8 @@ export default function AiCopyPanel({ propertyId }: { propertyId: string }) {
             Draft listing copy from this media
           </h2>
           <p className="mt-1 max-w-2xl text-xs text-realtor-muted">
-            Generates editable drafts from the listing details and delivered
-            media. Always review before posting to MLS or social.
+            Generates editable drafts from this listing. Always review before
+            posting to MLS or social.
           </p>
         </div>
         <button
@@ -80,7 +86,7 @@ export default function AiCopyPanel({ propertyId }: { propertyId: string }) {
         </button>
       </div>
 
-      <div className="mt-4 grid gap-2 md:grid-cols-4">
+      <div className={`mt-4 grid gap-2 ${compact ? "" : "md:grid-cols-4"}`}>
         {OPTIONS.map((option) => (
           <button
             key={option.kind}
@@ -107,7 +113,7 @@ export default function AiCopyPanel({ propertyId }: { propertyId: string }) {
       <textarea
         value={draft}
         onChange={(event) => setDraft(event.currentTarget.value)}
-        rows={12}
+        rows={compact ? 8 : 12}
         placeholder={
           pending
             ? "Writing..."
