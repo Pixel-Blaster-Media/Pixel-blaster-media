@@ -545,6 +545,7 @@ interface ListingWebsitesTable {
     headline: string | null;
     description: string | null;
     feature_bullets: string[];
+    included_sections: string[];
     hero_image_url: string | null;
     agent_name: string | null;
     agent_email: string | null;
@@ -566,6 +567,7 @@ interface ListingWebsitesTable {
     headline?: string | null;
     description?: string | null;
     feature_bullets?: string[];
+    included_sections?: string[];
     hero_image_url?: string | null;
     agent_name?: string | null;
     agent_email?: string | null;

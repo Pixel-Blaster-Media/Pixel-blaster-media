@@ -162,6 +162,14 @@ const LISTING_WEBSITE_TEMPLATES: ListingWebsiteTemplate[] = [
   "editorial_magazine",
 ];
 
+const LISTING_WEBSITE_INCLUDED_SECTIONS = [
+  "photos",
+  "tour",
+  "floor_plans",
+  "video",
+  "property_websites",
+] as const;
+
 /**
  * Move a booking forward in the status pipeline.
  *
@@ -358,6 +366,7 @@ export async function saveListingWebsite(
   const featureBullets = parseFeatureBullets(
     (formData.get("feature_bullets") as string | null) ?? "",
   );
+  const includedSections = parseListingWebsiteSections(formData);
 
   for (const [label, value] of [
     ["Hero image URL", heroImageUrl],
@@ -389,6 +398,7 @@ export async function saveListingWebsite(
       headline,
       description,
       feature_bullets: featureBullets,
+      included_sections: includedSections,
       hero_image_url: heroImageUrl,
       agent_name: agentName ?? booking.profiles?.full_name ?? null,
       agent_email: agentEmail ?? booking.profiles?.email ?? null,
@@ -565,6 +575,18 @@ function parseFeatureBullets(input: string): string[] {
     if (bullets.length >= 8) break;
   }
   return bullets;
+}
+
+function parseListingWebsiteSections(formData: FormData): string[] {
+  const selected = formData
+    .getAll("included_sections")
+    .filter((value): value is string => typeof value === "string")
+    .filter((value) =>
+      (LISTING_WEBSITE_INCLUDED_SECTIONS as readonly string[]).includes(value),
+    );
+  return selected.length > 0
+    ? selected
+    : [...LISTING_WEBSITE_INCLUDED_SECTIONS];
 }
 
 function isSafePublicUrl(url: string): boolean {

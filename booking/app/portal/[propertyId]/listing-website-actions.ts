@@ -27,6 +27,14 @@ const TEMPLATES: ListingWebsiteTemplate[] = [
   "editorial_magazine",
 ];
 
+const INCLUDED_SECTION_OPTIONS = [
+  "photos",
+  "tour",
+  "floor_plans",
+  "video",
+  "property_websites",
+] as const;
+
 export async function savePortalListingWebsite(
   propertyId: string,
   formData: FormData,
@@ -101,6 +109,7 @@ export async function savePortalListingWebsite(
       feature_bullets: parseFeatureBullets(
         (formData.get("feature_bullets") as string | null) ?? "",
       ),
+      included_sections: parseIncludedSections(formData),
       hero_image_url: heroImageUrl,
       agent_name: cleanOptional(formData.get("agent_name")) ?? user.fullName,
       agent_email: cleanOptional(formData.get("agent_email")) ?? user.email,
@@ -159,6 +168,16 @@ function parseFeatureBullets(input: string): string[] {
     if (bullets.length >= 8) break;
   }
   return bullets;
+}
+
+function parseIncludedSections(formData: FormData): string[] {
+  const selected = formData
+    .getAll("included_sections")
+    .filter((value): value is string => typeof value === "string")
+    .filter((value) =>
+      (INCLUDED_SECTION_OPTIONS as readonly string[]).includes(value),
+    );
+  return selected.length > 0 ? selected : [...INCLUDED_SECTION_OPTIONS];
 }
 
 function isSafePublicUrl(url: string): boolean {

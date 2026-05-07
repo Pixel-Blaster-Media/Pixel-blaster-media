@@ -6,6 +6,7 @@ import type { Database, Json } from "@/lib/supabase/database.types";
 import {
   fetchIGuideRESO,
   findMediaByCategory,
+  type IGuideRESOMedia,
   type IGuideRESOResponse,
 } from "./client";
 import {
@@ -406,6 +407,8 @@ function buildDeliverableRowsFromRESO(
   reso: IGuideRESOResponse,
 ): DeliverableInsert[] {
   const now = new Date().toISOString();
+  const photoUrls = photoUrlsFromRESO(reso);
+  const thumbnailUrl = photoUrls[0] ?? pickPreferredPhotoUrl(reso);
 
   const tourMedia =
     findMediaByCategory(reso.Media, "virtual tour") ??
@@ -416,7 +419,7 @@ function buildDeliverableRowsFromRESO(
   const floorPlanUrl =
     floorPlanMedia?.MediaURL ?? iguideFloorplanPdfUrl(alias);
 
-  return [
+  const rows: DeliverableInsert[] = [
     {
       booking_id: booking.id,
       property_id: booking.property_id,
@@ -427,7 +430,7 @@ function buildDeliverableRowsFromRESO(
       external_id: `alias:${alias}/tour`,
       url: tourUrl,
       embed_html: iguideEmbedHtml(alias),
-      thumbnail_url: pickPreferredPhotoUrl(reso),
+      thumbnail_url: thumbnailUrl,
       metadata: {
         alias,
         source_api: "reso_autofill",
@@ -444,7 +447,7 @@ function buildDeliverableRowsFromRESO(
       source: "iguide",
       external_id: `alias:${alias}/floorplan`,
       url: floorPlanUrl,
-      thumbnail_url: pickPreferredPhotoUrl(reso),
+      thumbnail_url: thumbnailUrl,
       metadata: {
         alias,
         source_api: "reso_autofill",
@@ -452,16 +455,56 @@ function buildDeliverableRowsFromRESO(
       ready_at: now,
     },
   ];
+
+  if (photoUrls.length > 0) {
+    rows.push({
+      booking_id: booking.id,
+      property_id: booking.property_id,
+      type: "photo_gallery",
+      source: "iguide",
+      external_id: `alias:${alias}/photos`,
+      url: photoUrls[0],
+      thumbnail_url: thumbnailUrl,
+      metadata: {
+        alias,
+        source_api: "reso_autofill",
+        delivery_label: "iGUIDE photo gallery",
+        image_urls: photoUrls,
+      },
+      ready_at: now,
+    });
+  }
+
+  return rows;
 }
 
 function pickPreferredPhotoUrl(reso: IGuideRESOResponse): string | null {
-  const photos = (reso.Media ?? []).filter((m) =>
-    (m.MediaCategory ?? m.MediaType ?? "").toLowerCase().includes("photo"),
-  );
+  const photos = (reso.Media ?? []).filter(isPhotoMedia);
   if (photos.length === 0) return null;
   const preferred =
     photos.find((p) => p.PreferredPhotoYN === true) ?? photos[0];
   return preferred?.MediaURL ?? null;
+}
+
+function photoUrlsFromRESO(reso: IGuideRESOResponse): string[] {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  for (const media of reso.Media ?? []) {
+    if (!isPhotoMedia(media) || !media.MediaURL) continue;
+    if (seen.has(media.MediaURL)) continue;
+    seen.add(media.MediaURL);
+    urls.push(media.MediaURL);
+  }
+  return urls;
+}
+
+function isPhotoMedia(media: IGuideRESOMedia): boolean {
+  const haystack = [media.MediaCategory, media.MediaType, media.ResourceName]
+    .filter((value): value is string => Boolean(value))
+    .join(" ")
+    .toLowerCase();
+  if (haystack.includes("photo") || haystack.includes("image")) return true;
+  return Boolean(media.MediaURL && /\.(jpg|jpeg|png|webp)$/i.test(media.MediaURL));
 }
 
 function formatAddressFromRESO(reso: IGuideRESOResponse): string {

@@ -104,6 +104,7 @@ interface ListingWebsiteRow {
   headline: string | null;
   description: string | null;
   feature_bullets: string[];
+  included_sections: string[];
   hero_image_url: string | null;
   agent_name: string | null;
   agent_email: string | null;
@@ -164,7 +165,7 @@ export default async function BookingDetailPage({
       supabase
         .from("listing_websites")
         .select(
-          "template, slug, is_published, headline, description, feature_bullets, hero_image_url, agent_name, agent_email, agent_phone, brokerage_name, cta_text, cta_url",
+          "template, slug, is_published, headline, description, feature_bullets, included_sections, hero_image_url, agent_name, agent_email, agent_phone, brokerage_name, cta_text, cta_url",
         )
         .eq("booking_id", id)
         .maybeSingle<ListingWebsiteRow>(),

@@ -13,6 +13,7 @@ interface ListingWebsiteInitial {
   headline: string | null;
   description: string | null;
   feature_bullets: string[];
+  included_sections: string[];
   hero_image_url: string | null;
   agent_name: string | null;
   agent_email: string | null;
@@ -64,6 +65,34 @@ const TEMPLATES: Array<{
   },
 ];
 
+const SECTION_OPTIONS = [
+  {
+    id: "photos",
+    label: "Photos",
+    helper: "Show delivered photo galleries/images on the page.",
+  },
+  {
+    id: "tour",
+    label: "Virtual tour",
+    helper: "Embed the iGUIDE tour directly on the page.",
+  },
+  {
+    id: "floor_plans",
+    label: "Floor plans",
+    helper: "Show floor plan and overview PDF buttons.",
+  },
+  {
+    id: "video",
+    label: "Video",
+    helper: "Show video links or embeds.",
+  },
+  {
+    id: "property_websites",
+    label: "Property website links",
+    helper: "Show Fotello branded/unbranded website links if delivered.",
+  },
+] as const;
+
 export default function ListingWebsiteEditor({
   propertyId,
   initial,
@@ -82,6 +111,9 @@ export default function ListingWebsiteEditor({
   const [slug, setSlug] = useState(initial?.slug ?? defaults.slug);
   const [heroImageUrl, setHeroImageUrl] = useState(
     initial?.hero_image_url ?? defaults.heroImageUrl,
+  );
+  const includedSections = new Set(
+    initial?.included_sections ?? SECTION_OPTIONS.map((option) => option.id),
   );
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -242,6 +274,40 @@ export default function ListingWebsiteEditor({
           </div>
 
           <div className="space-y-4">
+            <div className="realtor-green-panel rounded-2xl p-4">
+              <p className="text-sm font-semibold text-realtor-text">
+                Show on public page
+              </p>
+              <p className="mt-1 text-xs text-realtor-muted">
+                Choose which delivered assets should appear directly on the
+                custom website.
+              </p>
+              <div className="mt-3 space-y-2">
+                {SECTION_OPTIONS.map((option) => (
+                  <label
+                    key={option.id}
+                    className="flex items-start gap-2 rounded-xl border border-realtor-primary/15 bg-realtor-surface/70 px-3 py-2"
+                  >
+                    <input
+                      type="checkbox"
+                      name="included_sections"
+                      value={option.id}
+                      defaultChecked={includedSections.has(option.id)}
+                      className="mt-1 h-4 w-4 accent-realtor-primary"
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-realtor-text">
+                        {option.label}
+                      </span>
+                      <span className="block text-[11px] text-realtor-muted">
+                        {option.helper}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <div className="realtor-warm-panel rounded-2xl p-4">
               <p className="text-sm font-semibold text-realtor-text">Publish</p>
               <label className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-realtor-primary/15 bg-realtor-surface/70 px-3 py-2">

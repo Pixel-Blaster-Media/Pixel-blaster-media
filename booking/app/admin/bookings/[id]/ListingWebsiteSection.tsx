@@ -13,6 +13,7 @@ interface ListingWebsiteInitial {
   headline: string | null;
   description: string | null;
   feature_bullets: string[];
+  included_sections: string[];
   hero_image_url: string | null;
   agent_name: string | null;
   agent_email: string | null;
@@ -66,6 +67,34 @@ const TEMPLATES: Array<{
   },
 ];
 
+const SECTION_OPTIONS = [
+  {
+    id: "photos",
+    label: "Photos",
+    helper: "Show delivered photo galleries/images on the public page.",
+  },
+  {
+    id: "tour",
+    label: "Virtual tour",
+    helper: "Embed the iGUIDE tour directly on the public page.",
+  },
+  {
+    id: "floor_plans",
+    label: "Floor plans",
+    helper: "Show floor plan and overview PDF buttons.",
+  },
+  {
+    id: "video",
+    label: "Video",
+    helper: "Show video links or embeds.",
+  },
+  {
+    id: "property_websites",
+    label: "Property website links",
+    helper: "Show Fotello branded/unbranded website links if delivered.",
+  },
+] as const;
+
 export default function ListingWebsiteSection({
   bookingId,
   initial,
@@ -84,6 +113,9 @@ export default function ListingWebsiteSection({
   const [slug, setSlug] = useState(initial?.slug ?? defaults.slug);
   const [heroImageUrl, setHeroImageUrl] = useState(
     initial?.hero_image_url ?? defaults.heroImageUrl,
+  );
+  const includedSections = new Set(
+    initial?.included_sections ?? SECTION_OPTIONS.map((option) => option.id),
   );
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -258,6 +290,40 @@ export default function ListingWebsiteSection({
           </div>
 
           <div className="space-y-4">
+            <div className="rounded-2xl border border-white/10 bg-ink-soft/50 p-4">
+              <p className="text-sm font-semibold text-white">
+                Show on public page
+              </p>
+              <p className="mt-1 text-xs text-ink-muted">
+                Choose which delivered assets should appear directly on the
+                custom listing website.
+              </p>
+              <div className="mt-3 space-y-2">
+                {SECTION_OPTIONS.map((option) => (
+                  <label
+                    key={option.id}
+                    className="flex items-start gap-2 rounded-xl border border-white/10 bg-ink/25 px-3 py-2"
+                  >
+                    <input
+                      type="checkbox"
+                      name="included_sections"
+                      value={option.id}
+                      defaultChecked={includedSections.has(option.id)}
+                      className="mt-1 h-4 w-4 accent-brand"
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-white">
+                        {option.label}
+                      </span>
+                      <span className="block text-[11px] text-ink-muted">
+                        {option.helper}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <div className="rounded-2xl border border-white/10 bg-ink-soft/50 p-4">
               <p className="text-sm font-semibold text-white">Publish</p>
               <label className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-ink/25 px-3 py-2">

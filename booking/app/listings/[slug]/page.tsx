@@ -4,8 +4,14 @@ import { notFound } from "next/navigation";
 
 import {
   buildDeliveryLinks,
+  isStreamingVideoUrl,
+  metadataString,
   type DeliveryLink,
 } from "@/lib/booking/delivery-links";
+import {
+  iguideEmbedUrl,
+  parseIGuideAlias,
+} from "@/lib/integrations/iguide/parse-id";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type {
   DeliverableSource,
@@ -26,6 +32,7 @@ interface ListingWebsiteRow {
   headline: string | null;
   description: string | null;
   feature_bullets: string[];
+  included_sections: string[];
   hero_image_url: string | null;
   agent_name: string | null;
   agent_email: string | null;
@@ -117,6 +124,8 @@ interface ListingPageData {
   deliveryLinks: DeliveryLink[];
   heroImage: string;
   galleryImages: string[];
+  selectedLinks: DeliveryLink[];
+  tourEmbedUrl: string | null;
 }
 
 async function loadListing(slug: string): Promise<ListingPageData | null> {
@@ -124,7 +133,7 @@ async function loadListing(slug: string): Promise<ListingPageData | null> {
   const { data: website, error: websiteError } = await service
     .from("listing_websites")
     .select(
-      "property_id, booking_id, owner_id, template, slug, is_published, headline, description, feature_bullets, hero_image_url, agent_name, agent_email, agent_phone, brokerage_name, cta_text, cta_url",
+      "property_id, booking_id, owner_id, template, slug, is_published, headline, description, feature_bullets, included_sections, hero_image_url, agent_name, agent_email, agent_phone, brokerage_name, cta_text, cta_url",
     )
     .eq("slug", slug)
     .maybeSingle<ListingWebsiteRow>();
@@ -151,30 +160,41 @@ async function loadListing(slug: string): Promise<ListingPageData | null> {
   const ready = (deliverables ?? []).filter(
     (deliverable) => deliverable.url && deliverable.url !== "about:blank",
   );
-  const galleryImages = ready
-    .flatMap((deliverable) => [deliverable.thumbnail_url, imageUrl(deliverable.url)])
+  const allGalleryImages = ready
+    .flatMap((deliverable) => [
+      ...metadataImageUrls(deliverable.metadata),
+      deliverable.thumbnail_url,
+      imageUrl(deliverable.url),
+    ])
     .filter((url): url is string => Boolean(url));
+  const deliveryLinks = buildDeliveryLinks(
+    ready.map((deliverable) => ({
+      id: deliverable.id,
+      type: deliverable.type,
+      source: deliverable.source,
+      url: deliverable.url,
+      metadata: deliverable.metadata,
+    })),
+    process.env.NEXT_PUBLIC_APP_URL ?? "",
+  );
+  const selectedLinks = filterIncludedLinks(deliveryLinks, website.included_sections);
+  const tourEmbedUrl = findTourEmbedUrl(ready, website.included_sections);
   const heroImage =
     website.hero_image_url ??
-    galleryImages[0] ??
+    allGalleryImages[0] ??
     "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1800&q=80";
 
   return {
     website,
     property,
     deliverables: ready,
-    deliveryLinks: buildDeliveryLinks(
-      ready.map((deliverable) => ({
-        id: deliverable.id,
-        type: deliverable.type,
-        source: deliverable.source,
-        url: deliverable.url,
-        metadata: deliverable.metadata,
-      })),
-      process.env.NEXT_PUBLIC_APP_URL ?? "",
-    ),
+    deliveryLinks,
+    selectedLinks,
+    tourEmbedUrl,
     heroImage,
-    galleryImages: uniqueStrings(galleryImages).slice(0, 9),
+    galleryImages: includesSection(website.included_sections, "photos")
+      ? uniqueStrings(allGalleryImages).slice(0, 9)
+      : [],
   };
 }
 
@@ -200,7 +220,7 @@ function EstateCinematic({ listing }: { listing: ListingPageData }) {
         buttonClassName="bg-[#d5b56f] text-[#17130c] hover:bg-[#ead28f]"
       />
       <main className="mx-auto max-w-6xl space-y-16 px-6 py-16">
-        <MediaButtons links={listing.deliveryLinks} dark />
+        <SelectedMediaSections listing={listing} dark />
         <Gallery images={listing.galleryImages} dark cinematic />
         <Story listing={listing} dark />
         <AgentCard listing={listing} dark />
@@ -223,7 +243,7 @@ function CleanMLSPlus({ listing }: { listing: ListingPageData }) {
             <div className="mt-6">
               <AddressBlock listing={listing} />
             </div>
-            <MediaButtons links={listing.deliveryLinks} />
+            <SelectedMediaSections listing={listing} />
           </div>
           <AgentCard listing={listing} sticky />
         </div>
@@ -257,7 +277,7 @@ function ModernForest({ listing }: { listing: ListingPageData }) {
           alt=""
           className="aspect-[16/9] w-full rounded-[2rem] object-cover shadow-2xl shadow-[#315f45]/10"
         />
-        <MediaButtons links={listing.deliveryLinks} />
+        <SelectedMediaSections listing={listing} />
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="space-y-10">
             <Story listing={listing} />
@@ -301,7 +321,7 @@ function EditorialMagazine({ listing }: { listing: ListingPageData }) {
             <Gallery images={listing.galleryImages} editorial />
           </div>
           <div className="space-y-6">
-            <MediaButtons links={listing.deliveryLinks} compact />
+            <SelectedMediaSections listing={listing} compact />
             <FeatureList listing={listing} />
             <AgentCard listing={listing} />
           </div>
@@ -474,6 +494,116 @@ function Gallery({
   );
 }
 
+function SelectedMediaSections({
+  listing,
+  dark = false,
+  compact = false,
+}: {
+  listing: ListingPageData;
+  dark?: boolean;
+  compact?: boolean;
+}) {
+  const grouped = groupLinksBySection(listing.selectedLinks);
+  const videoEmbeds = grouped.video
+    .map((link) => ({ link, embedUrl: videoEmbedUrl(link.url) }))
+    .filter(
+      (item): item is { link: DeliveryLink; embedUrl: string } =>
+        Boolean(item.embedUrl),
+    );
+  const hasAny =
+    Boolean(listing.tourEmbedUrl) ||
+    grouped.tour.length > 0 ||
+    grouped.floor_plans.length > 0 ||
+    grouped.video.length > 0 ||
+    grouped.property_websites.length > 0;
+  if (!hasAny) return null;
+
+  const panelClass = dark
+    ? "border-white/12 bg-white/8 text-white"
+    : "border-current/10 bg-white/65 text-current";
+  const buttonClass = dark
+    ? "border-white/15 bg-white/8 text-white hover:bg-white/14"
+    : "border-current/10 bg-white/70 hover:bg-white";
+
+  return (
+    <section className="space-y-5">
+      <p
+        className={`text-xs font-semibold uppercase tracking-[0.22em] ${
+          dark ? "text-white/50" : "text-[#315f45]"
+        }`}
+      >
+        Included media
+      </p>
+
+      {listing.tourEmbedUrl ? (
+        <div className={`overflow-hidden rounded-3xl border ${panelClass}`}>
+          <div className="aspect-video w-full bg-black">
+            <iframe
+              src={listing.tourEmbedUrl}
+              title="Virtual tour"
+              className="h-full w-full"
+              allowFullScreen
+              loading="lazy"
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {videoEmbeds.map(({ link, embedUrl }) => (
+        <div
+          key={`${link.label}:${link.url}`}
+          className={`overflow-hidden rounded-3xl border ${panelClass}`}
+        >
+          <div className="aspect-video w-full bg-black">
+            <iframe
+              src={embedUrl ?? link.url}
+              title={link.label}
+              className="h-full w-full"
+              allow="autoplay; fullscreen; picture-in-picture"
+              allowFullScreen
+              loading="lazy"
+            />
+          </div>
+        </div>
+      ))}
+
+      {(["tour", "floor_plans", "video", "property_websites"] as const).map(
+        (section) => {
+          const links = grouped[section].filter(
+            (link) => !videoEmbeds.some((item) => item.link.url === link.url),
+          );
+          if (links.length === 0) return null;
+          return (
+            <div
+              key={section}
+              className={`rounded-3xl border p-4 ${panelClass}`}
+            >
+              <h2 className="text-lg font-semibold">{sectionTitle(section)}</h2>
+              <div
+                className={`mt-3 grid gap-2 ${
+                  compact ? "" : "sm:grid-cols-2"
+                }`}
+              >
+                {links.map((link) => (
+                  <a
+                    key={`${link.label}:${link.url}`}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener"
+                    className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${buttonClass}`}
+                  >
+                    {link.label} ↗
+                  </a>
+                ))}
+              </div>
+            </div>
+          );
+        },
+      )}
+    </section>
+  );
+}
+
 function MediaButtons({
   links,
   dark = false,
@@ -590,6 +720,94 @@ function imageUrl(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+function metadataImageUrls(metadata: Json | null): string[] {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return [];
+  }
+  const value = metadata.image_urls;
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+function includesSection(
+  includedSections: string[] | null | undefined,
+  section: string,
+): boolean {
+  return includedSections?.includes(section) ?? true;
+}
+
+function sectionForLink(link: DeliveryLink): string {
+  if (link.label.toLowerCase().includes("fotello")) return "property_websites";
+  return link.category;
+}
+
+function filterIncludedLinks(
+  links: DeliveryLink[],
+  includedSections: string[],
+): DeliveryLink[] {
+  return links.filter((link) =>
+    includesSection(includedSections, sectionForLink(link)),
+  );
+}
+
+function groupLinksBySection(links: DeliveryLink[]): Record<string, DeliveryLink[]> {
+  return {
+    photos: links.filter((link) => sectionForLink(link) === "photos"),
+    tour: links.filter((link) => sectionForLink(link) === "tour"),
+    floor_plans: links.filter((link) => sectionForLink(link) === "floor_plans"),
+    video: links.filter((link) => sectionForLink(link) === "video"),
+    property_websites: links.filter(
+      (link) => sectionForLink(link) === "property_websites",
+    ),
+  };
+}
+
+function findTourEmbedUrl(
+  deliverables: DeliverableRow[],
+  includedSections: string[],
+): string | null {
+  if (!includesSection(includedSections, "tour")) return null;
+  const tour = deliverables.find(
+    (deliverable) =>
+      deliverable.type === "virtual_tour" && deliverable.source === "iguide",
+  );
+  if (!tour) return null;
+  const alias = metadataString(tour.metadata, "alias") ?? parseIGuideAlias(tour.url);
+  return alias ? iguideEmbedUrl(alias) : null;
+}
+
+function videoEmbedUrl(url: string): string | null {
+  if (!isStreamingVideoUrl(url)) return null;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+    if (host === "youtu.be") {
+      const id = parsed.pathname.split("/").filter(Boolean)[0];
+      return id ? `https://www.youtube.com/embed/${id}` : null;
+    }
+    if (host.endsWith("youtube.com")) {
+      const id = parsed.searchParams.get("v");
+      if (id) return `https://www.youtube.com/embed/${id}`;
+      if (parsed.pathname.startsWith("/embed/")) return url;
+    }
+    if (host.endsWith("vimeo.com")) {
+      const id = parsed.pathname.split("/").filter(Boolean).find(Boolean);
+      return id ? `https://player.vimeo.com/video/${id}` : null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function sectionTitle(section: string): string {
+  if (section === "tour") return "Virtual tour links";
+  if (section === "floor_plans") return "Floor plans and PDFs";
+  if (section === "video") return "Video";
+  if (section === "property_websites") return "Property websites";
+  return "Media";
 }
 
 function uniqueStrings(values: string[]): string[] {
