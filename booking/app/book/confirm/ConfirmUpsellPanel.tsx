@@ -123,7 +123,7 @@ export default function ConfirmUpsellPanel({
   }
 
   return (
-    <section className="realtor-green-panel rounded-2xl p-4 text-sm">
+    <section className="realtor-green-panel rounded-3xl p-4 text-sm md:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
@@ -152,21 +152,21 @@ export default function ConfirmUpsellPanel({
               key={upgrade.slug}
               type="button"
               onClick={() => addService(upgrade.slug)}
-              className="realtor-elevated-panel rounded-xl p-3 text-left transition hover:border-brand-light/60 hover:bg-brand/15"
+              className="realtor-service-tile rounded-2xl border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 hover:bg-realtor-surface"
             >
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-brand-light/90">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">
                 {upgrade.eyebrow}
               </span>
               <span className="mt-1 flex items-start justify-between gap-3">
                 <span className="font-semibold text-realtor-text">{upgrade.title}</span>
-                <span className="shrink-0 font-semibold text-brand-light">
+                <span className="shrink-0 rounded-full bg-realtor-surface-muted/80 px-2 py-0.5 font-semibold text-realtor-primary ring-1 ring-realtor-primary/10">
                   +${(item.price_cents / 100).toFixed(0)}
                 </span>
               </span>
               <span className="mt-1 block text-[11px] leading-relaxed text-realtor-muted">
                 {upgrade.reason}
               </span>
-              <span className="mt-3 inline-flex rounded-full border border-brand-light/25 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-brand-light">
+              <span className="mt-3 inline-flex rounded-full border border-realtor-primary/25 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">
                 Add to booking
               </span>
             </button>

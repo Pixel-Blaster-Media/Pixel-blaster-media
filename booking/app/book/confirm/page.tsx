@@ -116,8 +116,27 @@ export default async function BookStep4Page({
       />
 
       {/* Summary */}
-      <section className="realtor-elevated-panel rounded-2xl p-4 text-sm">
-        <dl className="space-y-2">
+      <section className="realtor-elevated-panel rounded-3xl p-4 text-sm md:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-realtor-primary/10 pb-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
+              Booking summary
+            </p>
+            <h3 className="mt-1 text-base font-semibold text-realtor-text">
+              {addressLine}
+            </h3>
+          </div>
+          <div className="rounded-2xl bg-realtor-surface-muted/70 px-4 py-3 text-right ring-1 ring-realtor-primary/10">
+            <p className="text-xl font-semibold text-realtor-text">
+              ${(totalCents / 100).toFixed(0)}
+            </p>
+            <p className="text-[11px] uppercase tracking-wider text-realtor-muted">
+              ~{duration} min
+            </p>
+          </div>
+        </div>
+
+        <dl className="mt-4 grid gap-3">
           <Row
             label="Services"
             value={
@@ -192,19 +211,6 @@ export default async function BookStep4Page({
               }
             />
           ) : null}
-          <Row
-            label="Total"
-            value={
-              <span>
-                <span className="font-semibold text-realtor-text">
-                  ${(totalCents / 100).toFixed(0)}
-                </span>
-                <span className="text-realtor-muted">
-                  {" · "}~{duration} min on-site
-                </span>
-              </span>
-            }
-          />
         </dl>
         <p className="mt-3 border-t border-realtor-primary/10 pt-3 text-[11px] text-realtor-muted">
           Payment happens after the shoot. We&apos;ll adjust if the sqft or
@@ -221,11 +227,11 @@ export default async function BookStep4Page({
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap gap-2">
-      <dt className="w-24 shrink-0 text-[11px] uppercase tracking-wider text-realtor-muted">
+    <div className="grid gap-1 rounded-2xl border border-realtor-primary/10 bg-realtor-surface/55 p-3 sm:grid-cols-[120px_minmax(0,1fr)] sm:gap-3">
+      <dt className="text-[11px] uppercase tracking-wider text-realtor-muted">
         {label}
       </dt>
-      <dd className="min-w-0 flex-1 text-realtor-text/90">{value}</dd>
+      <dd className="min-w-0 text-realtor-text/90">{value}</dd>
     </div>
   );
 }

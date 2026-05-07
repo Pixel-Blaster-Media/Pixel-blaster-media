@@ -93,7 +93,7 @@ export default function ConfirmForm({
       <input type="hidden" name="shoot_notes" value={state.shootNotes} />
 
       {profile ? null : (
-        <fieldset className="realtor-warm-panel rounded-2xl p-4">
+        <fieldset className="realtor-warm-panel rounded-3xl p-4 md:p-5">
           <legend className="sr-only">Your contact info</legend>
           <div className="mb-4">
             <p className="text-sm font-semibold text-realtor-text">
@@ -162,7 +162,7 @@ export default function ConfirmForm({
                   }
                   minLength={8}
                   className={
-                    "realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
+                    "realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
                     (formState?.errors?.password
                       ? "border-red-400/60"
                       : "border-realtor-primary/15")
@@ -181,7 +181,7 @@ export default function ConfirmForm({
                   </span>
                 ) : null}
               </label>
-              <div className="mt-3 rounded-md border border-brand-light/20 bg-brand/10 p-3 text-xs text-realtor-muted">
+              <div className="mt-3 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/10 p-3 text-xs text-realtor-muted">
                 After you confirm, you can always come back through{" "}
                 <span className="font-semibold text-realtor-text">Sign in</span> using
                 this email and password. No magic link required.
@@ -192,7 +192,7 @@ export default function ConfirmForm({
       )}
 
       {/* Optional notes — for either path. */}
-      <label className="realtor-elevated-panel block rounded-2xl p-4">
+      <label className="realtor-elevated-panel block rounded-3xl p-4 md:p-5">
         <span className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
           Anything we should know? (optional)
         </span>
@@ -200,7 +200,7 @@ export default function ConfirmForm({
           name="notes"
           rows={3}
           placeholder="Pets, gate code, lockbox, etc."
-          className="realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+          className="realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
         />
       </label>
 
@@ -213,7 +213,7 @@ export default function ConfirmForm({
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-realtor-primary/10 pt-5">
         <Link
           href={`/book/schedule?${buildQuery(state)}`}
-          className="rounded-md border border-realtor-primary/20 px-4 py-2 text-sm text-realtor-muted hover:border-realtor-primary/35"
+          className="rounded-full border border-realtor-primary/20 px-4 py-2 text-sm text-realtor-muted transition hover:border-realtor-primary/35 hover:bg-realtor-surface"
         >
           ← Back
         </Link>
@@ -229,7 +229,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-60"
+      className="rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-realtor-primary/20 transition hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-60"
     >
       {pending ? "Booking…" : "Confirm booking"}
     </button>
@@ -275,7 +275,7 @@ function Field({
         onChange={onChange}
         onBlur={onBlur}
         className={
-          "realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
+          "realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
           (error ? "border-red-400/60" : "border-realtor-primary/15")
         }
       />
