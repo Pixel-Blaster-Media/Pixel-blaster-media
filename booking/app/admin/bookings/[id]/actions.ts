@@ -741,6 +741,105 @@ export async function syncIGuide(
   };
 }
 
+export async function saveIGuidePhotoDownloads(
+  bookingId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  await requireAdmin();
+
+  const mlsUrl =
+    ((formData.get("mls_photo_zip_url") as string | null) ?? "").trim() ||
+    null;
+  const highResUrl =
+    ((formData.get("high_res_photo_zip_url") as string | null) ?? "").trim() ||
+    null;
+
+  if (mlsUrl) {
+    const error = validateIGuidePhotoZipUrl(mlsUrl, "mls");
+    if (error) return { ok: false, error: `MLS photos: ${error}` };
+  }
+  if (highResUrl) {
+    const error = validateIGuidePhotoZipUrl(highResUrl, "high_res");
+    if (error) return { ok: false, error: `High-res photos: ${error}` };
+  }
+
+  const service = getServiceSupabase();
+  const { data: booking, error: bookingError } = await service
+    .from("bookings")
+    .select("id, property_id")
+    .eq("id", bookingId)
+    .single<BookingMinimalRow>();
+
+  if (bookingError || !booking) return { ok: false, error: "Booking not found." };
+
+  const externalId = `${booking.id}:iguide-photo-downloads`;
+
+  if (!mlsUrl && !highResUrl) {
+    const { error } = await service
+      .from("deliverables")
+      .delete()
+      .eq("source", "iguide")
+      .eq("external_id", externalId);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath(`/admin/bookings/${bookingId}`);
+    return { ok: true };
+  }
+
+  const { error } = await service.from("deliverables").upsert(
+    {
+      booking_id: booking.id,
+      property_id: booking.property_id,
+      type: "photo_gallery",
+      source: "iguide",
+      external_id: externalId,
+      url: mlsUrl ?? highResUrl ?? "about:blank",
+      embed_html: null,
+      thumbnail_url: null,
+      metadata: {
+        delivery_label: "iGUIDE photo downloads",
+        image_urls: [],
+        mls_photo_zip_url: mlsUrl,
+        high_res_photo_zip_url: highResUrl,
+        manual_entry: true,
+        last_synced_at: new Date().toISOString(),
+      },
+      ready_at: new Date().toISOString(),
+    },
+    { onConflict: "source,external_id" },
+  );
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/admin/bookings/${bookingId}`);
+  return { ok: true };
+}
+
+function validateIGuidePhotoZipUrl(
+  rawUrl: string,
+  kind: "mls" | "high_res",
+): string | null {
+  try {
+    const parsed = new URL(rawUrl);
+    const pathname = parsed.pathname.toLowerCase();
+    const expectedFile =
+      kind === "mls" ? "gallery-low-res.zip" : "gallery.zip";
+    const isYourIGuide =
+      parsed.protocol === "https:" &&
+      (parsed.hostname === "youriguide.com" ||
+        parsed.hostname.endsWith(".youriguide.com"));
+
+    if (!isYourIGuide) {
+      return "paste the youriguide.com download link.";
+    }
+    if (!pathname.includes("/doc/") || !pathname.endsWith(`/${expectedFile}`)) {
+      return `paste the ${expectedFile} download link from the iGUIDE report.`;
+    }
+    return null;
+  } catch {
+    return "URL doesn't look valid.";
+  }
+}
+
 export async function createIGuideForBooking(
   bookingId: string,
 ): Promise<

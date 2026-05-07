@@ -179,6 +179,7 @@ export default async function BookingDetailPage({
   const transitions = nextBookingStatuses(booking.status);
   const readyDeliverables = (deliverables ?? []).filter((d) => d.ready_at);
   const portalApiConfigured = await hasPortalCredentials();
+  const iguidePhotoDownloads = findIGuidePhotoDownloads(deliverables ?? []);
   const deliveryLinks = buildDeliveryLinks(
     readyDeliverables.map((deliverable) => ({
       id: deliverable.id,
@@ -336,6 +337,7 @@ export default async function BookingDetailPage({
                   initialPortalId={booking.iguide_portal_id}
                   portalApiConfigured={portalApiConfigured}
                   job={iguideJob ?? null}
+                  initialPhotoDownloads={iguidePhotoDownloads}
                 />
                 <ManualLinksPanel
                   bookingId={booking.id}
@@ -888,6 +890,51 @@ function buildListingSlug(address: string, city: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
+}
+
+function findIGuidePhotoDownloads(deliverables: DeliverableRow[]): {
+  mls: string | null;
+  highRes: string | null;
+} {
+  let mls: string | null = null;
+  let highRes: string | null = null;
+
+  for (const deliverable of deliverables) {
+    if (deliverable.type !== "photo_gallery") continue;
+    mls ??=
+      iGuidePhotoZipUrl(
+        metadataString(deliverable.metadata, "mls_photo_zip_url"),
+        "gallery-low-res.zip",
+      ) ?? iGuidePhotoZipUrl(deliverable.url, "gallery-low-res.zip");
+    highRes ??=
+      iGuidePhotoZipUrl(
+        metadataString(deliverable.metadata, "high_res_photo_zip_url"),
+        "gallery.zip",
+      ) ?? iGuidePhotoZipUrl(deliverable.url, "gallery.zip");
+  }
+
+  return { mls, highRes };
+}
+
+function iGuidePhotoZipUrl(
+  url: string | null,
+  fileName: "gallery-low-res.zip" | "gallery.zip",
+): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const pathname = parsed.pathname.toLowerCase();
+    const isYourIGuide =
+      parsed.hostname === "youriguide.com" ||
+      parsed.hostname.endsWith(".youriguide.com");
+    return isYourIGuide &&
+      pathname.includes("/doc/") &&
+      pathname.endsWith(`/${fileName}`)
+      ? url
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function isImageLikeUrl(url: string): boolean {

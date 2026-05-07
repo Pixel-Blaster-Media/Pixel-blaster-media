@@ -56,7 +56,7 @@ export function buildDeliveryLinks(
         "MLS / low-res photos download",
         proxiedIGuideDownloadUrl(
           appUrl,
-          photoDownloadUrl(deliverable.metadata, "mls_photo_zip_url"),
+          photoDownloadUrlForDeliverable(deliverable, "mls"),
         ),
       );
       add(
@@ -64,7 +64,7 @@ export function buildDeliveryLinks(
         "High-res photos download",
         proxiedIGuideDownloadUrl(
           appUrl,
-          photoDownloadUrl(deliverable.metadata, "high_res_photo_zip_url"),
+          photoDownloadUrlForDeliverable(deliverable, "high_res"),
         ),
       );
       continue;
@@ -147,6 +147,30 @@ function photoDownloadUrl(
   key: string,
 ): string | null {
   const url = metadataString(metadata, key);
+  return photoDownloadUrlFromString(
+    url,
+    key === "mls_photo_zip_url" ? "gallery-low-res.zip" : "gallery.zip",
+  );
+}
+
+function photoDownloadUrlForDeliverable(
+  deliverable: DeliveryLinkInput,
+  kind: "mls" | "high_res",
+): string | null {
+  const metadataKey =
+    kind === "mls" ? "mls_photo_zip_url" : "high_res_photo_zip_url";
+  const fileName = kind === "mls" ? "gallery-low-res.zip" : "gallery.zip";
+
+  return (
+    photoDownloadUrl(deliverable.metadata, metadataKey) ??
+    photoDownloadUrlFromString(deliverable.url, fileName)
+  );
+}
+
+function photoDownloadUrlFromString(
+  url: string | null,
+  fileName?: "gallery-low-res.zip" | "gallery.zip",
+): string | null {
   if (!url) return null;
   try {
     const parsed = new URL(url);
@@ -154,9 +178,12 @@ function photoDownloadUrl(
     const isYourIGuide =
       parsed.hostname === "youriguide.com" ||
       parsed.hostname.endsWith(".youriguide.com");
+    const matchesExpectedFile = fileName
+      ? pathname.endsWith(`/${fileName}`)
+      : /\/gallery(?:-low-res)?\.zip$/.test(pathname);
     return isYourIGuide &&
       pathname.includes("/doc/") &&
-      /\/gallery(?:-low-res)?\.zip$/.test(pathname)
+      matchesExpectedFile
       ? url
       : null;
   } catch {

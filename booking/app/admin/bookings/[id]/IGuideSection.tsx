@@ -2,7 +2,12 @@
 
 import { useState, useTransition } from "react";
 
-import { createIGuideForBooking, saveIGuideId, syncIGuide } from "./actions";
+import {
+  createIGuideForBooking,
+  saveIGuideId,
+  saveIGuidePhotoDownloads,
+  syncIGuide,
+} from "./actions";
 
 export default function IGuideSection({
   bookingId,
@@ -10,6 +15,7 @@ export default function IGuideSection({
   initialPortalId,
   portalApiConfigured,
   job,
+  initialPhotoDownloads,
 }: {
   bookingId: string;
   initialIGuideId: string | null;
@@ -21,6 +27,10 @@ export default function IGuideSection({
     default_view_id: string | null;
     match_source: string;
   } | null;
+  initialPhotoDownloads: {
+    mls: string | null;
+    highRes: string | null;
+  };
 }) {
   // The input is a free-form paste field — admin can type an alias, a
   // youriguide.com URL, a portal id, or a manage.youriguide.com URL.
@@ -31,8 +41,11 @@ export default function IGuideSection({
   const [saving, startSaving] = useTransition();
   const [syncing, startSyncing] = useTransition();
   const [creating, startCreating] = useTransition();
+  const [photoSaving, startPhotoSaving] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [okMessage, setOkMessage] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoMessage, setPhotoMessage] = useState<string | null>(null);
 
   function onSave() {
     setError(null);
@@ -253,6 +266,71 @@ export default function IGuideSection({
           </button>
         </div>
       ) : null}
+
+      <details className="rounded-xl border border-white/10 bg-ink/25 p-3">
+        <summary className="cursor-pointer text-sm font-semibold text-white">
+          Photo ZIP download links
+        </summary>
+        <form
+          className="mt-3 space-y-3"
+          action={(formData) => {
+            setPhotoError(null);
+            setPhotoMessage(null);
+            startPhotoSaving(async () => {
+              const res = await saveIGuidePhotoDownloads(bookingId, formData);
+              if (!res.ok) {
+                setPhotoError(res.error ?? "Could not save photo downloads.");
+                return;
+              }
+              setPhotoMessage("Photo download links saved.");
+            });
+          }}
+        >
+          <p className="text-xs leading-relaxed text-ink-muted">
+            Older iGUIDEs may only give us the tour and PDFs when you paste a
+            public link. If the realtor portal is missing photo downloads, copy
+            the Low-Res Image Gallery and Hi-Res Image Gallery links from the
+            iGUIDE report and save them here.
+          </p>
+          <div className="grid gap-2 md:grid-cols-2">
+            <label className="space-y-1 text-xs text-ink-muted">
+              <span>MLS / low-res photo ZIP</span>
+              <input
+                name="mls_photo_zip_url"
+                type="url"
+                defaultValue={initialPhotoDownloads.mls ?? ""}
+                placeholder="https://youriguide.com/.../doc/gallery-low-res.zip"
+                className="w-full rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+              />
+            </label>
+            <label className="space-y-1 text-xs text-ink-muted">
+              <span>High-res photo ZIP</span>
+              <input
+                name="high_res_photo_zip_url"
+                type="url"
+                defaultValue={initialPhotoDownloads.highRes ?? ""}
+                placeholder="https://youriguide.com/.../doc/gallery.zip"
+                className="w-full rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+              />
+            </label>
+          </div>
+          <button
+            type="submit"
+            disabled={photoSaving}
+            className="rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
+          >
+            {photoSaving ? "Saving…" : "Save photo downloads"}
+          </button>
+          {photoError ? (
+            <p className="text-sm text-red-300" role="alert">
+              {photoError}
+            </p>
+          ) : null}
+          {photoMessage ? (
+            <p className="text-xs text-emerald-300">{photoMessage}</p>
+          ) : null}
+        </form>
+      </details>
 
       {error ? (
         <p className="text-sm text-red-300" role="alert">

@@ -464,16 +464,13 @@ function pickIGuideAlias(
 }
 
 function PhotoDownloadsSection({ gallery }: { gallery: DeliverableRow[] }) {
-  const photo = gallery[0] ?? null;
-  const mlsZipUrl = photoDownloadUrl(photo?.metadata, "mls_photo_zip_url");
-  const highResZipUrl = photoDownloadUrl(
-    photo?.metadata,
-    "high_res_photo_zip_url",
-  );
+  const mlsZipUrl = findPhotoDownloadUrl(gallery, "mls");
+  const highResZipUrl = findPhotoDownloadUrl(gallery, "high_res");
   const imageCount = gallery.reduce(
     (total, deliverable) => total + metadataImageUrls(deliverable.metadata).length,
     0,
   );
+  const hasAnyDownload = Boolean(mlsZipUrl || highResZipUrl);
 
   return (
     <section id="photos" className="scroll-mt-6 space-y-3">
@@ -505,8 +502,16 @@ function PhotoDownloadsSection({ gallery }: { gallery: DeliverableRow[] }) {
             title="High-res photos"
             description="Full-size photo package for print and future marketing."
             url={highResZipUrl}
+            missingLabel="Waiting for the high-res ZIP."
           />
         </div>
+        {!hasAnyDownload ? (
+          <p className="mt-3 rounded-2xl border border-dashed border-realtor-primary/20 bg-realtor-surface-muted/70 px-4 py-3 text-xs leading-relaxed text-realtor-muted">
+            {imageCount > 0
+              ? "A preview photo is ready, but the downloadable photo ZIP files have not arrived from iGUIDE yet."
+              : "Photo ZIP downloads will appear here as soon as iGUIDE sends them."}
+          </p>
+        ) : null}
       </div>
     </section>
   );
@@ -516,10 +521,12 @@ function PhotoDownloadCard({
   title,
   description,
   url,
+  missingLabel = "Waiting for the MLS ZIP.",
 }: {
   title: string;
   description: string;
   url: string | null;
+  missingLabel?: string;
 }) {
   return (
     <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface-muted/80 p-4">
@@ -540,7 +547,7 @@ function PhotoDownloadCard({
         </div>
       ) : (
         <p className="mt-4 rounded-xl border border-dashed border-realtor-primary/15 px-3 py-2 text-xs text-realtor-muted">
-          Not available yet.
+          {missingLabel}
         </p>
       )}
     </div>
@@ -1075,7 +1082,7 @@ function PhotoDownloadButtons({
     <div className="flex flex-wrap gap-2">
       {mlsZipUrl ? (
         <a
-          href={mlsZipUrl}
+          href={iGuideDownloadUrl(mlsZipUrl)}
           target="_blank"
           rel="noopener"
           download
@@ -1086,7 +1093,7 @@ function PhotoDownloadButtons({
       ) : null}
       {highResZipUrl ? (
         <a
-          href={highResZipUrl}
+          href={iGuideDownloadUrl(highResZipUrl)}
           target="_blank"
           rel="noopener"
           download
@@ -1099,11 +1106,37 @@ function PhotoDownloadButtons({
   );
 }
 
+function findPhotoDownloadUrl(
+  deliverables: DeliverableRow[],
+  kind: "mls" | "high_res",
+): string | null {
+  const metadataKey =
+    kind === "mls" ? "mls_photo_zip_url" : "high_res_photo_zip_url";
+  const fileName = kind === "mls" ? "gallery-low-res.zip" : "gallery.zip";
+
+  for (const deliverable of deliverables) {
+    const fromMetadata = photoDownloadUrl(deliverable.metadata, metadataKey);
+    if (fromMetadata) return fromMetadata;
+
+    const fromUrl = photoDownloadUrlFromString(deliverable.url, fileName);
+    if (fromUrl) return fromUrl;
+  }
+
+  return null;
+}
+
 function photoDownloadUrl(
   metadata: Json | null | undefined,
   key: string,
 ): string | null {
   const url = metadataString(metadata, key);
+  return photoDownloadUrlFromString(url, key === "mls_photo_zip_url" ? "gallery-low-res.zip" : "gallery.zip");
+}
+
+function photoDownloadUrlFromString(
+  url: string | null,
+  fileName?: "gallery-low-res.zip" | "gallery.zip",
+): string | null {
   if (!url) return null;
   try {
     const parsed = new URL(url);
@@ -1111,9 +1144,12 @@ function photoDownloadUrl(
     const isYourIGuide =
       parsed.hostname === "youriguide.com" ||
       parsed.hostname.endsWith(".youriguide.com");
+    const matchesExpectedFile = fileName
+      ? pathname.endsWith(`/${fileName}`)
+      : /\/gallery(?:-low-res)?\.zip$/.test(pathname);
     return isYourIGuide &&
       pathname.includes("/doc/") &&
-      /\/gallery(?:-low-res)?\.zip$/.test(pathname)
+      matchesExpectedFile
       ? url
       : null;
   } catch {
