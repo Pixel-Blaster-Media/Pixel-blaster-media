@@ -26,7 +26,9 @@ import BookingActions, {
   DeliveryEmailPanel,
   ManualLinksPanel,
 } from "./BookingActions";
-import BookingWorkspaceTabs from "./BookingWorkspaceTabs";
+import BookingWorkspaceTabs, {
+  type WorkspaceTabId,
+} from "./BookingWorkspaceTabs";
 import FotelloSection from "./FotelloSection";
 import IGuideSection from "./IGuideSection";
 import InvoiceSection from "./InvoiceSection";
@@ -113,10 +115,14 @@ interface ListingWebsiteRow {
 
 export default async function BookingDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const { id } = await params;
+  const query = await searchParams;
+  const activeTabId = parseWorkspaceTab(query.tab);
   const supabase = await getServerSupabase();
 
   const [
@@ -291,6 +297,8 @@ export default async function BookingDetailPage({
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <main>
           <BookingWorkspaceTabs
+            activeTabId={activeTabId}
+            baseHref={`/admin/bookings/${booking.id}`}
             overview={
               <>
                 <SectionIntro
@@ -494,6 +502,15 @@ export default async function BookingDetailPage({
       </div>
     </div>
   );
+}
+
+function parseWorkspaceTab(raw: string | undefined): WorkspaceTabId {
+  return raw === "media" ||
+    raw === "website" ||
+    raw === "delivery" ||
+    raw === "billing"
+    ? raw
+    : "overview";
 }
 
 function DeliveryChecklist({

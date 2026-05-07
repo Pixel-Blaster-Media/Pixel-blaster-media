@@ -1,8 +1,12 @@
-"use client";
+import Link from "next/link";
+import type { ReactNode } from "react";
 
-import { useState, type ReactNode } from "react";
-
-type WorkspaceTabId = "overview" | "media" | "website" | "delivery" | "billing";
+export type WorkspaceTabId =
+  | "overview"
+  | "media"
+  | "website"
+  | "delivery"
+  | "billing";
 
 interface WorkspaceTab {
   id: WorkspaceTabId;
@@ -12,19 +16,22 @@ interface WorkspaceTab {
 }
 
 export default function BookingWorkspaceTabs({
+  activeTabId,
+  baseHref,
   overview,
   media,
   website,
   delivery,
   billing,
 }: {
+  activeTabId: WorkspaceTabId;
+  baseHref: string;
   overview: ReactNode;
   media: ReactNode;
   website: ReactNode;
   delivery: ReactNode;
   billing: ReactNode;
 }) {
-  const [active, setActive] = useState<WorkspaceTabId>("overview");
   const tabs: WorkspaceTab[] = [
     {
       id: "overview",
@@ -57,25 +64,28 @@ export default function BookingWorkspaceTabs({
       content: billing,
     },
   ];
-  const activeTab = tabs.find((tab) => tab.id === active) ?? tabs[0];
+  const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
 
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-white/10 bg-ink-soft/50 p-2">
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
           {tabs.map((tab) => {
-            const selected = tab.id === active;
+            const selected = tab.id === activeTab.id;
             return (
-              <button
+              <Link
                 key={tab.id}
-                type="button"
-                onClick={() => setActive(tab.id)}
+                href={
+                  tab.id === "overview"
+                    ? baseHref
+                    : `${baseHref}?tab=${tab.id}`
+                }
                 className={`rounded-xl px-3 py-3 text-left transition ${
                   selected
                     ? "bg-brand text-white shadow-sm"
                     : "text-ink-muted hover:bg-white/5 hover:text-white"
                 }`}
-                aria-pressed={selected}
+                aria-current={selected ? "page" : undefined}
               >
                 <span className="block text-sm font-semibold">{tab.label}</span>
                 <span
@@ -85,7 +95,7 @@ export default function BookingWorkspaceTabs({
                 >
                   {tab.helper}
                 </span>
-              </button>
+              </Link>
             );
           })}
         </div>
