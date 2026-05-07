@@ -155,9 +155,9 @@ export default function PackageAccordion({
               <li key={b.id}>
                 <article
                   className={
-                    "flex h-full min-w-0 flex-col rounded-xl p-4 transition " +
+                    "realtor-package-card flex h-full min-w-0 flex-col rounded-2xl p-4 pl-5 transition " +
                     (selected
-                      ? "realtor-choice-selected"
+                      ? "realtor-package-card-selected"
                       : b.highlight
                         ? "realtor-warm-panel hover:border-realtor-primary"
                         : "realtor-elevated-panel hover:border-realtor-primary/50")
@@ -170,7 +170,8 @@ export default function PackageAccordion({
                           {b.name}
                         </h4>
                         {selected ? (
-                          <span className="rounded-full bg-realtor-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-realtor-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                            <span aria-hidden="true">✓</span>
                             Selected
                           </span>
                         ) : b.badge ? (
@@ -189,8 +190,13 @@ export default function PackageAccordion({
                         </p>
                       )}
                     </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-lg font-bold text-realtor-primary">
+                    <div
+                      className={
+                        "shrink-0 rounded-xl px-3 py-2 text-right " +
+                        (selected ? "bg-realtor-primary/10" : "bg-realtor-surface/60")
+                      }
+                    >
+                      <p className="text-xl font-bold text-realtor-primary">
                         ${(b.price_cents / 100).toFixed(0)}
                       </p>
                       <p className="text-[11px] uppercase tracking-wider text-realtor-muted">
@@ -202,14 +208,14 @@ export default function PackageAccordion({
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <MediaBadges item={b} />
                     {sqftRuleText(b) ? (
-                      <span className="rounded-full border border-realtor-primary/15 bg-realtor-soft/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
+                      <span className="rounded-full border border-realtor-primary/15 bg-realtor-soft/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
                         Sqft pricing
                       </span>
                     ) : null}
                   </div>
 
                   {sqftRuleText(b) ? (
-                    <p className="mt-3 rounded-md border border-realtor-primary/20 bg-realtor-primary/10 px-2 py-1.5 text-xs text-realtor-primary">
+                    <p className="mt-3 rounded-lg border border-realtor-primary/20 bg-realtor-primary/10 px-3 py-2 text-xs font-medium text-realtor-primary">
                       {sqftRuleText(b)}
                     </p>
                   ) : null}
@@ -224,13 +230,13 @@ export default function PackageAccordion({
                       onClick={() => selectBundle(b.slug)}
                       aria-pressed={selected}
                       className={
-                        "rounded-md px-4 py-2 text-sm font-semibold transition " +
+                        "rounded-lg px-4 py-2 text-sm font-semibold transition " +
                         (selected
-                          ? "border border-realtor-primary/40 bg-realtor-primary/15 text-realtor-text"
+                          ? "border border-realtor-primary/35 bg-realtor-surface text-realtor-primary"
                           : "bg-realtor-primary text-white hover:bg-realtor-primary-light")
                       }
                     >
-                      {selected ? "Package selected" : "Choose package"}
+                      {selected ? "✓ Package selected" : "Choose package"}
                     </button>
                     <button
                       type="button"
@@ -239,7 +245,7 @@ export default function PackageAccordion({
                           current === b.slug ? null : b.slug,
                         )
                       }
-                      className="rounded-md border border-realtor-primary/15 px-4 py-2 text-sm text-realtor-text hover:border-realtor-primary"
+                      className="rounded-lg border border-realtor-primary/15 bg-realtor-surface/70 px-4 py-2 text-sm text-realtor-text hover:border-realtor-primary"
                     >
                       {expanded ? "Hide details" : "View details"}
                     </button>
@@ -271,7 +277,9 @@ export default function PackageAccordion({
                 key={a.id}
                 className={
                   "border-b border-realtor-primary/10 p-3 transition last:border-b-0 " +
-                  (selected ? "bg-realtor-primary/10" : "hover:bg-realtor-primary/5")
+                  (selected
+                    ? "bg-realtor-primary/10 shadow-[inset_4px_0_0_rgba(49,95,69,0.75)]"
+                    : "hover:bg-realtor-primary/5")
                 }
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -291,8 +299,8 @@ export default function PackageAccordion({
                     {expanded && a.description ? <PackageDetails item={a} /> : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-realtor-primary">
+                    <div className="rounded-lg bg-realtor-surface/70 px-2 py-1 text-right">
+                      <p className="text-sm font-bold text-realtor-primary">
                         ${(a.price_cents / 100).toFixed(0)}
                       </p>
                       <p className="text-[10px] uppercase tracking-wider text-realtor-muted">
@@ -315,9 +323,9 @@ export default function PackageAccordion({
                       onClick={() => toggleALaCarte(a.slug)}
                       aria-pressed={selected}
                       className={
-                        "min-w-20 rounded-md px-3 py-2 text-xs font-semibold transition " +
+                        "min-w-20 rounded-lg px-3 py-2 text-xs font-semibold transition " +
                         (selected
-                          ? "border border-realtor-primary/40 bg-realtor-primary/15 text-realtor-text"
+                          ? "border border-realtor-primary/35 bg-realtor-surface text-realtor-primary"
                           : "bg-realtor-primary text-white hover:bg-realtor-primary-light")
                       }
                     >

@@ -146,6 +146,53 @@ a {
     0 12px 24px -22px rgba(36, 71, 53, 0.48);
 }
 
+.realtor-package-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.realtor-package-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: rgba(199, 177, 122, 0.45);
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.realtor-package-card:hover::before {
+  opacity: 1;
+}
+
+.realtor-package-card-selected {
+  border-color: rgba(49, 95, 69, 0.7);
+  background:
+    linear-gradient(135deg, rgba(255, 253, 248, 0.98), rgba(111, 154, 120, 0.18)),
+    var(--realtor-surface);
+  box-shadow:
+    0 0 0 1px rgba(49, 95, 69, 0.12),
+    0 22px 50px -34px rgba(36, 71, 53, 0.58);
+}
+
+.realtor-package-card-selected::before {
+  width: 6px;
+  background: linear-gradient(180deg, var(--realtor-primary), var(--realtor-accent));
+  opacity: 1;
+}
+
+.realtor-package-card-selected::after {
+  content: "";
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 150px;
+  height: 150px;
+  border-radius: 999px;
+  background: rgba(49, 95, 69, 0.08);
+  pointer-events: none;
+}
+
 .realtor-field {
   border: 1px solid rgba(49, 95, 69, 0.18);
   background: rgba(255, 253, 248, 0.96);
