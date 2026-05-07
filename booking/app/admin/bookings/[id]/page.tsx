@@ -29,7 +29,6 @@ import BookingActions, {
 import BookingWorkspaceTabs, {
   type WorkspaceTabId,
 } from "./BookingWorkspaceTabs";
-import FotelloSection from "./FotelloSection";
 import IGuideSection from "./IGuideSection";
 import InvoiceSection from "./InvoiceSection";
 import ListingWebsiteSection from "./ListingWebsiteSection";
@@ -105,6 +104,7 @@ interface ListingWebsiteRow {
   description: string | null;
   feature_bullets: string[];
   included_sections: string[];
+  gallery_image_urls: string[] | null;
   hero_image_url: string | null;
   agent_name: string | null;
   agent_email: string | null;
@@ -165,7 +165,7 @@ export default async function BookingDetailPage({
       supabase
         .from("listing_websites")
         .select(
-          "template, slug, is_published, headline, description, feature_bullets, included_sections, hero_image_url, agent_name, agent_email, agent_phone, brokerage_name, cta_text, cta_url",
+          "template, slug, is_published, headline, description, feature_bullets, included_sections, gallery_image_urls, hero_image_url, agent_name, agent_email, agent_phone, brokerage_name, cta_text, cta_url",
         )
         .eq("booking_id", id)
         .maybeSingle<ListingWebsiteRow>(),
@@ -198,15 +198,23 @@ export default async function BookingDetailPage({
     .filter(Boolean)
     .join(", ");
   const firstHeroImage =
-    (deliverables ?? []).find((deliverable) => deliverable.thumbnail_url)
+    (deliverables ?? [])
+      .filter((deliverable) => deliverable.source !== "fotello")
+      .flatMap((deliverable) => metadataImageUrls(deliverable.metadata))
+      .find(Boolean) ??
+    (deliverables ?? [])
+      .filter((deliverable) => deliverable.source !== "fotello")
+      .find((deliverable) => deliverable.thumbnail_url)
       ?.thumbnail_url ??
-    (deliverables ?? []).find((deliverable) =>
-      isImageLikeUrl(deliverable.url),
-    )?.url ??
+    (deliverables ?? [])
+      .filter((deliverable) => deliverable.source !== "fotello")
+      .find((deliverable) => isImageLikeUrl(deliverable.url))?.url ??
     "";
   const heroImageOptions = uniqueStrings(
     (deliverables ?? [])
+      .filter((deliverable) => deliverable.source !== "fotello")
       .flatMap((deliverable) => [
+        ...metadataImageUrls(deliverable.metadata),
         deliverable.thumbnail_url,
         isImageLikeUrl(deliverable.url) ? deliverable.url : null,
       ])
@@ -319,24 +327,7 @@ export default async function BookingDetailPage({
                 <SectionIntro
                   eyebrow="Media"
                   title="Upload and sync deliverables"
-                  body="Use Fotello for photo galleries, iGUIDE for tours and floor plans, and video links for YouTube/Drive/Dropbox deliveries."
-                />
-                <FotelloSection
-                  bookingId={booking.id}
-                  initialListingId={booking.fotello_listing_id}
-                  deliverables={(deliverables ?? [])
-                    .filter((d) => d.source === "fotello")
-                    .map((d) => ({
-                      id: d.id,
-                      external_id: d.external_id,
-                      url: d.url,
-                      status: metadataString(d.metadata, "status"),
-                      deliveryKind: metadataString(d.metadata, "delivery_kind"),
-                      shotType: metadataString(d.metadata, "shot_type"),
-                      syncedAt:
-                        metadataString(d.metadata, "last_synced_at") ??
-                        d.created_at,
-                    }))}
+                  body="Use iGUIDE for tours, floor plans, and gallery photos. Add video links for YouTube, Drive, Dropbox, or direct video deliveries."
                 />
                 <VideoLinksSection bookingId={booking.id} />
                 <IGuideSection
@@ -650,20 +641,13 @@ function buildDeliveryChecklistItems({
     Boolean(booking.quickbooks_invoice_id) ||
     Boolean(booking.quickbooks_invoice_url) ||
     Boolean(booking.quickbooks_invoice_number);
-  const hasPendingFotello =
-    Boolean(booking.fotello_listing_id) &&
-    readyDeliverables.some(
-      (deliverable) =>
-        deliverable.source === "fotello" && deliverable.url === "about:blank",
-    );
-
   const items: ChecklistItem[] = [
     {
       label: "Photos",
       detail: hasPhotoLink
         ? "Photo delivery link is included."
         : expectsPhotos
-          ? "Add a Fotello listing share link or wait for the gallery to finish."
+          ? "Sync iGUIDE so the gallery photos are included."
           : "No photo package selected.",
       required: expectsPhotos,
       status: hasPhotoLink ? "ready" : expectsPhotos ? "missing" : "optional",
@@ -720,16 +704,6 @@ function buildDeliveryChecklistItems({
     },
   ];
 
-  if (hasPendingFotello && !hasPhotoLink) {
-    items.splice(1, 0, {
-      label: "Fotello processing",
-      detail:
-        "A Fotello enhance is being tracked, but it is not ready for realtor delivery yet.",
-      required: false,
-      status: "optional",
-    });
-  }
-
   return items;
 }
 
@@ -785,8 +759,8 @@ function DeliveryLinksPanel({ links }: { links: DeliveryLink[] }) {
         </div>
       ) : (
         <p className="text-sm text-ink-muted">
-          Delivery links will appear here once video, iGUIDE, Fotello, or
-          manual links are ready.
+          Delivery links will appear here once video, iGUIDE, or manual links
+          are ready.
         </p>
       )}
     </Panel>
@@ -923,6 +897,15 @@ function isImageLikeUrl(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+function metadataImageUrls(metadata: Json | null | undefined): string[] {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return [];
+  }
+  const value = metadata.image_urls;
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
 }
 
 function uniqueStrings(values: string[]): string[] {

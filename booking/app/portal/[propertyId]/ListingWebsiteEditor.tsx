@@ -14,6 +14,7 @@ interface ListingWebsiteInitial {
   description: string | null;
   feature_bullets: string[];
   included_sections: string[];
+  gallery_image_urls: string[] | null;
   hero_image_url: string | null;
   agent_name: string | null;
   agent_email: string | null;
@@ -86,11 +87,6 @@ const SECTION_OPTIONS = [
     label: "Video",
     helper: "Show video links or embeds.",
   },
-  {
-    id: "property_websites",
-    label: "Property website links",
-    helper: "Show Fotello branded/unbranded website links if delivered.",
-  },
 ] as const;
 
 export default function ListingWebsiteEditor({
@@ -112,6 +108,8 @@ export default function ListingWebsiteEditor({
   const [heroImageUrl, setHeroImageUrl] = useState(
     initial?.hero_image_url ?? defaults.heroImageUrl,
   );
+  const selectedGalleryImages =
+    initial?.gallery_image_urls ?? defaults.heroImageOptions;
   const includedSections = new Set(
     initial?.included_sections ?? SECTION_OPTIONS.map((option) => option.id),
   );
@@ -246,7 +244,7 @@ export default function ListingWebsiteEditor({
               />
               {defaults.heroImageOptions.length > 0 ? (
                 <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                  {defaults.heroImageOptions.slice(0, 6).map((url, index) => (
+                  {defaults.heroImageOptions.slice(0, 12).map((url, index) => (
                     <button
                       key={url}
                       type="button"
@@ -264,13 +262,53 @@ export default function ListingWebsiteEditor({
                         className="aspect-[4/3] w-full object-cover"
                       />
                       <span className="block px-2 py-1 text-[11px] text-realtor-muted">
-                        Image {index + 1}
+                        {heroImageUrl === url ? "Hero selected" : `Image ${index + 1}`}
                       </span>
                     </button>
                   ))}
                 </div>
               ) : null}
             </Field>
+
+            {defaults.heroImageOptions.length > 0 ? (
+              <div className="realtor-green-panel rounded-2xl p-4">
+                <p className="text-sm font-semibold text-realtor-text">
+                  Website gallery photos
+                </p>
+                <p className="mt-1 text-xs text-realtor-muted">
+                  Uncheck any photos you do not want shown on the public page.
+                  Click a photo above to make it the hero shot.
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  {defaults.heroImageOptions.slice(0, 24).map((url, index) => (
+                    <label
+                      key={url}
+                      className="group overflow-hidden rounded-2xl border border-realtor-primary/15 bg-realtor-surface/70"
+                    >
+                      <input
+                        type="checkbox"
+                        name="gallery_image_urls"
+                        value={url}
+                        defaultChecked={selectedGalleryImages.includes(url)}
+                        className="sr-only peer"
+                      />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={url}
+                        alt=""
+                        className="aspect-[4/3] w-full object-cover opacity-45 transition peer-checked:opacity-100"
+                      />
+                      <span className="flex items-center justify-between px-2 py-1 text-[11px] text-realtor-muted peer-checked:text-realtor-text">
+                        Photo {index + 1}
+                        <span className="rounded-full border border-realtor-primary/20 px-2 py-0.5">
+                          Show
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="space-y-4">

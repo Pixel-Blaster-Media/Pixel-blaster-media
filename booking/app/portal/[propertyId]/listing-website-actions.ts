@@ -110,6 +110,7 @@ export async function savePortalListingWebsite(
         (formData.get("feature_bullets") as string | null) ?? "",
       ),
       included_sections: parseIncludedSections(formData),
+      gallery_image_urls: parseGalleryImageUrls(formData),
       hero_image_url: heroImageUrl,
       agent_name: cleanOptional(formData.get("agent_name")) ?? user.fullName,
       agent_email: cleanOptional(formData.get("agent_email")) ?? user.email,
@@ -178,6 +179,14 @@ function parseIncludedSections(formData: FormData): string[] {
       (INCLUDED_SECTION_OPTIONS as readonly string[]).includes(value),
     );
   return selected.length > 0 ? selected : [...INCLUDED_SECTION_OPTIONS];
+}
+
+function parseGalleryImageUrls(formData: FormData): string[] {
+  return formData
+    .getAll("gallery_image_urls")
+    .filter((value): value is string => typeof value === "string")
+    .filter(isSafePublicUrl)
+    .slice(0, 48);
 }
 
 function isSafePublicUrl(url: string): boolean {

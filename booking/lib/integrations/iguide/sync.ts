@@ -222,6 +222,7 @@ async function persistFromAssetUrls({
     alias,
     portalId,
     media,
+    photoUrls: await fetchRESOPhotoUrls(alias),
   });
   const { upserts, error } = await upsertDeliverables(rows);
   if (error) return { ok: false, upserts, error, portalId };
@@ -265,14 +266,21 @@ function buildDeliverableRowsFromMedia({
   alias,
   portalId,
   media,
+  photoUrls,
 }: {
   bookingId: string;
   propertyId: string;
   alias: string;
   portalId: string;
   media: IGuideMediaUrls;
+  photoUrls: string[];
 }): DeliverableInsert[] {
   const now = new Date().toISOString();
+  const galleryPhotoUrls = uniqueStrings([
+    ...photoUrls,
+    media.galleryFrontImage,
+    media.embedImage,
+  ]);
 
   const tourRow: DeliverableInsert = {
     booking_id: bookingId,
@@ -310,7 +318,27 @@ function buildDeliverableRowsFromMedia({
     ready_at: now,
   };
 
-  return [tourRow, floorPlanRow];
+  const rows: DeliverableInsert[] = [tourRow, floorPlanRow];
+  if (galleryPhotoUrls.length > 0) {
+    rows.push({
+      booking_id: bookingId,
+      property_id: propertyId,
+      type: "photo_gallery",
+      source: "iguide",
+      external_id: `${portalId}/photos`,
+      url: galleryPhotoUrls[0],
+      thumbnail_url: galleryPhotoUrls[0],
+      metadata: {
+        portal_id: portalId,
+        alias,
+        delivery_label: "iGUIDE photo gallery",
+        image_urls: galleryPhotoUrls,
+      },
+      ready_at: now,
+    });
+  }
+
+  return rows;
 }
 
 // ---------------------------------------------------------------------------
@@ -498,6 +526,12 @@ function photoUrlsFromRESO(reso: IGuideRESOResponse): string[] {
   return urls;
 }
 
+async function fetchRESOPhotoUrls(alias: string): Promise<string[]> {
+  const fetched = await fetchIGuideRESO(alias);
+  if (!fetched.ok || !fetched.data) return [];
+  return photoUrlsFromRESO(fetched.data);
+}
+
 function isPhotoMedia(media: IGuideRESOMedia): boolean {
   const haystack = [media.MediaCategory, media.MediaType, media.ResourceName]
     .filter((value): value is string => Boolean(value))
@@ -505,6 +539,17 @@ function isPhotoMedia(media: IGuideRESOMedia): boolean {
     .toLowerCase();
   if (haystack.includes("photo") || haystack.includes("image")) return true;
   return Boolean(media.MediaURL && /\.(jpg|jpeg|png|webp)$/i.test(media.MediaURL));
+}
+
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const value of values) {
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    unique.push(value);
+  }
+  return unique;
 }
 
 function formatAddressFromRESO(reso: IGuideRESOResponse): string {

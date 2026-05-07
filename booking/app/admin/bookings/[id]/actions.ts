@@ -367,6 +367,7 @@ export async function saveListingWebsite(
     (formData.get("feature_bullets") as string | null) ?? "",
   );
   const includedSections = parseListingWebsiteSections(formData);
+  const galleryImageUrls = parseGalleryImageUrls(formData);
 
   for (const [label, value] of [
     ["Hero image URL", heroImageUrl],
@@ -399,6 +400,7 @@ export async function saveListingWebsite(
       description,
       feature_bullets: featureBullets,
       included_sections: includedSections,
+      gallery_image_urls: galleryImageUrls,
       hero_image_url: heroImageUrl,
       agent_name: agentName ?? booking.profiles?.full_name ?? null,
       agent_email: agentEmail ?? booking.profiles?.email ?? null,
@@ -587,6 +589,14 @@ function parseListingWebsiteSections(formData: FormData): string[] {
   return selected.length > 0
     ? selected
     : [...LISTING_WEBSITE_INCLUDED_SECTIONS];
+}
+
+function parseGalleryImageUrls(formData: FormData): string[] {
+  return formData
+    .getAll("gallery_image_urls")
+    .filter((value): value is string => typeof value === "string")
+    .filter(isSafePublicUrl)
+    .slice(0, 48);
 }
 
 function isSafePublicUrl(url: string): boolean {

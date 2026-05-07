@@ -33,6 +33,7 @@ interface ListingWebsiteRow {
   description: string | null;
   feature_bullets: string[];
   included_sections: string[];
+  gallery_image_urls: string[] | null;
   hero_image_url: string | null;
   agent_name: string | null;
   agent_email: string | null;
@@ -133,7 +134,7 @@ async function loadListing(slug: string): Promise<ListingPageData | null> {
   const { data: website, error: websiteError } = await service
     .from("listing_websites")
     .select(
-      "property_id, booking_id, owner_id, template, slug, is_published, headline, description, feature_bullets, included_sections, hero_image_url, agent_name, agent_email, agent_phone, brokerage_name, cta_text, cta_url",
+      "property_id, booking_id, owner_id, template, slug, is_published, headline, description, feature_bullets, included_sections, gallery_image_urls, hero_image_url, agent_name, agent_email, agent_phone, brokerage_name, cta_text, cta_url",
     )
     .eq("slug", slug)
     .maybeSingle<ListingWebsiteRow>();
@@ -158,7 +159,10 @@ async function loadListing(slug: string): Promise<ListingPageData | null> {
   if (!property) return null;
 
   const ready = (deliverables ?? []).filter(
-    (deliverable) => deliverable.url && deliverable.url !== "about:blank",
+    (deliverable) =>
+      deliverable.source !== "fotello" &&
+      deliverable.url &&
+      deliverable.url !== "about:blank",
   );
   const allGalleryImages = ready
     .flatMap((deliverable) => [
@@ -193,7 +197,7 @@ async function loadListing(slug: string): Promise<ListingPageData | null> {
     tourEmbedUrl,
     heroImage,
     galleryImages: includesSection(website.included_sections, "photos")
-      ? uniqueStrings(allGalleryImages).slice(0, 9)
+      ? selectedGalleryImages(website.gallery_image_urls, allGalleryImages)
       : [],
   };
 }
@@ -504,7 +508,10 @@ function SelectedMediaSections({
   compact?: boolean;
 }) {
   const grouped = groupLinksBySection(listing.selectedLinks);
-  const videoEmbeds = grouped.video
+  const publicVideoLinks = grouped.video.filter((link) =>
+    isStreamingVideoUrl(link.url),
+  );
+  const videoEmbeds = publicVideoLinks
     .map((link) => ({ link, embedUrl: videoEmbedUrl(link.url) }))
     .filter(
       (item): item is { link: DeliveryLink; embedUrl: string } =>
@@ -514,7 +521,7 @@ function SelectedMediaSections({
     Boolean(listing.tourEmbedUrl) ||
     grouped.tour.length > 0 ||
     grouped.floor_plans.length > 0 ||
-    grouped.video.length > 0 ||
+    videoEmbeds.length > 0 ||
     grouped.property_websites.length > 0;
   if (!hasAny) return null;
 
@@ -569,7 +576,8 @@ function SelectedMediaSections({
 
       {(["tour", "floor_plans", "video", "property_websites"] as const).map(
         (section) => {
-          const links = grouped[section].filter(
+          const sectionLinks = section === "video" ? publicVideoLinks : grouped[section];
+          const links = sectionLinks.filter(
             (link) => !videoEmbeds.some((item) => item.link.url === link.url),
           );
           if (links.length === 0) return null;
@@ -731,6 +739,16 @@ function metadataImageUrls(metadata: Json | null): string[] {
   return value.filter((item): item is string => typeof item === "string");
 }
 
+function selectedGalleryImages(
+  savedSelection: string[] | null,
+  availableImages: string[],
+): string[] {
+  const available = uniqueStrings(availableImages);
+  if (savedSelection === null) return available.slice(0, 24);
+  const availableSet = new Set(available);
+  return savedSelection.filter((url) => availableSet.has(url)).slice(0, 24);
+}
+
 function includesSection(
   includedSections: string[] | null | undefined,
   section: string,
@@ -739,7 +757,6 @@ function includesSection(
 }
 
 function sectionForLink(link: DeliveryLink): string {
-  if (link.label.toLowerCase().includes("fotello")) return "property_websites";
   return link.category;
 }
 
