@@ -150,14 +150,6 @@ export default async function PropertyDetailPage({
   const statusMeta = latestBooking
     ? BOOKING_STATUSES[latestBooking.status]
     : null;
-  const quickActions = buildQuickActions({
-    gallery,
-    tour,
-    floorPlan,
-    videos,
-    invoiceUrl: latestBooking?.quickbooks_invoice_url ?? null,
-    listingWebsite: listingWebsite?.is_published ? listingWebsite : null,
-  });
   const heroImageOptions = uniqueStrings(
     realtorVisibleDeliverables
       .flatMap((deliverable) => [
@@ -246,22 +238,14 @@ export default async function PropertyDetailPage({
           />
         ) : (
           <>
-            {quickActions.length > 0 ? (
-              <QuickActionGrid actions={quickActions} />
-            ) : (
-              <EmptySection
-                title="Media delivery"
-                message="Media will appear here once photos, tours, floor plans, or video are delivered."
-              />
-            )}
+            <PhotoDownloadsSection gallery={gallery} />
 
-        {gallery.length > 0 ? (
-          <section id="photos" className="scroll-mt-6 space-y-6">
-            <SectionHeader title="Photos" />
-            {gallery.map((g) => (
-              <IGuideGallery key={g.id} deliverable={g} />
-                ))}
-              </section>
+            {iGuideAlias || floorPlan ? (
+              <FloorPlanDownloadsSection
+                alias={iGuideAlias}
+                floorPlan={floorPlan ?? null}
+                reso={iGuideReso}
+              />
             ) : null}
 
             {videos.length > 0 ? (
@@ -272,56 +256,11 @@ export default async function PropertyDetailPage({
             ) : null}
 
             {iGuideAlias ? (
-              <IGuideDeliverySheet
-                alias={iGuideAlias}
-                tour={tour ?? null}
-                floorPlan={floorPlan ?? null}
-                reso={iGuideReso}
-              />
-            ) : floorPlan ? (
-              <section>
-                <SectionHeader
-                  title="Floor plan"
-                  source={floorPlan.source}
-                  actions={
-                    <CopyLinkButton
-                      url={floorPlan.url}
-                      label="Copy floor plan link"
-                    />
-                  }
-                />
-                <div className="realtor-warm-panel flex flex-wrap items-center gap-3 rounded-2xl p-4">
-                  <a
-                    href={iGuideDownloadUrl(floorPlan.url)}
-                    target="_blank"
-                    rel="noopener"
-                    download
-                    className="rounded-md bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary-light"
-                  >
-                    Download floor plan PDF
-                  </a>
-                  <p className="text-xs text-realtor-muted">
-                    Measured floor plan, ready to drop into your listing.
-                  </p>
-                </div>
-              </section>
+              <IGuideToolsSection alias={iGuideAlias} />
             ) : null}
 
             {tour ? (
-              <section>
-                <SectionHeader title="Virtual tour preview" source={tour.source} />
-                <div className="overflow-hidden rounded-2xl border border-realtor-primary/15 bg-realtor-text shadow-lg shadow-realtor-primary/10">
-                  <div className="aspect-[16/10] w-full">
-                    <iframe
-                      src={tourEmbedUrl(tour.url)}
-                      title="Virtual tour"
-                      className="h-full w-full border-0"
-                      allowFullScreen
-                      loading="lazy"
-                    />
-                  </div>
-                </div>
-              </section>
+              <VirtualTourSection alias={iGuideAlias} tour={tour} />
             ) : null}
 
             {latestBooking?.quickbooks_invoice_url ? (
@@ -524,106 +463,144 @@ function pickIGuideAlias(
   );
 }
 
-function IGuideDeliverySheet({
+function PhotoDownloadsSection({ gallery }: { gallery: DeliverableRow[] }) {
+  const photo = gallery[0] ?? null;
+  const mlsZipUrl = photo
+    ? metadataString(photo.metadata, "mls_photo_zip_url")
+    : null;
+  const highResZipUrl = photo
+    ? metadataString(photo.metadata, "high_res_photo_zip_url")
+    : null;
+  const imageCount = gallery.reduce(
+    (total, deliverable) => total + metadataImageUrls(deliverable.metadata).length,
+    0,
+  );
+
+  return (
+    <section id="photos" className="scroll-mt-6 space-y-3">
+      <SectionHeader title="Photos" />
+      <div className="realtor-elevated-panel rounded-2xl p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-realtor-text">
+              Photo downloads
+            </h3>
+            <p className="mt-1 text-xs text-realtor-muted">
+              Use MLS photos for listing uploads. Use high-res photos for print,
+              archives, and marketing files.
+            </p>
+          </div>
+          {imageCount > 0 ? (
+            <span className="rounded-full border border-realtor-primary/15 px-3 py-1 text-xs text-realtor-muted">
+              {imageCount} preview photos
+            </span>
+          ) : null}
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <PhotoDownloadCard
+            title="MLS photos"
+            description="Compressed/low-res photo package for MLS uploads."
+            url={mlsZipUrl}
+          />
+          <PhotoDownloadCard
+            title="High-res photos"
+            description="Full-size photo package for print and future marketing."
+            url={highResZipUrl}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PhotoDownloadCard({
+  title,
+  description,
+  url,
+}: {
+  title: string;
+  description: string;
+  url: string | null;
+}) {
+  return (
+    <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface-muted/80 p-4">
+      <h4 className="text-sm font-semibold text-realtor-text">{title}</h4>
+      <p className="mt-1 text-xs text-realtor-muted">{description}</p>
+      {url ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <CopyLinkButton url={url} label="Copy" />
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener"
+            download
+            className="rounded-md bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-realtor-primary-light"
+          >
+            Download
+          </a>
+        </div>
+      ) : (
+        <p className="mt-4 rounded-xl border border-dashed border-realtor-primary/15 px-3 py-2 text-xs text-realtor-muted">
+          Not available yet.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function FloorPlanDownloadsSection({
   alias,
-  tour,
   floorPlan,
   reso,
 }: {
-  alias: string;
-  tour: DeliverableRow | null;
+  alias: string | null;
   floorPlan: DeliverableRow | null;
   reso: IGuideRESOResponse | null;
 }) {
-  const brandedUrl = metadataString(tour?.metadata, "branded_url") ?? iguideViewerUrl(alias);
-  const unbrandedUrl =
-    metadataString(tour?.metadata, "unbranded_url") ?? iguideUnbrandedUrl(alias);
   const pdfImperial =
     metadataString(floorPlan?.metadata, "pdf_imperial") ??
     (floorPlan?.url.includes("floorplan_imperial") ? floorPlan.url : null) ??
-    iguideFloorplanPdfUrl(alias);
+    (alias ? iguideFloorplanPdfUrl(alias) : null);
   const pdfMetric =
     metadataString(floorPlan?.metadata, "pdf_metric") ??
     (floorPlan?.url.includes("floorplan_metric") ? floorPlan.url : null) ??
-    iguideFloorplanMetricPdfUrl(alias);
-
-  const tourLinks = [
-    { label: "Branded tour", url: brandedUrl },
-    { label: "Unbranded tour", url: unbrandedUrl },
-  ];
+    (alias ? iguideFloorplanMetricPdfUrl(alias) : null);
   const downloadLinks = [
     { label: "Floor plan PDF (feet)", url: pdfImperial },
     { label: "Floor plan PDF (meters)", url: pdfMetric },
-    {
-      label: "Property overview PDF (feet)",
-      url: `https://youriguide.com/${alias}/doc/branded_property_overview_imperial.pdf`,
-    },
-    {
-      label: "Property overview PDF (meters)",
-      url: `https://youriguide.com/${alias}/doc/branded_property_overview_metric.pdf`,
-    },
-  ];
-
-  const tools = [
-    {
-      label: "Feature sheet creator",
-      url: `https://manage.youriguide.com/feature_sheet/?g=${alias}`,
-    },
-    {
-      label: "Embedding tool",
-      url: `https://manage.youriguide.com/embed/${alias}/`,
-    },
-    {
-      label: "Create virtual showing",
-      url: `https://show.youriguide.com/create?url=${encodeURIComponent(
-        iguideViewerUrl(alias),
-      )}`,
-    },
-  ];
+    ...(alias
+      ? [
+          {
+            label: "Property overview PDF (feet)",
+            url: `https://youriguide.com/${alias}/doc/branded_property_overview_imperial.pdf`,
+          },
+          {
+            label: "Property overview PDF (meters)",
+            url: `https://youriguide.com/${alias}/doc/branded_property_overview_metric.pdf`,
+          },
+        ]
+      : []),
+  ].filter((link): link is { label: string; url: string } => Boolean(link.url));
 
   const areaRows = floorAreaRows(reso);
 
   return (
     <section className="space-y-4">
-      <SectionHeader title="iGUIDE delivery links" source="iguide" />
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_320px]">
-        <div className="realtor-elevated-panel min-w-0 rounded-2xl p-4">
-          <h3 className="text-sm font-semibold text-realtor-text">Tour links</h3>
-          <p className="text-xs text-realtor-muted">
-            Check your MLS/board policy before using branded virtual tours.
-          </p>
-          <div className="mt-3 grid gap-2">
-            {tourLinks.map((link) => (
-              <LinkRow key={link.label} label={link.label} url={link.url} />
-            ))}
-          </div>
-        </div>
-
-        <div className="realtor-warm-panel min-w-0 rounded-2xl p-4">
-          <h3 className="text-sm font-semibold text-realtor-text">Downloads</h3>
-          <p className="text-xs text-realtor-muted">
-            Floor plans and overview PDFs for listing paperwork.
-          </p>
-          <div className="mt-3 grid gap-2">
-            {downloadLinks.map((link) => (
-              <LinkRow
-                key={link.label}
-                label={link.label}
-                url={link.url}
-                actionLabel="Download"
-                download
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="realtor-green-panel min-w-0 rounded-2xl p-4">
-          <h3 className="text-sm font-semibold text-realtor-text">Tools</h3>
-          <div className="mt-3 grid gap-2">
-            {tools.map((tool) => (
-              <LinkRow key={tool.label} label={tool.label} url={tool.url} compact />
-            ))}
-          </div>
+      <SectionHeader title="Floor plan downloads" source="iguide" />
+      <div className="realtor-warm-panel min-w-0 rounded-2xl p-4">
+        <p className="text-xs text-realtor-muted">
+          Floor plans and property overview PDFs for listing paperwork.
+        </p>
+        <div className="mt-3 grid gap-2">
+          {downloadLinks.map((link) => (
+            <LinkRow
+              key={link.label}
+              label={link.label}
+              url={link.url}
+              actionLabel="Download"
+              download
+            />
+          ))}
         </div>
       </div>
 
@@ -644,6 +621,83 @@ function IGuideDeliverySheet({
           </dl>
         </div>
       ) : null}
+    </section>
+  );
+}
+
+function IGuideToolsSection({ alias }: { alias: string }) {
+  const tools = [
+    {
+      label: "Feature sheet creator",
+      url: `https://manage.youriguide.com/feature_sheet/?g=${alias}`,
+    },
+    {
+      label: "Embedding tool",
+      url: `https://manage.youriguide.com/embed/${alias}/`,
+    },
+    {
+      label: "Create virtual showing",
+      url: `https://show.youriguide.com/create?url=${encodeURIComponent(
+        iguideViewerUrl(alias),
+      )}`,
+    },
+  ];
+  return (
+    <section className="space-y-3">
+      <SectionHeader title="Tools" source="iguide" />
+      <div className="realtor-green-panel min-w-0 rounded-2xl p-4">
+        <div className="grid gap-2">
+          {tools.map((tool) => (
+            <LinkRow key={tool.label} label={tool.label} url={tool.url} compact />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function VirtualTourSection({
+  alias,
+  tour,
+}: {
+  alias: string | null;
+  tour: DeliverableRow;
+}) {
+  const brandedUrl =
+    metadataString(tour.metadata, "branded_url") ??
+    (alias ? iguideViewerUrl(alias) : tour.url);
+  const unbrandedUrl =
+    metadataString(tour.metadata, "unbranded_url") ??
+    (alias ? iguideUnbrandedUrl(alias) : null);
+  const tourLinks = [
+    { label: "Branded tour", url: brandedUrl },
+    ...(unbrandedUrl ? [{ label: "Unbranded tour", url: unbrandedUrl }] : []),
+  ];
+  return (
+    <section className="space-y-4">
+      <SectionHeader title="Virtual tour" source={tour.source} />
+      <div className="realtor-elevated-panel min-w-0 rounded-2xl p-4">
+        <h3 className="text-sm font-semibold text-realtor-text">Virtual tour links</h3>
+        <p className="text-xs text-realtor-muted">
+          Check your MLS/board policy before using branded virtual tours.
+        </p>
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          {tourLinks.map((link) => (
+            <LinkRow key={link.label} label={link.label} url={link.url} />
+          ))}
+        </div>
+      </div>
+      <div className="overflow-hidden rounded-2xl border border-realtor-primary/15 bg-realtor-text shadow-lg shadow-realtor-primary/10">
+        <div className="aspect-[16/10] w-full">
+          <iframe
+            src={tourEmbedUrl(tour.url)}
+            title="Virtual tour"
+            className="h-full w-full border-0"
+            allowFullScreen
+            loading="lazy"
+          />
+        </div>
+      </div>
     </section>
   );
 }
