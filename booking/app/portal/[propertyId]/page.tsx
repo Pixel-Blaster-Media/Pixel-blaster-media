@@ -45,6 +45,10 @@ interface PropertyRow {
     scheduled_at: string | null;
     services: string[];
     created_at: string;
+    quickbooks_invoice_number: string | null;
+    quickbooks_invoice_url: string | null;
+    quickbooks_invoice_status: string | null;
+    quickbooks_invoice_total_cents: number | null;
   }[];
 }
 
@@ -77,7 +81,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, street_address, city, postal_code, owner_id, bookings(id, status, scheduled_at, services, created_at)",
+      "id, street_address, city, postal_code, owner_id, bookings(id, status, scheduled_at, services, created_at, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents)",
     )
     .eq("id", propertyId)
     .maybeSingle<PropertyRow>();
@@ -133,6 +137,7 @@ export default async function PropertyDetailPage({
     floorPlan: Boolean(floorPlan),
     video: videos.length,
     websites: fotelloPropertyWebsites.length,
+    invoice: Boolean(latestBooking?.quickbooks_invoice_url),
   };
 
   return (
@@ -206,7 +211,7 @@ export default async function PropertyDetailPage({
         ) : null}
       </header>
 
-      <DeliveryOverview summary={readySummary} />
+      <MediaKitOverview summary={readySummary} />
 
       <AiCopyPanel propertyId={property.id} />
 
@@ -327,11 +332,15 @@ export default async function PropertyDetailPage({
           streamingLinks={videoStreamingLinks}
         />
       ) : null}
+
+      {latestBooking?.quickbooks_invoice_url ? (
+        <InvoiceCard booking={latestBooking} />
+      ) : null}
     </div>
   );
 }
 
-function DeliveryOverview({
+function MediaKitOverview({
   summary,
 }: {
   summary: {
@@ -340,6 +349,7 @@ function DeliveryOverview({
     floorPlan: boolean;
     video: number;
     websites: number;
+    invoice: boolean;
   };
 }) {
   const items = [
@@ -368,33 +378,63 @@ function DeliveryOverview({
       ready: summary.websites > 0,
       detail: summary.websites > 0 ? `${summary.websites} link` : "Optional",
     },
+    {
+      label: "Invoice",
+      ready: summary.invoice,
+      detail: summary.invoice ? "Available" : "Optional",
+    },
   ];
+  const readyCount = items.filter((item) => item.ready).length;
 
   return (
-    <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-      {items.map((item) => (
-        <div
-          key={item.label}
-          className={
-            "rounded-lg border p-3 " +
-            (item.ready
-              ? "border-realtor-primary/25 bg-realtor-primary/10"
-              : "border-realtor-primary/15 bg-realtor-surface-muted/75")
-          }
-        >
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
-            {item.label}
+    <section className="realtor-elevated-panel rounded-2xl p-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
+            Media kit
           </p>
-          <p
+          <h2 className="mt-1 text-xl font-semibold text-realtor-text">
+            Everything ready in one place
+          </h2>
+        </div>
+        <p className="rounded-full border border-realtor-primary/20 px-3 py-1 text-xs font-semibold text-realtor-primary">
+          {readyCount} of {items.length} ready
+        </p>
+      </div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {items.map((item) => (
+          <div
+            key={item.label}
             className={
-              "mt-1 text-sm font-semibold " +
-              (item.ready ? "text-realtor-primary" : "text-realtor-muted")
+              "rounded-2xl border p-3 " +
+              (item.ready
+                ? "border-realtor-primary/25 bg-realtor-primary/10"
+                : "border-realtor-primary/15 bg-realtor-surface-muted/75")
             }
           >
-            {item.detail}
-          </p>
-        </div>
-      ))}
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
+                {item.label}
+              </p>
+              <span
+                className={
+                  "h-2.5 w-2.5 rounded-full " +
+                  (item.ready ? "bg-realtor-primary" : "bg-realtor-accent/70")
+                }
+                aria-hidden="true"
+              />
+            </div>
+            <p
+              className={
+                "mt-1 text-sm font-semibold " +
+                (item.ready ? "text-realtor-primary" : "text-realtor-muted")
+              }
+            >
+              {item.detail}
+            </p>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
@@ -681,6 +721,41 @@ function VideoGroup({
   );
 }
 
+function InvoiceCard({
+  booking,
+}: {
+  booking: PropertyRow["bookings"][number];
+}) {
+  return (
+    <section className="space-y-3">
+      <SectionHeader title="Invoice" />
+      <div className="realtor-warm-panel flex flex-wrap items-center justify-between gap-4 rounded-2xl p-4">
+        <div>
+          <p className="text-sm font-semibold text-realtor-text">
+            {booking.quickbooks_invoice_number
+              ? `Invoice #${booking.quickbooks_invoice_number}`
+              : "Invoice"}
+          </p>
+          <p className="mt-1 text-xs text-realtor-muted">
+            {booking.quickbooks_invoice_total_cents != null
+              ? `${formatCurrency(booking.quickbooks_invoice_total_cents)} · `
+              : ""}
+            {booking.quickbooks_invoice_status ?? "Ready"}
+          </p>
+        </div>
+        <a
+          href={booking.quickbooks_invoice_url as string}
+          target="_blank"
+          rel="noopener"
+          className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-realtor-primary-light"
+        >
+          Open invoice
+        </a>
+      </div>
+    </section>
+  );
+}
+
 function isStreamingVideoUrl(url: string): boolean {
   try {
     const hostname = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
@@ -730,6 +805,13 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+function formatCurrency(cents: number): string {
+  return new Intl.NumberFormat("en-CA", {
+    style: "currency",
+    currency: "CAD",
+  }).format(cents / 100);
 }
 
 function SectionHeader({

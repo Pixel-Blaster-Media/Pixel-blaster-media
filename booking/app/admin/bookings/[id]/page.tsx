@@ -628,13 +628,20 @@ function hasCategory(
 
 function DeliveryLinksPanel({ links }: { links: DeliveryLink[] }) {
   const groups = groupDeliveryLinks(links);
+  const totalLinks = groups.reduce((sum, group) => sum + group.links.length, 0);
   return (
     <Panel title="Delivery preview">
       {links.length > 0 ? (
         <div className="space-y-3">
-          <p className="text-xs text-ink-muted">
-            These are the links included in the delivery email and portal.
-          </p>
+          <div className="rounded-2xl border border-white/10 bg-ink/25 p-3">
+            <p className="text-sm font-semibold text-white">
+              {totalLinks} delivery link{totalLinks === 1 ? "" : "s"} ready
+            </p>
+            <p className="mt-1 text-xs text-ink-muted">
+              These are grouped the same way the realtor sees them in their
+              portal media kit and delivery email.
+            </p>
+          </div>
           {groups.map((group) => (
             <div key={group.category}>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-light">
