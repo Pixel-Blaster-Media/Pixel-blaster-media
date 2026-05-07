@@ -14,26 +14,26 @@ export default async function ResetPage({
   const sent = params.sent === "1";
 
   return (
-    <div className="mx-auto max-w-md space-y-6 py-16">
+    <div className="space-y-6">
       <header>
-        <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+        <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
           Forgot your password?
         </p>
-        <h1 className="mt-2 text-2xl font-bold text-white">
+        <h1 className="mt-2 text-2xl font-bold text-realtor-text">
           Send yourself a reset link
         </h1>
       </header>
 
       {sent ? (
         <div className="space-y-4">
-          <p className="rounded-md border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-100">
+          <p className="rounded-md border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-800">
             If an account exists for {params.email ?? "that email"}, a
             reset link is on its way. Check your inbox (and spam) — the link
             is good for about an hour.
           </p>
-          <p className="text-xs text-ink-muted">
+          <p className="text-xs text-realtor-muted">
             Didn&apos;t receive it? Double-check the address for typos and{" "}
-            <Link href="/auth/reset" className="text-brand-light underline">
+            <Link href="/auth/reset" className="text-realtor-primary underline">
               try again
             </Link>
             .
@@ -43,9 +43,9 @@ export default async function ResetPage({
         <ResetRequestForm />
       )}
 
-      <p className="border-t border-white/5 pt-4 text-xs text-ink-muted">
+      <p className="border-t border-realtor-primary/10 pt-4 text-xs text-realtor-muted">
         Remembered it?{" "}
-        <Link href="/auth/sign-in" className="text-brand-light underline">
+        <Link href="/auth/sign-in" className="text-realtor-primary underline">
           Sign in with your password
         </Link>
         .

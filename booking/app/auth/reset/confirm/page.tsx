@@ -29,12 +29,12 @@ export default async function ResetConfirmPage() {
 
   if (!session?.access_token) {
     return (
-      <div className="mx-auto max-w-md space-y-4 py-16">
-        <h1 className="text-2xl font-bold text-white">Link expired or invalid</h1>
-        <p className="text-sm text-ink-muted">
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold text-realtor-text">Link expired or invalid</h1>
+        <p className="text-sm text-realtor-muted">
           Password-reset links expire after about an hour, and can only be
           used once. Please{" "}
-          <Link href="/auth/reset" className="text-brand-light underline">
+          <Link href="/auth/reset" className="text-realtor-primary underline">
             request a fresh link
           </Link>
           .
@@ -58,15 +58,15 @@ export default async function ResetConfirmPage() {
   if (!userId) redirect("/auth/reset");
 
   return (
-    <div className="mx-auto max-w-md space-y-6 py-16">
+    <div className="space-y-6">
       <header>
-        <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+        <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
           One last step
         </p>
-        <h1 className="mt-2 text-2xl font-bold text-white">
+        <h1 className="mt-2 text-2xl font-bold text-realtor-text">
           Set a new password
         </h1>
-        <p className="mt-1 text-sm text-ink-muted">
+        <p className="mt-1 text-sm text-realtor-muted">
           Pick something at least 8 characters. You&apos;ll be signed in
           automatically once you save.
         </p>

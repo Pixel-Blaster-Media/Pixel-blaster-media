@@ -2,16 +2,16 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <div className="space-y-16">
+    <div className="realtor-theme space-y-16">
       <section className="max-w-3xl">
-        <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+        <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
           Hamilton, ON · Greater Toronto Area
         </p>
-        <h1 className="mt-3 text-4xl font-bold leading-tight text-white md:text-6xl">
+        <h1 className="mt-3 text-4xl font-bold leading-tight text-realtor-text md:text-6xl">
           Book the shoot.{" "}
-          <span className="text-brand-light">Get everything in one place.</span>
+          <span className="text-realtor-primary">Get everything in one place.</span>
         </h1>
-        <p className="mt-6 text-lg text-ink-muted">
+        <p className="mt-6 text-lg text-realtor-muted">
           Photography, iGuide virtual tours, and floor plans — scheduled,
           tracked, and delivered through one portal. No chasing Dropbox links or
           hunting for the tour URL.
@@ -19,13 +19,13 @@ export default function Home() {
         <div className="mt-8 flex flex-wrap gap-3">
           <Link
             href="/book"
-            className="rounded-md bg-brand px-5 py-3 font-semibold text-white transition hover:bg-brand-light"
+            className="rounded-md bg-realtor-primary px-5 py-3 font-semibold text-white transition hover:bg-realtor-primary-light"
           >
             Book a Shoot
           </Link>
           <Link
             href="/portal"
-            className="rounded-md border border-brand/40 px-5 py-3 font-semibold text-brand-light transition hover:border-brand-light hover:bg-brand/10"
+            className="rounded-md border border-realtor-primary/40 px-5 py-3 font-semibold text-realtor-primary transition hover:border-realtor-primary hover:bg-realtor-primary/10"
           >
             Realtor Sign-In
           </Link>
@@ -47,9 +47,9 @@ export default function Home() {
         />
       </section>
 
-      <section className="rounded-xl border border-white/10 bg-ink-soft/60 p-6">
-        <h2 className="text-lg font-semibold text-white">Roadmap</h2>
-        <ol className="mt-4 grid gap-2 text-sm text-ink-muted md:grid-cols-2">
+      <section className="realtor-elevated-panel rounded-2xl p-6">
+        <h2 className="text-lg font-semibold text-realtor-text">Roadmap</h2>
+        <ol className="mt-4 grid gap-2 text-sm text-realtor-muted md:grid-cols-2">
           <Phase n={1} label="Foundation (this PR)" done />
           <Phase n={2} label="Custom booking form + email confirmations" />
           <Phase n={3} label="Admin job-tracking dashboard" />
@@ -64,9 +64,9 @@ export default function Home() {
 
 function Feature({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-lg border border-white/5 bg-ink-soft/40 p-5">
-      <h3 className="font-semibold text-white">{title}</h3>
-      <p className="mt-2 text-sm text-ink-muted">{body}</p>
+    <div className="realtor-warm-panel rounded-2xl p-5">
+      <h3 className="font-semibold text-realtor-text">{title}</h3>
+      <p className="mt-2 text-sm text-realtor-muted">{body}</p>
     </div>
   );
 }
@@ -86,14 +86,14 @@ function Phase({
         className={
           "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs " +
           (done
-            ? "border-brand-light bg-brand/20 text-brand-light"
-            : "border-white/15 text-ink-muted")
+            ? "border-realtor-primary bg-realtor-primary/20 text-realtor-primary"
+            : "border-realtor-primary/20 text-realtor-muted")
         }
         aria-hidden
       >
         {done ? "✓" : n}
       </span>
-      <span className={done ? "text-white" : ""}>{label}</span>
+      <span className={done ? "text-realtor-text" : ""}>{label}</span>
     </li>
   );
 }
