@@ -105,7 +105,7 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
 
   if (!hasAnySlots) {
     return (
-      <div className="rounded-xl border border-dashed border-realtor-primary/20 bg-realtor-surface-muted/70 p-6 text-sm text-realtor-muted">
+      <div className="rounded-3xl border border-dashed border-realtor-primary/20 bg-realtor-surface-muted/70 p-6 text-sm text-realtor-muted">
         No openings in the next 4 weeks. Try a different service combo or
         email{" "}
         <a
@@ -120,14 +120,14 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
   }
 
   return (
-    <div className="realtor-elevated-panel space-y-4 rounded-2xl p-4 md:p-5">
+    <div className="realtor-elevated-panel space-y-4 rounded-3xl p-4 md:p-5">
       {/* Month header */}
       <div className="flex items-center justify-between">
         <button
           type="button"
           onClick={() => setCursor(addMonths(cursor, -1))}
           disabled={!canGoPrev}
-          className="rounded-md border border-realtor-primary/15 px-3 py-1.5 text-sm text-realtor-muted hover:border-realtor-primary/35 disabled:cursor-not-allowed disabled:opacity-30"
+          className="rounded-full border border-realtor-primary/15 px-3 py-1.5 text-sm text-realtor-muted transition hover:border-realtor-primary/35 hover:bg-realtor-surface disabled:cursor-not-allowed disabled:opacity-30"
           aria-label="Previous month"
         >
           ←
@@ -142,7 +142,7 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
           type="button"
           onClick={() => setCursor(addMonths(cursor, 1))}
           disabled={!canGoNext}
-          className="rounded-md border border-realtor-primary/15 px-3 py-1.5 text-sm text-realtor-muted hover:border-realtor-primary/35 disabled:cursor-not-allowed disabled:opacity-30"
+          className="rounded-full border border-realtor-primary/15 px-3 py-1.5 text-sm text-realtor-muted transition hover:border-realtor-primary/35 hover:bg-realtor-surface disabled:cursor-not-allowed disabled:opacity-30"
           aria-label="Next month"
         >
           →
@@ -174,13 +174,13 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
               disabled={!hasSlots}
               onClick={() => hasSlots && dayKey && setOpenDayKey(dayKey)}
               className={
-                "relative aspect-square rounded-md border text-sm transition " +
+                "relative aspect-square rounded-2xl border text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
                 (!inMonth
                   ? "border-transparent text-realtor-muted/40"
                   : isSelected
-                    ? "border-brand-light bg-brand/20 text-brand-light shadow-sm shadow-brand/10"
+                    ? "border-realtor-primary bg-realtor-primary text-white shadow-sm shadow-realtor-primary/20"
                     : hasSlots
-                      ? "border-realtor-primary/15 bg-realtor-surface text-realtor-text hover:border-brand-light/60 hover:bg-brand/10"
+                      ? "border-realtor-primary/15 bg-realtor-surface text-realtor-text hover:border-realtor-primary/45 hover:bg-realtor-primary/10"
                       : "border-realtor-primary/10 bg-realtor-soft/45 text-realtor-muted/60")
               }
             >
@@ -190,7 +190,7 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
                   aria-hidden="true"
                   className={
                     "absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full " +
-                    (isSelected ? "bg-brand-light" : "bg-emerald-400/70")
+                    (isSelected ? "bg-white" : "bg-realtor-primary/70")
                   }
                 />
               ) : null}
@@ -201,21 +201,21 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
 
       {/* Slots for picked day */}
       {visibleSlots ? (
-        <div className="realtor-warm-panel rounded-xl p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
+        <div className="realtor-warm-panel rounded-3xl p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
             {formatDayLabel(openDayKey ?? "")}
           </p>
-          <ul className="mt-3 flex flex-wrap gap-2">
+          <ul className="mt-3 grid gap-2 sm:grid-cols-3">
             {visibleSlots.map((s) => (
               <li key={s.start}>
                 <button
                   type="button"
                   onClick={() => pickSlot(s.start)}
                   className={
-                    "rounded-md border px-3 py-1.5 text-sm transition " +
+                    "w-full rounded-full border px-3 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
                     (selectedSlot === s.start
-                      ? "border-brand-light bg-brand/20 text-brand-light"
-                      : "border-realtor-primary/20 text-realtor-text/90 hover:border-brand-light/60 hover:bg-brand/10")
+                      ? "border-realtor-primary bg-realtor-primary text-white"
+                      : "border-realtor-primary/20 bg-realtor-surface/75 text-realtor-text/90 hover:border-realtor-primary/55 hover:bg-realtor-primary/10")
                   }
                 >
                   {s.timeLabel}

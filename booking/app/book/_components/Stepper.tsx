@@ -26,7 +26,7 @@ export default function Stepper({
   const urlSuffix = buildQuerySuffix(state);
 
   return (
-    <ol className="mb-8 flex items-center gap-1 overflow-x-auto md:gap-3">
+    <ol className="mb-8 flex items-center gap-1 overflow-x-auto rounded-full border border-realtor-primary/10 bg-realtor-surface/55 p-1 shadow-sm shadow-realtor-primary/5 md:gap-2">
       {WIZARD_STEPS.map((step, idx) => {
         const isCurrent = step.id === current;
         const isDone = isStepDone(step.id, completeness);
@@ -34,11 +34,11 @@ export default function Stepper({
           step.id <= completeness.maxReachable;
 
         const chipClass = isCurrent
-          ? "border-realtor-primary bg-realtor-primary/15 text-realtor-primary"
+          ? "border-realtor-primary bg-realtor-primary text-white shadow-sm shadow-realtor-primary/20"
           : isDone
-            ? "border-emerald-700/40 bg-emerald-700/10 text-emerald-700"
+            ? "border-realtor-primary/35 bg-realtor-primary/10 text-realtor-primary"
             : isReachable
-              ? "border-realtor-primary/25 text-realtor-text/70 hover:border-realtor-primary/45"
+              ? "border-transparent text-realtor-text/70 hover:bg-realtor-surface hover:text-realtor-text"
               : "border-realtor-primary/15 text-realtor-text/30";
 
         const content = (
@@ -52,10 +52,10 @@ export default function Stepper({
               className={
                 "flex h-5 w-5 items-center justify-center rounded-full text-[10px] " +
                 (isDone
-                  ? "bg-emerald-400/20"
+                  ? "bg-realtor-primary/15"
                   : isCurrent
-                    ? "bg-realtor-primary-light/20"
-                    : "bg-white/10")
+                    ? "bg-white/15"
+                    : "bg-realtor-surface-muted/70")
               }
             >
               {isDone ? "✓" : step.id}
@@ -69,7 +69,7 @@ export default function Stepper({
             {isReachable && !isCurrent ? (
               <Link
                 href={step.path + urlSuffix}
-                className="focus:outline-none focus:ring-2 focus:ring-brand-light/50 rounded-full"
+                className="rounded-full focus:outline-none focus:ring-2 focus:ring-realtor-primary/35"
               >
                 {content}
               </Link>
@@ -81,7 +81,7 @@ export default function Stepper({
             {idx < WIZARD_STEPS.length - 1 ? (
               <span
                 aria-hidden="true"
-                className="h-px w-4 flex-shrink-0 bg-white/15 md:w-8"
+                className="h-px w-3 flex-shrink-0 bg-realtor-primary/12 md:w-6"
               />
             ) : null}
           </li>

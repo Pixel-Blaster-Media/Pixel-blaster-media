@@ -101,7 +101,7 @@ export default function PropertyForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-5">
-      <section className="realtor-elevated-panel rounded-2xl p-4">
+      <section className="realtor-elevated-panel rounded-3xl p-4 md:p-5">
         <AddressAutocomplete
           name="address"
           label="Property address"
@@ -150,7 +150,7 @@ export default function PropertyForm({
         </div>
       </section>
 
-      <fieldset className="realtor-warm-panel rounded-2xl p-4">
+      <fieldset className="realtor-warm-panel rounded-3xl p-4 md:p-5">
         <legend className="sr-only">Is the property occupied?</legend>
         <p className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
           Is the property occupied?
@@ -183,7 +183,7 @@ export default function PropertyForm({
         </div>
       </fieldset>
 
-      <fieldset className="realtor-warm-panel rounded-2xl p-4">
+      <fieldset className="realtor-warm-panel rounded-3xl p-4 md:p-5">
         <legend className="sr-only">Include basement in the shoot?</legend>
         <p className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
           Include basement in the shoot?
@@ -208,7 +208,7 @@ export default function PropertyForm({
         </div>
       </fieldset>
 
-      <section className="realtor-green-panel rounded-2xl p-4">
+      <section className="realtor-green-panel rounded-3xl p-4 md:p-5">
         <div className="max-w-2xl">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
             Must-have shots
@@ -237,10 +237,10 @@ export default function PropertyForm({
                   )
                 }
                 className={
-                  "rounded-xl border p-3 text-left transition " +
+                  "realtor-service-tile rounded-2xl border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
                   (selected
-                    ? "border-brand-light bg-brand/20 text-realtor-text shadow-sm shadow-brand/10"
-                    : "border-realtor-primary/15 bg-realtor-surface-muted/80 text-realtor-text/90 hover:border-brand-light/45 hover:bg-brand/10")
+                    ? "realtor-service-tile-selected text-realtor-text"
+                    : "text-realtor-text/90")
                 }
               >
                 <span className="flex items-center gap-2 text-sm font-semibold">
@@ -249,7 +249,7 @@ export default function PropertyForm({
                     className={
                       "flex h-5 w-5 items-center justify-center rounded-full border text-[10px] " +
                       (selected
-                        ? "border-brand-light bg-brand-light/20 text-brand-light"
+                        ? "border-realtor-primary bg-realtor-primary text-white"
                         : "border-realtor-primary/25 text-realtor-muted/70")
                     }
                   >
@@ -283,13 +283,13 @@ export default function PropertyForm({
         <button
           type="button"
           onClick={() => router.back()}
-          className="rounded-md border border-realtor-primary/20 px-4 py-2 text-sm text-realtor-muted hover:border-realtor-primary/35"
+          className="rounded-full border border-realtor-primary/20 px-4 py-2 text-sm text-realtor-muted transition hover:border-realtor-primary/35 hover:bg-realtor-surface"
         >
           ← Back
         </button>
         <button
           type="submit"
-          className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-light"
+          className="rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-realtor-primary/20 transition hover:bg-brand-light"
         >
           Continue →
         </button>
@@ -339,7 +339,7 @@ function Field({
         inputMode={inputMode}
         min={min}
         className={
-          "realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
+          "realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
           (error ? "border-red-400/60" : "border-realtor-primary/15")
         }
       />
@@ -374,7 +374,7 @@ function RadioCard<T extends string>({
   return (
     <label
       className={
-        "flex cursor-pointer flex-col gap-1 rounded-lg p-3 transition " +
+        "flex cursor-pointer items-start gap-3 rounded-2xl p-3 transition " +
         (selected
           ? "realtor-choice-selected"
           : "realtor-choice hover:border-brand/60")
@@ -388,8 +388,25 @@ function RadioCard<T extends string>({
         onChange={() => onSelect(value)}
         className="sr-only"
       />
-      <span className="text-sm font-semibold text-realtor-text">{label}</span>
-      <span className="text-xs text-realtor-muted">{helper}</span>
+      <span
+        aria-hidden="true"
+        className={
+          "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold transition " +
+          (selected
+            ? "border-realtor-primary bg-realtor-primary text-white"
+            : "border-realtor-primary/25 bg-realtor-surface text-transparent")
+        }
+      >
+        ✓
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-realtor-text">
+          {label}
+        </span>
+        <span className="mt-0.5 block text-xs leading-relaxed text-realtor-muted">
+          {helper}
+        </span>
+      </span>
     </label>
   );
 }
