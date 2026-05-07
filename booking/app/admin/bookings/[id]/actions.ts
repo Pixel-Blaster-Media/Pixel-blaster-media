@@ -20,6 +20,10 @@ import {
   parseIGuidePortalId,
 } from "@/lib/integrations/iguide/parse-id";
 import { getCredential } from "@/lib/integrations/credentials";
+import {
+  isIGuidePhotoZipUrl,
+  type IGuidePhotoZipKind,
+} from "@/lib/integrations/iguide/photo-downloads";
 import { createIGuide as createIGuideInPortal } from "@/lib/integrations/iguide/portal-client";
 import {
   recordIGuideCreateJob,
@@ -816,28 +820,21 @@ export async function saveIGuidePhotoDownloads(
 
 function validateIGuidePhotoZipUrl(
   rawUrl: string,
-  kind: "mls" | "high_res",
+  kind: IGuidePhotoZipKind,
 ): string | null {
   try {
-    const parsed = new URL(rawUrl);
-    const pathname = parsed.pathname.toLowerCase();
-    const expectedFile =
-      kind === "mls" ? "gallery-low-res.zip" : "gallery.zip";
-    const isYourIGuide =
-      parsed.protocol === "https:" &&
-      (parsed.hostname === "youriguide.com" ||
-        parsed.hostname.endsWith(".youriguide.com"));
-
-    if (!isYourIGuide) {
-      return "paste the youriguide.com download link.";
-    }
-    if (!pathname.includes("/doc/") || !pathname.endsWith(`/${expectedFile}`)) {
-      return `paste the ${expectedFile} download link from the iGUIDE report.`;
-    }
-    return null;
+    new URL(rawUrl);
   } catch {
     return "URL doesn't look valid.";
   }
+
+  if (!isIGuidePhotoZipUrl(rawUrl, kind)) {
+    const expectedFile =
+      kind === "mls" ? "gallery-low-res ZIP" : "gallery ZIP";
+    return `paste the ${expectedFile} download link from the iGUIDE report.`;
+  }
+
+  return null;
 }
 
 export async function createIGuideForBooking(

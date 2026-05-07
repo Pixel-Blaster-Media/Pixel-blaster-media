@@ -6,6 +6,10 @@ import {
   iguideViewerUrl,
   parseIGuideAlias,
 } from "@/lib/integrations/iguide/parse-id";
+import {
+  isIGuidePhotoZipUrl,
+  type IGuidePhotoZipKind,
+} from "@/lib/integrations/iguide/photo-downloads";
 import type { DeliverableType, Json } from "@/lib/supabase/database.types";
 
 export type DeliveryLinkCategory =
@@ -145,50 +149,30 @@ export function metadataString(
 function photoDownloadUrl(
   metadata: Json | null | undefined,
   key: string,
+  kind: IGuidePhotoZipKind = key === "mls_photo_zip_url" ? "mls" : "high_res",
 ): string | null {
   const url = metadataString(metadata, key);
-  return photoDownloadUrlFromString(
-    url,
-    key === "mls_photo_zip_url" ? "gallery-low-res.zip" : "gallery.zip",
-  );
+  return photoDownloadUrlFromString(url, kind);
 }
 
 function photoDownloadUrlForDeliverable(
   deliverable: DeliveryLinkInput,
-  kind: "mls" | "high_res",
+  kind: IGuidePhotoZipKind,
 ): string | null {
   const metadataKey =
     kind === "mls" ? "mls_photo_zip_url" : "high_res_photo_zip_url";
-  const fileName = kind === "mls" ? "gallery-low-res.zip" : "gallery.zip";
 
   return (
-    photoDownloadUrl(deliverable.metadata, metadataKey) ??
-    photoDownloadUrlFromString(deliverable.url, fileName)
+    photoDownloadUrl(deliverable.metadata, metadataKey, kind) ??
+    photoDownloadUrlFromString(deliverable.url, kind)
   );
 }
 
 function photoDownloadUrlFromString(
   url: string | null,
-  fileName?: "gallery-low-res.zip" | "gallery.zip",
+  kind?: IGuidePhotoZipKind,
 ): string | null {
-  if (!url) return null;
-  try {
-    const parsed = new URL(url);
-    const pathname = parsed.pathname.toLowerCase();
-    const isYourIGuide =
-      parsed.hostname === "youriguide.com" ||
-      parsed.hostname.endsWith(".youriguide.com");
-    const matchesExpectedFile = fileName
-      ? pathname.endsWith(`/${fileName}`)
-      : /\/gallery(?:-low-res)?\.zip$/.test(pathname);
-    return isYourIGuide &&
-      pathname.includes("/doc/") &&
-      matchesExpectedFile
-      ? url
-      : null;
-  } catch {
-    return null;
-  }
+  return isIGuidePhotoZipUrl(url, kind) ? url : null;
 }
 
 function proxiedIGuideDownloadUrl(

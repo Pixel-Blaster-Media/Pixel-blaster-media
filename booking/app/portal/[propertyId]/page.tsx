@@ -18,6 +18,10 @@ import {
   fetchIGuideRESO,
   type IGuideRESOResponse,
 } from "@/lib/integrations/iguide/client";
+import {
+  isIGuidePhotoZipUrl,
+  type IGuidePhotoZipKind,
+} from "@/lib/integrations/iguide/photo-downloads";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type {
   BookingStatus,
@@ -1108,17 +1112,16 @@ function PhotoDownloadButtons({
 
 function findPhotoDownloadUrl(
   deliverables: DeliverableRow[],
-  kind: "mls" | "high_res",
+  kind: IGuidePhotoZipKind,
 ): string | null {
   const metadataKey =
     kind === "mls" ? "mls_photo_zip_url" : "high_res_photo_zip_url";
-  const fileName = kind === "mls" ? "gallery-low-res.zip" : "gallery.zip";
 
   for (const deliverable of deliverables) {
-    const fromMetadata = photoDownloadUrl(deliverable.metadata, metadataKey);
+    const fromMetadata = photoDownloadUrl(deliverable.metadata, metadataKey, kind);
     if (fromMetadata) return fromMetadata;
 
-    const fromUrl = photoDownloadUrlFromString(deliverable.url, fileName);
+    const fromUrl = photoDownloadUrlFromString(deliverable.url, kind);
     if (fromUrl) return fromUrl;
   }
 
@@ -1128,33 +1131,17 @@ function findPhotoDownloadUrl(
 function photoDownloadUrl(
   metadata: Json | null | undefined,
   key: string,
+  kind: IGuidePhotoZipKind = key === "mls_photo_zip_url" ? "mls" : "high_res",
 ): string | null {
   const url = metadataString(metadata, key);
-  return photoDownloadUrlFromString(url, key === "mls_photo_zip_url" ? "gallery-low-res.zip" : "gallery.zip");
+  return photoDownloadUrlFromString(url, kind);
 }
 
 function photoDownloadUrlFromString(
   url: string | null,
-  fileName?: "gallery-low-res.zip" | "gallery.zip",
+  kind?: IGuidePhotoZipKind,
 ): string | null {
-  if (!url) return null;
-  try {
-    const parsed = new URL(url);
-    const pathname = parsed.pathname.toLowerCase();
-    const isYourIGuide =
-      parsed.hostname === "youriguide.com" ||
-      parsed.hostname.endsWith(".youriguide.com");
-    const matchesExpectedFile = fileName
-      ? pathname.endsWith(`/${fileName}`)
-      : /\/gallery(?:-low-res)?\.zip$/.test(pathname);
-    return isYourIGuide &&
-      pathname.includes("/doc/") &&
-      matchesExpectedFile
-      ? url
-      : null;
-  } catch {
-    return null;
-  }
+  return isIGuidePhotoZipUrl(url, kind) ? url : null;
 }
 
 function pickLatest(

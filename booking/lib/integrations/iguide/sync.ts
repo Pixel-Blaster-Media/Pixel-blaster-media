@@ -16,6 +16,7 @@ import {
   iguideViewerUrl,
   parseIGuideAlias,
 } from "./parse-id";
+import { isIGuidePhotoZipUrl, type IGuidePhotoZipKind } from "./photo-downloads";
 import {
   getAssetUrls,
   getReadyEventObject,
@@ -564,27 +565,21 @@ function photoDownloadUrlsFromMedia(
     mls: usableIGuidePhotoZipUrl(
       media.galleryLowResZip ?? media.galleryLowRes,
       accessToken,
+      "mls",
     ),
-    highRes: usableIGuidePhotoZipUrl(media.galleryZip, accessToken),
+    highRes: usableIGuidePhotoZipUrl(media.galleryZip, accessToken, "high_res"),
   };
 }
 
 function usableIGuidePhotoZipUrl(
   url: string | null | undefined,
   accessToken?: string | null,
+  kind?: IGuidePhotoZipKind,
 ): string | null {
   if (!url) return null;
   try {
     const parsed = new URL(url);
-    const pathname = parsed.pathname.toLowerCase();
-    const isYourIGuide =
-      parsed.hostname === "youriguide.com" ||
-      parsed.hostname.endsWith(".youriguide.com");
-    const isGalleryZip =
-      isYourIGuide &&
-      pathname.includes("/doc/") &&
-      /\/gallery(?:-low-res)?\.zip$/.test(pathname);
-    if (!isGalleryZip) return null;
+    if (!isIGuidePhotoZipUrl(url, kind)) return null;
     if (accessToken && !parsed.searchParams.has("accessToken")) {
       parsed.searchParams.set("accessToken", accessToken);
     }

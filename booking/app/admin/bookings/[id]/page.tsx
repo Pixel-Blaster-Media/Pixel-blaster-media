@@ -12,6 +12,10 @@ import {
   type DeliveryLinkCategory,
 } from "@/lib/booking/delivery-links";
 import { labelForAddOn, labelForService } from "@/lib/booking/services";
+import {
+  isIGuidePhotoZipUrl,
+  type IGuidePhotoZipKind,
+} from "@/lib/integrations/iguide/photo-downloads";
 import { hasPortalCredentials } from "@/lib/integrations/iguide/portal-client";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type {
@@ -904,13 +908,13 @@ function findIGuidePhotoDownloads(deliverables: DeliverableRow[]): {
     mls ??=
       iGuidePhotoZipUrl(
         metadataString(deliverable.metadata, "mls_photo_zip_url"),
-        "gallery-low-res.zip",
-      ) ?? iGuidePhotoZipUrl(deliverable.url, "gallery-low-res.zip");
+        "mls",
+      ) ?? iGuidePhotoZipUrl(deliverable.url, "mls");
     highRes ??=
       iGuidePhotoZipUrl(
         metadataString(deliverable.metadata, "high_res_photo_zip_url"),
-        "gallery.zip",
-      ) ?? iGuidePhotoZipUrl(deliverable.url, "gallery.zip");
+        "high_res",
+      ) ?? iGuidePhotoZipUrl(deliverable.url, "high_res");
   }
 
   return { mls, highRes };
@@ -918,23 +922,9 @@ function findIGuidePhotoDownloads(deliverables: DeliverableRow[]): {
 
 function iGuidePhotoZipUrl(
   url: string | null,
-  fileName: "gallery-low-res.zip" | "gallery.zip",
+  kind: IGuidePhotoZipKind,
 ): string | null {
-  if (!url) return null;
-  try {
-    const parsed = new URL(url);
-    const pathname = parsed.pathname.toLowerCase();
-    const isYourIGuide =
-      parsed.hostname === "youriguide.com" ||
-      parsed.hostname.endsWith(".youriguide.com");
-    return isYourIGuide &&
-      pathname.includes("/doc/") &&
-      pathname.endsWith(`/${fileName}`)
-      ? url
-      : null;
-  } catch {
-    return null;
-  }
+  return isIGuidePhotoZipUrl(url, kind) ? url : null;
 }
 
 function isImageLikeUrl(url: string): boolean {
