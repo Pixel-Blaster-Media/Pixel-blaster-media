@@ -36,13 +36,13 @@ export default function EmailTester({ defaultTo }: { defaultTo: string }) {
           value={to}
           onChange={(e) => setTo(e.target.value)}
           placeholder="you@example.com"
-          className="rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+          className="rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
         />
         <button
           type="button"
           disabled={sending || !to.trim()}
           onClick={onSend}
-          className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
+          className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
         >
           {sending ? "Sending…" : "Send test email"}
         </button>
@@ -50,7 +50,7 @@ export default function EmailTester({ defaultTo }: { defaultTo: string }) {
 
       {result ? (
         <div
-          className={`rounded-md border p-3 text-xs ${
+          className={`rounded-2xl border p-3 text-xs ${
             result.ok && !result.skipped
               ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
               : result.skipped

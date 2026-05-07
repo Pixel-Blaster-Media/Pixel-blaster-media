@@ -141,7 +141,7 @@ export default async function IGuideReviewPage({
 
   return (
     <div className="space-y-6">
-      <header>
+      <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
         <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
           iGUIDE
         </p>
@@ -174,7 +174,7 @@ export default async function IGuideReviewPage({
       </div>
 
       {linkedBookings && linkedBookings.length > 0 ? (
-        <section className="rounded-lg border border-white/10 bg-ink-soft/40 p-4">
+        <section className="rounded-2xl border border-white/10 bg-ink-soft/40 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-white">
@@ -187,7 +187,7 @@ export default async function IGuideReviewPage({
             </div>
             <Link
               href="/admin/bookings"
-              className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-ink-muted hover:border-white/30 hover:text-white"
+              className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-ink-muted hover:border-white/30 hover:text-white"
             >
               Open bookings
             </Link>
@@ -196,7 +196,7 @@ export default async function IGuideReviewPage({
             {linkedBookings.slice(0, 6).map((booking) => (
               <li
                 key={booking.id}
-                className="rounded-md border border-white/10 bg-black/20 p-3"
+                className="rounded-2xl border border-white/10 bg-black/20 p-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -218,7 +218,7 @@ export default async function IGuideReviewPage({
                   </div>
                   <Link
                     href={`/admin/bookings/${booking.id}`}
-                    className="shrink-0 rounded-md bg-brand px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-brand-light"
+                    className="shrink-0 rounded-full bg-brand px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-brand-light"
                   >
                     Open
                   </Link>
@@ -234,7 +234,7 @@ export default async function IGuideReviewPage({
         </section>
       ) : null}
 
-      <section className="rounded-lg border border-brand-light/20 bg-brand/10 p-4">
+      <section className="rounded-2xl border border-brand-light/20 bg-brand/10 p-4">
         <div>
           <h2 className="text-sm font-semibold text-white">
             Link an iGUIDE manually
@@ -254,12 +254,12 @@ export default async function IGuideReviewPage({
             name="iguide_ref"
             required
             placeholder="Paste iGUIDE link, alias, or Portal ID"
-            className="rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="rounded-full border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
           <select
             name="booking_id"
             required
-            className="min-w-0 rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="min-w-0 rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-light/60"
             defaultValue=""
           >
             <option value="" disabled>
@@ -273,14 +273,14 @@ export default async function IGuideReviewPage({
           </select>
           <button
             type="submit"
-            className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light"
+            className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light"
           >
             Link + sync
           </button>
         </form>
       </section>
 
-      <section className="rounded-lg border border-white/10 bg-ink-soft/40 p-4">
+      <section className="rounded-2xl border border-white/10 bg-ink-soft/40 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-white">
@@ -293,7 +293,7 @@ export default async function IGuideReviewPage({
           </div>
           <Link
             href="/admin/settings/integrations"
-            className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-ink-muted hover:border-white/30 hover:text-white"
+            className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-ink-muted hover:border-white/30 hover:text-white"
           >
             iGUIDE settings
           </Link>
@@ -305,18 +305,18 @@ export default async function IGuideReviewPage({
             name="q"
             defaultValue={portalQuery}
             placeholder="Search address, alias, or Portal ID"
-            className="rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="rounded-full border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
           <button
             type="submit"
-            className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light"
+            className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light"
           >
             Search
           </button>
         </form>
 
         {!portalTours.ok ? (
-          <div className="mt-4 rounded-md border border-amber-300/30 bg-amber-400/10 p-4">
+          <div className="mt-4 rounded-xl border border-amber-300/30 bg-amber-400/10 p-4">
             <p className="text-sm font-semibold text-amber-100">
               iGUIDE is blocking portal search for this token.
             </p>
@@ -344,7 +344,7 @@ export default async function IGuideReviewPage({
             ))}
           </ul>
         ) : (
-          <p className="mt-4 rounded-md border border-dashed border-white/10 px-4 py-6 text-center text-sm text-ink-muted">
+          <p className="mt-4 rounded-xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-ink-muted">
             {portalQuery
               ? "No portal iGUIDEs matched that search."
               : "No portal iGUIDEs came back from iGUIDE yet."}
@@ -357,7 +357,7 @@ export default async function IGuideReviewPage({
           <Link
             href="/admin/iguide"
             className={
-              "rounded-md border px-3 py-1.5 transition " +
+              "rounded-full border px-3 py-1.5 transition " +
               (view === "likely"
                 ? "border-brand-light bg-brand/15 text-brand-light"
                 : "border-white/10 text-ink-muted hover:border-white/30 hover:text-white")
@@ -368,7 +368,7 @@ export default async function IGuideReviewPage({
           <Link
             href="/admin/iguide?view=all"
             className={
-              "rounded-md border px-3 py-1.5 transition " +
+              "rounded-full border px-3 py-1.5 transition " +
               (view === "all"
                 ? "border-brand-light bg-brand/15 text-brand-light"
                 : "border-white/10 text-ink-muted hover:border-white/30 hover:text-white")
@@ -389,7 +389,7 @@ export default async function IGuideReviewPage({
             ))}
             <button
               type="submit"
-              className="rounded-md border border-red-300/30 px-3 py-1.5 text-xs text-red-200 hover:border-red-300 hover:bg-red-500/10"
+              className="rounded-full border border-red-300/30 px-3 py-1.5 text-xs text-red-200 hover:border-red-300 hover:bg-red-500/10"
             >
               Hide {unrelatedItems.length} unrelated iGUIDEs
             </button>
@@ -404,7 +404,7 @@ export default async function IGuideReviewPage({
             return (
               <li
                 key={event.id}
-                className="rounded-lg border border-white/10 bg-ink-soft/50 p-4"
+                className="rounded-2xl border border-white/10 bg-ink-soft/50 p-4"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -454,7 +454,7 @@ export default async function IGuideReviewPage({
           })}
         </ul>
       ) : (
-        <div className="rounded-lg border border-dashed border-white/10 bg-ink-soft/40 px-4 py-8 text-center">
+        <div className="rounded-2xl border border-dashed border-white/10 bg-ink-soft/40 px-4 py-8 text-center">
           <p className="text-sm text-ink-muted">
             {view === "likely" && unrelatedItems.length > 0
               ? "No likely matches. The remaining iGUIDEs look unrelated to current bookings."
@@ -463,7 +463,7 @@ export default async function IGuideReviewPage({
           {view === "likely" && unrelatedItems.length > 0 ? (
             <Link
               href="/admin/iguide?view=all"
-              className="mt-3 inline-flex rounded-md border border-white/10 px-3 py-1.5 text-xs text-brand-light hover:border-brand-light"
+              className="mt-3 inline-flex rounded-full border border-white/10 px-3 py-1.5 text-xs text-brand-light hover:border-brand-light"
             >
               See all unmatched iGUIDEs
             </Link>
@@ -484,7 +484,7 @@ export default async function IGuideReviewPage({
 
 function InfoBox({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-ink-soft/40 p-4">
+    <div className="rounded-2xl border border-white/10 bg-ink-soft/40 p-4">
       <p className="text-sm font-semibold text-white">{title}</p>
       <p className="mt-1 text-xs text-ink-muted">{body}</p>
     </div>
@@ -499,7 +499,7 @@ function PortalTourRow({
   bookings: Array<{ id: string; label: string }>;
 }) {
   return (
-    <li className="rounded-md border border-white/10 bg-black/20 p-3">
+    <li className="rounded-2xl border border-white/10 bg-black/20 p-3">
       <div className="grid gap-3 md:grid-cols-[1fr_minmax(260px,420px)]">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-white">
@@ -530,7 +530,7 @@ function PortalTourRow({
           <select
             name="booking_id"
             required
-            className="min-w-0 rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="min-w-0 rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-light/60"
             defaultValue=""
           >
             <option value="" disabled>
@@ -544,7 +544,7 @@ function PortalTourRow({
           </select>
           <button
             type="submit"
-            className="rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light"
+            className="rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light"
           >
             Link + sync
           </button>

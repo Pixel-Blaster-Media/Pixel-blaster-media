@@ -184,7 +184,8 @@ export default async function AdminCalendarPage({
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
+        <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
             Week of {formatHeaderDate(weekStart)}
@@ -199,28 +200,29 @@ export default async function AdminCalendarPage({
         <div className="flex flex-wrap gap-2 text-xs">
           <Link
             href={`/admin/calendar?week=${prevWeek}`}
-            className="rounded-md border border-white/10 px-3 py-1.5 text-ink-muted hover:border-white/30 hover:text-white"
+            className="rounded-full border border-white/10 px-3 py-1.5 text-ink-muted transition hover:border-white/30 hover:text-white"
           >
             Previous
           </Link>
           <Link
             href="/admin/calendar"
-            className="rounded-md border border-white/10 px-3 py-1.5 text-ink-muted hover:border-white/30 hover:text-white"
+            className="rounded-full border border-white/10 px-3 py-1.5 text-ink-muted transition hover:border-white/30 hover:text-white"
           >
             This week
           </Link>
           <Link
             href={`/admin/calendar?week=${nextWeek}`}
-            className="rounded-md border border-white/10 px-3 py-1.5 text-ink-muted hover:border-white/30 hover:text-white"
+            className="rounded-full border border-white/10 px-3 py-1.5 text-ink-muted transition hover:border-white/30 hover:text-white"
           >
             Next
           </Link>
           <Link
             href="/admin/settings/availability"
-            className="rounded-md border border-white/10 px-3 py-1.5 text-ink-muted hover:border-white/30 hover:text-white"
+            className="rounded-full border border-white/10 px-3 py-1.5 text-ink-muted transition hover:border-white/30 hover:text-white"
           >
             Hours + blocks
           </Link>
+        </div>
         </div>
       </header>
 

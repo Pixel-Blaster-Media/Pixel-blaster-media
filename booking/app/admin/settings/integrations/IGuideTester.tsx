@@ -38,7 +38,7 @@ export default function IGuideTester({
             });
           });
         }}
-        className="rounded-md border border-white/15 px-4 py-1.5 text-xs font-semibold text-white hover:border-brand-light hover:bg-brand/10 disabled:cursor-not-allowed disabled:opacity-60"
+        className="rounded-full border border-white/15 px-4 py-1.5 text-xs font-semibold text-white hover:border-brand-light hover:bg-brand/10 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isPending ? "Testing..." : "Test iGUIDE credentials"}
       </button>

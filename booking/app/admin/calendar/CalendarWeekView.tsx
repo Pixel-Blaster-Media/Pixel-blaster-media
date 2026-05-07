@@ -116,7 +116,7 @@ export default function CalendarWeekView({
         </span>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-white/10 bg-ink-soft/40">
+      <div className="overflow-x-auto rounded-2xl border border-white/10 bg-ink-soft/45 shadow-lg shadow-black/10">
         <div className="grid min-w-[980px] grid-cols-[64px_repeat(7,minmax(120px,1fr))]">
           <div className="border-b border-white/10 bg-ink px-2 py-3" />
           {days.map((day) => (
@@ -201,7 +201,7 @@ export default function CalendarWeekView({
         </div>
       </div>
 
-      <div className="rounded-lg border border-white/10 bg-ink-soft/40 p-4 md:hidden">
+      <div className="rounded-2xl border border-white/10 bg-ink-soft/45 p-4 md:hidden">
         <p className="text-sm font-semibold text-white">This week</p>
         <div className="mt-3 space-y-3">
           {days.map((day) => {
@@ -223,12 +223,12 @@ export default function CalendarWeekView({
                         {item.href ? (
                           <Link
                             href={item.href}
-                            className="block rounded-md border border-white/10 bg-ink px-3 py-2"
+                            className="block rounded-xl border border-white/10 bg-ink px-3 py-2"
                           >
                             <MobileItem item={item} />
                           </Link>
                         ) : (
-                          <div className="rounded-md border border-white/10 bg-ink px-3 py-2">
+                          <div className="rounded-xl border border-white/10 bg-ink px-3 py-2">
                             <MobileItem item={item} />
                           </div>
                         )}
@@ -245,7 +245,7 @@ export default function CalendarWeekView({
       </div>
 
       {selected ? (
-        <div className="fixed inset-x-4 bottom-4 z-50 max-h-[82vh] overflow-y-auto rounded-lg border border-brand/30 bg-ink-soft p-4 shadow-2xl shadow-black/50 md:left-auto md:w-[560px]">
+        <div className="fixed inset-x-4 bottom-4 z-50 max-h-[82vh] overflow-y-auto rounded-2xl border border-brand/30 bg-ink-soft p-4 shadow-2xl shadow-black/50 md:left-auto md:w-[560px]">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-white">
@@ -265,14 +265,14 @@ export default function CalendarWeekView({
             </button>
           </div>
 
-          <div className="mt-4 inline-flex rounded-md border border-white/10 bg-ink p-1 text-xs">
+          <div className="mt-4 inline-flex rounded-full border border-white/10 bg-ink p-1 text-xs">
             <button
               type="button"
               onClick={() => {
                 setError(null);
                 setMode("shoot");
               }}
-              className={`rounded px-3 py-1.5 ${
+              className={`rounded-full px-3 py-1.5 ${
                 mode === "shoot"
                   ? "bg-brand text-white"
                   : "text-ink-muted hover:text-white"
@@ -286,7 +286,7 @@ export default function CalendarWeekView({
                 setError(null);
                 setMode("block");
               }}
-              className={`rounded px-3 py-1.5 ${
+              className={`rounded-full px-3 py-1.5 ${
                 mode === "block"
                   ? "bg-brand text-white"
                   : "text-ink-muted hover:text-white"
@@ -503,7 +503,7 @@ export default function CalendarWeekView({
                 <textarea
                   name="notes"
                   rows={3}
-                  className="mt-1 w-full rounded-md border border-white/10 bg-ink px-2 py-1.5 text-sm text-white"
+                  className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white"
                 />
               </label>
 
@@ -511,7 +511,7 @@ export default function CalendarWeekView({
                 <button
                   type="submit"
                   disabled={pending}
-                  className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+                  className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-light disabled:opacity-60"
                 >
                   {pending ? "Adding..." : "Add confirmed shoot"}
                 </button>
@@ -553,7 +553,7 @@ export default function CalendarWeekView({
                   selected.minute,
                 )}
                 required
-                className="mt-1 w-full rounded-md border border-white/10 bg-ink px-2 py-1.5 text-sm text-white"
+                className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white"
               />
             </label>
             <label className="block">
@@ -562,13 +562,13 @@ export default function CalendarWeekView({
                 type="text"
                 name="label"
                 defaultValue="Busy"
-                className="mt-1 w-full rounded-md border border-white/10 bg-ink px-2 py-1.5 text-sm text-white"
+                className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white"
               />
             </label>
             <button
               type="submit"
               disabled={pending}
-              className="self-end rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+              className="self-end rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-light disabled:opacity-60"
             >
               {pending ? "Adding..." : "Add block"}
             </button>
@@ -597,7 +597,7 @@ function TextField({
       <span className="text-xs text-ink-muted">{label}</span>
       <input
         {...props}
-        className="mt-1 w-full rounded-md border border-white/10 bg-ink px-2 py-1.5 text-sm text-white"
+        className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white"
       />
     </label>
   );
@@ -651,7 +651,7 @@ function CatalogPicker({ items }: { items: CatalogItemOption[] }) {
               {groupItems.map((item) => (
                 <label
                   key={item.id}
-                  className="flex min-h-[76px] gap-3 rounded-md border border-white/10 bg-ink p-3 text-sm text-white hover:border-brand/40"
+                  className="flex min-h-[76px] gap-3 rounded-2xl border border-white/10 bg-ink p-3 text-sm text-white transition hover:border-brand/40 hover:bg-white/[0.03]"
                 >
                   <input
                     type="checkbox"
@@ -715,7 +715,7 @@ function CalendarEvent({ item }: { item: CalendarItem }) {
       : "border-white/15 bg-white/[0.08] text-ink-muted";
   const content = (
     <div
-      className={`absolute left-1 right-1 z-10 overflow-hidden rounded-md border px-2 py-1 text-left shadow-sm ${classes}`}
+      className={`absolute left-1 right-1 z-10 overflow-hidden rounded-xl border px-2 py-1 text-left shadow-sm ${classes}`}
       style={{ top: Math.max(top, 0), height }}
     >
       <p className="truncate text-xs font-semibold">{item.title}</p>

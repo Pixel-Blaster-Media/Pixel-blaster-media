@@ -102,7 +102,8 @@ export default async function AdminTodayPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
+        <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
             {formatFullDate(start)}
@@ -114,10 +115,11 @@ export default async function AdminTodayPage() {
         </div>
         <Link
           href="/admin/calendar"
-          className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-ink-muted hover:border-white/30 hover:text-white"
+          className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-ink-muted transition hover:border-white/30 hover:text-white"
         >
           Calendar
         </Link>
+        </div>
       </header>
 
       {bookings && bookings.length > 0 ? (
@@ -131,7 +133,7 @@ export default async function AdminTodayPage() {
           ))}
         </ol>
       ) : (
-        <p className="rounded-lg border border-dashed border-white/10 bg-ink-soft/40 px-4 py-8 text-center text-sm text-ink-muted">
+        <p className="rounded-2xl border border-dashed border-white/10 bg-ink-soft/40 px-4 py-8 text-center text-sm text-ink-muted">
           No shoots scheduled today.
         </p>
       )}
@@ -170,7 +172,7 @@ function ShootCard({
   const taskState = taskStates(booking, deliverables);
 
   return (
-    <li className="rounded-lg border border-white/10 bg-ink-soft/50 p-4">
+    <li className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
@@ -194,7 +196,7 @@ function ShootCard({
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <div className="rounded-md border border-white/10 bg-ink/50 p-3">
+        <div className="rounded-2xl border border-white/10 bg-ink/50 p-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
             Realtor
           </p>
@@ -208,7 +210,7 @@ function ShootCard({
             {profile?.phone ? (
               <a
                 href={`tel:${profile.phone}`}
-                className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-light"
+                className="rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-light"
               >
                 Call
               </a>
@@ -216,7 +218,7 @@ function ShootCard({
             {profile?.email ? (
               <a
                 href={`mailto:${profile.email}`}
-                className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-white hover:border-brand-light"
+                className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
               >
                 Email
               </a>
@@ -224,7 +226,7 @@ function ShootCard({
           </div>
         </div>
 
-        <div className="rounded-md border border-white/10 bg-ink/50 p-3">
+        <div className="rounded-2xl border border-white/10 bg-ink/50 p-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
             Services
           </p>
@@ -239,14 +241,14 @@ function ShootCard({
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-light"
+                className="rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-light"
               >
                 Map
               </a>
             ) : null}
             <Link
               href={`/admin/bookings/${booking.id}`}
-              className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-white hover:border-brand-light"
+              className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
             >
               Open booking
             </Link>
@@ -284,13 +286,13 @@ function ShootCard({
       <div className="mt-4 flex flex-wrap gap-2">
         <Link
           href={`/admin/bookings/${booking.id}#fotello`}
-          className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-white hover:border-brand-light"
+          className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
         >
           Fotello upload
         </Link>
         <Link
           href={`/admin/bookings/${booking.id}#iguide`}
-          className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-white hover:border-brand-light"
+          className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
         >
           iGUIDE
         </Link>
@@ -301,7 +303,7 @@ function ShootCard({
 
 function NoteBlock({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-md border border-white/10 bg-ink/50 p-3">
+    <div className="rounded-2xl border border-white/10 bg-ink/50 p-3">
       <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
         {title}
       </p>

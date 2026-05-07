@@ -41,7 +41,7 @@ export default function LinkEventForm({
         <select
           name="booking_id"
           defaultValue={suggestedBookingId ?? ""}
-          className="rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
+          className="rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
           required
         >
           <option value="" disabled>
@@ -56,7 +56,7 @@ export default function LinkEventForm({
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+          className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
         >
           {isPending ? "Linking..." : "Link to booking"}
         </button>

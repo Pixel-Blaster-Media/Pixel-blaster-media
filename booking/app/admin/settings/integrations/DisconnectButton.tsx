@@ -14,7 +14,7 @@ export default function DisconnectButton() {
         if (!confirm("Disconnect QuickBooks? You'll need to reconnect to invoice.")) return;
         startPending(() => disconnectQuickBooks());
       }}
-      className="rounded-md border border-red-400/30 px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60 disabled:opacity-60"
+      className="rounded-full border border-red-400/30 px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60 disabled:opacity-60"
     >
       {pending ? "Disconnecting…" : "Disconnect"}
     </button>

@@ -77,7 +77,7 @@ export default function BookingActions({
   const showCancel = isCancellable(currentStatus);
 
   return (
-    <div className="space-y-5 rounded-lg border border-brand/20 bg-brand/5 p-4">
+    <div className="space-y-5 rounded-2xl border border-brand/20 bg-brand/5 p-4">
       <header>
         <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
           Job controls
@@ -87,7 +87,7 @@ export default function BookingActions({
         </h2>
       </header>
 
-      <section className="rounded-md border border-white/10 bg-ink-soft/50 p-3">
+      <section className="rounded-2xl border border-white/10 bg-ink-soft/50 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-sm font-semibold text-white">Status</h3>
@@ -108,7 +108,7 @@ export default function BookingActions({
                 type="button"
                 disabled={isPending}
                 onClick={() => moveTo(s)}
-                className="rounded-md border border-white/15 px-3 py-1.5 text-sm text-white/90 hover:border-brand-light hover:bg-brand/10 disabled:opacity-60"
+                className="rounded-full border border-white/15 px-3 py-1.5 text-sm text-white/90 hover:border-brand-light hover:bg-brand/10 disabled:opacity-60"
               >
                 Move to {BOOKING_STATUSES[s].label}
               </button>
@@ -119,7 +119,7 @@ export default function BookingActions({
               type="button"
               disabled={isPending}
               onClick={cancel}
-              className="rounded-md border border-red-400/40 px-3 py-1.5 text-sm text-red-200 hover:border-red-300 hover:bg-red-500/10 disabled:opacity-60"
+              className="rounded-full border border-red-400/40 px-3 py-1.5 text-sm text-red-200 hover:border-red-300 hover:bg-red-500/10 disabled:opacity-60"
             >
               Cancel booking
             </button>
@@ -132,7 +132,7 @@ export default function BookingActions({
         ) : null}
       </section>
 
-      <section className="rounded-md border border-white/10 bg-ink-soft/50 p-3">
+      <section className="rounded-2xl border border-white/10 bg-ink-soft/50 p-3">
         <h3 className="text-sm font-semibold text-white">Delivery email</h3>
         <p className="mt-1 text-xs text-ink-muted">
           Email the realtor when their ready media links are available in the
@@ -144,7 +144,7 @@ export default function BookingActions({
         />
       </section>
 
-      <details className="rounded-md border border-white/10 bg-ink-soft/50 p-3">
+      <details className="rounded-2xl border border-white/10 bg-ink-soft/50 p-3">
         <summary className="cursor-pointer text-sm font-semibold text-white">
           Advanced manual links
         </summary>
@@ -216,7 +216,7 @@ function DeliveryEmailButton({
         onChange={(event) => setExtraRecipients(event.target.value)}
         rows={2}
         placeholder="teammate@example.com, assistant@example.com"
-        className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60"
+        className="mt-1 w-full rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60"
       />
       <p className="mt-1 text-[11px] text-ink-muted">
         Separate emails with commas or spaces. You&apos;ll be copied
@@ -245,7 +245,7 @@ function DeliveryEmailButton({
             );
           });
         }}
-        className="mt-3 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+        className="mt-3 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
       >
         {isPending
           ? "Sending..."
@@ -302,7 +302,7 @@ function ManualDeliverableForm({ bookingId }: { bookingId: string }) {
       <select
         name="type"
         defaultValue=""
-        className="rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
+        className="rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
       >
         <option value="" disabled>
           Type…
@@ -318,18 +318,18 @@ function ManualDeliverableForm({ bookingId }: { bookingId: string }) {
         type="url"
         placeholder="https://youriguide.com/..."
         required
-        className="rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
+        className="rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
       />
       <input
         name="thumbnail_url"
         type="url"
         placeholder="Thumbnail (opt)"
-        className="rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
+        className="rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
       />
       <button
         type="submit"
         disabled={isPending}
-        className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+        className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
       >
         {isPending ? "Adding…" : "Add"}
       </button>

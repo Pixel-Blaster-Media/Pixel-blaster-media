@@ -127,7 +127,7 @@ export default function IGuideSection({
   return (
     <div
       id="iguide"
-      className="space-y-4 rounded-lg border border-brand/20 bg-brand/5 p-4"
+      className="space-y-4 rounded-2xl border border-brand/20 bg-brand/5 p-4"
     >
       <div>
         <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
@@ -151,7 +151,7 @@ export default function IGuideSection({
           type="button"
           disabled={!canCreate}
           onClick={onCreate}
-          className="rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
+          className="rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
         >
           {creating ? "Creating…" : "Create iGuide"}
         </button>
@@ -172,13 +172,13 @@ export default function IGuideSection({
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           placeholder="Paste URL, alias, or Portal ID (igXXXXX)…"
-          className="rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+          className="rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
         />
         <button
           type="button"
           disabled={saving || !canSave}
           onClick={onSave}
-          className="rounded-md border border-white/15 px-3 py-2 text-sm text-white/90 hover:border-brand-light hover:bg-brand/10 disabled:opacity-50"
+          className="rounded-full border border-white/15 px-3 py-2 text-sm text-white/90 hover:border-brand-light hover:bg-brand/10 disabled:opacity-50"
         >
           {saving ? "Saving…" : "Save"}
         </button>
@@ -186,7 +186,7 @@ export default function IGuideSection({
           type="button"
           disabled={syncing || !hasLink || canSave}
           onClick={onSync}
-          className="rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
+          className="rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
         >
           {syncing ? "Syncing…" : "Sync from iGuide"}
         </button>

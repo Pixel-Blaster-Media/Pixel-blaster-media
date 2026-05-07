@@ -167,7 +167,7 @@ export default async function BookingDetailPage({
       <div className="flex items-center justify-between">
         <Link
           href="/admin/bookings"
-          className="text-xs text-ink-muted hover:text-white"
+          className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-ink-muted transition hover:border-white/30 hover:text-white"
         >
           ← Bookings
         </Link>
@@ -178,7 +178,7 @@ export default async function BookingDetailPage({
         </span>
       </div>
 
-      <header className="rounded-lg border border-white/10 bg-ink-soft/50 p-4">
+      <header className="rounded-2xl border border-white/10 bg-ink-soft/60 p-4 shadow-lg shadow-black/10 md:p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
@@ -198,7 +198,7 @@ export default async function BookingDetailPage({
             {profile?.phone ? (
               <a
                 href={`tel:${profile.phone}`}
-                className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-light"
+                className="rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-light"
               >
                 Call realtor
               </a>
@@ -206,7 +206,7 @@ export default async function BookingDetailPage({
             {profile?.email ? (
               <a
                 href={`mailto:${profile.email}`}
-                className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-white hover:border-brand-light"
+                className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
               >
                 Email
               </a>
@@ -218,14 +218,14 @@ export default async function BookingDetailPage({
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-white hover:border-brand-light"
+                className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
               >
                 Map
               </a>
             ) : null}
             <Link
               href="/admin/today"
-              className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-white hover:border-brand-light"
+              className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
             >
               Today
             </Link>
@@ -419,7 +419,7 @@ function DeliveryChecklist({
   return (
     <Panel title="Delivery checklist">
       <div
-        className={`rounded-md border p-3 ${
+        className={`rounded-2xl border p-3 ${
           missingRequired === 0
             ? "border-emerald-400/30 bg-emerald-500/10"
             : "border-amber-400/30 bg-amber-500/10"
@@ -441,7 +441,7 @@ function DeliveryChecklist({
         {items.map((item) => (
           <li
             key={item.label}
-            className="rounded-md border border-white/10 bg-ink/35 p-3"
+            className="rounded-2xl border border-white/10 bg-ink/35 p-3"
           >
             <div className="flex items-start gap-2">
               <span
@@ -699,7 +699,7 @@ function groupDeliveryLinks(links: DeliveryLink[]): Array<{
 
 function SummaryStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-white/10 bg-ink/50 p-3">
+    <div className="rounded-2xl border border-white/10 bg-ink/50 p-3">
       <p className="text-[10px] uppercase tracking-wider text-ink-muted">
         {label}
       </p>
@@ -747,8 +747,8 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-ink-soft/50 p-4">
-      <p className="text-[11px] uppercase tracking-wider text-ink-muted">
+    <div className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
+      <p className="text-[11px] uppercase tracking-wider text-brand-light/80">
         {title}
       </p>
       <div className="mt-3 space-y-2 text-sm">{children}</div>
@@ -764,7 +764,7 @@ function Row({
   value: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap justify-between gap-2">
+    <div className="flex flex-wrap justify-between gap-2 rounded-xl border border-white/5 bg-ink/25 px-3 py-2">
       <span className="text-xs text-ink-muted">{label}</span>
       <span className="text-right text-white">{value}</span>
     </div>

@@ -6,7 +6,7 @@ import { addManualDeliverable } from "./actions";
 
 export default function VideoLinksSection({ bookingId }: { bookingId: string }) {
   return (
-    <div className="space-y-4 rounded-lg border border-brand/20 bg-brand/5 p-4">
+    <div className="space-y-4 rounded-2xl border border-brand/20 bg-brand/5 p-4">
       <div>
         <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
           Video
@@ -64,7 +64,7 @@ function VideoLinkForm({
   return (
     <form
       id={`video-link-${deliveryKind}-${bookingId}`}
-      className="min-w-0 rounded-md border border-white/10 bg-ink/30 p-3"
+      className="min-w-0 rounded-2xl border border-white/10 bg-ink/30 p-3"
       action={(formData) => {
         setError(null);
         setOkMessage(null);
@@ -92,12 +92,12 @@ function VideoLinkForm({
           type="url"
           placeholder={placeholder}
           required
-          className="min-w-0 rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
+          className="min-w-0 rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
         />
         <button
           type="submit"
           disabled={isPending}
-          className="w-full rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+          className="w-full rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
         >
           {isPending ? "Adding..." : buttonLabel}
         </button>

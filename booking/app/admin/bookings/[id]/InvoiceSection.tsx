@@ -62,7 +62,7 @@ export default function InvoiceSection({
   const hasInvoice = !!state.id || !!initial.id;
 
   return (
-    <div className="space-y-4 rounded-lg border border-brand/20 bg-brand/5 p-4">
+    <div className="space-y-4 rounded-2xl border border-brand/20 bg-brand/5 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
@@ -125,7 +125,7 @@ export default function InvoiceSection({
             type="button"
             onClick={onCreate}
             disabled={pending}
-            className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+            className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
           >
             {pending ? "Creating…" : "Create invoice"}
           </button>
@@ -135,7 +135,7 @@ export default function InvoiceSection({
               type="button"
               onClick={onRefresh}
               disabled={pending}
-              className="rounded-md border border-white/15 px-3 py-2 text-sm text-white hover:border-brand-light hover:text-brand-light disabled:opacity-60"
+              className="rounded-full border border-white/15 px-3 py-2 text-sm text-white hover:border-brand-light hover:text-brand-light disabled:opacity-60"
             >
               {pending ? "Refreshing…" : "Refresh status"}
             </button>
@@ -144,7 +144,7 @@ export default function InvoiceSection({
                 href={(state.url ?? initial.url) as string}
                 target="_blank"
                 rel="noopener"
-                className="rounded-md border border-brand/40 px-3 py-2 text-sm font-semibold text-brand-light hover:border-brand-light hover:bg-brand/10"
+                className="rounded-full border border-brand/40 px-3 py-2 text-sm font-semibold text-brand-light hover:border-brand-light hover:bg-brand/10"
               >
                 Open in QuickBooks ↗
               </a>

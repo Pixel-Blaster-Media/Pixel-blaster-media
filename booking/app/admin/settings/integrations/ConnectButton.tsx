@@ -11,7 +11,7 @@ export default function ConnectButton() {
       type="button"
       disabled={pending}
       onClick={() => startPending(() => startQuickBooksConnect())}
-      className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+      className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
     >
       {pending ? "Redirecting…" : "Connect QuickBooks"}
     </button>

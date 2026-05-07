@@ -33,7 +33,7 @@ export default function ItemPicker({
             setSelected(e.target.value);
             setSaved(false);
           }}
-          className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
+          className="mt-1 w-full rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
         >
           <option value="" disabled>
             Pick one…
@@ -57,7 +57,7 @@ export default function ItemPicker({
             else setSaved(true);
           });
         }}
-        className="rounded-md border border-white/15 px-3 py-2 text-sm text-white hover:border-brand-light hover:text-brand-light disabled:opacity-50"
+        className="rounded-full border border-white/15 px-3 py-2 text-sm text-white hover:border-brand-light hover:text-brand-light disabled:opacity-50"
       >
         {pending ? "Saving…" : saved ? "✓ Saved" : "Save"}
       </button>

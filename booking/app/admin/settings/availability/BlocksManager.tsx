@@ -28,7 +28,7 @@ export default function BlocksManager({ blocks }: { blocks: Block[] }) {
           });
         }}
         id="block-form"
-        className="grid gap-2 rounded-lg border border-white/10 bg-ink-soft/50 p-4 md:grid-cols-[1fr_1fr_1fr_auto]"
+        className="grid gap-2 rounded-2xl border border-white/10 bg-ink-soft/50 p-4 md:grid-cols-[1fr_1fr_1fr_auto]"
       >
         <label className="block">
           <span className="text-xs text-ink-muted">Starts</span>
@@ -36,7 +36,7 @@ export default function BlocksManager({ blocks }: { blocks: Block[] }) {
             type="datetime-local"
             name="starts_at"
             required
-            className="mt-1 w-full rounded-md border border-white/10 bg-ink px-2 py-1.5 text-sm text-white"
+            className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-2 py-1.5 text-sm text-white"
           />
         </label>
         <label className="block">
@@ -45,7 +45,7 @@ export default function BlocksManager({ blocks }: { blocks: Block[] }) {
             type="datetime-local"
             name="ends_at"
             required
-            className="mt-1 w-full rounded-md border border-white/10 bg-ink px-2 py-1.5 text-sm text-white"
+            className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-2 py-1.5 text-sm text-white"
           />
         </label>
         <label className="block">
@@ -54,13 +54,13 @@ export default function BlocksManager({ blocks }: { blocks: Block[] }) {
             type="text"
             name="label"
             placeholder="Vacation / Family / etc."
-            className="mt-1 w-full rounded-md border border-white/10 bg-ink px-2 py-1.5 text-sm text-white"
+            className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-2 py-1.5 text-sm text-white"
           />
         </label>
         <button
           type="submit"
           disabled={pending}
-          className="self-end rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
+          className="self-end rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
         >
           {pending ? "Adding…" : "Add block"}
         </button>
@@ -72,11 +72,11 @@ export default function BlocksManager({ blocks }: { blocks: Block[] }) {
       </form>
 
       {blocks.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-white/10 bg-ink-soft/40 p-4 text-center text-xs text-ink-muted">
+        <p className="rounded-2xl border border-dashed border-white/10 bg-ink-soft/40 p-4 text-center text-xs text-ink-muted">
           No upcoming blocks.
         </p>
       ) : (
-        <ul className="divide-y divide-white/5 rounded-lg border border-white/10 bg-ink-soft/50">
+        <ul className="divide-y divide-white/5 rounded-2xl border border-white/10 bg-ink-soft/50">
           {blocks.map((b) => (
             <BlockRow key={b.id} block={b} />
           ))}

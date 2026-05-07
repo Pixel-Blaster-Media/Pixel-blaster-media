@@ -161,7 +161,7 @@ export default function FotelloSection({
   return (
     <div
       id="fotello"
-      className="space-y-5 rounded-lg border border-brand/20 bg-brand/5 p-4"
+      className="space-y-5 rounded-2xl border border-brand/20 bg-brand/5 p-4"
     >
       <div>
         <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
@@ -177,7 +177,7 @@ export default function FotelloSection({
       {/* Upload photos */}
       <form
         action={onUpload}
-        className="rounded-md border border-white/10 bg-ink-soft/50 p-3"
+        className="rounded-2xl border border-white/10 bg-ink-soft/50 p-3"
       >
         <p className="text-xs font-medium uppercase tracking-wider text-ink-muted">
           Upload to Fotello
@@ -193,12 +193,12 @@ export default function FotelloSection({
             multiple
             accept="image/*"
             disabled={uploading}
-            className="rounded-md border border-white/10 bg-ink px-3 py-2 text-sm text-white file:mr-3 file:rounded file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white disabled:opacity-60"
+            className="rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white file:mr-3 file:rounded-full file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white disabled:opacity-60"
           />
           <button
             type="submit"
             disabled={uploading}
-            className="rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
+            className="rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
           >
             {uploading ? "Working..." : "Upload + enhance"}
           </button>
@@ -229,13 +229,13 @@ export default function FotelloSection({
             value={listingId}
             onChange={(e) => setListingId(e.target.value)}
             placeholder="WkgmcWEz7UUSqtfwSn6P or full Fotello listing URL"
-            className="flex-1 min-w-[260px] rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="flex-1 min-w-[260px] rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
           <button
             type="button"
             disabled={savingListing || !listingDirty}
             onClick={onSaveListing}
-            className="rounded-md border border-white/15 px-3 py-2 text-sm text-white/90 hover:border-brand-light hover:bg-brand/10 disabled:opacity-50"
+            className="rounded-full border border-white/15 px-3 py-2 text-sm text-white/90 hover:border-brand-light hover:bg-brand/10 disabled:opacity-50"
           >
             {savingListing ? "Saving…" : "Save"}
           </button>
@@ -265,7 +265,7 @@ export default function FotelloSection({
             router.refresh();
           });
         }}
-        className="rounded-md border border-white/10 bg-ink-soft/50 p-3"
+        className="rounded-2xl border border-white/10 bg-ink-soft/50 p-3"
       >
         <p className="text-xs font-medium uppercase tracking-wider text-ink-muted">
           Realtor delivery links
@@ -285,7 +285,7 @@ export default function FotelloSection({
               type="url"
               defaultValue={deliveryLink("listing_share")}
               placeholder="https://..."
-              className="mt-1 w-full rounded-md border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
+              className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
             />
           </label>
           <label className="block">
@@ -297,7 +297,7 @@ export default function FotelloSection({
               type="url"
               defaultValue={deliveryLink("branded_property_website")}
               placeholder="https://..."
-              className="mt-1 w-full rounded-md border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
+              className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
             />
           </label>
           <label className="block">
@@ -309,14 +309,14 @@ export default function FotelloSection({
               type="url"
               defaultValue={deliveryLink("unbranded_property_website")}
               placeholder="https://..."
-              className="mt-1 w-full rounded-md border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
+              className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
             />
           </label>
         </div>
         <button
           type="submit"
           disabled={savingDeliveryLinks}
-          className="mt-3 rounded-md border border-white/15 px-3 py-2 text-sm font-semibold text-white hover:border-brand-light hover:bg-brand/10 disabled:opacity-50"
+          className="mt-3 rounded-full border border-white/15 px-3 py-2 text-sm font-semibold text-white hover:border-brand-light hover:bg-brand/10 disabled:opacity-50"
         >
           {savingDeliveryLinks ? "Saving..." : "Save delivery links"}
         </button>
@@ -331,7 +331,7 @@ export default function FotelloSection({
       </form>
 
       {/* Track a new enhance */}
-      <div className="rounded-md border border-white/10 bg-ink-soft/50 p-3">
+      <div className="rounded-2xl border border-white/10 bg-ink-soft/50 p-3">
         <p className="text-xs font-medium uppercase tracking-wider text-ink-muted">
           Track an enhance
         </p>
@@ -345,13 +345,13 @@ export default function FotelloSection({
             value={enhanceInput}
             onChange={(e) => setEnhanceInput(e.target.value)}
             placeholder="Enhance ID from Fotello"
-            className="rounded-md border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
+            className="rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
           />
           <button
             type="button"
             disabled={trackingPending || !enhanceInput.trim()}
             onClick={onTrack}
-            className="rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
+            className="rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
           >
             {trackingPending ? "Checking…" : "Track"}
           </button>
@@ -424,7 +424,7 @@ function TrackedEnhanceRow({
   const statusChip = statusChipFor(localStatus);
 
   return (
-    <li className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-white/10 bg-ink-soft/40 p-3 text-sm">
+    <li className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-ink-soft/40 p-3 text-sm">
       <div className="min-w-0">
         <p className="truncate font-mono text-xs text-white">
           {deliverable.external_id ?? "—"}
@@ -445,7 +445,7 @@ function TrackedEnhanceRow({
           type="button"
           disabled={refreshing}
           onClick={onRefresh}
-          className="rounded-md border border-white/15 px-2.5 py-1 text-xs text-white hover:border-brand-light hover:text-brand-light disabled:opacity-50"
+          className="rounded-full border border-white/15 px-2.5 py-1 text-xs text-white hover:border-brand-light hover:text-brand-light disabled:opacity-50"
         >
           {refreshing ? "…" : "Refresh"}
         </button>

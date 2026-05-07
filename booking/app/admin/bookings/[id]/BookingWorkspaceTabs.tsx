@@ -45,7 +45,7 @@ export default function BookingWorkspaceTabs({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-white/10 bg-ink-soft/50 p-2">
+      <div className="rounded-2xl border border-white/10 bg-ink-soft/50 p-2">
         <div className="grid gap-2 sm:grid-cols-3">
           {tabs.map((tab) => {
             const selected = tab.id === active;
@@ -54,7 +54,7 @@ export default function BookingWorkspaceTabs({
                 key={tab.id}
                 type="button"
                 onClick={() => setActive(tab.id)}
-                className={`rounded-md px-3 py-3 text-left transition ${
+                className={`rounded-xl px-3 py-3 text-left transition ${
                   selected
                     ? "bg-brand text-white shadow-sm"
                     : "text-ink-muted hover:bg-white/5 hover:text-white"

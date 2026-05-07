@@ -14,7 +14,7 @@ export default async function PricingPage() {
 
   return (
     <div className="space-y-10">
-      <header>
+      <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
         <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
           Settings
         </p>
@@ -68,7 +68,7 @@ function Section({
         </h2>
         <p className="text-xs text-ink-muted">{blurb}</p>
       </div>
-      <ul className="mt-4 divide-y divide-white/5 rounded-lg border border-white/10 bg-ink-soft/50">
+      <ul className="mt-4 divide-y divide-white/5 rounded-2xl border border-white/10 bg-ink-soft/50">
         {items.map((it) => (
           <li
             key={it.id}

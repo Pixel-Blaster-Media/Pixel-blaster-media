@@ -115,7 +115,7 @@ export default async function IntegrationsPage({
 
   return (
     <div className="space-y-10">
-      <header>
+      <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
         <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
           Settings
         </p>
@@ -128,7 +128,7 @@ export default async function IntegrationsPage({
       {flashError ? (
         <p
           role="alert"
-          className="rounded-md border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-200"
+          className="rounded-2xl border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-200"
         >
           QuickBooks connection failed ({flashError}). Double-check your
           Intuit app's redirect URI matches{" "}
@@ -137,7 +137,7 @@ export default async function IntegrationsPage({
         </p>
       ) : null}
       {flashOk ? (
-        <p className="rounded-md border border-emerald-400/30 bg-emerald-400/10 p-3 text-sm text-emerald-200">
+        <p className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-3 text-sm text-emerald-200">
           QuickBooks connected. Pick a default service item below and you're
           ready to invoice.
         </p>
@@ -145,7 +145,7 @@ export default async function IntegrationsPage({
       {googleFlashError ? (
         <p
           role="alert"
-          className="rounded-md border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-200"
+          className="rounded-2xl border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-200"
         >
           Google Calendar connection failed ({googleFlashError}). Double-check
           that your OAuth app&apos;s authorized redirect URI matches{" "}
@@ -154,14 +154,14 @@ export default async function IntegrationsPage({
         </p>
       ) : null}
       {googleFlashOk ? (
-        <p className="rounded-md border border-emerald-400/30 bg-emerald-400/10 p-3 text-sm text-emerald-200">
+        <p className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-3 text-sm text-emerald-200">
           Google Calendar connected. Busy blocks from{" "}
           {googleConnection?.google_account_email ?? "your calendar"} now hide
           booking slots, and new bookings land on your calendar automatically.
         </p>
       ) : null}
 
-      <section className="rounded-lg border border-white/10 bg-ink-soft/50 p-5">
+      <section className="rounded-2xl border border-white/10 bg-ink-soft/50 p-5 shadow-lg shadow-black/10">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-white">
@@ -238,7 +238,7 @@ export default async function IntegrationsPage({
       {/* iGUIDE — Portal API + webhook secret. Used by /admin/bookings to
           sync tour deliverables and by the webhook receiver to verify
           incoming events. */}
-      <section className="rounded-lg border border-white/10 bg-ink-soft/50 p-5">
+      <section className="rounded-2xl border border-white/10 bg-ink-soft/50 p-5 shadow-lg shadow-black/10">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-white">iGUIDE</h2>
@@ -258,7 +258,7 @@ export default async function IntegrationsPage({
           )}
         </div>
 
-        <div className="mt-4 rounded-md border border-brand-light/20 bg-brand/10 p-4">
+        <div className="mt-4 rounded-2xl border border-brand-light/20 bg-brand/10 p-4">
           <p className="text-sm font-semibold text-white">
             What to copy from iGUIDE
           </p>
@@ -282,7 +282,7 @@ export default async function IntegrationsPage({
           </ol>
         </div>
 
-        <div className="mt-4 rounded-md border border-white/10 bg-black/20 p-4">
+        <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
             Webhook URL for iGUIDE
           </p>
@@ -291,7 +291,7 @@ export default async function IntegrationsPage({
             webhook setup and put your secret after the equals sign.
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <code className="min-w-0 flex-1 overflow-x-auto rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-xs text-white">
+            <code className="min-w-0 flex-1 overflow-x-auto rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-xs text-white">
               {webhookUrlBase}YOUR_SECRET_HERE
             </code>
             <CopyTextButton value={`${webhookUrlBase}YOUR_SECRET_HERE`} />
@@ -332,7 +332,7 @@ export default async function IntegrationsPage({
 
       {/* Fotello — single API key, used for /getEnhance polling and
           listing creation. */}
-      <section className="rounded-lg border border-white/10 bg-ink-soft/50 p-5">
+      <section className="rounded-2xl border border-white/10 bg-ink-soft/50 p-5 shadow-lg shadow-black/10">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-white">Fotello</h2>
@@ -367,7 +367,7 @@ export default async function IntegrationsPage({
         />
       </section>
 
-      <section className="rounded-lg border border-white/10 bg-ink-soft/50 p-5">
+      <section className="rounded-2xl border border-white/10 bg-ink-soft/50 p-5 shadow-lg shadow-black/10">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-white">Google Calendar</h2>
@@ -464,7 +464,7 @@ export default async function IntegrationsPage({
         )}
       </section>
 
-      <section className="rounded-lg border border-white/10 bg-ink-soft/50 p-5">
+      <section className="rounded-2xl border border-white/10 bg-ink-soft/50 p-5 shadow-lg shadow-black/10">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-white">QuickBooks Online</h2>
@@ -509,7 +509,7 @@ export default async function IntegrationsPage({
             </dl>
 
             {itemError ? (
-              <p className="rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200">
+              <p className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200">
                 {itemError}
               </p>
             ) : (

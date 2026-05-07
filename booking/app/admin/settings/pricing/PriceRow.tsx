@@ -49,7 +49,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
-          className="self-start rounded-md border border-white/15 px-3 py-1.5 text-xs font-semibold text-white hover:border-brand-light hover:text-brand-light md:self-center"
+          className="self-start rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold text-white hover:border-brand-light hover:text-brand-light md:self-center"
         >
           {open ? "Hide details" : "Edit details"}
         </button>
@@ -80,7 +80,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
             name="name"
             defaultValue={item.name}
             required
-            className="rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
+            className="rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
           />
         </label>
         <label className="flex flex-col gap-1">
@@ -95,7 +95,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
               min={0}
               step="0.01"
               defaultValue={(item.price_cents / 100).toFixed(2)}
-              className="w-24 rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
+              className="w-24 rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
             />
           </div>
         </label>
@@ -110,7 +110,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
               min={0}
               step="1"
               defaultValue={item.duration_minutes}
-              className="w-20 rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
+              className="w-20 rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
             />
             <span className="text-xs text-ink-muted">min</span>
           </div>
@@ -125,7 +125,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
             min={0}
             step="1"
             defaultValue={item.display_order}
-            className="w-16 rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
+            className="w-16 rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
           />
         </label>
       </div>
@@ -139,7 +139,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
           name="description"
           defaultValue={item.description}
           rows={4}
-          className="w-full rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
+          className="w-full rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
         />
       </label>
 
@@ -152,7 +152,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
             name="badge"
             defaultValue={item.badge ?? ""}
             placeholder="Most popular"
-            className="rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
+            className="rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
           />
         </label>
         <label className="flex flex-col gap-1">
@@ -163,12 +163,12 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
             name="ideal_for"
             defaultValue={item.ideal_for ?? ""}
             placeholder="Standard listings, luxury homes, social-first launches…"
-            className="rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
+            className="rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
           />
         </label>
       </div>
 
-      <div className="rounded-md border border-white/10 bg-black/20 p-3">
+      <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
         <p className="text-[10px] uppercase tracking-wider text-ink-muted">
           Booking-card labels
         </p>
@@ -212,7 +212,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
         </div>
       </div>
 
-      <div className="rounded-md border border-white/10 bg-black/20 p-3">
+      <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
         <label className="flex items-center gap-2 text-xs text-ink-muted">
           <input
             type="checkbox"
@@ -234,7 +234,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
               step="1"
               defaultValue={item.included_sqft ?? ""}
               placeholder="2500"
-              className="rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
+              className="rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
             />
           </label>
           <label className="flex flex-col gap-1">
@@ -248,7 +248,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
               step="1"
               defaultValue={item.overage_increment_sqft ?? ""}
               placeholder="500"
-              className="rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
+              className="rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
             />
           </label>
           <label className="flex flex-col gap-1">
@@ -268,7 +268,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
                     : (item.overage_price_cents / 100).toFixed(2)
                 }
                 placeholder="40.00"
-                className="w-full rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
+                className="w-full rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
               />
             </div>
           </label>
@@ -315,7 +315,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md border border-white/15 px-3 py-1.5 text-xs text-white hover:border-brand-light hover:text-brand-light disabled:opacity-50"
+          className="rounded-full border border-white/15 px-3 py-1.5 text-xs text-white hover:border-brand-light hover:text-brand-light disabled:opacity-50"
         >
           {pending ? "Saving…" : saved ? "✓ Saved" : "Save"}
         </button>
@@ -336,7 +336,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
               if (!res.ok) setError(res.error ?? "Delete failed.");
             });
           }}
-          className="rounded-md border border-red-400/30 px-3 py-1.5 text-xs text-red-200 hover:bg-red-400/10 disabled:opacity-50"
+          className="rounded-full border border-red-400/30 px-3 py-1.5 text-xs text-red-200 hover:bg-red-400/10 disabled:opacity-50"
         >
           {deleting ? "Deleting…" : "Delete"}
         </button>

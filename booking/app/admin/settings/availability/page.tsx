@@ -66,7 +66,7 @@ export default async function AvailabilityPage() {
 
   return (
     <div className="space-y-10">
-      <header>
+      <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
         <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
           Settings
         </p>
@@ -82,7 +82,7 @@ export default async function AvailabilityPage() {
         <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
           Weekly hours
         </h2>
-        <ul className="mt-4 divide-y divide-white/5 rounded-lg border border-white/10 bg-ink-soft/50">
+        <ul className="mt-4 divide-y divide-white/5 rounded-2xl border border-white/10 bg-ink-soft/50">
           {hours.map((h) => (
             <li key={h.day_of_week} className="p-4">
               <HoursEditor

@@ -72,12 +72,16 @@ export default async function BookingsPage({
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
+        <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
             Job board
           </p>
           <h1 className="mt-1 text-2xl font-bold text-white">Bookings</h1>
+          <p className="mt-1 max-w-xl text-sm text-ink-muted">
+            Track upcoming shoots, delivery progress, and job status from one place.
+          </p>
         </div>
         <nav className="flex flex-wrap gap-1 text-xs">
           {FILTERS.map((f) => (
@@ -85,7 +89,7 @@ export default async function BookingsPage({
               key={f.id}
               href={`/admin/bookings?filter=${f.id}`}
               className={
-                "rounded-md border px-3 py-1.5 transition " +
+                "rounded-full border px-3 py-1.5 transition " +
                 (f.id === filter
                   ? "border-brand-light bg-brand/15 text-brand-light"
                   : "border-white/10 text-ink-muted hover:border-white/30 hover:text-white")
@@ -95,10 +99,11 @@ export default async function BookingsPage({
             </Link>
           ))}
         </nav>
+        </div>
       </header>
 
       {bookings && bookings.length > 0 ? (
-        <ul className="divide-y divide-white/5 overflow-hidden rounded-lg border border-white/10 bg-ink-soft/50">
+        <ul className="grid gap-3">
           {bookings.map((b) => {
             const property = b.properties;
             const profile = b.profiles;
@@ -107,33 +112,35 @@ export default async function BookingsPage({
               <li key={b.id}>
                 <Link
                   href={`/admin/bookings/${b.id}`}
-                  className="flex flex-wrap items-start justify-between gap-3 px-4 py-3 transition hover:bg-white/[0.03]"
+                  className="block rounded-2xl border border-white/10 bg-ink-soft/45 p-4 transition hover:border-brand-light/40 hover:bg-white/[0.035]"
                 >
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-white">
-                      {property?.street_address ?? "—"}
-                      {property?.city ? (
-                        <span className="text-ink-muted"> · {property.city}</span>
-                      ) : null}
-                    </p>
-                    <p className="mt-0.5 text-xs text-ink-muted">
-                      {profile?.full_name ?? profile?.email ?? "Unknown realtor"}
-                    </p>
-                    <p className="mt-1 text-xs text-ink-muted">
-                      {b.services.map(labelForService).join(", ") || "—"}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <span
-                      className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${meta.pill}`}
-                    >
-                      {meta.label}
-                    </span>
-                    <span className="text-[10px] text-ink-muted">
-                      {b.scheduled_at
-                        ? new Date(b.scheduled_at).toLocaleString()
-                        : "no date"}
-                    </span>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-white">
+                        {property?.street_address ?? "—"}
+                        {property?.city ? (
+                          <span className="text-ink-muted"> · {property.city}</span>
+                        ) : null}
+                      </p>
+                      <p className="mt-0.5 text-xs text-ink-muted">
+                        {profile?.full_name ?? profile?.email ?? "Unknown realtor"}
+                      </p>
+                      <p className="mt-2 line-clamp-2 text-xs text-ink-muted">
+                        {b.services.map(labelForService).join(", ") || "—"}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${meta.pill}`}
+                      >
+                        {meta.label}
+                      </span>
+                      <span className="text-[10px] text-ink-muted">
+                        {b.scheduled_at
+                          ? new Date(b.scheduled_at).toLocaleString()
+                          : "no date"}
+                      </span>
+                    </div>
                   </div>
                 </Link>
               </li>
@@ -141,7 +148,7 @@ export default async function BookingsPage({
           })}
         </ul>
       ) : (
-        <p className="rounded-lg border border-dashed border-white/10 bg-ink-soft/40 px-4 py-8 text-center text-sm text-ink-muted">
+        <p className="rounded-2xl border border-dashed border-white/10 bg-ink-soft/40 px-4 py-8 text-center text-sm text-ink-muted">
           No bookings in this view.
         </p>
       )}

@@ -42,7 +42,7 @@ export default function HoursEditor({
           type="time"
           name="start_time"
           defaultValue={startTime}
-          className="flex-1 rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
+          className="flex-1 rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
         />
       </label>
       <label className="flex items-center gap-2 text-xs text-ink-muted">
@@ -51,7 +51,7 @@ export default function HoursEditor({
           type="time"
           name="end_time"
           defaultValue={endTime}
-          className="flex-1 rounded-md border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
+          className="flex-1 rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
         />
       </label>
       <label className="flex items-center gap-2 text-xs text-ink-muted">
@@ -66,7 +66,7 @@ export default function HoursEditor({
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md border border-white/15 px-3 py-1.5 text-xs text-white hover:border-brand-light hover:text-brand-light disabled:opacity-50"
+        className="rounded-full border border-white/15 px-3 py-1.5 text-xs text-white hover:border-brand-light hover:text-brand-light disabled:opacity-50"
       >
         {pending ? "Saving…" : ok ? "✓ Saved" : "Save"}
       </button>
