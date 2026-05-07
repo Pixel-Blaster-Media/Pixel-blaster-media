@@ -22,7 +22,7 @@ export default async function AdminLayout({
   const admin = await requireAdmin();
 
   return (
-    <div className="admin-earth realtor-theme grid min-h-[60vh] gap-8 md:grid-cols-[220px_1fr]">
+    <div className="admin-earth realtor-theme realtor-backdrop -mx-6 -my-12 grid min-h-screen gap-8 px-6 py-8 md:grid-cols-[220px_1fr] md:py-10">
       <aside className="space-y-4 md:sticky md:top-16 md:self-start">
         <div className="rounded-2xl border border-white/10 bg-ink-soft/70 p-4 text-sm shadow-lg shadow-black/10">
           <p className="text-[11px] uppercase tracking-wider text-brand-light/80">
