@@ -929,6 +929,11 @@ function EmptySection({
 
 function IGuideGallery({ deliverable }: { deliverable: DeliverableRow }) {
   const imageUrls = metadataImageUrls(deliverable.metadata);
+  const mlsZipUrl = metadataString(deliverable.metadata, "mls_photo_zip_url");
+  const highResZipUrl = metadataString(
+    deliverable.metadata,
+    "high_res_photo_zip_url",
+  );
   const label =
     metadataString(deliverable.metadata, "delivery_label") ?? "Photo gallery";
   if (imageUrls.length > 0) {
@@ -941,7 +946,7 @@ function IGuideGallery({ deliverable }: { deliverable: DeliverableRow }) {
               {imageUrls.length} iGUIDE gallery photos
             </p>
           </div>
-          <CopyLinkButton url={deliverable.url} />
+          <PhotoDownloadButtons mlsZipUrl={mlsZipUrl} highResZipUrl={highResZipUrl} />
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {imageUrls.slice(0, 24).map((url, index) => (
@@ -968,7 +973,8 @@ function IGuideGallery({ deliverable }: { deliverable: DeliverableRow }) {
         </p>
       </div>
       <div className="flex gap-2">
-        <CopyLinkButton url={deliverable.url} />
+        <PhotoDownloadButtons mlsZipUrl={mlsZipUrl} highResZipUrl={highResZipUrl} />
+        {!mlsZipUrl && !highResZipUrl ? <CopyLinkButton url={deliverable.url} /> : null}
         <a
           href={deliverable.url}
           target="_blank"
@@ -978,6 +984,42 @@ function IGuideGallery({ deliverable }: { deliverable: DeliverableRow }) {
           Open ↗
         </a>
       </div>
+    </div>
+  );
+}
+
+function PhotoDownloadButtons({
+  mlsZipUrl,
+  highResZipUrl,
+}: {
+  mlsZipUrl: string | null;
+  highResZipUrl: string | null;
+}) {
+  if (!mlsZipUrl && !highResZipUrl) return null;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {mlsZipUrl ? (
+        <a
+          href={mlsZipUrl}
+          target="_blank"
+          rel="noopener"
+          download
+          className="rounded-md bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-realtor-primary-light"
+        >
+          Download MLS photos
+        </a>
+      ) : null}
+      {highResZipUrl ? (
+        <a
+          href={highResZipUrl}
+          target="_blank"
+          rel="noopener"
+          download
+          className="rounded-md border border-realtor-primary/20 px-3 py-1.5 text-xs font-semibold text-realtor-text hover:border-realtor-primary/40"
+        >
+          Download high-res
+        </a>
+      ) : null}
     </div>
   );
 }

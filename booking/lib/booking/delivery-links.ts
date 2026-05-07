@@ -32,7 +32,7 @@ export interface DeliveryLink {
 
 export function buildDeliveryLinks(
   deliverables: DeliveryLinkInput[],
-  appUrl: string,
+  _appUrl: string,
 ): DeliveryLink[] {
   const links: DeliveryLink[] = [];
   const seen = new Set<string>();
@@ -49,24 +49,27 @@ export function buildDeliveryLinks(
 
   const iGuideAlias = findIGuideAlias(deliverables);
   for (const deliverable of deliverables) {
-    if (deliverable.source === "iguide" && iGuideAlias) continue;
-    if (deliverable.source === "fotello") {
-      const deliveryKind = metadataString(deliverable.metadata, "delivery_kind");
-      if (deliveryKind) {
-        add(
-          categoryForFotelloDeliveryKind(deliveryKind),
-          fotelloDeliveryLabel(deliveryKind),
-          deliverable.url,
-        );
-      } else {
-        add(
-          "photos",
-          deliverableTypeLabel(deliverable.type),
-          `${appUrl}/api/fotello/embed/${deliverable.id}`,
-        );
+    if (deliverable.source === "fotello") continue;
+    if (deliverable.source === "iguide" && deliverable.type === "photo_gallery") {
+      add(
+        "photos",
+        "MLS / low-res photos download",
+        metadataString(deliverable.metadata, "mls_photo_zip_url"),
+      );
+      add(
+        "photos",
+        "High-res photos download",
+        metadataString(deliverable.metadata, "high_res_photo_zip_url"),
+      );
+      if (
+        !metadataString(deliverable.metadata, "mls_photo_zip_url") &&
+        !metadataString(deliverable.metadata, "high_res_photo_zip_url")
+      ) {
+        add("photos", "iGUIDE photo gallery", deliverable.url);
       }
       continue;
     }
+    if (deliverable.source === "iguide" && iGuideAlias) continue;
     add(
       categoryForDeliverable(deliverable),
       deliveryLinkLabel(deliverable),
@@ -109,23 +112,6 @@ export function buildDeliveryLinks(
   }
 
   return links;
-}
-
-function categoryForFotelloDeliveryKind(kind: string): DeliveryLinkCategory {
-  if (kind === "branded_property_website" || kind === "unbranded_property_website") {
-    return "tour";
-  }
-  return "photos";
-}
-
-function fotelloDeliveryLabel(kind: string): string {
-  if (kind === "branded_property_website") {
-    return "Fotello branded property website";
-  }
-  if (kind === "unbranded_property_website") {
-    return "Fotello unbranded property website";
-  }
-  return "Fotello listing share link";
 }
 
 export function isStreamingVideoUrl(url: string): boolean {

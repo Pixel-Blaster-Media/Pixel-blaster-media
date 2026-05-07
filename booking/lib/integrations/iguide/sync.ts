@@ -281,6 +281,7 @@ function buildDeliverableRowsFromMedia({
     media.galleryFrontImage,
     media.embedImage,
   ]);
+  const photoDownloads = photoDownloadUrlsFromMedia(media);
 
   const tourRow: DeliverableInsert = {
     booking_id: bookingId,
@@ -319,20 +320,22 @@ function buildDeliverableRowsFromMedia({
   };
 
   const rows: DeliverableInsert[] = [tourRow, floorPlanRow];
-  if (galleryPhotoUrls.length > 0) {
+  if (galleryPhotoUrls.length > 0 || photoDownloads.mls || photoDownloads.highRes) {
     rows.push({
       booking_id: bookingId,
       property_id: propertyId,
       type: "photo_gallery",
       source: "iguide",
       external_id: `${portalId}/photos`,
-      url: galleryPhotoUrls[0],
-      thumbnail_url: galleryPhotoUrls[0],
+      url: galleryPhotoUrls[0] ?? photoDownloads.mls ?? photoDownloads.highRes ?? iguideViewerUrl(alias),
+      thumbnail_url: galleryPhotoUrls[0] ?? media.galleryFrontImage ?? media.embedImage ?? null,
       metadata: {
         portal_id: portalId,
         alias,
         delivery_label: "iGUIDE photo gallery",
         image_urls: galleryPhotoUrls,
+        mls_photo_zip_url: photoDownloads.mls ?? null,
+        high_res_photo_zip_url: photoDownloads.highRes ?? null,
       },
       ready_at: now,
     });
@@ -358,6 +361,8 @@ function buildDeliverableRowsFromReady(
   const unbrandedUrl = event.urls?.unbrandedUrl ?? iguideUnbrandedUrl(alias);
   const embedUrl = event.urls?.embeddedUrl ?? null;
   const thumbnail = media.galleryFrontImage ?? media.embedImage ?? null;
+  const galleryPhotoUrls = uniqueStrings([media.galleryFrontImage, media.embedImage]);
+  const photoDownloads = photoDownloadUrlsFromMedia(media);
 
   const tourRow: DeliverableInsert = {
     booking_id: booking.id,
@@ -402,7 +407,29 @@ function buildDeliverableRowsFromReady(
     ready_at: now,
   };
 
-  return [tourRow, floorPlanRow];
+  const rows: DeliverableInsert[] = [tourRow, floorPlanRow];
+  if (galleryPhotoUrls.length > 0 || photoDownloads.mls || photoDownloads.highRes) {
+    rows.push({
+      booking_id: booking.id,
+      property_id: booking.property_id,
+      type: "photo_gallery",
+      source: "iguide",
+      external_id: `${portalId}/photos`,
+      url: galleryPhotoUrls[0] ?? photoDownloads.mls ?? photoDownloads.highRes ?? publicUrl,
+      thumbnail_url: thumbnail,
+      metadata: {
+        portal_id: portalId,
+        alias,
+        delivery_label: "iGUIDE photo gallery",
+        image_urls: galleryPhotoUrls,
+        mls_photo_zip_url: photoDownloads.mls ?? null,
+        high_res_photo_zip_url: photoDownloads.highRes ?? null,
+      },
+      ready_at: now,
+    });
+  }
+
+  return rows;
 }
 
 // ---------------------------------------------------------------------------
@@ -524,6 +551,16 @@ function photoUrlsFromRESO(reso: IGuideRESOResponse): string[] {
     urls.push(media.MediaURL);
   }
   return urls;
+}
+
+function photoDownloadUrlsFromMedia(media: IGuideMediaUrls): {
+  mls: string | null;
+  highRes: string | null;
+} {
+  return {
+    mls: media.galleryLowResZip ?? media.galleryLowRes ?? null,
+    highRes: media.galleryZip ?? null,
+  };
 }
 
 async function fetchRESOPhotoUrls(alias: string): Promise<string[]> {
