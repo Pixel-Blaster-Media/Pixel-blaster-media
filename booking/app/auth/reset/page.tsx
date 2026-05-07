@@ -26,7 +26,7 @@ export default async function ResetPage({
 
       {sent ? (
         <div className="space-y-4">
-          <p className="rounded-md border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-800">
+          <p className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-800">
             If an account exists for {params.email ?? "that email"}, a
             reset link is on its way. Check your inbox (and spam) — the link
             is good for about an hour.

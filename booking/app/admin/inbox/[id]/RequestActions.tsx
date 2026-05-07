@@ -34,7 +34,7 @@ export default function RequestActions({
   }
 
   return (
-    <div className="space-y-4 rounded-lg border border-brand/20 bg-brand/5 p-4">
+    <div className="space-y-4 rounded-2xl border border-brand/20 bg-brand/5 p-4 shadow-lg shadow-black/5">
       <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
         Actions
       </h2>
@@ -46,7 +46,7 @@ export default function RequestActions({
             type="date"
             value={scheduledDate}
             onChange={(e) => setScheduledDate(e.target.value)}
-            className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-white"
+            className="mt-1 w-full rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-white"
           />
         </label>
         <label className="block">
@@ -55,7 +55,7 @@ export default function RequestActions({
             type="time"
             value={scheduledTime}
             onChange={(e) => setScheduledTime(e.target.value)}
-            className="mt-1 w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-white"
+            className="mt-1 w-full rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-white"
           />
         </label>
       </div>
@@ -71,7 +71,7 @@ export default function RequestActions({
           type="button"
           disabled={isPending}
           onClick={() => call(() => acceptRequest(requestId, combineDateTime()))}
-          className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+          className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
         >
           {isPending ? "Accepting…" : "Accept & create booking"}
         </button>
@@ -79,7 +79,7 @@ export default function RequestActions({
           type="button"
           disabled={isPending}
           onClick={() => call(() => markReviewing(requestId))}
-          className="rounded-md border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-white/40 disabled:opacity-60"
+          className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-white/40 disabled:opacity-60"
         >
           Mark reviewing
         </button>
@@ -88,7 +88,7 @@ export default function RequestActions({
             type="button"
             disabled={isPending}
             onClick={() => call(() => declineRequest(requestId))}
-            className="rounded-md border border-red-400/30 px-4 py-2 text-sm text-red-200 hover:border-red-400/60 disabled:opacity-60"
+            className="rounded-full border border-red-400/30 px-4 py-2 text-sm text-red-200 hover:border-red-400/60 disabled:opacity-60"
           >
             Decline
           </button>

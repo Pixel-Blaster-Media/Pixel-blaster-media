@@ -43,7 +43,7 @@ export default async function RequestDetailPage({
       <div className="flex items-center justify-between">
         <Link
           href="/admin/inbox"
-          className="text-xs text-ink-muted hover:text-white"
+          className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-ink-muted transition hover:border-white/30 hover:text-white"
         >
           ← Inbox
         </Link>
@@ -54,8 +54,11 @@ export default async function RequestDetailPage({
         </span>
       </div>
 
-      <header>
-        <h1 className="text-2xl font-bold text-white">{req.street_address}</h1>
+      <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
+        <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+          Request detail
+        </p>
+        <h1 className="mt-1 text-2xl font-bold text-white">{req.street_address}</h1>
         <p className="mt-1 text-sm text-ink-muted">
           {[req.city, req.postal_code].filter(Boolean).join(" ")}
           {req.square_footage ? ` · ${req.square_footage} sq ft` : ""}
@@ -148,7 +151,7 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-ink-soft/50 p-4">
+    <div className="rounded-2xl border border-white/10 bg-ink-soft/50 p-4 shadow-lg shadow-black/5">
       <p className="text-[11px] uppercase tracking-wider text-ink-muted">
         {title}
       </p>
@@ -165,7 +168,7 @@ function Row({
   value: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap justify-between gap-2">
+    <div className="flex flex-wrap justify-between gap-2 rounded-xl border border-white/5 bg-ink/25 px-3 py-2">
       <span className="text-xs text-ink-muted">{label}</span>
       <span className="text-right text-white">{value}</span>
     </div>

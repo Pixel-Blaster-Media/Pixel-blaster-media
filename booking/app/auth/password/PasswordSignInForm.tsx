@@ -25,7 +25,7 @@ export default function PasswordSignInForm({ next }: { next?: string }) {
           name="email"
           autoComplete="email"
           required
-          className="realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-realtor-primary/60"
+          className="realtor-field mt-1 w-full rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-realtor-primary/60"
         />
       </label>
       <label className="block">
@@ -43,7 +43,7 @@ export default function PasswordSignInForm({ next }: { next?: string }) {
           name="password"
           autoComplete="current-password"
           required
-          className="realtor-field mt-1 w-full rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-realtor-primary/60"
+          className="realtor-field mt-1 w-full rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-realtor-primary/60"
         />
       </label>
       {state?.error ? (
@@ -62,7 +62,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="w-full rounded-md bg-realtor-primary px-4 py-2 font-semibold text-white transition hover:bg-realtor-primary-light disabled:cursor-not-allowed disabled:opacity-60"
+      className="w-full rounded-full bg-realtor-primary px-4 py-2 font-semibold text-white transition hover:bg-realtor-primary-light disabled:cursor-not-allowed disabled:opacity-60"
     >
       {pending ? "Signing in…" : "Sign in"}
     </button>

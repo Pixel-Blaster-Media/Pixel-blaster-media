@@ -69,7 +69,8 @@ export default async function InboxPage({
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
+        <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
             Inbox · historical
@@ -77,6 +78,10 @@ export default async function InboxPage({
           <h1 className="mt-1 text-2xl font-bold text-white">
             Booking requests
           </h1>
+          <p className="mt-1 max-w-xl text-sm text-ink-muted">
+            Older request-form submissions live here. New self-serve bookings
+            land directly on the main booking board.
+          </p>
         </div>
         <nav className="flex gap-1 text-xs">
           {FILTERS.map((f) => (
@@ -84,7 +89,7 @@ export default async function InboxPage({
               key={f.id}
               href={`/admin/inbox?filter=${f.id}`}
               className={
-                "rounded-md border px-3 py-1.5 transition " +
+                "rounded-full border px-3 py-1.5 transition " +
                 (f.id === filter
                   ? "border-brand-light bg-brand/15 text-brand-light"
                   : "border-white/10 text-ink-muted hover:border-white/30 hover:text-white")
@@ -94,9 +99,10 @@ export default async function InboxPage({
             </Link>
           ))}
         </nav>
+        </div>
       </header>
 
-      <p className="rounded-md border border-white/10 bg-ink-soft/40 px-4 py-3 text-xs text-ink-muted">
+      <p className="rounded-2xl border border-white/10 bg-ink-soft/40 px-4 py-3 text-xs text-ink-muted">
         New self-serve bookings go directly to{" "}
         <Link href="/admin/bookings" className="text-brand-light underline">
           Bookings
@@ -105,12 +111,12 @@ export default async function InboxPage({
       </p>
 
       {requests && requests.length > 0 ? (
-        <ul className="divide-y divide-white/5 overflow-hidden rounded-lg border border-white/10 bg-ink-soft/50">
+        <ul className="grid gap-3">
           {requests.map((r) => (
             <li key={r.id}>
               <Link
                 href={`/admin/inbox/${r.id}`}
-                className="flex flex-wrap items-start justify-between gap-3 px-4 py-3 transition hover:bg-white/[0.03]"
+                className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-white/10 bg-ink-soft/50 px-4 py-3 shadow-lg shadow-black/5 transition hover:border-brand-light/40 hover:bg-white/[0.03]"
               >
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-white">
@@ -139,7 +145,7 @@ export default async function InboxPage({
           ))}
         </ul>
       ) : (
-        <p className="rounded-lg border border-dashed border-white/10 bg-ink-soft/40 px-4 py-8 text-center text-sm text-ink-muted">
+        <p className="rounded-2xl border border-dashed border-white/10 bg-ink-soft/40 px-4 py-8 text-center text-sm text-ink-muted">
           No requests in this view.
         </p>
       )}
