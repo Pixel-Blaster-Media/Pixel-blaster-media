@@ -181,6 +181,7 @@ export interface IGuideMediaUrls {
   pdfMetric?: string;
   pdfImperial?: string;
   galleryZip?: string;
+  galleryMlsZip?: string;
   galleryLowRes?: string;
   galleryLowResZip?: string;
   sphereZip?: string;

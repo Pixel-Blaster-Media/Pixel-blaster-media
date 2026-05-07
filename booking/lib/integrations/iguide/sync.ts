@@ -563,7 +563,7 @@ function photoDownloadUrlsFromMedia(
 } {
   return {
     mls: usableIGuidePhotoZipUrl(
-      media.galleryLowResZip ?? media.galleryLowRes,
+      media.galleryMlsZip ?? media.galleryLowResZip ?? media.galleryLowRes,
       accessToken,
       "mls",
     ),
