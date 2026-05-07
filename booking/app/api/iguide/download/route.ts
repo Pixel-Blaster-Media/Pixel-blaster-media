@@ -13,20 +13,20 @@ export async function GET(req: NextRequest) {
     return new NextResponse("Missing URL.", { status: 400 });
   }
 
-  const safeUrl = parseSafeIGuidePdfUrl(rawUrl);
+  const safeUrl = parseSafeIGuideDownloadUrl(rawUrl);
   if (!safeUrl) {
     return new NextResponse("Unsupported download URL.", { status: 400 });
   }
 
   const upstream = await fetch(safeUrl, {
-    headers: { Accept: "application/pdf" },
+    headers: { Accept: "*/*" },
     cache: "no-store",
   });
   if (!upstream.ok || !upstream.body) {
     return new NextResponse("File unavailable.", { status: upstream.status });
   }
 
-  const filename = safeUrl.pathname.split("/").pop() || "iguide.pdf";
+  const filename = safeUrl.pathname.split("/").pop() || "iguide-download";
   return new NextResponse(upstream.body, {
     status: 200,
     headers: {
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   });
 }
 
-function parseSafeIGuidePdfUrl(rawUrl: string): URL | null {
+function parseSafeIGuideDownloadUrl(rawUrl: string): URL | null {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -49,6 +49,18 @@ function parseSafeIGuidePdfUrl(rawUrl: string): URL | null {
   if (url.protocol !== "https:") return null;
   if (url.hostname !== "youriguide.com") return null;
   if (!url.pathname.includes("/doc/")) return null;
-  if (!url.pathname.toLowerCase().endsWith(".pdf")) return null;
+  if (!isSupportedIGuideDownloadPath(url.pathname)) return null;
   return url;
+}
+
+function isSupportedIGuideDownloadPath(pathname: string): boolean {
+  const lower = pathname.toLowerCase();
+  return (
+    lower.endsWith(".pdf") ||
+    lower.endsWith(".zip") ||
+    lower.endsWith(".jpg") ||
+    lower.endsWith(".jpeg") ||
+    lower.endsWith(".png") ||
+    lower.endsWith(".image")
+  );
 }

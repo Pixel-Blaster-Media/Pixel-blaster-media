@@ -529,7 +529,7 @@ function PhotoDownloadCard({
         <div className="mt-4 flex flex-wrap gap-2">
           <CopyLinkButton url={url} label="Copy" />
           <a
-            href={url}
+            href={iGuideDownloadUrl(url)}
             target="_blank"
             rel="noopener"
             download

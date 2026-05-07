@@ -32,7 +32,7 @@ export interface DeliveryLink {
 
 export function buildDeliveryLinks(
   deliverables: DeliveryLinkInput[],
-  _appUrl: string,
+  appUrl: string,
 ): DeliveryLink[] {
   const links: DeliveryLink[] = [];
   const seen = new Set<string>();
@@ -54,12 +54,18 @@ export function buildDeliveryLinks(
       add(
         "photos",
         "MLS / low-res photos download",
-        photoDownloadUrl(deliverable.metadata, "mls_photo_zip_url"),
+        proxiedIGuideDownloadUrl(
+          appUrl,
+          photoDownloadUrl(deliverable.metadata, "mls_photo_zip_url"),
+        ),
       );
       add(
         "photos",
         "High-res photos download",
-        photoDownloadUrl(deliverable.metadata, "high_res_photo_zip_url"),
+        proxiedIGuideDownloadUrl(
+          appUrl,
+          photoDownloadUrl(deliverable.metadata, "high_res_photo_zip_url"),
+        ),
       );
       continue;
     }
@@ -156,6 +162,16 @@ function photoDownloadUrl(
   } catch {
     return null;
   }
+}
+
+function proxiedIGuideDownloadUrl(
+  appUrl: string,
+  url: string | null,
+): string | null {
+  if (!url) return null;
+  const base = appUrl.replace(/\/+$/, "");
+  const path = `/api/iguide/download?url=${encodeURIComponent(url)}`;
+  return base ? `${base}${path}` : path;
 }
 
 function deliveryLinkLabel(deliverable: DeliveryLinkInput): string {
