@@ -154,8 +154,18 @@ export default function PackageAccordion({
             return (
               <li key={b.id}>
                 <article
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={selected}
+                  onClick={() => selectBundle(b.slug)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      selectBundle(b.slug);
+                    }
+                  }}
                   className={
-                    "realtor-package-card flex h-full min-w-0 flex-col rounded-2xl p-4 pl-5 transition " +
+                    "realtor-package-card flex h-full min-w-0 cursor-pointer flex-col rounded-2xl border p-5 transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/45 " +
                     (selected
                       ? "realtor-package-card-selected"
                       : b.highlight
@@ -166,11 +176,16 @@ export default function PackageAccordion({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-base font-semibold text-realtor-text">
+                        <h4
+                          className={
+                            "text-base font-semibold " +
+                            (selected ? "text-white" : "text-realtor-text")
+                          }
+                        >
                           {b.name}
                         </h4>
                         {selected ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-realtor-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white ring-1 ring-white/25">
                             <span aria-hidden="true">✓</span>
                             Selected
                           </span>
@@ -181,11 +196,11 @@ export default function PackageAccordion({
                         ) : null}
                       </div>
                       {b.ideal_for ? (
-                        <p className="mt-1 text-sm text-realtor-muted">
+                        <p className={"mt-1 text-sm " + (selected ? "text-white/78" : "text-realtor-muted")}>
                           {b.ideal_for}
                         </p>
                       ) : (
-                        <p className="mt-1 text-sm text-realtor-muted">
+                        <p className={"mt-1 text-sm " + (selected ? "text-white/78" : "text-realtor-muted")}>
                           {shortDescription(b.description)}
                         </p>
                       )}
@@ -193,59 +208,74 @@ export default function PackageAccordion({
                     <div
                       className={
                         "shrink-0 rounded-xl px-3 py-2 text-right " +
-                        (selected ? "bg-realtor-primary/10" : "bg-realtor-surface/60")
+                        (selected ? "bg-white/12 ring-1 ring-white/20" : "bg-realtor-surface/60")
                       }
                     >
-                      <p className="text-xl font-bold text-realtor-primary">
+                      <p className={"text-xl font-bold " + (selected ? "text-white" : "text-realtor-primary")}>
                         ${(b.price_cents / 100).toFixed(0)}
                       </p>
-                      <p className="text-[11px] uppercase tracking-wider text-realtor-muted">
+                      <p className={"text-[11px] uppercase tracking-wider " + (selected ? "text-white/65" : "text-realtor-muted")}>
                         {formatMinutes(b.duration_minutes)}
                       </p>
                     </div>
                   </div>
 
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <MediaBadges item={b} />
+                    <MediaBadges item={b} inverted={selected} />
                     {sqftRuleText(b) ? (
-                      <span className="rounded-full border border-realtor-primary/15 bg-realtor-soft/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
+                      <span
+                        className={
+                          "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider " +
+                          (selected
+                            ? "border-white/20 bg-white/10 text-white/75"
+                            : "border-realtor-primary/15 bg-realtor-soft/70 text-realtor-muted")
+                        }
+                      >
                         Sqft pricing
                       </span>
                     ) : null}
                   </div>
 
                   {sqftRuleText(b) ? (
-                    <p className="mt-3 rounded-lg border border-realtor-primary/20 bg-realtor-primary/10 px-3 py-2 text-xs font-medium text-realtor-primary">
+                    <p
+                      className={
+                        "mt-3 rounded-lg border px-3 py-2 text-xs font-medium " +
+                        (selected
+                          ? "border-white/20 bg-white/10 text-white/82"
+                          : "border-realtor-primary/20 bg-realtor-primary/10 text-realtor-primary")
+                      }
+                    >
                       {sqftRuleText(b)}
                     </p>
                   ) : null}
 
                   {expanded && b.description ? (
-                    <PackageDetails item={b} />
+                    <PackageDetails item={b} inverted={selected} />
                   ) : null}
 
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => selectBundle(b.slug)}
-                      aria-pressed={selected}
+                  <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-4">
+                    <span
                       className={
-                        "rounded-lg px-4 py-2 text-sm font-semibold transition " +
-                        (selected
-                          ? "border border-realtor-primary/35 bg-realtor-surface text-realtor-primary"
-                          : "bg-realtor-primary text-white hover:bg-realtor-primary-light")
+                        "text-xs font-semibold " +
+                        (selected ? "text-white" : "text-realtor-primary")
                       }
                     >
-                      {selected ? "✓ Package selected" : "Choose package"}
-                    </button>
+                      {selected ? "Selected package" : "Click anywhere to select"}
+                    </span>
                     <button
                       type="button"
-                      onClick={() =>
+                      onClick={(event) => {
+                        event.stopPropagation();
                         setExpandedSlug((current) =>
                           current === b.slug ? null : b.slug,
-                        )
+                        );
+                      }}
+                      className={
+                        "rounded-lg border px-4 py-2 text-sm transition " +
+                        (selected
+                          ? "border-white/20 bg-white/10 text-white hover:bg-white/15"
+                          : "border-realtor-primary/15 bg-realtor-surface/70 text-realtor-text hover:border-realtor-primary")
                       }
-                      className="rounded-lg border border-realtor-primary/15 bg-realtor-surface/70 px-4 py-2 text-sm text-realtor-text hover:border-realtor-primary"
                     >
                       {expanded ? "Hide details" : "View details"}
                     </button>
@@ -425,7 +455,13 @@ function ContinueButton() {
   );
 }
 
-function MediaBadges({ item }: { item: CatalogItemDTO }) {
+function MediaBadges({
+  item,
+  inverted = false,
+}: {
+  item: CatalogItemDTO;
+  inverted?: boolean;
+}) {
   const badges = [
     item.is_photo ? "Photos" : null,
     item.is_video ? "Video" : null,
@@ -437,7 +473,12 @@ function MediaBadges({ item }: { item: CatalogItemDTO }) {
       {badges.map((badge) => (
         <span
           key={badge}
-          className="rounded-full border border-realtor-primary/25 bg-realtor-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary"
+          className={
+            "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider " +
+            (inverted
+              ? "border-white/25 bg-white/10 text-white/82"
+              : "border-realtor-primary/25 bg-realtor-primary/10 text-realtor-primary")
+          }
         >
           {badge}
         </span>
@@ -446,21 +487,39 @@ function MediaBadges({ item }: { item: CatalogItemDTO }) {
   );
 }
 
-function PackageDetails({ item }: { item: CatalogItemDTO }) {
+function PackageDetails({
+  item,
+  inverted = false,
+}: {
+  item: CatalogItemDTO;
+  inverted?: boolean;
+}) {
   const lines = descriptionLines(item.description);
   return (
-    <div className="mt-3 rounded-lg border border-realtor-primary/15 bg-realtor-soft/65 p-3">
+    <div
+      className={
+        "mt-3 rounded-lg border p-3 " +
+        (inverted
+          ? "border-white/18 bg-white/10"
+          : "border-realtor-primary/15 bg-realtor-soft/65")
+      }
+    >
       {lines.length > 0 ? (
-        <ul className="grid gap-1.5 text-xs text-realtor-muted sm:grid-cols-2">
+        <ul
+          className={
+            "grid gap-1.5 text-xs sm:grid-cols-2 " +
+            (inverted ? "text-white/78" : "text-realtor-muted")
+          }
+        >
           {lines.map((line) => (
             <li key={line} className="flex gap-2">
-              <span className="mt-0.5 text-realtor-primary">✓</span>
+              <span className={inverted ? "mt-0.5 text-realtor-accent" : "mt-0.5 text-realtor-primary"}>✓</span>
               <span>{line}</span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-xs text-realtor-muted">
+        <p className={inverted ? "text-xs text-white/72" : "text-xs text-realtor-muted"}>
           Package details will appear here once configured.
         </p>
       )}
