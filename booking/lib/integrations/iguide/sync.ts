@@ -362,7 +362,7 @@ function buildDeliverableRowsFromReady(
   const embedUrl = event.urls?.embeddedUrl ?? null;
   const thumbnail = media.galleryFrontImage ?? media.embedImage ?? null;
   const galleryPhotoUrls = uniqueStrings([media.galleryFrontImage, media.embedImage]);
-  const photoDownloads = photoDownloadUrlsFromMedia(media);
+  const photoDownloads = photoDownloadUrlsFromMedia(media, event.authtoken);
 
   const tourRow: DeliverableInsert = {
     booking_id: booking.id,
@@ -553,39 +553,44 @@ function photoUrlsFromRESO(reso: IGuideRESOResponse): string[] {
   return urls;
 }
 
-function photoDownloadUrlsFromMedia(media: IGuideMediaUrls): {
+function photoDownloadUrlsFromMedia(
+  media: IGuideMediaUrls,
+  accessToken?: string | null,
+): {
   mls: string | null;
   highRes: string | null;
 } {
   return {
-    mls: usableIGuideDownloadUrl(media.galleryLowResZip ?? media.galleryLowRes),
-    highRes: usableIGuideDownloadUrl(media.galleryZip),
+    mls: usableIGuidePhotoZipUrl(
+      media.galleryLowResZip ?? media.galleryLowRes,
+      accessToken,
+    ),
+    highRes: usableIGuidePhotoZipUrl(media.galleryZip, accessToken),
   };
 }
 
-function usableIGuideDownloadUrl(url: string | null | undefined): string | null {
+function usableIGuidePhotoZipUrl(
+  url: string | null | undefined,
+  accessToken?: string | null,
+): string | null {
   if (!url) return null;
-  if (!isIGuideViewerPage(url)) return url;
-  return null;
-}
-
-function isIGuideViewerPage(url: string): boolean {
   try {
     const parsed = new URL(url);
-    const hostname = parsed.hostname.replace(/^www\./, "").toLowerCase();
-    if (
-      hostname !== "youriguide.com" &&
-      hostname !== "unbranded.youriguide.com"
-    ) {
-      return false;
+    const pathname = parsed.pathname.toLowerCase();
+    const isYourIGuide =
+      parsed.hostname === "youriguide.com" ||
+      parsed.hostname.endsWith(".youriguide.com");
+    const isGalleryZip =
+      isYourIGuide &&
+      pathname.includes("/doc/") &&
+      /\/gallery(?:-low-res)?\.zip$/.test(pathname);
+    if (!isGalleryZip) return null;
+    if (accessToken && !parsed.searchParams.has("accessToken")) {
+      parsed.searchParams.set("accessToken", accessToken);
     }
-    const segments = parsed.pathname.split("/").filter(Boolean);
-    return (
-      segments.length === 1 ||
-      (segments.length === 2 && segments[0] === "embed")
-    );
+    return parsed.toString();
   } catch {
-    return false;
+    return null;
   }
 }
 

@@ -141,27 +141,20 @@ function photoDownloadUrl(
   key: string,
 ): string | null {
   const url = metadataString(metadata, key);
-  if (!url || isIGuideViewerPage(url)) return null;
-  return url;
-}
-
-function isIGuideViewerPage(url: string): boolean {
+  if (!url) return null;
   try {
     const parsed = new URL(url);
-    const hostname = parsed.hostname.replace(/^www\./, "").toLowerCase();
-    if (
-      hostname !== "youriguide.com" &&
-      hostname !== "unbranded.youriguide.com"
-    ) {
-      return false;
-    }
-    const segments = parsed.pathname.split("/").filter(Boolean);
-    return (
-      segments.length === 1 ||
-      (segments.length === 2 && segments[0] === "embed")
-    );
+    const pathname = parsed.pathname.toLowerCase();
+    const isYourIGuide =
+      parsed.hostname === "youriguide.com" ||
+      parsed.hostname.endsWith(".youriguide.com");
+    return isYourIGuide &&
+      pathname.includes("/doc/") &&
+      /\/gallery(?:-low-res)?\.zip$/.test(pathname)
+      ? url
+      : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
