@@ -558,9 +558,35 @@ function photoDownloadUrlsFromMedia(media: IGuideMediaUrls): {
   highRes: string | null;
 } {
   return {
-    mls: media.galleryLowResZip ?? media.galleryLowRes ?? null,
-    highRes: media.galleryZip ?? null,
+    mls: usableIGuideDownloadUrl(media.galleryLowResZip ?? media.galleryLowRes),
+    highRes: usableIGuideDownloadUrl(media.galleryZip),
   };
+}
+
+function usableIGuideDownloadUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (!isIGuideViewerPage(url)) return url;
+  return null;
+}
+
+function isIGuideViewerPage(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.replace(/^www\./, "").toLowerCase();
+    if (
+      hostname !== "youriguide.com" &&
+      hostname !== "unbranded.youriguide.com"
+    ) {
+      return false;
+    }
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    return (
+      segments.length === 1 ||
+      (segments.length === 2 && segments[0] === "embed")
+    );
+  } catch {
+    return false;
+  }
 }
 
 async function fetchRESOPhotoUrls(alias: string): Promise<string[]> {

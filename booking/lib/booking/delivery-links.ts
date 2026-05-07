@@ -54,12 +54,12 @@ export function buildDeliveryLinks(
       add(
         "photos",
         "MLS / low-res photos download",
-        metadataString(deliverable.metadata, "mls_photo_zip_url"),
+        photoDownloadUrl(deliverable.metadata, "mls_photo_zip_url"),
       );
       add(
         "photos",
         "High-res photos download",
-        metadataString(deliverable.metadata, "high_res_photo_zip_url"),
+        photoDownloadUrl(deliverable.metadata, "high_res_photo_zip_url"),
       );
       continue;
     }
@@ -134,6 +134,35 @@ export function metadataString(
   }
   const value = metadata[key];
   return typeof value === "string" && value.trim() ? value : null;
+}
+
+function photoDownloadUrl(
+  metadata: Json | null | undefined,
+  key: string,
+): string | null {
+  const url = metadataString(metadata, key);
+  if (!url || isIGuideViewerPage(url)) return null;
+  return url;
+}
+
+function isIGuideViewerPage(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.replace(/^www\./, "").toLowerCase();
+    if (
+      hostname !== "youriguide.com" &&
+      hostname !== "unbranded.youriguide.com"
+    ) {
+      return false;
+    }
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    return (
+      segments.length === 1 ||
+      (segments.length === 2 && segments[0] === "embed")
+    );
+  } catch {
+    return false;
+  }
 }
 
 function deliveryLinkLabel(deliverable: DeliveryLinkInput): string {

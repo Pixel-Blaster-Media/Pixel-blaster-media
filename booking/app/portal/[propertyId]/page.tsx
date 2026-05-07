@@ -465,12 +465,11 @@ function pickIGuideAlias(
 
 function PhotoDownloadsSection({ gallery }: { gallery: DeliverableRow[] }) {
   const photo = gallery[0] ?? null;
-  const mlsZipUrl = photo
-    ? metadataString(photo.metadata, "mls_photo_zip_url")
-    : null;
-  const highResZipUrl = photo
-    ? metadataString(photo.metadata, "high_res_photo_zip_url")
-    : null;
+  const mlsZipUrl = photoDownloadUrl(photo?.metadata, "mls_photo_zip_url");
+  const highResZipUrl = photoDownloadUrl(
+    photo?.metadata,
+    "high_res_photo_zip_url",
+  );
   const imageCount = gallery.reduce(
     (total, deliverable) => total + metadataImageUrls(deliverable.metadata).length,
     0,
@@ -985,8 +984,8 @@ function EmptySection({
 
 function IGuideGallery({ deliverable }: { deliverable: DeliverableRow }) {
   const imageUrls = metadataImageUrls(deliverable.metadata);
-  const mlsZipUrl = metadataString(deliverable.metadata, "mls_photo_zip_url");
-  const highResZipUrl = metadataString(
+  const mlsZipUrl = photoDownloadUrl(deliverable.metadata, "mls_photo_zip_url");
+  const highResZipUrl = photoDownloadUrl(
     deliverable.metadata,
     "high_res_photo_zip_url",
   );
@@ -1048,16 +1047,16 @@ function IGuideGallery({ deliverable }: { deliverable: DeliverableRow }) {
 function hasPhotoAsset(deliverable: DeliverableRow): boolean {
   return (
     metadataImageUrls(deliverable.metadata).length > 0 ||
-    Boolean(metadataString(deliverable.metadata, "mls_photo_zip_url")) ||
-    Boolean(metadataString(deliverable.metadata, "high_res_photo_zip_url"))
+    Boolean(photoDownloadUrl(deliverable.metadata, "mls_photo_zip_url")) ||
+    Boolean(photoDownloadUrl(deliverable.metadata, "high_res_photo_zip_url"))
   );
 }
 
 function photoDownloadDetail(deliverable: DeliverableRow): string {
-  if (metadataString(deliverable.metadata, "mls_photo_zip_url")) {
+  if (photoDownloadUrl(deliverable.metadata, "mls_photo_zip_url")) {
     return "MLS download available";
   }
-  if (metadataString(deliverable.metadata, "high_res_photo_zip_url")) {
+  if (photoDownloadUrl(deliverable.metadata, "high_res_photo_zip_url")) {
     return "High-res download available";
   }
   const count = metadataImageUrls(deliverable.metadata).length;
@@ -1098,6 +1097,35 @@ function PhotoDownloadButtons({
       ) : null}
     </div>
   );
+}
+
+function photoDownloadUrl(
+  metadata: Json | null | undefined,
+  key: string,
+): string | null {
+  const url = metadataString(metadata, key);
+  if (!url || isIGuideViewerPage(url)) return null;
+  return url;
+}
+
+function isIGuideViewerPage(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.replace(/^www\./, "").toLowerCase();
+    if (
+      hostname !== "youriguide.com" &&
+      hostname !== "unbranded.youriguide.com"
+    ) {
+      return false;
+    }
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    return (
+      segments.length === 1 ||
+      (segments.length === 2 && segments[0] === "embed")
+    );
+  } catch {
+    return false;
+  }
 }
 
 function pickLatest(
