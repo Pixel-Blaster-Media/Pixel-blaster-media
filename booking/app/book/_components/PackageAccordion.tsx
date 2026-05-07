@@ -127,8 +127,7 @@ export default function PackageAccordion({
               Start with a package
             </h3>
             <p className="mt-1 text-sm text-realtor-muted">
-              Pick the closest fit. You can open details before choosing, or
-              build a custom order below.
+              Pick the closest fit, or build a custom order below.
             </p>
           </div>
           {hasBundle ? (
@@ -150,7 +149,6 @@ export default function PackageAccordion({
         <ul className="grid gap-3 xl:grid-cols-2">
           {bundles.map((b) => {
             const selected = selectedSlugs.includes(b.slug);
-            const expanded = expandedSlug === b.slug || selected;
             return (
               <li key={b.id}>
                 <article
@@ -238,26 +236,9 @@ export default function PackageAccordion({
                     </p>
                   ) : null}
 
-                  {expanded && b.description ? (
+                  {b.description ? (
                     <PackageDetails item={b} />
                   ) : null}
-
-                  <div className="mt-auto flex flex-wrap items-center justify-end gap-2 pt-4">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setExpandedSlug((current) =>
-                          current === b.slug ? null : b.slug,
-                        );
-                      }}
-                      className={
-                        "rounded-full border border-realtor-primary/15 bg-realtor-surface/70 px-4 py-2 text-sm text-realtor-text transition hover:border-realtor-primary hover:bg-realtor-surface"
-                      }
-                    >
-                      {expanded ? "Hide details" : "View details"}
-                    </button>
-                  </div>
                 </article>
               </li>
             );
