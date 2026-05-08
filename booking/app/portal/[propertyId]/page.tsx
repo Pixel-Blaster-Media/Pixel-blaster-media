@@ -164,6 +164,7 @@ export default async function PropertyDetailPage({
       .filter((url): url is string => Boolean(url)),
   );
   const defaultHeroImage = heroImageOptions[0] ?? "";
+  const bookSimilarHref = buildSimilarBookingHref(property, latestBooking);
 
   return (
     <div className="realtor-theme space-y-8">
@@ -179,24 +180,35 @@ export default async function PropertyDetailPage({
         </section>
       ) : null}
 
-      <header className="realtor-elevated-panel rounded-3xl p-5 md:p-6">
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-          <div className="min-w-0">
-            <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
-              Current listing media
-            </p>
-            <h1 className="mt-2 break-words text-3xl font-bold text-realtor-text md:text-4xl">
+      <header className="realtor-elevated-panel overflow-hidden rounded-3xl">
+        <div className="grid gap-5 p-4 md:p-5 lg:grid-cols-[220px_minmax(0,1fr)_auto] lg:items-center">
+          {defaultHeroImage ? (
+            <div className="overflow-hidden rounded-2xl border border-realtor-primary/15 bg-realtor-surface-muted shadow-sm">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={defaultHeroImage}
+                alt=""
+                className="aspect-[4/3] w-full object-cover"
+              />
+            </div>
+          ) : (
+            <div className="flex aspect-[4/3] items-center justify-center rounded-2xl border border-dashed border-realtor-primary/20 bg-realtor-surface-muted/70 text-xs text-realtor-muted">
+              Media preview
+            </div>
+          )}
+          <div className="min-w-0 lg:py-2">
+            <h1 className="break-words text-3xl font-semibold leading-tight text-realtor-text md:text-4xl">
               {property.street_address}
             </h1>
             <p className="mt-1 text-sm text-realtor-muted">
               {[property.city, property.postal_code].filter(Boolean).join(" ")}
             </p>
-          </div>
-          <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/70 px-4 py-3 text-sm lg:min-w-[260px]">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs uppercase tracking-[0.2em] text-realtor-muted">
-                Booking
-              </p>
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-realtor-muted">
+              {latestBooking?.scheduled_at ? (
+                <span>{formatDateTime(latestBooking.scheduled_at)}</span>
+              ) : (
+                <span>Date to be confirmed</span>
+              )}
               {statusMeta ? (
                 <span
                   className={`rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-wider ${statusMeta.pill}`}
@@ -205,13 +217,14 @@ export default async function PropertyDetailPage({
                 </span>
               ) : null}
             </div>
-            <p className="mt-2 font-semibold text-realtor-text">
-              {latestBooking?.scheduled_at ? (
-                formatDateTime(latestBooking.scheduled_at)
-              ) : (
-                "Date to be confirmed"
-              )}
-            </p>
+          </div>
+          <div className="flex lg:justify-end">
+            <Link
+              href={bookSimilarHref}
+              className="rounded-xl border border-realtor-primary/15 bg-realtor-surface px-4 py-2 text-sm font-semibold text-realtor-text transition hover:border-realtor-primary/35 hover:bg-realtor-surface-muted"
+            >
+              Book similar shoot
+            </Link>
           </div>
         </div>
         <PortalTabs propertyId={property.id} activeTab={activeTab} />
@@ -236,6 +249,13 @@ export default async function PropertyDetailPage({
           <>
             <PhotoDownloadsSection gallery={gallery} />
 
+            {videos.length > 0 ? (
+              <VideoSection
+                downloads={videoDownloads}
+                streamingLinks={videoStreamingLinks}
+              />
+            ) : null}
+
             {iGuideAlias || floorPlan ? (
               <FloorPlanDownloadsSection
                 alias={iGuideAlias}
@@ -244,23 +264,16 @@ export default async function PropertyDetailPage({
               />
             ) : null}
 
-            {videos.length > 0 ? (
-              <VideoSection
-                downloads={videoDownloads}
-                streamingLinks={videoStreamingLinks}
-              />
-            ) : null}
-
             {iGuideAlias ? (
               <IGuideToolsSection alias={iGuideAlias} />
             ) : null}
 
-            {tour ? (
-              <VirtualTourSection alias={iGuideAlias} tour={tour} />
-            ) : null}
-
             {latestBooking?.quickbooks_invoice_url ? (
               <InvoiceCard booking={latestBooking} />
+            ) : null}
+
+            {tour ? (
+              <VirtualTourSection alias={iGuideAlias} tour={tour} />
             ) : null}
           </>
         )}
@@ -303,7 +316,7 @@ function PortalTabs({
   return (
     <nav
       aria-label="Listing workspace"
-      className="mt-5 grid gap-2 rounded-2xl border border-realtor-primary/15 bg-realtor-surface-muted/75 p-2 sm:grid-cols-2"
+      className="grid gap-2 border-t border-realtor-primary/15 bg-realtor-surface-muted/55 p-2 sm:grid-cols-2"
     >
       {tabs.map((tab) => {
         const selected = tab.id === activeTab;
@@ -314,7 +327,7 @@ function PortalTabs({
             className={`rounded-xl border px-4 py-3 transition ${
               selected
                 ? "border-realtor-primary bg-realtor-primary text-white shadow-sm shadow-realtor-primary/20"
-                : "border-transparent bg-realtor-surface/60 text-realtor-text hover:border-realtor-primary/20"
+                : "border-realtor-primary/20 bg-realtor-surface/80 text-realtor-text shadow-sm shadow-realtor-primary/5 hover:border-realtor-primary/45 hover:bg-realtor-surface hover:shadow-realtor-primary/10"
             }`}
           >
             <span className="block text-center text-sm font-semibold">
@@ -427,6 +440,85 @@ function QuickActionGrid({ actions }: { actions: QuickAction[] }) {
   );
 }
 
+function MediaSection({
+  id,
+  title,
+  source,
+  description,
+  icon,
+  children,
+}: {
+  id?: string;
+  title: string;
+  source?: string;
+  description: string;
+  countLabel?: string;
+  icon: MediaIconKind;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      id={id}
+      className="realtor-elevated-panel scroll-mt-6 rounded-2xl p-4 md:p-5"
+    >
+      <div className="space-y-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <MediaIcon kind={icon} />
+          <div className="min-w-0 pt-0.5">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-realtor-text">
+                {title}
+              </h2>
+              {source ? (
+                <span className="text-[10px] uppercase tracking-wider text-realtor-muted">
+                  via {formatSourceLabel(source)}
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-1 text-xs text-realtor-muted">{description}</p>
+          </div>
+        </div>
+        <div className="grid gap-2">{children}</div>
+      </div>
+    </section>
+  );
+}
+
+type MediaIconKind = "photos" | "floor" | "video" | "tools" | "tour";
+
+function MediaIcon({ kind }: { kind: MediaIconKind }) {
+  const common = "h-5 w-5";
+  return (
+    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-realtor-primary/10 text-realtor-primary ring-1 ring-realtor-primary/10">
+      {kind === "photos" ? (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="14" rx="2" stroke="currentColor" strokeWidth="1.8" />
+          <path d="m7 16 4-4 3 3 2-2 3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="15.5" cy="9.5" r="1.4" fill="currentColor" />
+        </svg>
+      ) : kind === "floor" ? (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M5 5h6v6H5zM13 5h6v14h-6zM5 13h6v6H5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        </svg>
+      ) : kind === "video" ? (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="4" y="6" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" />
+          <path d="m16 10 4-2v8l-4-2z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        </svg>
+      ) : kind === "tour" ? (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 21s6-5.1 6-11a6 6 0 1 0-12 0c0 5.9 6 11 6 11Z" stroke="currentColor" strokeWidth="1.8" />
+          <circle cx="12" cy="10" r="2.2" stroke="currentColor" strokeWidth="1.8" />
+        </svg>
+      ) : (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M9 7h10M5 7h.01M9 12h10M5 12h.01M9 17h10M5 17h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
 function tourEmbedUrl(url: string): string {
   const alias = parseIGuideAlias(url);
   return alias ? iguideEmbedUrl(alias) : url;
@@ -461,45 +553,27 @@ function PhotoDownloadsSection({ gallery }: { gallery: DeliverableRow[] }) {
   const hasAnyDownload = Boolean(mlsZipUrl || highResZipUrl);
 
   return (
-    <section id="photos" className="scroll-mt-6 space-y-3">
-      <SectionHeader title="Photos" />
-      <div className="realtor-elevated-panel rounded-2xl p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-semibold text-realtor-text">
-              Photo downloads
-            </h3>
-            <p className="mt-1 text-xs text-realtor-muted">
-              Use MLS photos for listing uploads. Use high-res photos for print,
-              archives, and marketing files.
-            </p>
-          </div>
-          {imageCount > 0 ? (
-            <span className="rounded-full border border-realtor-primary/15 px-3 py-1 text-xs text-realtor-muted">
-              {imageCount} preview photos
-            </span>
-          ) : null}
-        </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <PhotoDownloadCard
-            title="MLS photos"
-            url={mlsZipUrl}
-          />
-          <PhotoDownloadCard
-            title="High-res photos"
-            url={highResZipUrl}
-            missingLabel="Waiting for the high-res ZIP."
-          />
-        </div>
-        {!hasAnyDownload ? (
-          <p className="mt-3 rounded-2xl border border-dashed border-realtor-primary/20 bg-realtor-surface-muted/70 px-4 py-3 text-xs leading-relaxed text-realtor-muted">
-            {imageCount > 0
-              ? "A preview photo is ready, but the downloadable photo ZIP files have not arrived from iGUIDE yet."
-              : "Photo ZIP downloads will appear here as soon as iGUIDE sends them."}
-          </p>
-        ) : null}
-      </div>
-    </section>
+    <MediaSection
+      id="photos"
+      title="Photos"
+      description="MLS and high-resolution photos for listing uploads, print, and marketing."
+      countLabel={imageCount > 0 ? `${imageCount} photos` : undefined}
+      icon="photos"
+    >
+      <PhotoDownloadCard title="MLS photos" url={mlsZipUrl} />
+      <PhotoDownloadCard
+        title="High-res photos"
+        url={highResZipUrl}
+        missingLabel="Waiting for the high-res ZIP."
+      />
+      {!hasAnyDownload ? (
+        <p className="rounded-xl border border-dashed border-realtor-primary/20 bg-realtor-surface-muted/70 px-4 py-3 text-xs leading-relaxed text-realtor-muted">
+          {imageCount > 0
+            ? "A preview photo is ready, but the downloadable photo ZIP files have not arrived from iGUIDE yet."
+            : "Photo ZIP downloads will appear here as soon as iGUIDE sends them."}
+        </p>
+      ) : null}
+    </MediaSection>
   );
 }
 
@@ -513,10 +587,10 @@ function PhotoDownloadCard({
   missingLabel?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface-muted/80 p-4">
-      <h4 className="text-sm font-semibold text-realtor-text">{title}</h4>
+    <div className="grid min-w-0 gap-3 rounded-xl border border-realtor-primary/15 bg-realtor-surface-muted/75 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <h4 className="truncate text-xs font-semibold text-realtor-text">{title}</h4>
       {url ? (
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
           <a
             href={iGuideDownloadUrl(url)}
             target="_blank"
@@ -528,7 +602,7 @@ function PhotoDownloadCard({
           </a>
         </div>
       ) : (
-        <p className="mt-4 rounded-xl border border-dashed border-realtor-primary/15 px-3 py-2 text-xs text-realtor-muted">
+        <p className="rounded-xl border border-dashed border-realtor-primary/15 px-3 py-2 text-xs text-realtor-muted sm:text-right">
           {missingLabel}
         </p>
       )}
@@ -574,23 +648,25 @@ function FloorPlanDownloadsSection({
 
   return (
     <section className="space-y-4">
-      <SectionHeader title="Floor plan downloads" source="iguide" />
-      <div className="realtor-warm-panel min-w-0 rounded-2xl p-4">
-        <p className="text-xs text-realtor-muted">
-          Floor plans and property overview PDFs for listing paperwork.
-        </p>
-        <div className="mt-3 grid gap-2">
-          {downloadLinks.map((link) => (
-            <LinkRow
-              key={link.label}
-              label={link.label}
-              url={link.url}
-              actionLabel="Download"
-              download
-            />
-          ))}
-        </div>
-      </div>
+      <MediaSection
+        title="Floor plans"
+        source="iguide"
+        description="Floor plans and property overview PDFs for listing paperwork."
+        countLabel={`${downloadLinks.length} files`}
+        icon="floor"
+      >
+        {downloadLinks.map((link) => (
+          <LinkRow
+            key={link.label}
+            label={link.label}
+            url={link.url}
+            actionLabel="Download"
+            compact
+            download
+            proxyDownload
+          />
+        ))}
+      </MediaSection>
 
       {areaRows.length > 0 ? (
         <div className="realtor-elevated-panel rounded-2xl p-4">
@@ -631,16 +707,19 @@ function IGuideToolsSection({ alias }: { alias: string }) {
     },
   ];
   return (
-    <section className="space-y-3">
-      <SectionHeader title="Tools" source="iguide" />
-      <div className="realtor-green-panel min-w-0 rounded-2xl p-4">
-        <div className="grid gap-2">
-          {tools.map((tool) => (
-            <LinkRow key={tool.label} label={tool.label} url={tool.url} compact />
-          ))}
-        </div>
+    <MediaSection
+      title="Tools"
+      source="iguide"
+      description="Additional iGUIDE tools for feature sheets, embeds, and virtual showings."
+      countLabel={`${tools.length} tools`}
+      icon="tools"
+    >
+      <div className="grid gap-2 md:grid-cols-3">
+        {tools.map((tool) => (
+          <ToolLink key={tool.label} label={tool.label} url={tool.url} />
+        ))}
       </div>
-    </section>
+    </MediaSection>
   );
 }
 
@@ -663,18 +742,19 @@ function VirtualTourSection({
   ];
   return (
     <section className="space-y-4">
-      <SectionHeader title="Virtual tour" source={tour.source} />
-      <div className="realtor-elevated-panel min-w-0 rounded-2xl p-4">
-        <h3 className="text-sm font-semibold text-realtor-text">Virtual tour links</h3>
-        <p className="text-xs text-realtor-muted">
-          Check your MLS/board policy before using branded virtual tours.
-        </p>
-        <div className="mt-3 grid gap-2 md:grid-cols-2">
+      <MediaSection
+        title="Virtual tour"
+        source={tour.source}
+        description="Branded and unbranded iGUIDE tour links."
+        countLabel={`${tourLinks.length} links`}
+        icon="tour"
+      >
+        <div className="grid gap-2 md:grid-cols-2">
           {tourLinks.map((link) => (
-            <LinkRow key={link.label} label={link.label} url={link.url} />
+            <LinkRow key={link.label} label={link.label} url={link.url} compact />
           ))}
         </div>
-      </div>
+      </MediaSection>
       <div className="overflow-hidden rounded-2xl border border-realtor-primary/15 bg-realtor-text shadow-lg shadow-realtor-primary/10">
         <div className="aspect-[16/10] w-full">
           <iframe
@@ -696,16 +776,18 @@ function LinkRow({
   compact = false,
   actionLabel = "Open ↗",
   download = false,
+  proxyDownload = false,
 }: {
   label: string;
   url: string;
   compact?: boolean;
   actionLabel?: string;
   download?: boolean;
+  proxyDownload?: boolean;
 }) {
-  const href = download ? iGuideDownloadUrl(url) : url;
+  const href = proxyDownload ? iGuideDownloadUrl(url) : url;
   return (
-    <div className="grid min-w-0 gap-3 rounded-2xl border border-realtor-primary/15 bg-realtor-surface-muted/80 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+    <div className="grid min-w-0 gap-3 rounded-xl border border-realtor-primary/15 bg-realtor-surface-muted/70 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
       <div className="min-w-0 overflow-hidden">
         <p className="truncate text-xs font-semibold text-realtor-text">{label}</p>
         {!compact ? (
@@ -723,13 +805,31 @@ function LinkRow({
           href={href}
           target="_blank"
           rel="noopener"
-          download={download}
+          download={download || proxyDownload}
           className="rounded-md bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-realtor-primary-light"
         >
           {actionLabel}
         </a>
       </div>
     </div>
+  );
+}
+
+function ToolLink({ label, url }: { label: string; url: string }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener"
+      className="group rounded-xl border border-realtor-primary/15 bg-realtor-surface-muted/70 px-4 py-3 transition hover:border-realtor-primary/30 hover:bg-realtor-surface"
+    >
+      <span className="block truncate text-xs font-semibold text-realtor-text">
+        {label}
+      </span>
+      <span className="mt-2 inline-flex text-xs font-semibold text-realtor-primary group-hover:text-realtor-primary-dark">
+        Open ↗
+      </span>
+    </a>
   );
 }
 
@@ -744,86 +844,43 @@ function VideoSection({
   downloads: DeliverableRow[];
   streamingLinks: DeliverableRow[];
 }) {
-  return (
-    <section className="space-y-4">
-      <SectionHeader title="Video" />
-      <div className="grid gap-4 lg:grid-cols-2">
-        <VideoGroup
-          title="Downloadable video"
-          description="Use this for MLS uploads, social edits, or saving the final file."
-          empty="No downloadable video file has been added yet."
-          videos={downloads}
-          actionLabel="Download"
-        />
-        <VideoGroup
-          title="YouTube / viewing link"
-          description="Use this for easy sharing, embeds, or public video pages."
-          empty="No YouTube or viewing link has been added yet."
-          videos={streamingLinks}
-          actionLabel="Open video ↗"
-        />
-      </div>
-    </section>
-  );
-}
+  const videoRows = [
+    ...downloads.map((video) => ({
+      video,
+      label:
+        metadataString(video.metadata, "delivery_label") ??
+        deliverableTypeLabel(video.type),
+      actionLabel: "Download",
+      download: true,
+    })),
+    ...streamingLinks.map((video) => ({
+      video,
+      label:
+        metadataString(video.metadata, "delivery_label") ??
+        deliverableTypeLabel(video.type),
+      actionLabel: "Open video ↗",
+      download: false,
+    })),
+  ];
 
-function VideoGroup({
-  title,
-  description,
-  empty,
-  videos,
-  actionLabel,
-}: {
-  title: string;
-  description: string;
-  empty: string;
-  videos: DeliverableRow[];
-  actionLabel: string;
-}) {
   return (
-    <div className="realtor-elevated-panel min-w-0 rounded-2xl p-4">
-      <h3 className="text-sm font-semibold text-realtor-text">{title}</h3>
-      <p className="mt-1 text-xs text-realtor-muted">{description}</p>
-      {videos.length > 0 ? (
-        <ul className="mt-3 grid min-w-0 gap-2">
-          {videos.map((video) => (
-            <li
-              key={video.id}
-              className="grid min-w-0 gap-3 rounded-md border border-realtor-primary/15 bg-realtor-surface-muted/80 p-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
-            >
-              <div className="min-w-0 overflow-hidden">
-                <p className="truncate text-xs font-semibold text-realtor-text">
-                  {metadataString(video.metadata, "delivery_label") ??
-                    deliverableTypeLabel(video.type)}
-                </p>
-                <p
-                  className="mt-0.5 max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-realtor-muted"
-                  title={video.url}
-                >
-                  {video.url}
-                </p>
-              </div>
-              <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-                <CopyLinkButton url={video.url} label="Copy" />
-                <a
-                  href={video.url}
-                  target="_blank"
-                  rel="noopener"
-                  download={actionLabel === "Download"}
-                  className="rounded-md bg-realtor-primary px-2.5 py-1 text-xs font-semibold text-white hover:bg-realtor-primary-light"
-                >
-                  {actionLabel}
-                </a>
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-3 rounded-md border border-dashed border-realtor-primary/15 bg-realtor-surface-muted/70 p-3 text-xs text-realtor-muted">
-          {empty}
-        </p>
-      )}
-    </div>
+    <MediaSection
+      title="Video"
+      description="Video files and viewing links for sharing, MLS, and social."
+      countLabel={`${videoRows.length} links`}
+      icon="video"
+    >
+      {videoRows.map(({ video, label, actionLabel, download }) => (
+        <LinkRow
+          key={video.id}
+          label={label}
+          url={video.url}
+          actionLabel={actionLabel}
+          download={download}
+          compact
+        />
+      ))}
+    </MediaSection>
   );
 }
 
@@ -931,6 +988,11 @@ function formatCurrency(cents: number): string {
   }).format(cents / 100);
 }
 
+function formatSourceLabel(source: string): string {
+  if (source.toLowerCase() === "iguide") return "iGUIDE";
+  return source;
+}
+
 function SectionHeader({
   title,
   source,
@@ -948,7 +1010,7 @@ function SectionHeader({
         </h2>
         {source ? (
           <p className="text-[10px] uppercase tracking-wider text-realtor-muted">
-            via {source}
+            via {formatSourceLabel(source)}
           </p>
         ) : null}
       </div>
@@ -1153,6 +1215,25 @@ function buildListingSlug(address: string, city: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
+}
+
+function buildSimilarBookingHref(
+  property: PropertyRow,
+  booking: PropertyRow["bookings"][number] | null,
+): string {
+  const params = new URLSearchParams();
+  params.set("repeat", "1");
+  params.set("from_property", property.id);
+  if (booking?.services.length) params.set("services", booking.services.join(","));
+  if (booking?.add_ons.length) params.set("add_ons", booking.add_ons.join(","));
+  params.set("street_address", property.street_address);
+  if (property.city) params.set("city", property.city);
+  if (property.postal_code) params.set("postal_code", property.postal_code);
+  if (booking?.square_footage) {
+    params.set("square_footage", String(booking.square_footage));
+  }
+  const qs = params.toString();
+  return qs ? `/portal/book?${qs}` : "/portal/book";
 }
 
 function isImageLikeUrl(url: string): boolean {

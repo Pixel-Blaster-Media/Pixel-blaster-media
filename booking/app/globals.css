@@ -29,12 +29,12 @@
   --realtor-text-rgb: 35 51 43;
   --realtor-muted: #6f7a70;
   --realtor-muted-rgb: 111 122 112;
-  --realtor-primary: #315f45;
-  --realtor-primary-rgb: 49 95 69;
-  --realtor-primary-light: #6f9a78;
-  --realtor-primary-light-rgb: 111 154 120;
-  --realtor-primary-dark: #244735;
-  --realtor-primary-dark-rgb: 36 71 53;
+  --realtor-primary: #3f7356;
+  --realtor-primary-rgb: 63 115 86;
+  --realtor-primary-light: #7fa684;
+  --realtor-primary-light-rgb: 127 166 132;
+  --realtor-primary-dark: #3b5f49;
+  --realtor-primary-dark-rgb: 59 95 73;
   --realtor-accent: #c7b17a;
   --realtor-accent-rgb: 199 177 122;
   --realtor-blush: #dfb8aa;
@@ -277,27 +277,62 @@ body:has(.realtor-theme) .site-footer {
   color: var(--realtor-muted);
 }
 
+body:has(.realtor-theme) .site-main {
+  padding-top: 1rem;
+}
+
 body:has(.realtor-theme) .portal-header {
-  border-color: var(--realtor-border);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(135deg, rgba(74, 111, 84, 0.98), rgba(56, 92, 70, 0.98)),
+    var(--realtor-primary-dark);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.12) inset,
+    0 18px 42px -30px rgba(35, 51, 43, 0.42);
+}
+
+body:has(.realtor-theme) .portal-mark {
+  display: inline-flex;
+  height: 28px;
+  width: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.2);
+  color: rgba(255, 253, 248, 0.96);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  overflow: hidden;
+}
+
+body:has(.realtor-theme) .portal-mark img {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
 }
 
 body:has(.realtor-theme) .portal-kicker,
 body:has(.realtor-theme) .portal-nav-link:hover,
 body:has(.realtor-theme) .portal-sign-out:hover {
-  color: var(--realtor-primary);
+  color: rgba(255, 253, 248, 0.95);
 }
 
 body:has(.realtor-theme) .portal-user {
-  color: var(--realtor-text);
+  color: white;
 }
 
 body:has(.realtor-theme) .portal-nav-link,
 body:has(.realtor-theme) .portal-sign-out {
-  color: var(--realtor-muted);
+  color: rgba(255, 253, 248, 0.78);
 }
 
 body:has(.realtor-theme) .portal-sign-out {
-  border-color: var(--realtor-border);
+  border-color: rgba(255, 253, 248, 0.22);
+}
+
+body:has(.realtor-theme) .portal-nav-pill {
+  border-color: rgba(255, 253, 248, 0.2);
 }
 
 .realtor-theme .address-autocomplete-label,
