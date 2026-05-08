@@ -1,6 +1,7 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 
 import { createSelfBooking, type SelfBookResult } from "./actions";
 
@@ -24,7 +25,7 @@ export default function BookingConfirmForm({
     squareFootage?: string;
   };
 }) {
-  const [state, formAction] = useFormState(createSelfBooking, initial);
+  const [state, formAction] = useActionState(createSelfBooking, initial);
 
   return (
     <form action={formAction} className="space-y-4">

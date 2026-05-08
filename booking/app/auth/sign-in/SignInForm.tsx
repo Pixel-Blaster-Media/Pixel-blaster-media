@@ -1,13 +1,14 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 
 import { sendMagicLink, type SignInState } from "./actions";
 
 const initial: SignInState | null = null;
 
 export default function SignInForm({ next }: { next?: string }) {
-  const [state, formAction] = useFormState(sendMagicLink, initial);
+  const [state, formAction] = useActionState(sendMagicLink, initial);
 
   return (
     <form action={formAction} className="space-y-4">

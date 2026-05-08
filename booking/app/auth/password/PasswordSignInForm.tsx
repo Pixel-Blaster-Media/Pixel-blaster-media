@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 
 import {
   signInWithPassword,
@@ -11,7 +12,7 @@ import {
 const initial: PasswordSignInState | null = null;
 
 export default function PasswordSignInForm({ next }: { next?: string }) {
-  const [state, formAction] = useFormState(signInWithPassword, initial);
+  const [state, formAction] = useActionState(signInWithPassword, initial);
 
   return (
     <form action={formAction} className="space-y-4">

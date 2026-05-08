@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useTransition } from "react";
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState, useEffect, useState, useTransition } from "react";
+import { useFormStatus } from "react-dom";
 
 import { checkEmailAction, createPublicBooking, type BookResult } from "../actions";
 import type { WizardState } from "@/lib/booking/wizard-state";
@@ -34,7 +34,7 @@ export default function ConfirmForm({
   profile: ProfileLite | null;
   items: BookingTotalItem[];
 }) {
-  const [formState, formAction] = useFormState(createPublicBooking, initial);
+  const [formState, formAction] = useActionState(createPublicBooking, initial);
 
   const [email, setEmail] = useState(profile?.email ?? "");
   const [mode, setMode] = useState<"unknown" | "new" | "existing">("unknown");

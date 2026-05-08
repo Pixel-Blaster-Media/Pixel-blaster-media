@@ -1,13 +1,14 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 
 import { requestPasswordReset, type ResetRequestState } from "./actions";
 
 const initial: ResetRequestState | null = null;
 
 export default function ResetRequestForm() {
-  const [state, formAction] = useFormState(requestPasswordReset, initial);
+  const [state, formAction] = useActionState(requestPasswordReset, initial);
 
   return (
     <form action={formAction} className="space-y-4">
