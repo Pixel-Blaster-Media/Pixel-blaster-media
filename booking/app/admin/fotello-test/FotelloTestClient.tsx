@@ -3,10 +3,9 @@
 import { useState, useTransition } from "react";
 
 import {
-  testCreateEnhance,
   testCreateListing,
-  testCreateUpload,
   testGetEnhance,
+  testUploadAndEnhance,
 } from "./actions";
 
 type EnhanceResult = {
@@ -51,41 +50,27 @@ export default function FotelloTestClient() {
     }
     setUploading(true);
     try {
-      let currentListingId = listingId.trim();
-      if (!currentListingId) {
-        append("No listing ID set — creating test listing...");
-        const listing = await testCreateListing(listingName);
-        if (!listing.ok) throw new Error(listing.error);
-        currentListingId = listing.id;
-        setListingId(listing.id);
-        append(`Listing created: ${listing.id}`);
-      }
+      append("Uploading server-side to avoid browser CORS...");
+      const formData = new FormData();
+      formData.set("listingName", listingName);
+      formData.set("listingId", listingId);
+      formData.set("shotType", shotType);
+      for (const file of files) formData.append("photos", file);
 
-      const uploadIds: string[] = [];
-      for (const [index, file] of files.entries()) {
-        append(`Creating upload ${index + 1}/${files.length}: ${file.name}`);
-        const upload = await testCreateUpload(file.name);
-        if (!upload.ok) throw new Error(upload.error);
-        append(`Uploading to presigned URL: ${upload.id}`);
-        const put = await fetch(upload.url, {
-          method: "PUT",
-          headers: { "Content-Type": "application/octet-stream" },
-          body: file,
-        });
-        if (!put.ok) throw new Error(`Presigned upload failed for ${file.name}: ${put.status}`);
-        uploadIds.push(upload.id);
-      }
-
-      append(`Starting enhance with ${uploadIds.length} upload ID(s)...`);
-      const enhance = await testCreateEnhance({
-        listingId: currentListingId,
-        uploadIds,
-        shotType,
+      const res = await testUploadAndEnhance(formData);
+      if (!res.ok) throw new Error(res.error);
+      setListingId(res.listingId);
+      setEnhanceId(res.enhanceId);
+      setResult({
+        id: res.enhanceId,
+        status: res.status,
+        enhancedImageUrl: res.enhancedImageUrl,
+        enhancedImageUrlExpires: res.enhancedImageUrlExpires,
       });
-      if (!enhance.ok) throw new Error(enhance.error);
-      setEnhanceId(enhance.id);
-      append(`Enhance created: ${enhance.id}`);
-      await refreshEnhance(enhance.id);
+      append(`Listing: ${res.listingId}`);
+      append(`Uploaded ${res.uploadIds.length} file(s).`);
+      append(`Enhance created: ${res.enhanceId}`);
+      append(`Status: ${res.status}${res.enhancedImageUrl ? " · URL ready" : ""}`);
     } catch (err) {
       append(`Failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
