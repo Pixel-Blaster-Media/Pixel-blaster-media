@@ -5,6 +5,11 @@ import {
   BOOKING_STATUSES,
   deliverableTypeLabel,
 } from "@/lib/booking/booking-status";
+import {
+  imageUrlOrNull,
+  metadataImageUrls,
+  uniqueImageUrls,
+} from "@/lib/booking/media-images";
 import { requireUser } from "@/lib/auth/require-user";
 import {
   iguideEmbedUrl,
@@ -154,12 +159,12 @@ export default async function PropertyDetailPage({
   const statusMeta = latestBooking
     ? BOOKING_STATUSES[latestBooking.status]
     : null;
-  const heroImageOptions = uniqueStrings(
+  const heroImageOptions = uniqueImageUrls(
     realtorVisibleDeliverables
       .flatMap((deliverable) => [
         ...metadataImageUrls(deliverable.metadata),
         deliverable.thumbnail_url,
-        isImageLikeUrl(deliverable.url) ? deliverable.url : null,
+        imageUrlOrNull(deliverable.url),
       ])
       .filter((url): url is string => Boolean(url)),
   );
@@ -544,12 +549,12 @@ function pickIGuideAlias(
 }
 
 function PhotoDownloadsSection({ gallery }: { gallery: DeliverableRow[] }) {
+  const previewImages = uniqueImageUrls(
+    gallery.flatMap((deliverable) => metadataImageUrls(deliverable.metadata)),
+  );
   const mlsZipUrl = findPhotoDownloadUrl(gallery, "mls");
   const highResZipUrl = findPhotoDownloadUrl(gallery, "high_res");
-  const imageCount = gallery.reduce(
-    (total, deliverable) => total + metadataImageUrls(deliverable.metadata).length,
-    0,
-  );
+  const imageCount = previewImages.length;
   const hasAnyDownload = Boolean(mlsZipUrl || highResZipUrl);
 
   return (
@@ -566,6 +571,27 @@ function PhotoDownloadsSection({ gallery }: { gallery: DeliverableRow[] }) {
         url={highResZipUrl}
         missingLabel="Waiting for the high-res ZIP."
       />
+      {previewImages.length > 0 ? (
+        <div className="grid gap-2 pt-2 sm:grid-cols-2 lg:grid-cols-4">
+          {previewImages.slice(0, 12).map((url, index) => (
+            <a
+              key={url}
+              href={url}
+              target="_blank"
+              rel="noopener"
+              className="group overflow-hidden rounded-xl border border-realtor-primary/15 bg-realtor-surface-muted/75"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={url}
+                alt={`Listing photo ${index + 1}`}
+                className="aspect-[4/3] w-full object-cover transition group-hover:scale-[1.02]"
+                loading="lazy"
+              />
+            </a>
+          ))}
+        </div>
+      ) : null}
       {!hasAnyDownload ? (
         <p className="rounded-xl border border-dashed border-realtor-primary/20 bg-realtor-surface-muted/70 px-4 py-3 text-xs leading-relaxed text-realtor-muted">
           {imageCount > 0
@@ -944,17 +970,6 @@ function metadataString(metadata: Json | null | undefined, key: string): string 
   return typeof value === "string" && value.trim() ? value : null;
 }
 
-function metadataImageUrls(metadata: Json | null | undefined): string[] {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-    return [];
-  }
-  const value = metadata.image_urls;
-  if (!Array.isArray(value)) return [];
-  return value.filter(
-    (item): item is string => typeof item === "string" && isImageLikeUrl(item),
-  );
-}
-
 function floorAreaRows(reso: IGuideRESOResponse | null): Array<{
   label: string;
   value: string;
@@ -1234,24 +1249,4 @@ function buildSimilarBookingHref(
   }
   const qs = params.toString();
   return qs ? `/portal/book?${qs}` : "/portal/book";
-}
-
-function isImageLikeUrl(url: string): boolean {
-  try {
-    const pathname = new URL(url).pathname.toLowerCase();
-    return /\.(jpg|jpeg|png|webp|gif)$/.test(pathname);
-  } catch {
-    return false;
-  }
-}
-
-function uniqueStrings(values: string[]): string[] {
-  const seen = new Set<string>();
-  const unique: string[] = [];
-  for (const value of values) {
-    if (seen.has(value)) continue;
-    seen.add(value);
-    unique.push(value);
-  }
-  return unique;
 }

@@ -9,6 +9,11 @@ import {
   type DeliveryLink,
 } from "@/lib/booking/delivery-links";
 import {
+  imageUrlOrNull,
+  metadataImageUrls,
+  uniqueImageUrls,
+} from "@/lib/booking/media-images";
+import {
   iguideEmbedUrl,
   parseIGuideAlias,
 } from "@/lib/integrations/iguide/parse-id";
@@ -164,13 +169,15 @@ async function loadListing(slug: string): Promise<ListingPageData | null> {
       deliverable.url &&
       deliverable.url !== "about:blank",
   );
-  const allGalleryImages = ready
+  const allGalleryImages = uniqueImageUrls(
+    ready
     .flatMap((deliverable) => [
       ...metadataImageUrls(deliverable.metadata),
       deliverable.thumbnail_url,
-      imageUrl(deliverable.url),
+      imageUrlOrNull(deliverable.url),
     ])
-    .filter((url): url is string => Boolean(url));
+    .filter((url): url is string => Boolean(url)),
+  );
   const deliveryLinks = buildDeliveryLinks(
     ready.map((deliverable) => ({
       id: deliverable.id,
@@ -721,29 +728,11 @@ function addressLine(property: PropertyRow): string {
     .join(", ");
 }
 
-function imageUrl(url: string): string | null {
-  try {
-    const pathname = new URL(url).pathname.toLowerCase();
-    return /\.(jpg|jpeg|png|webp|gif)$/.test(pathname) ? url : null;
-  } catch {
-    return null;
-  }
-}
-
-function metadataImageUrls(metadata: Json | null): string[] {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-    return [];
-  }
-  const value = metadata.image_urls;
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string");
-}
-
 function selectedGalleryImages(
   savedSelection: string[] | null,
   availableImages: string[],
 ): string[] {
-  const available = uniqueStrings(availableImages);
+  const available = uniqueImageUrls(availableImages);
   if (savedSelection === null) return available.slice(0, 24);
   const availableSet = new Set(available);
   return savedSelection.filter((url) => availableSet.has(url)).slice(0, 24);
@@ -825,15 +814,4 @@ function sectionTitle(section: string): string {
   if (section === "video") return "Video";
   if (section === "property_websites") return "Property websites";
   return "Media";
-}
-
-function uniqueStrings(values: string[]): string[] {
-  const seen = new Set<string>();
-  const unique: string[] = [];
-  for (const value of values) {
-    if (seen.has(value)) continue;
-    seen.add(value);
-    unique.push(value);
-  }
-  return unique;
 }

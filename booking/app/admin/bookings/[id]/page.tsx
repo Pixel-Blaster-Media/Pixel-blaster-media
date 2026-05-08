@@ -11,6 +11,11 @@ import {
   type DeliveryLink,
   type DeliveryLinkCategory,
 } from "@/lib/booking/delivery-links";
+import {
+  imageUrlOrNull,
+  metadataImageUrls,
+  uniqueImageUrls,
+} from "@/lib/booking/media-images";
 import { labelForAddOn, labelForService } from "@/lib/booking/services";
 import {
   isIGuidePhotoZipUrl,
@@ -213,15 +218,16 @@ export default async function BookingDetailPage({
       ?.thumbnail_url ??
     (deliverables ?? [])
       .filter((deliverable) => deliverable.source !== "fotello")
-      .find((deliverable) => isImageLikeUrl(deliverable.url))?.url ??
+      .map((deliverable) => imageUrlOrNull(deliverable.url))
+      .find(Boolean) ??
     "";
-  const heroImageOptions = uniqueStrings(
+  const heroImageOptions = uniqueImageUrls(
     (deliverables ?? [])
       .filter((deliverable) => deliverable.source !== "fotello")
       .flatMap((deliverable) => [
         ...metadataImageUrls(deliverable.metadata),
         deliverable.thumbnail_url,
-        isImageLikeUrl(deliverable.url) ? deliverable.url : null,
+        imageUrlOrNull(deliverable.url),
       ])
       .filter((url): url is string => Boolean(url)),
   );
@@ -925,33 +931,4 @@ function iGuidePhotoZipUrl(
   kind: IGuidePhotoZipKind,
 ): string | null {
   return isIGuidePhotoZipUrl(url, kind) ? url : null;
-}
-
-function isImageLikeUrl(url: string): boolean {
-  try {
-    const pathname = new URL(url).pathname.toLowerCase();
-    return /\.(jpg|jpeg|png|webp|gif)$/.test(pathname);
-  } catch {
-    return false;
-  }
-}
-
-function metadataImageUrls(metadata: Json | null | undefined): string[] {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-    return [];
-  }
-  const value = metadata.image_urls;
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string");
-}
-
-function uniqueStrings(values: string[]): string[] {
-  const seen = new Set<string>();
-  const unique: string[] = [];
-  for (const value of values) {
-    if (seen.has(value)) continue;
-    seen.add(value);
-    unique.push(value);
-  }
-  return unique;
 }
