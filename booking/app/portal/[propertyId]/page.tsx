@@ -604,6 +604,7 @@ function FotelloGalleryCard({
   const label = metadataString(deliverable.metadata, "delivery_label") ?? fallbackLabel;
   const status = metadataString(deliverable.metadata, "status");
   const expiresAt = metadataString(deliverable.metadata, "url_expires_at");
+  const href = fotelloEmbedUrl(deliverable.id);
   return (
     <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface-muted/80 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -625,9 +626,9 @@ function FotelloGalleryCard({
         </span>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
-        <CopyLinkButton url={deliverable.url} label="Copy" />
+        <CopyLinkButton url={href} label="Copy" />
         <a
-          href={deliverable.url}
+          href={href}
           target="_blank"
           rel="noopener"
           className="rounded-md bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-realtor-primary-light"
@@ -897,6 +898,10 @@ function ToolLink({ label, url }: { label: string; url: string }) {
 
 function iGuideDownloadUrl(url: string): string {
   return `/api/iguide/download?url=${encodeURIComponent(url)}`;
+}
+
+function fotelloEmbedUrl(deliverableId: string): string {
+  return `/api/fotello/embed/${encodeURIComponent(deliverableId)}`;
 }
 
 function VideoSection({

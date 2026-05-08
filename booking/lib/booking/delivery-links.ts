@@ -57,7 +57,7 @@ export function buildDeliveryLinks(
       add(
         "photos",
         deliveryLinkLabel(deliverable) || "Fotello edited photo gallery",
-        deliverable.url,
+        proxiedFotelloGalleryUrl(appUrl, deliverable.id),
       );
       continue;
     }
@@ -190,6 +190,12 @@ function proxiedIGuideDownloadUrl(
   if (!url) return null;
   const base = appUrl.replace(/\/+$/, "");
   const path = `/api/iguide/download?url=${encodeURIComponent(url)}`;
+  return base ? `${base}${path}` : path;
+}
+
+function proxiedFotelloGalleryUrl(appUrl: string, deliverableId: string): string {
+  const base = appUrl.replace(/\/+$/, "");
+  const path = `/api/fotello/embed/${encodeURIComponent(deliverableId)}`;
   return base ? `${base}${path}` : path;
 }
 
