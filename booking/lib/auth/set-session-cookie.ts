@@ -34,7 +34,10 @@ export interface SessionTokens {
   token_type?: string;
 }
 
-export function setSupabaseSessionCookie(tokens: SessionTokens, email: string) {
+export async function setSupabaseSessionCookie(
+  tokens: SessionTokens,
+  email: string,
+) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!supabaseUrl) {
     throw new Error("NEXT_PUBLIC_SUPABASE_URL not set");
@@ -87,7 +90,7 @@ export function setSupabaseSessionCookie(tokens: SessionTokens, email: string) {
   const encoded =
     "base64-" + Buffer.from(JSON.stringify(session)).toString("base64url");
 
-  const cookieStore = cookies() as unknown as MutableCookieStore;
+  const cookieStore = (await cookies()) as unknown as MutableCookieStore;
 
   for (const existing of cookieStore.getAll()) {
     if (

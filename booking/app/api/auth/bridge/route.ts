@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
     "base64-" + Buffer.from(JSON.stringify(session)).toString("base64url");
 
   const cookieBase = `sb-${projectRef}-auth-token`;
-  const cookieStore = cookies() as unknown as MutableCookieStore;
+  const cookieStore = (await cookies()) as unknown as MutableCookieStore;
 
   // Clear any stale chunks from a previous sign-in before writing new ones.
   for (const existing of cookieStore.getAll()) {
@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
   // cookies to keep its in-memory session state in sync.
   const baseOptions = {
     httpOnly: false,
-    secure: true,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
     path: "/",
     maxAge: 60 * 60 * 24 * 400,

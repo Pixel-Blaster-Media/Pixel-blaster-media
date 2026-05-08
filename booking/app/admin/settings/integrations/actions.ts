@@ -58,7 +58,8 @@ export async function startQuickBooksConnect(): Promise<void> {
   }
 
   const state = randomBytes(24).toString("hex");
-  (cookies() as unknown as MutableCookieStore).set(STATE_COOKIE, state, {
+  const cookieStore = (await cookies()) as unknown as MutableCookieStore;
+  cookieStore.set(STATE_COOKIE, state, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -269,17 +270,14 @@ export async function startGoogleCalendarConnect(): Promise<void> {
   }
 
   const state = randomBytes(24).toString("hex");
-  (cookies() as unknown as MutableCookieStore).set(
-    GOOGLE_STATE_COOKIE,
-    state,
-    {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 10 * 60,
-    },
-  );
+  const cookieStore = (await cookies()) as unknown as MutableCookieStore;
+  cookieStore.set(GOOGLE_STATE_COOKIE, state, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 10 * 60,
+  });
 
   const redirectUri = new URL(
     "/api/integrations/google-calendar/callback",

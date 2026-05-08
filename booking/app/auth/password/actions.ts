@@ -159,7 +159,7 @@ export async function signInWithPassword(
   const encoded =
     "base64-" + Buffer.from(JSON.stringify(session)).toString("base64url");
 
-  const cookieStore = cookies() as unknown as MutableCookieStore;
+  const cookieStore = (await cookies()) as unknown as MutableCookieStore;
 
   // Wipe stale chunks first.
   for (const existing of cookieStore.getAll()) {
@@ -175,7 +175,7 @@ export async function signInWithPassword(
     name: cookieBase,
     value: encoded,
     httpOnly: false,
-    secure: true,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 400,

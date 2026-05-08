@@ -472,7 +472,7 @@ async function resolveUser(params: {
         },
       };
     }
-    setSupabaseSessionCookie(signIn.tokens, params.contactEmail);
+    await setSupabaseSessionCookie(signIn.tokens, params.contactEmail);
 
     const service = getServiceSupabase();
     const userId = decodeUserId(signIn.tokens.access_token);
@@ -576,7 +576,7 @@ async function resolveUser(params: {
       },
     };
   }
-  setSupabaseSessionCookie(signIn.tokens, params.contactEmail);
+  await setSupabaseSessionCookie(signIn.tokens, params.contactEmail);
 
   return {
     ok: true,

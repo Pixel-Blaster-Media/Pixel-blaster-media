@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(settingsUrl);
   }
 
-  const cookieStore = cookies() as unknown as MutableCookieStore;
+  const cookieStore = (await cookies()) as unknown as MutableCookieStore;
   const expectedState = cookieStore.get(STATE_COOKIE)?.value;
   if (!expectedState || expectedState !== state) {
     settingsUrl.searchParams.set("qbo_error", "state_mismatch");
