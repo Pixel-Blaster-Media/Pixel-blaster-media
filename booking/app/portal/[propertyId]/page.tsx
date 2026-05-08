@@ -549,12 +549,8 @@ function pickIGuideAlias(
 }
 
 function PhotoDownloadsSection({ gallery }: { gallery: DeliverableRow[] }) {
-  const previewImages = uniqueImageUrls(
-    gallery.flatMap((deliverable) => metadataImageUrls(deliverable.metadata)),
-  );
   const mlsZipUrl = findPhotoDownloadUrl(gallery, "mls");
   const highResZipUrl = findPhotoDownloadUrl(gallery, "high_res");
-  const imageCount = previewImages.length;
   const hasAnyDownload = Boolean(mlsZipUrl || highResZipUrl);
 
   return (
@@ -562,7 +558,6 @@ function PhotoDownloadsSection({ gallery }: { gallery: DeliverableRow[] }) {
       id="photos"
       title="Photos"
       description="MLS and high-resolution photos for listing uploads, print, and marketing."
-      countLabel={imageCount > 0 ? `${imageCount} photos` : undefined}
       icon="photos"
     >
       <PhotoDownloadCard title="MLS photos" url={mlsZipUrl} />
@@ -571,32 +566,9 @@ function PhotoDownloadsSection({ gallery }: { gallery: DeliverableRow[] }) {
         url={highResZipUrl}
         missingLabel="Waiting for the high-res ZIP."
       />
-      {previewImages.length > 0 ? (
-        <div className="grid gap-2 pt-2 sm:grid-cols-2 lg:grid-cols-4">
-          {previewImages.slice(0, 12).map((url, index) => (
-            <a
-              key={url}
-              href={url}
-              target="_blank"
-              rel="noopener"
-              className="group overflow-hidden rounded-xl border border-realtor-primary/15 bg-realtor-surface-muted/75"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={url}
-                alt={`Listing photo ${index + 1}`}
-                className="aspect-[4/3] w-full object-cover transition group-hover:scale-[1.02]"
-                loading="lazy"
-              />
-            </a>
-          ))}
-        </div>
-      ) : null}
       {!hasAnyDownload ? (
         <p className="rounded-xl border border-dashed border-realtor-primary/20 bg-realtor-surface-muted/70 px-4 py-3 text-xs leading-relaxed text-realtor-muted">
-          {imageCount > 0
-            ? "A preview photo is ready, but the downloadable photo ZIP files have not arrived from iGUIDE yet."
-            : "Photo ZIP downloads will appear here as soon as iGUIDE sends them."}
+          Photo ZIP downloads will appear here as soon as iGUIDE sends them.
         </p>
       ) : null}
     </MediaSection>

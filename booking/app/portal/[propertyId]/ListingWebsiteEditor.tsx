@@ -108,8 +108,9 @@ export default function ListingWebsiteEditor({
   const [heroImageUrl, setHeroImageUrl] = useState(
     initial?.hero_image_url ?? defaults.heroImageUrl,
   );
-  const selectedGalleryImages =
-    initial?.gallery_image_urls ?? defaults.heroImageOptions;
+  const [galleryImageUrls, setGalleryImageUrls] = useState(
+    initial?.gallery_image_urls ?? defaults.heroImageOptions,
+  );
   const includedSections = new Set(
     initial?.included_sections ?? SECTION_OPTIONS.map((option) => option.id),
   );
@@ -119,7 +120,8 @@ export default function ListingWebsiteEditor({
   const publicUrl = `${defaults.publicBaseUrl}/listings/${slug || defaults.slug}`;
 
   return (
-    <section className="realtor-elevated-panel rounded-3xl p-5">
+    <section className="space-y-4">
+      <div className="realtor-elevated-panel rounded-3xl p-4 md:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
@@ -133,20 +135,32 @@ export default function ListingWebsiteEditor({
             for buyers, sellers, and social posts.
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
+              isPublished
+                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                : "border-realtor-primary/15 bg-realtor-surface-muted text-realtor-muted"
+            }`}
+          >
+            {isPublished ? "Public" : "Private"}
+          </span>
         {initial?.slug ? (
           <a
             href={`/listings/${initial.slug}`}
             target="_blank"
             rel="noopener"
-            className="rounded-full border border-realtor-primary/20 px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:text-realtor-text"
+            className="rounded-full border border-realtor-primary/20 bg-realtor-surface px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:text-realtor-text"
           >
-            Preview page ↗
+            Preview page
           </a>
         ) : null}
       </div>
+      </div>
+      </div>
 
       <form
-        className="mt-5 space-y-5"
+        className="space-y-4"
         action={(formData) => {
           setMessage(null);
           setError(null);
@@ -167,6 +181,11 @@ export default function ListingWebsiteEditor({
       >
         <input type="hidden" name="existing_slug" value={initial?.slug ?? ""} />
 
+        <CreatorSection
+          title="Choose a template"
+          description="Start with the visual style that best fits this listing."
+          icon="template"
+        >
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {TEMPLATES.map((option) => {
             const selected = option.id === template;
@@ -175,8 +194,8 @@ export default function ListingWebsiteEditor({
                 key={option.id}
                 className={`cursor-pointer rounded-2xl border p-3 transition ${
                   selected
-                    ? "border-realtor-primary bg-realtor-primary/10"
-                    : "border-realtor-primary/15 bg-realtor-surface-muted/70 hover:border-realtor-primary/35"
+                    ? "border-realtor-primary bg-realtor-primary/10 shadow-sm shadow-realtor-primary/10"
+                    : "border-realtor-primary/15 bg-realtor-surface-muted/70 hover:border-realtor-primary/35 hover:bg-realtor-surface"
                 }`}
               >
                 <input
@@ -192,19 +211,34 @@ export default function ListingWebsiteEditor({
                   <div className="mt-3 h-2 w-3/4 rounded-full bg-current/40" />
                   <div className="mt-2 h-2 w-1/2 rounded-full bg-current/25" />
                 </div>
-                <p className="mt-3 text-sm font-semibold text-realtor-text">
-                  {option.name}
-                </p>
-                <p className="mt-1 text-xs text-realtor-muted">
-                  {option.helper}
-                </p>
+                <div className="mt-3 flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-realtor-text">
+                      {option.name}
+                    </p>
+                    <p className="mt-1 text-xs text-realtor-muted">
+                      {option.helper}
+                    </p>
+                  </div>
+                  {selected ? (
+                    <span className="rounded-full bg-realtor-primary px-2 py-0.5 text-[10px] font-semibold text-white">
+                      Selected
+                    </span>
+                  ) : null}
+                </div>
               </label>
             );
           })}
         </div>
+        </CreatorSection>
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-4">
+            <CreatorSection
+              title="Listing copy"
+              description="This is the main text buyers and sellers will read."
+              icon="copy"
+            >
             <Field label="Listing headline">
               <input
                 name="headline"
@@ -233,6 +267,13 @@ export default function ListingWebsiteEditor({
                 One feature per line.
               </p>
             </Field>
+            </CreatorSection>
+
+            <CreatorSection
+              title="Photos"
+              description="Set the main image and choose the photos that appear on the public listing page."
+              icon="photos"
+            >
             <Field label="Hero image">
               <input
                 name="hero_image_url"
@@ -251,18 +292,28 @@ export default function ListingWebsiteEditor({
                       onClick={() => setHeroImageUrl(url)}
                       className={`overflow-hidden rounded-2xl border text-left transition ${
                         heroImageUrl === url
-                          ? "border-realtor-primary"
-                          : "border-realtor-primary/15 hover:border-realtor-primary/35"
+                          ? "border-realtor-primary bg-realtor-primary/5 shadow-sm shadow-realtor-primary/10"
+                          : "border-realtor-primary/15 bg-realtor-surface/80 hover:border-realtor-primary/35 hover:bg-realtor-surface"
                       }`}
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={url}
-                        alt=""
-                        className="aspect-[4/3] w-full object-cover"
-                      />
-                      <span className="block px-2 py-1 text-[11px] text-realtor-muted">
-                        {heroImageUrl === url ? "Hero selected" : `Image ${index + 1}`}
+                      <span className="relative block">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={url}
+                          alt=""
+                          className="aspect-[4/3] w-full object-cover"
+                        />
+                        {heroImageUrl === url ? (
+                          <span className="absolute left-2 top-2 rounded-full bg-realtor-primary px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-white shadow-sm">
+                            Hero
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="flex items-center justify-between gap-2 px-3 py-2 text-[11px] text-realtor-muted">
+                        <span>Image {index + 1}</span>
+                        <span className="font-semibold text-realtor-primary">
+                          {heroImageUrl === url ? "Selected" : "Use as hero"}
+                        </span>
                       </span>
                     </button>
                   ))}
@@ -272,59 +323,59 @@ export default function ListingWebsiteEditor({
 
             {defaults.heroImageOptions.length > 0 ? (
               <div className="realtor-green-panel rounded-2xl p-4">
-                <p className="text-sm font-semibold text-realtor-text">
-                  Website gallery photos
-                </p>
-                <p className="mt-1 text-xs text-realtor-muted">
-                  Uncheck any photos you do not want shown on the public page.
-                  Click a photo above to make it the hero shot.
-                </p>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-realtor-text">
+                      Website gallery photos
+                    </p>
+                    <p className="mt-1 text-xs text-realtor-muted">
+                      iGUIDE supplied {defaults.heroImageOptions.length} web preview{" "}
+                      {defaults.heroImageOptions.length === 1 ? "photo" : "photos"} for
+                      this listing page. The full MLS and high-res photo sets stay as
+                      download buttons in the media tab.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-realtor-primary/20 bg-realtor-surface px-3 py-1 text-[11px] font-semibold text-realtor-primary">
+                    {galleryImageUrls.length} shown
+                  </span>
+                </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-3">
                   {defaults.heroImageOptions.slice(0, 24).map((url, index) => (
-                    <label
+                    <GalleryPhotoToggle
                       key={url}
-                      className="group overflow-hidden rounded-2xl border border-realtor-primary/15 bg-realtor-surface/70"
-                    >
-                      <input
-                        type="checkbox"
-                        name="gallery_image_urls"
-                        value={url}
-                        defaultChecked={selectedGalleryImages.includes(url)}
-                        className="sr-only peer"
-                      />
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={url}
-                        alt=""
-                        className="aspect-[4/3] w-full object-cover opacity-45 transition peer-checked:opacity-100"
-                      />
-                      <span className="flex items-center justify-between px-2 py-1 text-[11px] text-realtor-muted peer-checked:text-realtor-text">
-                        Photo {index + 1}
-                        <span className="rounded-full border border-realtor-primary/20 px-2 py-0.5">
-                          Show
-                        </span>
-                      </span>
-                    </label>
+                      url={url}
+                      index={index}
+                      shown={galleryImageUrls.includes(url)}
+                      onToggle={(checked) => {
+                        setGalleryImageUrls((current) => {
+                          if (checked) return [...new Set([...current, url])];
+                          return current.filter((item) => item !== url);
+                        });
+                      }}
+                    />
                   ))}
                 </div>
               </div>
-            ) : null}
+            ) : (
+              <div className="rounded-2xl border border-dashed border-realtor-primary/20 bg-realtor-surface-muted/70 p-4 text-sm text-realtor-muted">
+                No web preview photos are attached yet. Once iGUIDE sends preview
+                images, they will appear here for the public listing page.
+              </div>
+            )}
+            </CreatorSection>
           </div>
 
           <div className="space-y-4">
-            <div className="realtor-green-panel rounded-2xl p-4">
-              <p className="text-sm font-semibold text-realtor-text">
-                Show on public page
-              </p>
-              <p className="mt-1 text-xs text-realtor-muted">
-                Choose which delivered assets should appear directly on the
-                custom website.
-              </p>
-              <div className="mt-3 space-y-2">
+            <CreatorSection
+              title="Included media"
+              description="Choose which delivered assets should appear directly on the custom website."
+              icon="media"
+            >
+              <div className="space-y-2">
                 {SECTION_OPTIONS.map((option) => (
                   <label
                     key={option.id}
-                    className="flex items-start gap-2 rounded-xl border border-realtor-primary/15 bg-realtor-surface/70 px-3 py-2"
+                    className="flex items-start gap-2 rounded-xl border border-realtor-primary/15 bg-realtor-surface-muted/70 px-3 py-2"
                   >
                     <input
                       type="checkbox"
@@ -344,11 +395,14 @@ export default function ListingWebsiteEditor({
                   </label>
                 ))}
               </div>
-            </div>
+            </CreatorSection>
 
-            <div className="realtor-warm-panel rounded-2xl p-4">
-              <p className="text-sm font-semibold text-realtor-text">Publish</p>
-              <label className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-realtor-primary/15 bg-realtor-surface/70 px-3 py-2">
+            <CreatorSection
+              title="Publish"
+              description="Control whether the listing page is live."
+              icon="publish"
+            >
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-realtor-primary/15 bg-realtor-surface-muted/70 px-3 py-2">
                 <span className="text-sm text-realtor-text">Public website</span>
                 <input
                   type="checkbox"
@@ -369,11 +423,14 @@ export default function ListingWebsiteEditor({
               <p className="mt-2 break-all text-[11px] text-realtor-muted">
                 {publicUrl}
               </p>
-            </div>
+            </CreatorSection>
 
-            <div className="realtor-green-panel rounded-2xl p-4">
-              <p className="text-sm font-semibold text-realtor-text">Contact</p>
-              <div className="mt-3 space-y-3">
+            <CreatorSection
+              title="Agent contact"
+              description="This contact block appears on the public listing page."
+              icon="contact"
+            >
+              <div className="space-y-3">
                 <Field label="Agent name">
                   <input
                     name="agent_name"
@@ -423,26 +480,163 @@ export default function ListingWebsiteEditor({
                   />
                 </Field>
               </div>
-            </div>
+            </CreatorSection>
           </div>
         </div>
 
-        {error ? (
-          <p className="text-sm text-red-600" role="alert">
-            {error}
-          </p>
-        ) : null}
-        {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
+        <div className="realtor-elevated-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4">
+          <div>
+            {error ? (
+              <p className="text-sm text-red-600" role="alert">
+                {error}
+              </p>
+            ) : message ? (
+              <p className="text-sm text-emerald-700">{message}</p>
+            ) : (
+              <p className="text-sm text-realtor-muted">
+                Save changes before sharing the public listing page.
+              </p>
+            )}
+          </div>
 
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-full bg-realtor-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-realtor-primary/20 transition hover:bg-realtor-primary-light disabled:opacity-60"
-        >
-          {pending ? "Saving..." : "Save listing website"}
-        </button>
+          <button
+            type="submit"
+            disabled={pending}
+            className="rounded-full bg-realtor-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-realtor-primary/20 transition hover:bg-realtor-primary-light disabled:opacity-60"
+          >
+            {pending ? "Saving..." : "Save listing website"}
+          </button>
+        </div>
       </form>
     </section>
+  );
+}
+
+type CreatorIconKind =
+  | "template"
+  | "copy"
+  | "photos"
+  | "publish"
+  | "media"
+  | "contact";
+
+function CreatorSection({
+  title,
+  description,
+  icon,
+  children,
+}: {
+  title: string;
+  description: string;
+  icon: CreatorIconKind;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="realtor-elevated-panel rounded-2xl p-4 md:p-5">
+      <div className="space-y-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <CreatorIcon kind={icon} />
+          <div className="min-w-0 pt-0.5">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-realtor-text">
+              {title}
+            </h3>
+            <p className="mt-1 text-xs text-realtor-muted">{description}</p>
+          </div>
+        </div>
+        <div className="grid gap-3">{children}</div>
+      </div>
+    </section>
+  );
+}
+
+function GalleryPhotoToggle({
+  url,
+  index,
+  shown,
+  onToggle,
+}: {
+  url: string;
+  index: number;
+  shown: boolean;
+  onToggle: (checked: boolean) => void;
+}) {
+  return (
+    <label
+      className={`group cursor-pointer overflow-hidden rounded-2xl border bg-realtor-surface transition ${
+        shown
+          ? "border-realtor-primary shadow-sm shadow-realtor-primary/10"
+          : "border-realtor-primary/15 opacity-70 hover:border-realtor-primary/35 hover:opacity-100"
+      }`}
+    >
+      <input
+        type="checkbox"
+        name="gallery_image_urls"
+        value={url}
+        checked={shown}
+        onChange={(event) => onToggle(event.target.checked)}
+        className="sr-only"
+      />
+      <span className="relative block">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={url}
+          alt=""
+          className={`aspect-[4/3] w-full object-cover transition ${
+            shown ? "opacity-100" : "opacity-50 grayscale-[20%]"
+          }`}
+        />
+        <span
+          className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wider shadow-sm ${
+            shown
+              ? "bg-realtor-primary text-white"
+              : "bg-realtor-surface/90 text-realtor-muted"
+          }`}
+        >
+          {shown ? "Shown" : "Hidden"}
+        </span>
+      </span>
+      <span className="flex items-center justify-between gap-2 px-3 py-2 text-[11px]">
+        <span className="font-medium text-realtor-text">Photo {index + 1}</span>
+        <span className="font-semibold text-realtor-primary">
+          {shown ? "Tap to hide" : "Tap to show"}
+        </span>
+      </span>
+    </label>
+  );
+}
+
+function CreatorIcon({ kind }: { kind: CreatorIconKind }) {
+  const common = "h-5 w-5";
+  return (
+    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-realtor-primary/10 text-realtor-primary ring-1 ring-realtor-primary/10">
+      {kind === "template" ? (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M5 5h14v14H5zM8 9h8M8 13h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ) : kind === "copy" ? (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M7 5h10M7 9h10M7 13h7M7 17h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      ) : kind === "photos" ? (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="14" rx="2" stroke="currentColor" strokeWidth="1.8" />
+          <path d="m7 16 4-4 3 3 2-2 3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ) : kind === "publish" ? (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 5v10M8 9l4-4 4 4M6 19h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ) : kind === "media" ? (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M9 7h10M5 7h.01M9 12h10M5 12h.01M9 17h10M5 17h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      ) : (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="8" r="3" stroke="currentColor" strokeWidth="1.8" />
+          <path d="M5 19c1.6-3.2 4-4.8 7-4.8s5.4 1.6 7 4.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      )}
+    </span>
   );
 }
 
