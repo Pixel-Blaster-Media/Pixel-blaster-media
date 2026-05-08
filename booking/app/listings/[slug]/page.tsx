@@ -433,7 +433,7 @@ function Story({
         } ${dark ? "text-white/72" : "text-current/75"}`}
       >
         {listing.website.description ||
-          "A polished property website is ready for this listing. Add the property description in the Listing Website editor to replace this placeholder."}
+          "A polished custom listing page is ready for this property. Add the property description in the portal to replace this placeholder."}
       </p>
     </section>
   );

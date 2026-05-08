@@ -36,32 +36,42 @@ interface Defaults {
 
 const TEMPLATES: Array<{
   id: ListingWebsiteTemplate;
+  eyebrow: string;
   name: string;
   helper: string;
+  bestFor: string;
   previewClass: string;
 }> = [
   {
     id: "clean_mls_plus",
-    name: "Clean MLS Plus",
-    helper: "Bright and practical.",
+    eyebrow: "Custom page 1",
+    name: "Bright MLS-style",
+    helper: "Clean, simple, and photo-forward.",
+    bestFor: "Most listings, quick sharing, easy reading",
     previewClass: "bg-white text-slate-950 ring-slate-200",
   },
   {
     id: "modern_forest",
+    eyebrow: "Custom page 2",
     name: "Modern Forest",
-    helper: "Warm and earthy.",
+    helper: "Warm, earthy, and upscale.",
+    bestFor: "Modern homes, lifestyle listings, soft branding",
     previewClass: "bg-[#f7f2e8] text-[#21382b] ring-[#2f6b4f]/30",
   },
   {
     id: "estate_cinematic",
-    name: "Estate Cinematic",
-    helper: "Dark and premium.",
+    eyebrow: "Custom page 3",
+    name: "Luxury / Cinematic",
+    helper: "Dark, dramatic, and premium.",
+    bestFor: "Luxury homes, hero photos, big visual impact",
     previewClass: "bg-[#111513] text-white ring-[#c8a96a]/40",
   },
   {
     id: "editorial_magazine",
+    eyebrow: "Custom page 4",
     name: "Editorial Magazine",
-    helper: "Stylish and story-led.",
+    helper: "Elegant, curated, and story-led.",
+    bestFor: "Character homes, design-heavy listings, agent branding",
     previewClass: "bg-[#f8f7f3] text-[#20201d] ring-[#9f8f77]/35",
   },
 ];
@@ -122,41 +132,41 @@ export default function ListingWebsiteEditor({
   return (
     <section className="space-y-4">
       <div className="realtor-elevated-panel rounded-3xl p-4 md:p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
-            Listing website
-          </p>
-          <h2 className="mt-1 text-2xl font-semibold text-realtor-text">
-            Create a public listing page
-          </h2>
-          <p className="mt-2 max-w-2xl text-sm text-realtor-muted">
-            Pick a design, write the listing copy, and publish a shareable page
-            for buyers, sellers, and social posts.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
+              Custom listing page
+            </p>
+            <h2 className="mt-1 text-2xl font-semibold text-realtor-text">
+              Choose one of 4 custom pages
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm text-realtor-muted">
+              Pick a design, add the listing copy, choose the media to show,
+              then publish a polished property website agents can share.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                isPublished
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                  : "border-realtor-primary/15 bg-realtor-surface-muted text-realtor-muted"
+              }`}
+            >
+              {isPublished ? "Public" : "Private"}
+            </span>
+            {initial?.slug ? (
+              <a
+                href={`/listings/${initial.slug}`}
+                target="_blank"
+                rel="noopener"
+                className="rounded-full border border-realtor-primary/20 bg-realtor-surface px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:text-realtor-text"
+              >
+                Preview custom page
+              </a>
+            ) : null}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
-              isPublished
-                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                : "border-realtor-primary/15 bg-realtor-surface-muted text-realtor-muted"
-            }`}
-          >
-            {isPublished ? "Public" : "Private"}
-          </span>
-        {initial?.slug ? (
-          <a
-            href={`/listings/${initial.slug}`}
-            target="_blank"
-            rel="noopener"
-            className="rounded-full border border-realtor-primary/20 bg-realtor-surface px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:text-realtor-text"
-          >
-            Preview page
-          </a>
-        ) : null}
-      </div>
-      </div>
       </div>
 
       <form
@@ -167,14 +177,14 @@ export default function ListingWebsiteEditor({
           startTransition(async () => {
             const result = await savePortalListingWebsite(propertyId, formData);
             if (!result.ok) {
-              setError(result.error ?? "Could not save listing website.");
+              setError(result.error ?? "Could not save custom listing page.");
               return;
             }
             if (result.slug) setSlug(result.slug);
             setMessage(
               isPublished
-                ? "Listing website saved and published."
-                : "Listing website saved as private.",
+                ? "Custom listing page saved and published."
+                : "Custom listing page saved as private.",
             );
           });
         }}
@@ -182,8 +192,8 @@ export default function ListingWebsiteEditor({
         <input type="hidden" name="existing_slug" value={initial?.slug ?? ""} />
 
         <CreatorSection
-          title="Choose a template"
-          description="Start with the visual style that best fits this listing."
+          title="Choose a custom page"
+          description="Agents can switch between these 4 designs any time before sharing."
           icon="template"
         >
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -207,12 +217,15 @@ export default function ListingWebsiteEditor({
                   className="sr-only"
                 />
                 <div className={`rounded-xl p-3 ring-1 ${option.previewClass}`}>
-                  <div className="h-14 rounded-lg bg-current/15" />
+                  <div className="h-16 rounded-lg bg-current/15" />
                   <div className="mt-3 h-2 w-3/4 rounded-full bg-current/40" />
                   <div className="mt-2 h-2 w-1/2 rounded-full bg-current/25" />
                 </div>
                 <div className="mt-3 flex items-start justify-between gap-2">
                   <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">
+                      {option.eyebrow}
+                    </p>
                     <p className="text-sm font-semibold text-realtor-text">
                       {option.name}
                     </p>
@@ -226,6 +239,9 @@ export default function ListingWebsiteEditor({
                     </span>
                   ) : null}
                 </div>
+                <p className="mt-3 rounded-xl bg-realtor-surface/75 px-3 py-2 text-[11px] leading-relaxed text-realtor-muted">
+                  {option.bestFor}
+                </p>
               </label>
             );
           })}
@@ -271,7 +287,7 @@ export default function ListingWebsiteEditor({
 
             <CreatorSection
               title="Photos"
-              description="Set the main image and choose the photos that appear on the public listing page."
+              description="Set the main image and choose the photos that appear on the custom listing page."
               icon="photos"
             >
             <Field label="Hero image">
@@ -331,7 +347,7 @@ export default function ListingWebsiteEditor({
                     <p className="mt-1 text-xs text-realtor-muted">
                       iGUIDE supplied {defaults.heroImageOptions.length} web preview{" "}
                       {defaults.heroImageOptions.length === 1 ? "photo" : "photos"} for
-                      this listing page. The full MLS and high-res photo sets stay as
+                      this custom listing page. The full MLS and high-res photo sets stay as
                       download buttons in the media tab.
                     </p>
                   </div>
@@ -359,7 +375,7 @@ export default function ListingWebsiteEditor({
             ) : (
               <div className="rounded-2xl border border-dashed border-realtor-primary/20 bg-realtor-surface-muted/70 p-4 text-sm text-realtor-muted">
                 No web preview photos are attached yet. Once iGUIDE sends preview
-                images, they will appear here for the public listing page.
+                images, they will appear here for the custom listing page.
               </div>
             )}
             </CreatorSection>
@@ -368,7 +384,7 @@ export default function ListingWebsiteEditor({
           <div className="space-y-4">
             <CreatorSection
               title="Included media"
-              description="Choose which delivered assets should appear directly on the custom website."
+              description="Choose which delivered assets should appear directly on the custom listing page."
               icon="media"
             >
               <div className="space-y-2">
@@ -398,12 +414,12 @@ export default function ListingWebsiteEditor({
             </CreatorSection>
 
             <CreatorSection
-              title="Publish"
-              description="Control whether the listing page is live."
+              title="Publish custom page"
+              description="Control whether the custom listing page is live."
               icon="publish"
             >
               <label className="flex items-center justify-between gap-3 rounded-xl border border-realtor-primary/15 bg-realtor-surface-muted/70 px-3 py-2">
-                <span className="text-sm text-realtor-text">Public website</span>
+                <span className="text-sm text-realtor-text">Public custom page</span>
                 <input
                   type="checkbox"
                   name="is_published"
@@ -427,7 +443,7 @@ export default function ListingWebsiteEditor({
 
             <CreatorSection
               title="Agent contact"
-              description="This contact block appears on the public listing page."
+              description="This contact block appears on the custom listing page."
               icon="contact"
             >
               <div className="space-y-3">
@@ -494,7 +510,7 @@ export default function ListingWebsiteEditor({
               <p className="text-sm text-emerald-700">{message}</p>
             ) : (
               <p className="text-sm text-realtor-muted">
-                Save changes before sharing the public listing page.
+                Save changes before sharing the custom listing page.
               </p>
             )}
           </div>
@@ -504,7 +520,7 @@ export default function ListingWebsiteEditor({
             disabled={pending}
             className="rounded-full bg-realtor-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-realtor-primary/20 transition hover:bg-realtor-primary-light disabled:opacity-60"
           >
-            {pending ? "Saving..." : "Save listing website"}
+            {pending ? "Saving..." : "Save custom listing page"}
           </button>
         </div>
       </form>

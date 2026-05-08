@@ -313,7 +313,7 @@ function PortalTabs({
     },
     {
       id: "website",
-      label: "Listing page",
+      label: "Custom listing page",
       href: `/portal/${propertyId}?tab=website`,
     },
   ];
@@ -363,7 +363,7 @@ function buildQuickActions({
   const actions: QuickAction[] = [];
   if (listingWebsite) {
     actions.push({
-      label: "Open listing website",
+      label: "Open custom listing page",
       detail: listingWebsite.headline ?? "Public marketing page",
       href: `/listings/${listingWebsite.slug}`,
     });
