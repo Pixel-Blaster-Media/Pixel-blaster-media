@@ -53,6 +53,14 @@ export function buildDeliveryLinks(
 
   const iGuideAlias = findIGuideAlias(deliverables);
   for (const deliverable of deliverables) {
+    if (deliverable.source === "fotello" && deliverable.type === "photo_gallery") {
+      add(
+        "photos",
+        deliveryLinkLabel(deliverable) || "Fotello edited photo gallery",
+        deliverable.url,
+      );
+      continue;
+    }
     if (deliverable.source === "fotello") continue;
     if (deliverable.source === "iguide" && deliverable.type === "photo_gallery") {
       add(
@@ -188,6 +196,9 @@ function proxiedIGuideDownloadUrl(
 function deliveryLinkLabel(deliverable: DeliveryLinkInput): string {
   const savedLabel = metadataString(deliverable.metadata, "delivery_label");
   if (savedLabel) return savedLabel;
+  if (deliverable.source === "fotello" && deliverable.type === "photo_gallery") {
+    return "Fotello edited photo gallery";
+  }
   if (deliverable.type === "video" || deliverable.type === "aerial") {
     return isStreamingVideoUrl(deliverable.url)
       ? "YouTube / video link"
