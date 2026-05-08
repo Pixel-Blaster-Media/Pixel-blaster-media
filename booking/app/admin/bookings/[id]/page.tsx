@@ -38,6 +38,7 @@ import BookingActions, {
 import BookingWorkspaceTabs, {
   type WorkspaceTabId,
 } from "./BookingWorkspaceTabs";
+import FotelloSection from "./FotelloSection";
 import IGuideSection from "./IGuideSection";
 import InvoiceSection from "./InvoiceSection";
 import ListingWebsiteSection from "./ListingWebsiteSection";
@@ -189,6 +190,17 @@ export default async function BookingDetailPage({
   const readyDeliverables = (deliverables ?? []).filter((d) => d.ready_at);
   const portalApiConfigured = await hasPortalCredentials();
   const iguidePhotoDownloads = findIGuidePhotoDownloads(deliverables ?? []);
+  const fotelloDeliverables = (deliverables ?? [])
+    .filter((deliverable) => deliverable.source === "fotello")
+    .map((deliverable) => ({
+      id: deliverable.id,
+      external_id: deliverable.external_id,
+      url: deliverable.url,
+      status: metadataString(deliverable.metadata, "status"),
+      deliveryKind: metadataString(deliverable.metadata, "delivery_kind"),
+      shotType: metadataString(deliverable.metadata, "shot_type"),
+      syncedAt: metadataString(deliverable.metadata, "last_synced_at"),
+    }));
   const deliveryLinks = buildDeliveryLinks(
     readyDeliverables.map((deliverable) => ({
       id: deliverable.id,
@@ -338,9 +350,14 @@ export default async function BookingDetailPage({
                 <SectionIntro
                   eyebrow="Media"
                   title="Upload and sync deliverables"
-                  body="Use iGUIDE for tours, floor plans, and gallery photos. Add video links for YouTube, Drive, Dropbox, or direct video deliveries."
+                  body="Use Fotello for edited photo galleries, iGUIDE for tours and floor plans, and video links for YouTube, Drive, Dropbox, or direct video deliveries."
                 />
                 <VideoLinksSection bookingId={booking.id} />
+                <FotelloSection
+                  bookingId={booking.id}
+                  initialListingId={booking.fotello_listing_id}
+                  deliverables={fotelloDeliverables}
+                />
                 <IGuideSection
                   bookingId={booking.id}
                   initialIGuideId={booking.iguide_id}
