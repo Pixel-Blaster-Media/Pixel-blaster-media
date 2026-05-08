@@ -71,6 +71,10 @@ async function apiKey(): Promise<string> {
   return key;
 }
 
+function normalizeFotelloApiKey(key: string): string {
+  return key.trim().replace(/^Bearer\s+/i, "").replace(/\u0430/g, "a");
+}
+
 async function request<T>(
   method: "GET" | "POST",
   path: string,
@@ -87,7 +91,10 @@ async function request<T>(
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
+      // Fotello's docs label this as BearerAuth, but the Cloud Function
+      // currently accepts the raw `api-...` token in Authorization. Sending
+      // `Bearer api-...` returns 401.
+      Authorization: normalizeFotelloApiKey(token),
     },
     body: init.body ? JSON.stringify(init.body) : undefined,
     cache: "no-store",
