@@ -211,6 +211,12 @@ export default async function BookingDetailPage({
     })),
     process.env.NEXT_PUBLIC_APP_URL ?? "",
   );
+  const checklistItems = buildDeliveryChecklistItems({
+    booking,
+    links: deliveryLinks,
+    readyDeliverables,
+    deliveryEmailSentAt: deliveryNotification?.sent_at ?? null,
+  });
   const fullAddress = [
     property?.street_address,
     booking.unit_number ? `Unit ${booking.unit_number}` : null,
@@ -326,201 +332,126 @@ export default async function BookingDetailPage({
         </div>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <main>
-          <BookingWorkspaceTabs
-            activeTabId={activeTabId}
-            baseHref={`/admin/bookings/${booking.id}`}
-            overview={
-              <>
-                <SectionIntro
-                  eyebrow="Overview"
-                  title="What needs to happen next?"
-                  body="Use this area for the core job state: confirm, move forward, or cancel the booking."
-                />
-                <BookingActions
-                  bookingId={booking.id}
-                  currentStatus={booking.status}
-                  transitions={transitions}
-                />
-              </>
-            }
-            media={
-              <>
-                <SectionIntro
-                  eyebrow="Media"
-                  title="Upload and sync deliverables"
-                  body="Use Fotello for edited photo galleries, iGUIDE for tours and floor plans, and video links for YouTube, Drive, Dropbox, or direct video deliveries."
-                />
-                <VideoLinksSection bookingId={booking.id} />
-                <FotelloSection
-                  bookingId={booking.id}
-                  initialListingId={booking.fotello_listing_id}
-                  deliverables={fotelloDeliverables}
-                />
-                <IGuideSection
-                  bookingId={booking.id}
-                  initialIGuideId={booking.iguide_id}
-                  initialPortalId={booking.iguide_portal_id}
-                  portalApiConfigured={portalApiConfigured}
-                  job={iguideJob ?? null}
-                  initialPhotoDownloads={iguidePhotoDownloads}
-                />
-                <ManualLinksPanel
-                  bookingId={booking.id}
-                  deliverables={deliverables ?? []}
-                />
-              </>
-            }
-            website={
-              <>
-                <SectionIntro
-                  eyebrow="Website"
-                  title="Create a public listing launch page"
-                  body="Give the agent a polished, shareable website powered by the same media and listing details already attached to this job."
-                />
-                <ListingWebsiteSection
-                  bookingId={booking.id}
-                  initial={listingWebsite ?? null}
-                  defaults={{
-                    slug: buildListingSlug(
-                      property?.street_address ?? "listing",
-                      property?.city ?? "",
-                    ),
-                    headline: property?.street_address
-                      ? `${property.street_address}${property.city ? `, ${property.city}` : ""}`
-                      : "Featured listing",
-                    agentName: profile?.full_name ?? "",
-                    agentEmail: profile?.email ?? "",
-                    agentPhone: profile?.phone ?? "",
-                    brokerageName: profile?.brokerage ?? "",
-                    heroImageUrl: firstHeroImage,
-                    heroImageOptions,
-                    publicBaseUrl: process.env.NEXT_PUBLIC_APP_URL ?? "",
-                  }}
-                />
-              </>
-            }
-            delivery={
-              <>
-                <SectionIntro
-                  eyebrow="Delivery"
-                  title="Send the realtor their finished media"
-                  body="Preview the grouped links, add extra recipients, and resend the delivery email when agents misplace it."
-                />
-                <DeliveryEmailPanel
-                  bookingId={booking.id}
-                  deliveryEmailSentAt={deliveryNotification?.sent_at ?? null}
-                />
-                <DeliveryLinksPanel links={deliveryLinks} />
-              </>
-            }
-            billing={
-              <>
-                <SectionIntro
-                  eyebrow="Billing"
-                  title="Create or check the invoice"
-                  body="Keep invoicing separate from media delivery so it is easy to find when the job is ready to bill."
-                />
-                <InvoiceSection
-                  bookingId={booking.id}
-                  initial={{
-                    id: booking.quickbooks_invoice_id,
-                    number: booking.quickbooks_invoice_number,
-                    url: booking.quickbooks_invoice_url,
-                    status: booking.quickbooks_invoice_status,
-                    totalCents: booking.quickbooks_invoice_total_cents,
-                    syncedAt: booking.quickbooks_invoice_synced_at,
-                  }}
-                />
-              </>
-            }
-          />
-        </main>
+      <DeliveryReadinessStrip
+        baseHref={`/admin/bookings/${booking.id}`}
+        items={checklistItems}
+      />
 
-        <aside className="space-y-4 lg:sticky lg:top-16 lg:self-start">
-          <Panel title="Realtor">
-            <Row label="Name" value={profile?.full_name ?? "—"} />
-            <Row
-              label="Email"
-              value={
-                profile?.email ? (
-                  <a
-                    href={`mailto:${profile.email}`}
-                    className="text-brand-light underline"
-                  >
-                    {profile.email}
-                  </a>
-                ) : (
-                  "—"
-                )
-              }
+      <BookingWorkspaceTabs
+        activeTabId={activeTabId}
+        baseHref={`/admin/bookings/${booking.id}`}
+        overview={
+          <>
+            <SectionIntro
+              eyebrow="Job"
+              title="Move the booking forward"
+              body="Confirm, advance, or cancel the shoot."
             />
-            <Row label="Phone" value={profile?.phone ?? "—"} />
-            <Row label="Brokerage" value={profile?.brokerage ?? "—"} />
-          </Panel>
-
-          <Panel title="Shoot details">
-            <Row
-              label="Services"
-              value={booking.services.map(labelForService).join(", ") || "—"}
+            <BookingActions
+              bookingId={booking.id}
+              currentStatus={booking.status}
+              transitions={transitions}
             />
-            <Row
-              label="Add-ons"
-              value={
-                booking.add_ons.length
-                  ? booking.add_ons.map(labelForAddOn).join(", ")
-                  : "—"
-              }
+          </>
+        }
+        media={
+          <>
+            <SectionIntro
+              eyebrow="Media"
+              title="Add the finished media"
+              body="Use Fotello for edited photos, sync iGUIDE, add video links, and manage extra delivery links."
             />
-            <Row
-              label="Square footage"
-              value={booking.square_footage ? `${booking.square_footage}` : "—"}
+            <VideoLinksSection bookingId={booking.id} />
+            <FotelloSection
+              bookingId={booking.id}
+              initialListingId={booking.fotello_listing_id}
+              deliverables={fotelloDeliverables}
             />
-            <Row label="Unit #" value={booking.unit_number ?? "—"} />
-            <Row
-              label="Occupancy"
-              value={
-                booking.is_vacant === "vacant"
-                  ? "Vacant"
-                  : booking.is_vacant === "partial"
-                    ? "Partially occupied"
-                    : booking.is_vacant === "occupied"
-                      ? "Occupied"
-                      : "—"
-              }
+            <IGuideSection
+              bookingId={booking.id}
+              initialIGuideId={booking.iguide_id}
+              initialPortalId={booking.iguide_portal_id}
+              portalApiConfigured={portalApiConfigured}
+              job={iguideJob ?? null}
+              initialPhotoDownloads={iguidePhotoDownloads}
             />
-            <Row
-              label="Basement"
-              value={
-                booking.include_basement == null
-                  ? "—"
-                  : booking.include_basement
-                    ? "Include"
-                    : "Skip"
-              }
+            <ManualLinksPanel
+              bookingId={booking.id}
+              deliverables={deliverables ?? []}
             />
-          </Panel>
-
-          <DeliveryChecklist
+          </>
+        }
+        website={
+          <>
+            <SectionIntro
+              eyebrow="Custom page"
+              title="Build the listing page"
+              body="Pick a template, choose media, and publish a shareable page."
+            />
+            <ListingWebsiteSection
+              bookingId={booking.id}
+              initial={listingWebsite ?? null}
+              defaults={{
+                slug: buildListingSlug(
+                  property?.street_address ?? "listing",
+                  property?.city ?? "",
+                ),
+                headline: property?.street_address
+                  ? `${property.street_address}${property.city ? `, ${property.city}` : ""}`
+                  : "Featured listing",
+                agentName: profile?.full_name ?? "",
+                agentEmail: profile?.email ?? "",
+                agentPhone: profile?.phone ?? "",
+                brokerageName: profile?.brokerage ?? "",
+                heroImageUrl: firstHeroImage,
+                heroImageOptions,
+                publicBaseUrl: process.env.NEXT_PUBLIC_APP_URL ?? "",
+              }}
+            />
+          </>
+        }
+        delivery={
+          <>
+            <SectionIntro
+              eyebrow="Delivery"
+              title="Send the media"
+              body="Preview links, add extra recipients, and resend the email."
+            />
+            <DeliveryEmailPanel
+              bookingId={booking.id}
+              deliveryEmailSentAt={deliveryNotification?.sent_at ?? null}
+            />
+            <DeliveryLinksPanel links={deliveryLinks} />
+          </>
+        }
+        billing={
+          <>
+            <SectionIntro
+              eyebrow="Billing"
+              title="Invoice"
+              body="Create or refresh the QuickBooks invoice."
+            />
+            <InvoiceSection
+              bookingId={booking.id}
+              initial={{
+                id: booking.quickbooks_invoice_id,
+                number: booking.quickbooks_invoice_number,
+                url: booking.quickbooks_invoice_url,
+                status: booking.quickbooks_invoice_status,
+                totalCents: booking.quickbooks_invoice_total_cents,
+                syncedAt: booking.quickbooks_invoice_synced_at,
+              }}
+            />
+          </>
+        }
+        details={
+          <DetailsTab
             booking={booking}
-            links={deliveryLinks}
-            readyDeliverables={readyDeliverables}
-            deliveryEmailSentAt={deliveryNotification?.sent_at ?? null}
+            profile={profile}
+            fullAddress={fullAddress}
           />
-
-          {booking.client_notes || booking.internal_notes ? (
-            <Panel title="Notes">
-              {booking.client_notes ? (
-                <Note title="Realtor" body={booking.client_notes} />
-              ) : null}
-              {booking.internal_notes ? (
-                <Note title="Internal" body={booking.internal_notes} />
-              ) : null}
-            </Panel>
-          ) : null}
-        </aside>
-      </div>
+        }
+      />
     </div>
   );
 }
@@ -529,94 +460,207 @@ function parseWorkspaceTab(raw: string | undefined): WorkspaceTabId {
   return raw === "media" ||
     raw === "website" ||
     raw === "delivery" ||
-    raw === "billing"
+    raw === "billing" ||
+    raw === "details"
     ? raw
     : "overview";
 }
 
-function DeliveryChecklist({
+function DetailsTab({
   booking,
-  links,
-  readyDeliverables,
-  deliveryEmailSentAt,
+  profile,
+  fullAddress,
 }: {
   booking: BookingDetail;
-  links: DeliveryLink[];
-  readyDeliverables: DeliverableRow[];
-  deliveryEmailSentAt: string | null;
+  profile: BookingDetail["profiles"];
+  fullAddress: string;
 }) {
-  const items = buildDeliveryChecklistItems({
-    booking,
-    links,
-    readyDeliverables,
-    deliveryEmailSentAt,
-  });
+  return (
+    <>
+      <SectionIntro
+        eyebrow="Details"
+        title="Reference info"
+        body="Realtor, property, shoot choices, and notes live here when you need them."
+      />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel title="Realtor profile">
+          <Row label="Name" value={profile?.full_name ?? "—"} />
+          <Row
+            label="Email"
+            value={
+              profile?.email ? (
+                <a
+                  href={`mailto:${profile.email}`}
+                  className="text-brand-light underline"
+                >
+                  {profile.email}
+                </a>
+              ) : (
+                "—"
+              )
+            }
+          />
+          <Row
+            label="Phone"
+            value={
+              profile?.phone ? (
+                <a
+                  href={`tel:${profile.phone}`}
+                  className="text-brand-light underline"
+                >
+                  {profile.phone}
+                </a>
+              ) : (
+                "—"
+              )
+            }
+          />
+          <Row label="Brokerage" value={profile?.brokerage ?? "—"} />
+        </Panel>
+
+        <Panel title="Shoot details">
+          <Row
+            label="Services"
+            value={booking.services.map(labelForService).join(", ") || "—"}
+          />
+          <Row
+            label="Add-ons"
+            value={
+              booking.add_ons.length
+                ? booking.add_ons.map(labelForAddOn).join(", ")
+                : "—"
+            }
+          />
+          <Row
+            label="Square footage"
+            value={booking.square_footage ? `${booking.square_footage}` : "—"}
+          />
+          <Row label="Unit #" value={booking.unit_number ?? "—"} />
+          <Row
+            label="Occupancy"
+            value={
+              booking.is_vacant === "vacant"
+                ? "Vacant"
+                : booking.is_vacant === "partial"
+                  ? "Partially occupied"
+                  : booking.is_vacant === "occupied"
+                    ? "Occupied"
+                    : "—"
+            }
+          />
+          <Row
+            label="Basement"
+            value={
+              booking.include_basement == null
+                ? "—"
+                : booking.include_basement
+                  ? "Include"
+                  : "Skip"
+            }
+          />
+          {fullAddress ? (
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                fullAddress,
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block rounded-xl border border-white/10 bg-ink/25 px-3 py-2 text-sm font-semibold text-brand-light transition hover:border-brand-light/50"
+            >
+              Open in Google Maps
+            </a>
+          ) : null}
+        </Panel>
+
+        <Panel title="Notes">
+          {booking.client_notes || booking.internal_notes ? (
+            <>
+              {booking.client_notes ? (
+                <Note title="Realtor" body={booking.client_notes} />
+              ) : null}
+              {booking.internal_notes ? (
+                <Note title="Internal" body={booking.internal_notes} />
+              ) : null}
+            </>
+          ) : (
+            <p className="text-sm text-ink-muted">No notes on this booking.</p>
+          )}
+        </Panel>
+      </div>
+    </>
+  );
+}
+
+function DeliveryReadinessStrip({
+  baseHref,
+  items,
+}: {
+  baseHref: string;
+  items: ChecklistItem[];
+}) {
   const missingRequired = items.filter(
     (item) => item.required && item.status === "missing",
   ).length;
+  const requiredItems = items.filter((item) => item.required);
+  const deliveryEmail = items.find((item) => item.label === "Delivery email");
 
   return (
-    <Panel title="Delivery checklist">
-      <div
-        className={`rounded-2xl border p-3 ${
-          missingRequired === 0
-            ? "border-emerald-400/30 bg-emerald-500/10"
-            : "border-amber-400/30 bg-amber-500/10"
-        }`}
-      >
-        <p className="text-sm font-semibold text-white">
-          {missingRequired === 0
-            ? "Ready to send"
-            : `${missingRequired} required item${
-                missingRequired === 1 ? "" : "s"
-              } missing`}
-        </p>
-        <p className="mt-1 text-xs text-ink-muted">
-          Use this as a quick final check before sending or resending the
-          delivery email.
-        </p>
-      </div>
-      <ul className="space-y-2">
-        {items.map((item) => (
-          <li
-            key={item.label}
-            className="rounded-2xl border border-white/10 bg-ink/35 p-3"
+    <section className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+            Delivery readiness
+          </p>
+          <h2 className="mt-1 text-lg font-semibold text-white">
+            {missingRequired === 0
+              ? "Ready when you are"
+              : `${missingRequired} thing${missingRequired === 1 ? "" : "s"} to finish`}
+          </h2>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={`${baseHref}?tab=media`}
+            className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-brand-light hover:bg-brand/10"
           >
-            <div className="flex items-start gap-2">
-              <span
-                className={`mt-0.5 grid h-5 w-5 place-items-center rounded-full text-xs font-bold ${
-                  item.status === "ready"
-                    ? "bg-emerald-400/20 text-emerald-200"
-                    : item.status === "missing"
-                      ? "bg-amber-400/20 text-amber-100"
-                      : "bg-white/10 text-ink-muted"
-                }`}
-                aria-hidden="true"
-              >
-                {item.status === "ready"
-                  ? "✓"
-                  : item.status === "missing"
-                    ? "!"
-                    : "·"}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-semibold text-white">
-                    {item.label}
-                  </p>
-                  {!item.required ? (
-                    <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-ink-muted">
-                      Optional
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-1 text-xs text-ink-muted">{item.detail}</p>
-              </div>
-            </div>
-          </li>
+            Add media
+          </Link>
+          <Link
+            href={`${baseHref}?tab=delivery`}
+            className="rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-light"
+          >
+            Send delivery
+          </Link>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {requiredItems.map((item) => (
+          <ReadinessPill key={item.label} item={item} />
         ))}
-      </ul>
-    </Panel>
+        {deliveryEmail ? <ReadinessPill item={deliveryEmail} /> : null}
+      </div>
+    </section>
+  );
+}
+
+function ReadinessPill({ item }: { item: ChecklistItem }) {
+  const className =
+    item.status === "ready"
+      ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
+      : item.status === "missing"
+        ? "border-amber-400/30 bg-amber-500/10 text-amber-100"
+        : "border-white/10 bg-ink/35 text-ink-muted";
+  return (
+    <div className={`rounded-full border px-3 py-1.5 text-xs ${className}`}>
+      <span className="font-semibold">{item.label}</span>
+      <span className="ml-2 opacity-75">
+        {item.status === "ready"
+          ? "Ready"
+          : item.status === "missing"
+            ? "Missing"
+            : "Optional"}
+      </span>
+    </div>
   );
 }
 

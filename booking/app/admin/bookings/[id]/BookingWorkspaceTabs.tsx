@@ -6,12 +6,12 @@ export type WorkspaceTabId =
   | "media"
   | "website"
   | "delivery"
-  | "billing";
+  | "billing"
+  | "details";
 
 interface WorkspaceTab {
   id: WorkspaceTabId;
   label: string;
-  helper: string;
   content: ReactNode;
 }
 
@@ -23,6 +23,7 @@ export default function BookingWorkspaceTabs({
   website,
   delivery,
   billing,
+  details,
 }: {
   activeTabId: WorkspaceTabId;
   baseHref: string;
@@ -31,37 +32,38 @@ export default function BookingWorkspaceTabs({
   website: ReactNode;
   delivery: ReactNode;
   billing: ReactNode;
+  details: ReactNode;
 }) {
   const tabs: WorkspaceTab[] = [
     {
       id: "overview",
-      label: "Overview",
-      helper: "Status, cancellation, and the next job move.",
+      label: "Job",
       content: overview,
     },
     {
       id: "media",
       label: "Media",
-      helper: "Photos, video links, iGUIDE, and manual media links.",
       content: media,
     },
     {
       id: "website",
-      label: "Website",
-      helper: "Template, listing copy, contact details, and publish state.",
+      label: "Custom page",
       content: website,
     },
     {
       id: "delivery",
       label: "Delivery",
-      helper: "Preview links and send or resend the realtor email.",
       content: delivery,
     },
     {
       id: "billing",
       label: "Billing",
-      helper: "QuickBooks creation and invoice status.",
       content: billing,
+    },
+    {
+      id: "details",
+      label: "Details",
+      content: details,
     },
   ];
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
@@ -69,7 +71,7 @@ export default function BookingWorkspaceTabs({
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-white/10 bg-ink-soft/50 p-2">
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
           {tabs.map((tab) => {
             const selected = tab.id === activeTab.id;
             return (
@@ -83,17 +85,12 @@ export default function BookingWorkspaceTabs({
                 className={`rounded-xl px-3 py-3 text-left transition ${
                   selected
                     ? "bg-brand text-white shadow-sm"
-                    : "text-ink-muted hover:bg-white/5 hover:text-white"
+                    : "border border-white/10 text-ink-muted hover:border-brand-light/40 hover:bg-white/5 hover:text-white"
                 }`}
                 aria-current={selected ? "page" : undefined}
               >
-                <span className="block text-sm font-semibold">{tab.label}</span>
-                <span
-                  className={`mt-1 block text-xs ${
-                    selected ? "text-white/80" : "text-ink-muted"
-                  }`}
-                >
-                  {tab.helper}
+                <span className="block text-center text-sm font-semibold">
+                  {tab.label}
                 </span>
               </Link>
             );
