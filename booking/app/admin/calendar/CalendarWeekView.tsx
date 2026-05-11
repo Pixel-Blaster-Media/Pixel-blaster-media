@@ -98,6 +98,32 @@ export default function CalendarWeekView({
   const selectedSlot = selected
     ? toDateTimeLocal(selected.day.dateInput, selected.hour, selected.minute)
     : null;
+  const checkRealtor = () => {
+    const email = realtor.contact_email.trim();
+    if (!email.includes("@")) {
+      setLookupMessage("Enter a full email, then check.");
+      return;
+    }
+    setLookupMessage("Checking realtor...");
+    startLookupTransition(async () => {
+      try {
+        const result = await lookupRealtor(email);
+        if (!result.ok || !result.realtor) {
+          setLookupMessage(result.error ?? "New realtor. Enter details below.");
+          return;
+        }
+        setRealtor({
+          contact_email: result.realtor.email,
+          contact_name: result.realtor.fullName,
+          contact_phone: result.realtor.phone,
+          brokerage: result.realtor.brokerage,
+        });
+        setLookupMessage("Realtor found.");
+      } catch {
+        setLookupMessage("Could not check realtor. Enter details manually.");
+      }
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -328,51 +354,37 @@ export default function CalendarWeekView({
               <FormSection
                 step="2"
                 title="Realtor"
-                detail="Enter email first to auto-fill returning clients."
+                detail="Type the email, then check for a saved realtor if needed."
               >
                 <div className="grid gap-3 md:grid-cols-2">
-                  <TextField
-                    label="Realtor email"
-                    name="contact_email"
-                    type="email"
-                    required
-                    autoComplete="email"
-                    value={realtor.contact_email}
-                    onChange={(event) => {
-                      setLookupMessage(null);
-                      setRealtor((draft) => ({
-                        ...draft,
-                        contact_email: event.currentTarget.value,
-                      }));
-                    }}
-                    onBlur={() => {
-                      const email = realtor.contact_email.trim();
-                      if (!email.includes("@")) return;
-                      setLookupMessage("Checking realtor...");
-                      startLookupTransition(async () => {
-                        try {
-                          const result = await lookupRealtor(email);
-                          if (!result.ok || !result.realtor) {
-                            setLookupMessage(
-                              result.error ?? "New realtor. Enter details below.",
-                            );
-                            return;
-                          }
-                          setRealtor({
-                            contact_email: result.realtor.email,
-                            contact_name: result.realtor.fullName,
-                            contact_phone: result.realtor.phone,
-                            brokerage: result.realtor.brokerage,
-                          });
-                          setLookupMessage("Realtor found.");
-                        } catch {
-                          setLookupMessage(
-                            "Could not check realtor. Enter details manually.",
-                          );
-                        }
-                      });
-                    }}
-                  />
+                  <label className="block">
+                    <span className="text-xs text-ink-muted">Realtor email</span>
+                    <div className="mt-1 flex gap-2">
+                      <input
+                        name="contact_email"
+                        type="email"
+                        required
+                        autoComplete="email"
+                        value={realtor.contact_email}
+                        onChange={(event) => {
+                          setLookupMessage(null);
+                          setRealtor((draft) => ({
+                            ...draft,
+                            contact_email: event.currentTarget.value,
+                          }));
+                        }}
+                        className="min-w-0 flex-1 rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={checkRealtor}
+                        disabled={lookupPending}
+                        className="shrink-0 rounded-xl border border-brand/30 bg-brand/10 px-3 py-2 text-xs font-semibold text-brand-light transition hover:border-brand/50 hover:bg-brand/20 disabled:opacity-60"
+                      >
+                        {lookupPending ? "Checking..." : "Check"}
+                      </button>
+                    </div>
+                  </label>
                   <TextField
                     label="Realtor name"
                     name="contact_name"
