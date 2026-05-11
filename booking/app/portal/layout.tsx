@@ -3,6 +3,11 @@ import { redirect } from "next/navigation";
 
 import { signOut } from "@/lib/auth/sign-out";
 import { requireUser } from "@/lib/auth/require-user";
+import { getServerSupabase } from "@/lib/supabase/server";
+
+interface ProfilePhotoRow {
+  profile_photo_url: string | null;
+}
 
 export default async function PortalLayout({
   children,
@@ -16,13 +21,19 @@ export default async function PortalLayout({
   if (user.role === "admin") {
     redirect("/admin");
   }
+  const profilePhotoUrl = await loadProfilePhotoUrl(user.userId);
 
   return (
     <div className="portal-layout realtor-theme min-h-[60vh]">
       <header className="portal-header mb-6 flex flex-wrap items-center justify-between gap-3 rounded-3xl px-3 py-2.5 md:px-4 md:py-3">
         <div className="flex items-center gap-3">
           <span className="portal-mark" aria-hidden="true">
-            {initialsFor(user.fullName ?? user.email)}
+            {profilePhotoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={profilePhotoUrl} alt="" />
+            ) : (
+              initialsFor(user.fullName ?? user.email)
+            )}
           </span>
           <div>
             <p className="portal-kicker text-[11px] uppercase tracking-[0.2em]">
@@ -53,6 +64,21 @@ export default async function PortalLayout({
       {children}
     </div>
   );
+}
+
+async function loadProfilePhotoUrl(userId: string): Promise<string | null> {
+  try {
+    const supabase = await getServerSupabase();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("profile_photo_url")
+      .eq("id", userId)
+      .maybeSingle<ProfilePhotoRow>();
+    if (error) return null;
+    return data?.profile_photo_url ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function initialsFor(nameOrEmail: string): string {

@@ -60,6 +60,10 @@ interface ProfilesTable {
     full_name: string | null;
     phone: string | null;
     brokerage: string | null;
+    profile_photo_url: string | null;
+    brokerage_logo_url: string | null;
+    website_url: string | null;
+    instagram_url: string | null;
     role: UserRole;
     created_at: string;
     updated_at: string;
@@ -70,6 +74,10 @@ interface ProfilesTable {
     full_name?: string | null;
     phone?: string | null;
     brokerage?: string | null;
+    profile_photo_url?: string | null;
+    brokerage_logo_url?: string | null;
+    website_url?: string | null;
+    instagram_url?: string | null;
     role?: UserRole;
   };
   Update: Partial<ProfilesTable["Insert"]>;

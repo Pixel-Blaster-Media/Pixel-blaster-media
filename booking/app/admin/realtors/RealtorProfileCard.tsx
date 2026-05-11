@@ -1,0 +1,326 @@
+"use client";
+
+import { useState, useTransition } from "react";
+
+import { updateRealtorProfile } from "./actions";
+
+export interface RealtorProfileView {
+  id: string;
+  email: string;
+  full_name: string | null;
+  phone: string | null;
+  brokerage: string | null;
+  profile_photo_url: string | null;
+  brokerage_logo_url: string | null;
+  website_url: string | null;
+  instagram_url: string | null;
+  created_at: string;
+  bookingCount: number;
+  activeBookingCount: number;
+  deliveredBookingCount: number;
+  latestBooking: {
+    id: string;
+    address: string;
+    scheduled_at: string | null;
+    status: string;
+  } | null;
+}
+
+export default function RealtorProfileCard({
+  realtor,
+}: {
+  realtor: RealtorProfileView;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [message, setMessage] = useState<
+    { kind: "ok" | "err"; text: string } | null
+  >(null);
+
+  return (
+    <article className="realtor-elevated-panel overflow-hidden rounded-3xl">
+      <div className="flex flex-col gap-4 p-4 md:flex-row md:items-start">
+        <div className="flex items-start gap-3 md:w-72 md:shrink-0">
+          <ProfileImage realtor={realtor} />
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-semibold text-realtor-text">
+              {realtor.full_name || realtor.email}
+            </h2>
+            <p className="truncate text-sm text-realtor-muted">{realtor.email}</p>
+            {realtor.brokerage ? (
+              <p className="mt-1 truncate text-xs font-medium text-realtor-primary">
+                {realtor.brokerage}
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-amber-700">Brokerage missing</p>
+            )}
+          </div>
+        </div>
+
+        <div className="grid flex-1 gap-2 text-xs text-realtor-muted sm:grid-cols-3">
+          <Stat label="Total shoots" value={String(realtor.bookingCount)} />
+          <Stat label="Active" value={String(realtor.activeBookingCount)} />
+          <Stat label="Delivered" value={String(realtor.deliveredBookingCount)} />
+        </div>
+
+        <div className="md:w-72 md:shrink-0">
+          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
+            Latest shoot
+          </p>
+          {realtor.latestBooking ? (
+            <a
+              href={`/admin/bookings/${realtor.latestBooking.id}`}
+              className="mt-1 block rounded-2xl border border-realtor-primary/15 bg-white/70 px-3 py-2 text-sm text-realtor-text transition hover:border-realtor-primary/35 hover:bg-white"
+            >
+              <span className="block truncate font-semibold">
+                {realtor.latestBooking.address}
+              </span>
+              <span className="mt-0.5 block text-xs text-realtor-muted">
+                {realtor.latestBooking.scheduled_at
+                  ? new Date(realtor.latestBooking.scheduled_at).toLocaleDateString()
+                  : "No date"}{" "}
+                · {realtor.latestBooking.status}
+              </span>
+            </a>
+          ) : (
+            <p className="mt-1 rounded-2xl border border-dashed border-realtor-primary/15 px-3 py-2 text-sm">
+              No shoots yet.
+            </p>
+          )}
+        </div>
+      </div>
+
+      <details className="border-t border-realtor-primary/10 bg-white/55">
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-realtor-primary transition hover:bg-realtor-primary/5">
+          Edit realtor profile
+        </summary>
+        <form
+          action={(formData) => {
+            setMessage(null);
+            startTransition(async () => {
+              const result = await updateRealtorProfile(formData);
+              setMessage(
+                result.ok
+                  ? { kind: "ok", text: "Profile saved." }
+                  : {
+                      kind: "err",
+                      text: result.error ?? "Could not save profile.",
+                    },
+              );
+            });
+          }}
+          className="space-y-5 px-4 pb-4"
+        >
+          <input type="hidden" name="profile_id" value={realtor.id} />
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="Full name">
+              <input
+                name="full_name"
+                defaultValue={realtor.full_name ?? ""}
+                className="admin-input"
+                placeholder="Agent name"
+              />
+            </Field>
+            <Field label="Email">
+              <input
+                value={realtor.email}
+                readOnly
+                className="admin-input opacity-75"
+                title="Email is controlled by Supabase Auth."
+              />
+              <p className="mt-1 text-[11px] text-realtor-muted">
+                Email sign-in is controlled by Supabase Auth, so this stays
+                read-only here.
+              </p>
+            </Field>
+            <Field label="Phone">
+              <input
+                name="phone"
+                defaultValue={realtor.phone ?? ""}
+                className="admin-input"
+                placeholder="905-555-1234"
+              />
+            </Field>
+            <Field label="Brokerage">
+              <input
+                name="brokerage"
+                defaultValue={realtor.brokerage ?? ""}
+                className="admin-input"
+                placeholder="Brokerage name"
+              />
+            </Field>
+            <Field label="Website">
+              <input
+                name="website_url"
+                defaultValue={realtor.website_url ?? ""}
+                className="admin-input"
+                placeholder="https://agent-site.com"
+              />
+            </Field>
+            <Field label="Instagram">
+              <input
+                name="instagram_url"
+                defaultValue={realtor.instagram_url ?? ""}
+                className="admin-input"
+                placeholder="https://instagram.com/agent"
+              />
+            </Field>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <MediaField
+              title="Profile photo / headshot"
+              currentUrl={realtor.profile_photo_url}
+              urlName="profile_photo_url"
+              fileName="profile_photo_file"
+              clearName="clear_profile_photo"
+            />
+            <MediaField
+              title="Brokerage logo"
+              currentUrl={realtor.brokerage_logo_url}
+              urlName="brokerage_logo_url"
+              fileName="brokerage_logo_file"
+              clearName="clear_brokerage_logo"
+            />
+          </div>
+
+          {message ? (
+            <p
+              className={
+                "rounded-2xl border px-3 py-2 text-sm " +
+                (message.kind === "ok"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-red-200 bg-red-50 text-red-800")
+              }
+            >
+              {message.text}
+            </p>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="submit"
+              disabled={isPending}
+              className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-realtor-primary/90 disabled:opacity-60"
+            >
+              {isPending ? "Saving..." : "Save profile"}
+            </button>
+            <p className="text-xs text-realtor-muted">
+              Changes show in the realtor portal and future listing page
+              defaults.
+            </p>
+          </div>
+        </form>
+      </details>
+    </article>
+  );
+}
+
+function ProfileImage({ realtor }: { realtor: RealtorProfileView }) {
+  return (
+    <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-realtor-primary/15 bg-realtor-primary/10 text-sm font-bold text-realtor-primary">
+      {realtor.profile_photo_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={realtor.profile_photo_url}
+          alt=""
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        initialsFor(realtor.full_name ?? realtor.email)
+      )}
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
+        {label}
+      </span>
+      <div className="mt-1">{children}</div>
+    </label>
+  );
+}
+
+function MediaField({
+  title,
+  currentUrl,
+  urlName,
+  fileName,
+  clearName,
+}: {
+  title: string;
+  currentUrl: string | null;
+  urlName: string;
+  fileName: string;
+  clearName: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-realtor-primary/15 bg-white/70 p-3">
+      <div className="flex items-center gap-3">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-realtor-primary/15 bg-realtor-primary/5 text-[10px] font-semibold uppercase text-realtor-muted">
+          {currentUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={currentUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            "None"
+          )}
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-realtor-text">{title}</p>
+          <p className="text-xs text-realtor-muted">
+            Upload a JPG, PNG, WebP, or GIF under 5 MB.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        <input
+          name={fileName}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          className="block w-full rounded-xl border border-realtor-primary/15 bg-white px-3 py-2 text-xs text-realtor-text file:mr-3 file:rounded-full file:border-0 file:bg-realtor-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+        />
+        <input
+          name={urlName}
+          defaultValue={currentUrl ?? ""}
+          className="admin-input text-xs"
+          placeholder="Or paste an image URL"
+        />
+        <label className="flex items-center gap-2 text-xs text-realtor-muted">
+          <input
+            type="checkbox"
+            name={clearName}
+            className="h-4 w-4 rounded border-realtor-primary/20 text-realtor-primary"
+          />
+          Clear this image
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 px-3 py-2">
+      <p className="text-[11px] uppercase tracking-wider">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-realtor-text">{value}</p>
+    </div>
+  );
+}
+
+function initialsFor(nameOrEmail: string): string {
+  const name = nameOrEmail.split("@")[0]?.replace(/[._-]+/g, " ") ?? "";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "PB";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
+}
