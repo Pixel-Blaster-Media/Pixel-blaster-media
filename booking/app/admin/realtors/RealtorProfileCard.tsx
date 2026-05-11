@@ -32,13 +32,14 @@ export default function RealtorProfileCard({
   realtor: RealtorProfileView;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState<
     { kind: "ok" | "err"; text: string } | null
   >(null);
 
   return (
     <article className="realtor-elevated-panel overflow-hidden rounded-3xl">
-      <div className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
+      <div className="grid gap-4 p-4 md:grid-cols-[minmax(0,1fr)_minmax(220px,320px)_auto] md:items-center">
         <div className="flex min-w-0 items-start gap-3">
           <ProfileImage realtor={realtor} />
           <div className="min-w-0">
@@ -81,99 +82,111 @@ export default function RealtorProfileCard({
             </p>
           )}
         </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setIsOpen((current) => !current);
+            setMessage(null);
+          }}
+          aria-expanded={isOpen}
+          className={
+            "w-full rounded-full px-4 py-2 text-sm font-semibold transition md:w-auto " +
+            (isOpen
+              ? "border border-realtor-primary/20 bg-white text-realtor-primary hover:bg-realtor-primary/5"
+              : "bg-realtor-primary text-white hover:bg-realtor-primary/90")
+          }
+        >
+          {isOpen ? "Close" : "Edit profile"}
+        </button>
       </div>
 
-      <details className="border-t border-realtor-primary/10 bg-white/55">
-        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-realtor-primary transition hover:bg-realtor-primary/5">
-          Edit realtor profile
-        </summary>
-        <form
-          action={(formData) => {
-            setMessage(null);
-            startTransition(async () => {
-              const result = await updateRealtorProfile(formData);
-              setMessage(
-                result.ok
-                  ? { kind: "ok", text: "Profile saved." }
-                  : {
-                      kind: "err",
-                      text: result.error ?? "Could not save profile.",
-                    },
-              );
-            });
-          }}
-          className="space-y-5 px-4 pb-4"
-        >
-          <input type="hidden" name="profile_id" value={realtor.id} />
+      {isOpen ? (
+        <div className="border-t border-realtor-primary/10 bg-white/55">
+          <form
+            action={(formData) => {
+              setMessage(null);
+              startTransition(async () => {
+                const result = await updateRealtorProfile(formData);
+                setMessage(
+                  result.ok
+                    ? { kind: "ok", text: "Profile saved." }
+                    : {
+                        kind: "err",
+                        text: result.error ?? "Could not save profile.",
+                      },
+                );
+              });
+            }}
+            className="space-y-4 px-4 pb-4"
+          >
+            <input type="hidden" name="profile_id" value={realtor.id} />
 
-          <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
-              Booking history
-            </p>
-            <div className="mt-3 grid gap-2 text-xs text-realtor-muted sm:grid-cols-3">
-              <Stat label="Total shoots" value={String(realtor.bookingCount)} />
-              <Stat label="Active" value={String(realtor.activeBookingCount)} />
-              <Stat
-                label="Delivered"
-                value={String(realtor.deliveredBookingCount)}
-              />
+            <section className="pt-3">
+              <div className="grid gap-2 text-xs text-realtor-muted sm:grid-cols-3">
+                <Stat label="Total shoots" value={String(realtor.bookingCount)} />
+                <Stat label="Active" value={String(realtor.activeBookingCount)} />
+                <Stat
+                  label="Delivered"
+                  value={String(realtor.deliveredBookingCount)}
+                />
+              </div>
+            </section>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label="Full name">
+                <input
+                  name="full_name"
+                  defaultValue={realtor.full_name ?? ""}
+                  className="admin-input"
+                  placeholder="Agent name"
+                />
+              </Field>
+              <Field label="Email">
+                <input
+                  value={realtor.email}
+                  readOnly
+                  className="admin-input opacity-75"
+                  title="Email is controlled by Supabase Auth."
+                />
+                <p className="mt-1 text-[11px] text-realtor-muted">
+                  Email sign-in is controlled by Supabase Auth, so this stays
+                  read-only here.
+                </p>
+              </Field>
+              <Field label="Phone">
+                <input
+                  name="phone"
+                  defaultValue={realtor.phone ?? ""}
+                  className="admin-input"
+                  placeholder="905-555-1234"
+                />
+              </Field>
+              <Field label="Brokerage">
+                <input
+                  name="brokerage"
+                  defaultValue={realtor.brokerage ?? ""}
+                  className="admin-input"
+                  placeholder="Brokerage name"
+                />
+              </Field>
+              <Field label="Website">
+                <input
+                  name="website_url"
+                  defaultValue={realtor.website_url ?? ""}
+                  className="admin-input"
+                  placeholder="https://agent-site.com"
+                />
+              </Field>
+              <Field label="Instagram">
+                <input
+                  name="instagram_url"
+                  defaultValue={realtor.instagram_url ?? ""}
+                  className="admin-input"
+                  placeholder="https://instagram.com/agent"
+                />
+              </Field>
             </div>
-          </section>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Full name">
-              <input
-                name="full_name"
-                defaultValue={realtor.full_name ?? ""}
-                className="admin-input"
-                placeholder="Agent name"
-              />
-            </Field>
-            <Field label="Email">
-              <input
-                value={realtor.email}
-                readOnly
-                className="admin-input opacity-75"
-                title="Email is controlled by Supabase Auth."
-              />
-              <p className="mt-1 text-[11px] text-realtor-muted">
-                Email sign-in is controlled by Supabase Auth, so this stays
-                read-only here.
-              </p>
-            </Field>
-            <Field label="Phone">
-              <input
-                name="phone"
-                defaultValue={realtor.phone ?? ""}
-                className="admin-input"
-                placeholder="905-555-1234"
-              />
-            </Field>
-            <Field label="Brokerage">
-              <input
-                name="brokerage"
-                defaultValue={realtor.brokerage ?? ""}
-                className="admin-input"
-                placeholder="Brokerage name"
-              />
-            </Field>
-            <Field label="Website">
-              <input
-                name="website_url"
-                defaultValue={realtor.website_url ?? ""}
-                className="admin-input"
-                placeholder="https://agent-site.com"
-              />
-            </Field>
-            <Field label="Instagram">
-              <input
-                name="instagram_url"
-                defaultValue={realtor.instagram_url ?? ""}
-                className="admin-input"
-                placeholder="https://instagram.com/agent"
-              />
-            </Field>
-          </div>
 
           <div className="grid gap-3 md:grid-cols-2">
             <MediaField
@@ -218,8 +231,9 @@ export default function RealtorProfileCard({
               defaults.
             </p>
           </div>
-        </form>
-      </details>
+          </form>
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -318,9 +332,9 @@ function MediaField({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 px-3 py-2">
-      <p className="text-[11px] uppercase tracking-wider">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-realtor-text">{value}</p>
+    <div className="rounded-2xl border border-realtor-primary/10 bg-white/70 px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wider">{label}</p>
+      <p className="mt-0.5 text-base font-semibold text-realtor-text">{value}</p>
     </div>
   );
 }
