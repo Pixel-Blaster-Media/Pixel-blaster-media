@@ -14,6 +14,7 @@ export interface RealtorProfileView {
   brokerage_logo_url: string | null;
   website_url: string | null;
   instagram_url: string | null;
+  delivery_cc_emails: string[];
   created_at: string;
   bookingCount: number;
   activeBookingCount: number;
@@ -146,13 +147,9 @@ export default function RealtorProfileCard({
                 <input
                   value={realtor.email}
                   readOnly
-                  className="admin-input opacity-75"
+                  className="admin-input cursor-not-allowed bg-realtor-primary/5 text-realtor-muted"
                   title="Email is controlled by Supabase Auth."
                 />
-                <p className="mt-1 text-[11px] text-realtor-muted">
-                  Email sign-in is controlled by Supabase Auth, so this stays
-                  read-only here.
-                </p>
               </Field>
               <Field label="Phone">
                 <input
@@ -186,6 +183,21 @@ export default function RealtorProfileCard({
                   placeholder="https://instagram.com/agent"
                 />
               </Field>
+              <div className="md:col-span-2">
+                <Field label="Delivery CC emails">
+                  <textarea
+                    name="delivery_cc_emails"
+                    defaultValue={(realtor.delivery_cc_emails ?? []).join("\n")}
+                    rows={3}
+                    className="admin-input min-h-24 resize-y"
+                    placeholder={"assistant@example.com\nteam@example.com"}
+                  />
+                  <p className="mt-1 text-[11px] text-realtor-muted">
+                    One per line. These are copied on every delivery email for
+                    this realtor.
+                  </p>
+                </Field>
+              </div>
             </div>
 
           <div className="grid gap-3 md:grid-cols-2">

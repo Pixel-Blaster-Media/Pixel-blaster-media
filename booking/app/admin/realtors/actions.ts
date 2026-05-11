@@ -51,6 +51,13 @@ export async function updateRealtorProfile(
   );
   if (!instagramUrl.ok) return { ok: false, error: instagramUrl.error };
 
+  const deliveryCcEmails = parseEmailList(
+    cleanText(formData.get("delivery_cc_emails")),
+  );
+  if (!deliveryCcEmails.ok) {
+    return { ok: false, error: deliveryCcEmails.error };
+  }
+
   const service = getServiceSupabase();
   const { data: currentProfile, error: currentProfileError } = await service
     .from("profiles")
@@ -97,6 +104,7 @@ export async function updateRealtorProfile(
     brokerage_logo_url: brokerageLogo.url,
     website_url: websiteUrl.value,
     instagram_url: instagramUrl.value,
+    delivery_cc_emails: deliveryCcEmails.emails,
   };
 
   const { data: updatedProfile, error } = await service
@@ -121,6 +129,29 @@ export async function updateRealtorProfile(
 
 function cleanText(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function parseEmailList(
+  input: string,
+): { ok: true; emails: string[] } | { ok: false; error: string } {
+  if (!input) return { ok: true, emails: [] };
+
+  const rawEmails = input
+    .split(/[\s,;]+/)
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+  const invalid = rawEmails.find(
+    (email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
+  );
+  if (invalid) {
+    return { ok: false, error: `${invalid} does not look like a valid email.` };
+  }
+
+  const emails = Array.from(new Set(rawEmails));
+  if (emails.length > 20) {
+    return { ok: false, error: "Use 20 delivery CC emails or fewer." };
+  }
+  return { ok: true, emails };
 }
 
 function parseOptionalUrl(

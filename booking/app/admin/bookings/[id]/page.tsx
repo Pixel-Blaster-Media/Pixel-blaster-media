@@ -79,6 +79,7 @@ interface BookingDetail {
     email: string;
     phone: string | null;
     brokerage: string | null;
+    delivery_cc_emails: string[] | null;
   } | null;
 }
 
@@ -147,7 +148,7 @@ export default async function BookingDetailPage({
       supabase
         .from("bookings")
         .select(
-          "id, status, scheduled_at, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, internal_notes, iguide_id, iguide_portal_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage)",
+          "id, status, scheduled_at, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, internal_notes, iguide_id, iguide_portal_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage, delivery_cc_emails)",
         )
         .eq("id", id)
         .single<BookingDetail>(),
@@ -386,6 +387,7 @@ export default async function BookingDetailPage({
               deliveryEmailSentAt={deliveryNotification?.sent_at ?? null}
               primaryRecipientEmail={profile?.email ?? null}
               primaryRecipientName={profile?.full_name ?? null}
+              savedCcEmails={profile?.delivery_cc_emails ?? []}
               adminEmail={admin.email}
             />
             <DeliveryLinksPanel links={deliveryLinks} />

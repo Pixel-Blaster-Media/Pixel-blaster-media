@@ -21,6 +21,7 @@ interface ProfileRow {
   brokerage_logo_url: string | null;
   website_url: string | null;
   instagram_url: string | null;
+  delivery_cc_emails: string[];
   role: UserRole;
   created_at: string;
 }
@@ -56,7 +57,7 @@ export default async function RealtorsPage({
   const { data: profiles, error } = await supabase
     .from("profiles")
     .select(
-      "id, email, full_name, phone, brokerage, profile_photo_url, brokerage_logo_url, website_url, instagram_url, role, created_at",
+      "id, email, full_name, phone, brokerage, profile_photo_url, brokerage_logo_url, website_url, instagram_url, delivery_cc_emails, role, created_at",
     )
     .eq("role", "realtor")
     .order("full_name", { ascending: true, nullsFirst: false })
@@ -179,6 +180,7 @@ function buildRealtorView(
     brokerage_logo_url: profile.brokerage_logo_url,
     website_url: profile.website_url,
     instagram_url: profile.instagram_url,
+    delivery_cc_emails: profile.delivery_cc_emails,
     created_at: profile.created_at,
     bookingCount: bookings.length,
     activeBookingCount: bookings.filter((booking) =>

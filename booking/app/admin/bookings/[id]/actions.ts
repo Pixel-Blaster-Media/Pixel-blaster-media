@@ -118,6 +118,7 @@ interface BookingForDeliveryEmailRow {
   profiles: {
     email: string;
     full_name: string | null;
+    delivery_cc_emails: string[] | null;
   } | null;
 }
 
@@ -438,7 +439,9 @@ export async function sendDeliveryReadyEmail(
 
   const { data: booking, error: bookingError } = await service
     .from("bookings")
-    .select("id, property_id, properties(street_address), profiles(email, full_name)")
+    .select(
+      "id, property_id, properties(street_address), profiles(email, full_name, delivery_cc_emails)",
+    )
     .eq("id", bookingId)
     .single<BookingForDeliveryEmailRow>();
 
@@ -484,6 +487,7 @@ export async function sendDeliveryReadyEmail(
   const extraRecipients = parseRecipientEmails(extraRecipientsInput);
   const ccRecipients = uniqueEmails([
     admin.email,
+    ...(booking.profiles.delivery_cc_emails ?? []),
     ...extraRecipients,
   ]).filter((email) => email.toLowerCase() !== primaryRecipient.toLowerCase());
 

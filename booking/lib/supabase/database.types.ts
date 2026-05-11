@@ -64,6 +64,7 @@ interface ProfilesTable {
     brokerage_logo_url: string | null;
     website_url: string | null;
     instagram_url: string | null;
+    delivery_cc_emails: string[];
     role: UserRole;
     created_at: string;
     updated_at: string;
@@ -78,6 +79,7 @@ interface ProfilesTable {
     brokerage_logo_url?: string | null;
     website_url?: string | null;
     instagram_url?: string | null;
+    delivery_cc_emails?: string[];
     role?: UserRole;
   };
   Update: Partial<ProfilesTable["Insert"]>;

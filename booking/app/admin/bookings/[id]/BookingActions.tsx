@@ -137,12 +137,14 @@ export function DeliveryEmailPanel({
   deliveryEmailSentAt,
   primaryRecipientEmail,
   primaryRecipientName,
+  savedCcEmails,
   adminEmail,
 }: {
   bookingId: string;
   deliveryEmailSentAt: string | null;
   primaryRecipientEmail: string | null;
   primaryRecipientName: string | null;
+  savedCcEmails: string[];
   adminEmail: string;
 }) {
   return (
@@ -162,6 +164,7 @@ export function DeliveryEmailPanel({
         initialSentAt={deliveryEmailSentAt}
         primaryRecipientEmail={primaryRecipientEmail}
         primaryRecipientName={primaryRecipientName}
+        savedCcEmails={savedCcEmails}
         adminEmail={adminEmail}
       />
     </section>
@@ -173,12 +176,14 @@ function DeliveryEmailButton({
   initialSentAt,
   primaryRecipientEmail,
   primaryRecipientName,
+  savedCcEmails,
   adminEmail,
 }: {
   bookingId: string;
   initialSentAt: string | null;
   primaryRecipientEmail: string | null;
   primaryRecipientName: string | null;
+  savedCcEmails: string[];
   adminEmail: string;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -212,10 +217,18 @@ function DeliveryEmailButton({
             </span>
           )}
           <RecipientPill label="Copy" email={adminEmail} name="You" />
+          {savedCcEmails.map((email) => (
+            <RecipientPill
+              key={email}
+              label="Saved CC"
+              email={email}
+              name={null}
+            />
+          ))}
         </div>
       </div>
       <label className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">
-        Extra recipients
+        Extra recipients for this send
       </label>
       <textarea
         value={extraRecipients}
@@ -225,7 +238,7 @@ function DeliveryEmailButton({
         className="mt-1 w-full rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60"
       />
       <p className="mt-1 text-[11px] text-ink-muted">
-        Add assistants or teammates here. Separate emails with commas or spaces.
+        Add one-off teammates here. Saved CCs come from the realtor profile.
       </p>
       <button
         type="button"
