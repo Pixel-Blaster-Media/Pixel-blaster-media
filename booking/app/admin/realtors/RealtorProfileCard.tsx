@@ -204,14 +204,12 @@ export default function RealtorProfileCard({
             <MediaField
               title="Profile photo / headshot"
               currentUrl={realtor.profile_photo_url}
-              urlName="profile_photo_url"
               fileName="profile_photo_file"
               clearName="clear_profile_photo"
             />
             <MediaField
               title="Brokerage logo"
               currentUrl={realtor.brokerage_logo_url}
-              urlName="brokerage_logo_url"
               fileName="brokerage_logo_file"
               clearName="clear_brokerage_logo"
             />
@@ -287,13 +285,11 @@ function Field({
 function MediaField({
   title,
   currentUrl,
-  urlName,
   fileName,
   clearName,
 }: {
   title: string;
   currentUrl: string | null;
-  urlName: string;
   fileName: string;
   clearName: string;
 }) {
@@ -311,7 +307,7 @@ function MediaField({
         <div>
           <p className="text-sm font-semibold text-realtor-text">{title}</p>
           <p className="text-xs text-realtor-muted">
-            Upload a file, or paste a direct image link and we will import it.
+            Upload a JPG, PNG, WebP, or GIF.
           </p>
         </div>
       </div>
@@ -322,12 +318,6 @@ function MediaField({
           type="file"
           accept="image/jpeg,image/png,image/webp,image/gif"
           className="block w-full rounded-xl border border-realtor-primary/15 bg-white px-3 py-2 text-xs text-realtor-text file:mr-3 file:rounded-full file:border-0 file:bg-realtor-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
-        />
-        <input
-          name={urlName}
-          defaultValue=""
-          className="admin-input text-xs"
-          placeholder="Import from image URL"
         />
         <label className="flex items-center gap-2 text-xs text-realtor-muted">
           <input

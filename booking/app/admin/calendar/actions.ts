@@ -16,7 +16,7 @@ import {
 } from "@/lib/booking/catalog";
 import { sendEmail } from "@/lib/email/resend";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
-import { getServiceSupabase } from "@/lib/supabase/server";
+import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
 
 interface ActionResult {
   ok: boolean;
@@ -26,6 +26,7 @@ interface ActionResult {
 
 interface RealtorLookupResult {
   ok: boolean;
+  error?: string;
   realtor?: {
     email: string;
     fullName: string;
@@ -55,13 +56,18 @@ export async function lookupRealtor(
     return { ok: false };
   }
 
-  const supabase = getServiceSupabase();
-  const { data } = await supabase
+  const supabase = await getServerSupabase();
+  const { data, error } = await supabase
     .from("profiles")
     .select("email, full_name, phone, brokerage")
     .eq("email", normalizedEmail)
     .limit(1)
     .maybeSingle<ProfileLookupRow>();
+
+  if (error) {
+    console.warn("[admin-calendar] realtor lookup failed", error.message);
+    return { ok: false, error: "Could not check realtor. Enter details manually." };
+  }
 
   if (!data) return { ok: false };
   return {

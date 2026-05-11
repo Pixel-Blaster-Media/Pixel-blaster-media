@@ -348,19 +348,28 @@ export default function CalendarWeekView({
                     onBlur={() => {
                       const email = realtor.contact_email.trim();
                       if (!email.includes("@")) return;
+                      setLookupMessage("Checking realtor...");
                       startLookupTransition(async () => {
-                        const result = await lookupRealtor(email);
-                        if (!result.ok || !result.realtor) {
-                          setLookupMessage("New realtor.");
-                          return;
+                        try {
+                          const result = await lookupRealtor(email);
+                          if (!result.ok || !result.realtor) {
+                            setLookupMessage(
+                              result.error ?? "New realtor. Enter details below.",
+                            );
+                            return;
+                          }
+                          setRealtor({
+                            contact_email: result.realtor.email,
+                            contact_name: result.realtor.fullName,
+                            contact_phone: result.realtor.phone,
+                            brokerage: result.realtor.brokerage,
+                          });
+                          setLookupMessage("Realtor found.");
+                        } catch {
+                          setLookupMessage(
+                            "Could not check realtor. Enter details manually.",
+                          );
                         }
-                        setRealtor({
-                          contact_email: result.realtor.email,
-                          contact_name: result.realtor.fullName,
-                          contact_phone: result.realtor.phone,
-                          brokerage: result.realtor.brokerage,
-                        });
-                        setLookupMessage("Realtor found.");
                       });
                     }}
                   />
@@ -404,7 +413,7 @@ export default function CalendarWeekView({
                 </div>
                 {lookupMessage ? (
                   <p className="text-xs text-brand-light">
-                    {lookupPending ? "Checking..." : lookupMessage}
+                    {lookupPending ? "Checking realtor..." : lookupMessage}
                   </p>
                 ) : null}
               </FormSection>
