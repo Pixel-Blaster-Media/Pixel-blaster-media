@@ -367,10 +367,11 @@ export default function CalendarWeekView({
                         autoComplete="email"
                         value={realtor.contact_email}
                         onChange={(event) => {
+                          const value = event.currentTarget.value;
                           setLookupMessage(null);
                           setRealtor((draft) => ({
                             ...draft,
-                            contact_email: event.currentTarget.value,
+                            contact_email: value,
                           }));
                         }}
                         className="min-w-0 flex-1 rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white"
@@ -391,12 +392,13 @@ export default function CalendarWeekView({
                     required
                     autoComplete="name"
                     value={realtor.contact_name}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
                       setRealtor((draft) => ({
                         ...draft,
-                        contact_name: event.currentTarget.value,
-                      }))
-                    }
+                        contact_name: value,
+                      }));
+                    }}
                   />
                   <TextField
                     label="Phone"
@@ -404,23 +406,25 @@ export default function CalendarWeekView({
                     type="tel"
                     autoComplete="tel"
                     value={realtor.contact_phone}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
                       setRealtor((draft) => ({
                         ...draft,
-                        contact_phone: event.currentTarget.value,
-                      }))
-                    }
+                        contact_phone: value,
+                      }));
+                    }}
                   />
                   <TextField
                     label="Brokerage"
                     name="brokerage"
                     value={realtor.brokerage}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
                       setRealtor((draft) => ({
                         ...draft,
-                        brokerage: event.currentTarget.value,
-                      }))
-                    }
+                        brokerage: value,
+                      }));
+                    }}
                   />
                 </div>
                 {lookupMessage ? (
@@ -462,45 +466,49 @@ export default function CalendarWeekView({
                     label="Unit"
                     name="unit_number"
                     value={property.unit_number}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
                       setProperty((draft) => ({
                         ...draft,
-                        unit_number: event.currentTarget.value,
-                      }))
-                    }
+                        unit_number: value,
+                      }));
+                    }}
                   />
                   <TextField
                     label="City"
                     name="city"
                     value={property.city}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
                       setProperty((draft) => ({
                         ...draft,
-                        city: event.currentTarget.value,
-                      }))
-                    }
+                        city: value,
+                      }));
+                    }}
                   />
                   <TextField
                     label="Province/state"
                     name="province"
                     value={property.province}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
                       setProperty((draft) => ({
                         ...draft,
-                        province: event.currentTarget.value,
-                      }))
-                    }
+                        province: value,
+                      }));
+                    }}
                   />
                   <TextField
                     label="Postal code"
                     name="postal_code"
                     value={property.postal_code}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
                       setProperty((draft) => ({
                         ...draft,
-                        postal_code: event.currentTarget.value,
-                      }))
-                    }
+                        postal_code: value,
+                      }));
+                    }}
                   />
                   <TextField
                     label="Square feet"
@@ -509,12 +517,13 @@ export default function CalendarWeekView({
                     min="0"
                     inputMode="numeric"
                     value={property.square_footage}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
                       setProperty((draft) => ({
                         ...draft,
-                        square_footage: event.currentTarget.value,
-                      }))
-                    }
+                        square_footage: value,
+                      }));
+                    }}
                   />
                 </div>
               </FormSection>
