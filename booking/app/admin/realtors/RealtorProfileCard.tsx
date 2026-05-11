@@ -38,8 +38,8 @@ export default function RealtorProfileCard({
 
   return (
     <article className="realtor-elevated-panel overflow-hidden rounded-3xl">
-      <div className="flex flex-col gap-4 p-4 md:flex-row md:items-start">
-        <div className="flex items-start gap-3 md:w-72 md:shrink-0">
+      <div className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
           <ProfileImage realtor={realtor} />
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold text-realtor-text">
@@ -54,12 +54,6 @@ export default function RealtorProfileCard({
               <p className="mt-1 text-xs text-amber-700">Brokerage missing</p>
             )}
           </div>
-        </div>
-
-        <div className="grid flex-1 gap-2 text-xs text-realtor-muted sm:grid-cols-3">
-          <Stat label="Total shoots" value={String(realtor.bookingCount)} />
-          <Stat label="Active" value={String(realtor.activeBookingCount)} />
-          <Stat label="Delivered" value={String(realtor.deliveredBookingCount)} />
         </div>
 
         <div className="md:w-72 md:shrink-0">
@@ -111,6 +105,20 @@ export default function RealtorProfileCard({
           className="space-y-5 px-4 pb-4"
         >
           <input type="hidden" name="profile_id" value={realtor.id} />
+
+          <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
+              Booking history
+            </p>
+            <div className="mt-3 grid gap-2 text-xs text-realtor-muted sm:grid-cols-3">
+              <Stat label="Total shoots" value={String(realtor.bookingCount)} />
+              <Stat label="Active" value={String(realtor.activeBookingCount)} />
+              <Stat
+                label="Delivered"
+                value={String(realtor.deliveredBookingCount)}
+              />
+            </div>
+          </section>
 
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Full name">
@@ -277,7 +285,7 @@ function MediaField({
         <div>
           <p className="text-sm font-semibold text-realtor-text">{title}</p>
           <p className="text-xs text-realtor-muted">
-            Upload a JPG, PNG, WebP, or GIF under 5 MB.
+            Upload a file, or paste a direct image link and we will import it.
           </p>
         </div>
       </div>
@@ -291,9 +299,9 @@ function MediaField({
         />
         <input
           name={urlName}
-          defaultValue={currentUrl ?? ""}
+          defaultValue=""
           className="admin-input text-xs"
-          placeholder="Or paste an image URL"
+          placeholder="Import from image URL"
         />
         <label className="flex items-center gap-2 text-xs text-realtor-muted">
           <input
