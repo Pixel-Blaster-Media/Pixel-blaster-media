@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 export type WorkspaceTabId =
-  | "overview"
   | "media"
   | "website"
   | "delivery"
@@ -18,7 +17,6 @@ interface WorkspaceTab {
 export default function BookingWorkspaceTabs({
   activeTabId,
   baseHref,
-  overview,
   media,
   website,
   delivery,
@@ -27,7 +25,6 @@ export default function BookingWorkspaceTabs({
 }: {
   activeTabId: WorkspaceTabId;
   baseHref: string;
-  overview: ReactNode;
   media: ReactNode;
   website: ReactNode;
   delivery: ReactNode;
@@ -35,11 +32,6 @@ export default function BookingWorkspaceTabs({
   details: ReactNode;
 }) {
   const tabs: WorkspaceTab[] = [
-    {
-      id: "overview",
-      label: "Job",
-      content: overview,
-    },
     {
       id: "media",
       label: "Media",
@@ -71,17 +63,13 @@ export default function BookingWorkspaceTabs({
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-white/10 bg-ink-soft/50 p-2">
-        <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
+        <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-5">
           {tabs.map((tab) => {
             const selected = tab.id === activeTab.id;
             return (
               <Link
                 key={tab.id}
-                href={
-                  tab.id === "overview"
-                    ? baseHref
-                    : `${baseHref}?tab=${tab.id}`
-                }
+                href={tab.id === "media" ? baseHref : `${baseHref}?tab=${tab.id}`}
                 className={`rounded-xl px-3 py-3 text-left transition ${
                   selected
                     ? "bg-brand text-white shadow-sm"

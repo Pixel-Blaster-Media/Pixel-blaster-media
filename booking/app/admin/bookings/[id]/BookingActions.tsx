@@ -135,9 +135,15 @@ export default function BookingActions({
 export function DeliveryEmailPanel({
   bookingId,
   deliveryEmailSentAt,
+  primaryRecipientEmail,
+  primaryRecipientName,
+  adminEmail,
 }: {
   bookingId: string;
   deliveryEmailSentAt: string | null;
+  primaryRecipientEmail: string | null;
+  primaryRecipientName: string | null;
+  adminEmail: string;
 }) {
   return (
     <section className="rounded-2xl border border-brand/20 bg-brand/5 p-4">
@@ -148,12 +154,15 @@ export function DeliveryEmailPanel({
         Send the finished media
       </h2>
       <p className="mt-1 text-xs text-ink-muted">
-        Email the realtor when their ready media links are available in the
-        portal. If they lose it, you can resend it any time.
+        Email the realtor when their media links are ready. You can resend it
+        any time.
       </p>
       <DeliveryEmailButton
         bookingId={bookingId}
         initialSentAt={deliveryEmailSentAt}
+        primaryRecipientEmail={primaryRecipientEmail}
+        primaryRecipientName={primaryRecipientName}
+        adminEmail={adminEmail}
       />
     </section>
   );
@@ -162,9 +171,15 @@ export function DeliveryEmailPanel({
 function DeliveryEmailButton({
   bookingId,
   initialSentAt,
+  primaryRecipientEmail,
+  primaryRecipientName,
+  adminEmail,
 }: {
   bookingId: string;
   initialSentAt: string | null;
+  primaryRecipientEmail: string | null;
+  primaryRecipientName: string | null;
+  adminEmail: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [sentAt, setSentAt] = useState(initialSentAt);
@@ -180,6 +195,25 @@ function DeliveryEmailButton({
           Already sent {formatSentAt(sentAt)}.
         </p>
       ) : null}
+      <div className="mb-3 rounded-2xl border border-white/10 bg-ink/30 p-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+          Recipients
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {primaryRecipientEmail ? (
+            <RecipientPill
+              label="To"
+              email={primaryRecipientEmail}
+              name={primaryRecipientName}
+            />
+          ) : (
+            <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-100">
+              Realtor email missing
+            </span>
+          )}
+          <RecipientPill label="Copy" email={adminEmail} name="You" />
+        </div>
+      </div>
       <label className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">
         Extra recipients
       </label>
@@ -191,12 +225,11 @@ function DeliveryEmailButton({
         className="mt-1 w-full rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60"
       />
       <p className="mt-1 text-[11px] text-ink-muted">
-        Separate emails with commas or spaces. You&apos;ll be copied
-        automatically.
+        Add assistants or teammates here. Separate emails with commas or spaces.
       </p>
       <button
         type="button"
-        disabled={isPending}
+        disabled={isPending || !primaryRecipientEmail}
         onClick={() => {
           setMessage(null);
           setError(null);
@@ -221,6 +254,8 @@ function DeliveryEmailButton({
       >
         {isPending
           ? "Sending..."
+          : !primaryRecipientEmail
+            ? "Missing realtor email"
           : hasBeenSent
             ? "Resend delivery email"
             : "Send delivery email"}
@@ -234,6 +269,24 @@ function DeliveryEmailButton({
         <p className="mt-2 text-xs text-emerald-300">{message}</p>
       ) : null}
     </div>
+  );
+}
+
+function RecipientPill({
+  label,
+  email,
+  name,
+}: {
+  label: string;
+  email: string;
+  name: string | null;
+}) {
+  return (
+    <span className="rounded-full border border-white/10 bg-ink-soft px-3 py-1.5 text-xs text-white">
+      <span className="text-ink-muted">{label}: </span>
+      {name ? `${name} · ` : ""}
+      {email}
+    </span>
   );
 }
 
@@ -252,9 +305,7 @@ export function ManualLinksPanel({
       <div className="mt-3">
         <p className="text-xs text-ink-muted">
           Fallback for unusual public links like video, Drive, Dropbox,
-          floor plan, or iGUIDE URLs. Fotello does not usually give you a
-          permanent link to paste here; use the Fotello upload section
-          instead.
+          floor plan, or iGUIDE URLs.
         </p>
         <ManualDeliverableForm bookingId={bookingId} />
       </div>

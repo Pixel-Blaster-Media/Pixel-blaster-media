@@ -468,12 +468,15 @@ export async function sendDeliveryReadyEmail(
     .returns<ReadyDeliverableRow[]>();
 
   const ready = (deliverables ?? []).filter(
-    (deliverable) => deliverable.url && deliverable.url !== "about:blank",
+    (deliverable) =>
+      deliverable.source !== "fotello" &&
+      deliverable.url &&
+      deliverable.url !== "about:blank",
   );
   if (ready.length === 0) {
     return {
       ok: false,
-      error: "No ready deliverables yet. Add a video link or wait for Fotello/iGUIDE to finish.",
+      error: "No ready deliverables yet. Add iGUIDE links or a video link before sending.",
     };
   }
 

@@ -11,6 +11,7 @@ import {
   type DeliveryLink,
   type DeliveryLinkCategory,
 } from "@/lib/booking/delivery-links";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import {
   imageUrlOrNull,
   metadataImageUrls,
@@ -38,7 +39,6 @@ import BookingActions, {
 import BookingWorkspaceTabs, {
   type WorkspaceTabId,
 } from "./BookingWorkspaceTabs";
-import FotelloSection from "./FotelloSection";
 import IGuideSection from "./IGuideSection";
 import InvoiceSection from "./InvoiceSection";
 import ListingWebsiteSection from "./ListingWebsiteSection";
@@ -60,7 +60,6 @@ interface BookingDetail {
   internal_notes: string | null;
   iguide_id: string | null;
   iguide_portal_id: string | null;
-  fotello_listing_id: string | null;
   quickbooks_invoice_id: string | null;
   quickbooks_invoice_number: string | null;
   quickbooks_invoice_url: string | null;
@@ -134,6 +133,7 @@ export default async function BookingDetailPage({
   const { id } = await params;
   const query = await searchParams;
   const activeTabId = parseWorkspaceTab(query.tab);
+  const admin = await requireAdmin();
   const supabase = await getServerSupabase();
 
   const [
@@ -147,7 +147,7 @@ export default async function BookingDetailPage({
       supabase
         .from("bookings")
         .select(
-          "id, status, scheduled_at, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, internal_notes, iguide_id, iguide_portal_id, fotello_listing_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage)",
+          "id, status, scheduled_at, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, internal_notes, iguide_id, iguide_portal_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage)",
         )
         .eq("id", id)
         .single<BookingDetail>(),
@@ -187,20 +187,12 @@ export default async function BookingDetailPage({
   const profile = booking.profiles;
   const meta = BOOKING_STATUSES[booking.status];
   const transitions = nextBookingStatuses(booking.status);
-  const readyDeliverables = (deliverables ?? []).filter((d) => d.ready_at);
+  const visibleDeliverables = (deliverables ?? []).filter(
+    (deliverable) => deliverable.source !== "fotello",
+  );
+  const readyDeliverables = visibleDeliverables.filter((d) => d.ready_at);
   const portalApiConfigured = await hasPortalCredentials();
-  const iguidePhotoDownloads = findIGuidePhotoDownloads(deliverables ?? []);
-  const fotelloDeliverables = (deliverables ?? [])
-    .filter((deliverable) => deliverable.source === "fotello")
-    .map((deliverable) => ({
-      id: deliverable.id,
-      external_id: deliverable.external_id,
-      url: deliverable.url,
-      status: metadataString(deliverable.metadata, "status"),
-      deliveryKind: metadataString(deliverable.metadata, "delivery_kind"),
-      shotType: metadataString(deliverable.metadata, "shot_type"),
-      syncedAt: metadataString(deliverable.metadata, "last_synced_at"),
-    }));
+  const iguidePhotoDownloads = findIGuidePhotoDownloads(visibleDeliverables);
   const deliveryLinks = buildDeliveryLinks(
     readyDeliverables.map((deliverable) => ({
       id: deliverable.id,
@@ -211,12 +203,6 @@ export default async function BookingDetailPage({
     })),
     process.env.NEXT_PUBLIC_APP_URL ?? "",
   );
-  const checklistItems = buildDeliveryChecklistItems({
-    booking,
-    links: deliveryLinks,
-    readyDeliverables,
-    deliveryEmailSentAt: deliveryNotification?.sent_at ?? null,
-  });
   const fullAddress = [
     property?.street_address,
     booking.unit_number ? `Unit ${booking.unit_number}` : null,
@@ -226,22 +212,18 @@ export default async function BookingDetailPage({
     .filter(Boolean)
     .join(", ");
   const firstHeroImage =
-    (deliverables ?? [])
-      .filter((deliverable) => deliverable.source !== "fotello")
+    visibleDeliverables
       .flatMap((deliverable) => metadataImageUrls(deliverable.metadata))
       .find(Boolean) ??
-    (deliverables ?? [])
-      .filter((deliverable) => deliverable.source !== "fotello")
+    visibleDeliverables
       .find((deliverable) => deliverable.thumbnail_url)
       ?.thumbnail_url ??
-    (deliverables ?? [])
-      .filter((deliverable) => deliverable.source !== "fotello")
+    visibleDeliverables
       .map((deliverable) => imageUrlOrNull(deliverable.url))
       .find(Boolean) ??
     "";
   const heroImageOptions = uniqueImageUrls(
-    (deliverables ?? [])
-      .filter((deliverable) => deliverable.source !== "fotello")
+    visibleDeliverables
       .flatMap((deliverable) => [
         ...metadataImageUrls(deliverable.metadata),
         deliverable.thumbnail_url,
@@ -283,10 +265,16 @@ export default async function BookingDetailPage({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/admin/bookings/${booking.id}?tab=delivery`}
+              className="rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-light"
+            >
+              Send delivery
+            </Link>
             {profile?.phone ? (
               <a
                 href={`tel:${profile.phone}`}
-                className="rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-light"
+                className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
               >
                 Call realtor
               </a>
@@ -332,40 +320,15 @@ export default async function BookingDetailPage({
         </div>
       </header>
 
-      <DeliveryReadinessStrip
-        baseHref={`/admin/bookings/${booking.id}`}
-        items={checklistItems}
-      />
-
       <BookingWorkspaceTabs
         activeTabId={activeTabId}
         baseHref={`/admin/bookings/${booking.id}`}
-        overview={
-          <>
-            <SectionIntro
-              eyebrow="Job"
-              title="Move the booking forward"
-              body="Confirm, advance, or cancel the shoot."
-            />
-            <BookingActions
-              bookingId={booking.id}
-              currentStatus={booking.status}
-              transitions={transitions}
-            />
-          </>
-        }
         media={
           <>
             <SectionIntro
               eyebrow="Media"
               title="Add the finished media"
-              body="Use Fotello for edited photos, sync iGUIDE, add video links, and manage extra delivery links."
-            />
-            <VideoLinksSection bookingId={booking.id} />
-            <FotelloSection
-              bookingId={booking.id}
-              initialListingId={booking.fotello_listing_id}
-              deliverables={fotelloDeliverables}
+              body="Sync iGUIDE first, then add video links or any extra manual links."
             />
             <IGuideSection
               bookingId={booking.id}
@@ -375,9 +338,10 @@ export default async function BookingDetailPage({
               job={iguideJob ?? null}
               initialPhotoDownloads={iguidePhotoDownloads}
             />
+            <VideoLinksSection bookingId={booking.id} />
             <ManualLinksPanel
               bookingId={booking.id}
-              deliverables={deliverables ?? []}
+              deliverables={visibleDeliverables}
             />
           </>
         }
@@ -420,6 +384,9 @@ export default async function BookingDetailPage({
             <DeliveryEmailPanel
               bookingId={booking.id}
               deliveryEmailSentAt={deliveryNotification?.sent_at ?? null}
+              primaryRecipientEmail={profile?.email ?? null}
+              primaryRecipientName={profile?.full_name ?? null}
+              adminEmail={admin.email}
             />
             <DeliveryLinksPanel links={deliveryLinks} />
           </>
@@ -449,6 +416,7 @@ export default async function BookingDetailPage({
             booking={booking}
             profile={profile}
             fullAddress={fullAddress}
+            transitions={transitions}
           />
         }
       />
@@ -463,24 +431,31 @@ function parseWorkspaceTab(raw: string | undefined): WorkspaceTabId {
     raw === "billing" ||
     raw === "details"
     ? raw
-    : "overview";
+    : "media";
 }
 
 function DetailsTab({
   booking,
   profile,
   fullAddress,
+  transitions,
 }: {
   booking: BookingDetail;
   profile: BookingDetail["profiles"];
   fullAddress: string;
+  transitions: BookingStatus[];
 }) {
   return (
     <>
       <SectionIntro
         eyebrow="Details"
         title="Reference info"
-        body="Realtor, property, shoot choices, and notes live here when you need them."
+        body="Status controls, realtor info, shoot choices, and notes live here when you need them."
+      />
+      <BookingActions
+        bookingId={booking.id}
+        currentStatus={booking.status}
+        transitions={transitions}
       />
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Realtor profile">
@@ -589,207 +564,6 @@ function DetailsTab({
       </div>
     </>
   );
-}
-
-function DeliveryReadinessStrip({
-  baseHref,
-  items,
-}: {
-  baseHref: string;
-  items: ChecklistItem[];
-}) {
-  const missingRequired = items.filter(
-    (item) => item.required && item.status === "missing",
-  ).length;
-  const requiredItems = items.filter((item) => item.required);
-  const deliveryEmail = items.find((item) => item.label === "Delivery email");
-
-  return (
-    <section className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
-            Delivery readiness
-          </p>
-          <h2 className="mt-1 text-lg font-semibold text-white">
-            {missingRequired === 0
-              ? "Ready when you are"
-              : `${missingRequired} thing${missingRequired === 1 ? "" : "s"} to finish`}
-          </h2>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href={`${baseHref}?tab=media`}
-            className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-brand-light hover:bg-brand/10"
-          >
-            Add media
-          </Link>
-          <Link
-            href={`${baseHref}?tab=delivery`}
-            className="rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-light"
-          >
-            Send delivery
-          </Link>
-        </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {requiredItems.map((item) => (
-          <ReadinessPill key={item.label} item={item} />
-        ))}
-        {deliveryEmail ? <ReadinessPill item={deliveryEmail} /> : null}
-      </div>
-    </section>
-  );
-}
-
-function ReadinessPill({ item }: { item: ChecklistItem }) {
-  const className =
-    item.status === "ready"
-      ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
-      : item.status === "missing"
-        ? "border-amber-400/30 bg-amber-500/10 text-amber-100"
-        : "border-white/10 bg-ink/35 text-ink-muted";
-  return (
-    <div className={`rounded-full border px-3 py-1.5 text-xs ${className}`}>
-      <span className="font-semibold">{item.label}</span>
-      <span className="ml-2 opacity-75">
-        {item.status === "ready"
-          ? "Ready"
-          : item.status === "missing"
-            ? "Missing"
-            : "Optional"}
-      </span>
-    </div>
-  );
-}
-
-type ChecklistStatus = "ready" | "missing" | "optional";
-
-interface ChecklistItem {
-  label: string;
-  detail: string;
-  required: boolean;
-  status: ChecklistStatus;
-}
-
-function buildDeliveryChecklistItems({
-  booking,
-  links,
-  readyDeliverables,
-  deliveryEmailSentAt,
-}: {
-  booking: BookingDetail;
-  links: DeliveryLink[];
-  readyDeliverables: DeliverableRow[];
-  deliveryEmailSentAt: string | null;
-}): ChecklistItem[] {
-  const expectsPhotos = expectsAny(booking, [
-    "residential_photography",
-    "blue_print",
-    "social_media_special",
-    "social_media_plus",
-    "ultimate",
-  ]);
-  const expectsIGuide = expectsAny(booking, [
-    "iguide_measurements",
-    "blue_print",
-    "social_media_special",
-    "social_media_plus",
-    "ultimate",
-  ]);
-  const expectsVideo = expectsAny(booking, [
-    "social_media_reel",
-    "video_tour",
-    "social_media_special",
-    "social_media_plus",
-    "ultimate",
-  ]);
-
-  const hasPhotoLink = hasCategory(links, "photos");
-  const hasTourLink = hasCategory(links, "tour");
-  const hasFloorPlanLink = hasCategory(links, "floor_plans");
-  const hasVideoLink = hasCategory(links, "video");
-  const hasInvoice =
-    Boolean(booking.quickbooks_invoice_id) ||
-    Boolean(booking.quickbooks_invoice_url) ||
-    Boolean(booking.quickbooks_invoice_number);
-  const items: ChecklistItem[] = [
-    {
-      label: "Photos",
-      detail: hasPhotoLink
-        ? "Photo delivery link is included."
-        : expectsPhotos
-          ? "Sync iGUIDE so the gallery photos are included."
-          : "No photo package selected.",
-      required: expectsPhotos,
-      status: hasPhotoLink ? "ready" : expectsPhotos ? "missing" : "optional",
-    },
-    {
-      label: "iGUIDE tour",
-      detail: hasTourLink
-        ? "Branded/unbranded tour links are included."
-        : expectsIGuide
-          ? "Add or sync the iGUIDE before sending."
-          : "No iGUIDE package selected.",
-      required: expectsIGuide,
-      status: hasTourLink ? "ready" : expectsIGuide ? "missing" : "optional",
-    },
-    {
-      label: "Floor plans",
-      detail: hasFloorPlanLink
-        ? "Floor plan and overview PDF links are included."
-        : expectsIGuide
-          ? "Sync iGUIDE so the floor plans are included."
-          : "Only needed when iGUIDE/floor plans were ordered.",
-      required: expectsIGuide,
-      status: hasFloorPlanLink
-        ? "ready"
-        : expectsIGuide
-          ? "missing"
-          : "optional",
-    },
-    {
-      label: "Video",
-      detail: hasVideoLink
-        ? "Video download or YouTube/streaming link is included."
-        : expectsVideo
-          ? "Add the video download and/or YouTube link in the Media section."
-          : "Optional unless this booking includes video.",
-      required: expectsVideo,
-      status: hasVideoLink ? "ready" : expectsVideo ? "missing" : "optional",
-    },
-    {
-      label: "Invoice",
-      detail: hasInvoice
-        ? "QuickBooks invoice has been created."
-        : "Create this when you want invoice info attached to the booking.",
-      required: false,
-      status: hasInvoice ? "ready" : "optional",
-    },
-    {
-      label: "Delivery email",
-      detail: deliveryEmailSentAt
-        ? `Last sent ${formatDateTime(deliveryEmailSentAt)}.`
-        : "Send when the required media above is ready.",
-      required: false,
-      status: deliveryEmailSentAt ? "ready" : "optional",
-    },
-  ];
-
-  return items;
-}
-
-function expectsAny(booking: BookingDetail, slugs: string[]): boolean {
-  const selected = new Set([...booking.services, ...booking.add_ons]);
-  return slugs.some((slug) => selected.has(slug));
-}
-
-function hasCategory(
-  links: DeliveryLink[],
-  category: DeliveryLinkCategory,
-): boolean {
-  return links.some((link) => link.category === category);
 }
 
 function DeliveryLinksPanel({ links }: { links: DeliveryLink[] }) {

@@ -134,20 +134,20 @@ export default async function PropertyDetailPage({
     .eq("property_id", property.id)
     .maybeSingle<ListingWebsiteRow>();
 
-  const readyDeliverables = (deliverables ?? []).filter((d) => d.ready_at);
-  // iGUIDE remains the canonical source for tours/floor plans, but Fotello is
-  // allowed through as the edited-photo gallery source for Downloads & Media.
-  const iGuideVisibleDeliverables = readyDeliverables.filter(
+  const readyDeliverables = (deliverables ?? []).filter(
+    (d) => d.ready_at,
+  );
+  const realtorVisibleDeliverables = readyDeliverables.filter(
     (d) => d.source !== "fotello",
   );
-  const tour = iGuideVisibleDeliverables.find(
+  const tour = realtorVisibleDeliverables.find(
     (d) => d.type === "virtual_tour",
   );
-  const floorPlan = iGuideVisibleDeliverables.find((d) => d.type === "floor_plan");
-  const gallery = readyDeliverables.filter(
+  const floorPlan = realtorVisibleDeliverables.find((d) => d.type === "floor_plan");
+  const gallery = realtorVisibleDeliverables.filter(
     (d) => d.type === "photo_gallery" && hasPhotoAsset(d),
   );
-  const videos = iGuideVisibleDeliverables.filter(
+  const videos = realtorVisibleDeliverables.filter(
     (d) => d.type === "video" || d.type === "aerial",
   );
   const videoDownloads = videos.filter((video) => !isStreamingVideoUrl(video.url));
@@ -162,7 +162,7 @@ export default async function PropertyDetailPage({
     ? BOOKING_STATUSES[latestBooking.status]
     : null;
   const heroImageOptions = uniqueImageUrls(
-    iGuideVisibleDeliverables
+    realtorVisibleDeliverables
       .flatMap((deliverable) => [
         ...metadataImageUrls(deliverable.metadata),
         deliverable.thumbnail_url,
@@ -551,34 +551,17 @@ function pickIGuideAlias(
 }
 
 function PhotoDownloadsSection({ gallery }: { gallery: DeliverableRow[] }) {
-  const fotelloGalleries = gallery.filter(
-    (deliverable) => deliverable.source === "fotello" && deliverable.url !== "about:blank",
-  );
-  const iGuideGalleries = gallery.filter(
-    (deliverable) => deliverable.source !== "fotello",
-  );
-  const mlsZipUrl = findPhotoDownloadUrl(iGuideGalleries, "mls");
-  const highResZipUrl = findPhotoDownloadUrl(iGuideGalleries, "high_res");
-  const hasAnyDownload = Boolean(fotelloGalleries.length || mlsZipUrl || highResZipUrl);
+  const mlsZipUrl = findPhotoDownloadUrl(gallery, "mls");
+  const highResZipUrl = findPhotoDownloadUrl(gallery, "high_res");
+  const hasAnyDownload = Boolean(mlsZipUrl || highResZipUrl);
 
   return (
     <MediaSection
       id="photos"
       title="Photos"
-      description="Fotello edited galleries plus MLS and high-resolution photo downloads."
+      description="MLS and high-resolution photo downloads."
       icon="photos"
     >
-      {fotelloGalleries.map((deliverable, index) => (
-        <FotelloGalleryCard
-          key={deliverable.id}
-          deliverable={deliverable}
-          fallbackLabel={
-            fotelloGalleries.length > 1
-              ? `Fotello edited photo gallery ${index + 1}`
-              : "Fotello edited photo gallery"
-          }
-        />
-      ))}
       <PhotoDownloadCard title="MLS photos" url={mlsZipUrl} />
       <PhotoDownloadCard
         title="High-res photos"
@@ -587,56 +570,10 @@ function PhotoDownloadsSection({ gallery }: { gallery: DeliverableRow[] }) {
       />
       {!hasAnyDownload ? (
         <p className="rounded-xl border border-dashed border-realtor-primary/20 bg-realtor-surface-muted/70 px-4 py-3 text-xs leading-relaxed text-realtor-muted">
-          Photo downloads will appear here as soon as Fotello or iGUIDE sends them.
+          Photo downloads will appear here as soon as iGUIDE sends them.
         </p>
       ) : null}
     </MediaSection>
-  );
-}
-
-function FotelloGalleryCard({
-  deliverable,
-  fallbackLabel,
-}: {
-  deliverable: DeliverableRow;
-  fallbackLabel: string;
-}) {
-  const label = metadataString(deliverable.metadata, "delivery_label") ?? fallbackLabel;
-  const status = metadataString(deliverable.metadata, "status");
-  const expiresAt = metadataString(deliverable.metadata, "url_expires_at");
-  const href = fotelloEmbedUrl(deliverable.id);
-  return (
-    <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface-muted/80 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h4 className="text-sm font-semibold text-realtor-text">{label}</h4>
-          <p className="mt-1 text-xs text-realtor-muted">
-            Edited photos from Fotello. Open the gallery to view or download the completed set.
-          </p>
-          {status || expiresAt ? (
-            <p className="mt-1 text-[11px] text-realtor-muted/80">
-              {status ? `Status: ${status}` : null}
-              {status && expiresAt ? " · " : null}
-              {expiresAt ? `Link expires ${formatDateTime(expiresAt)}` : null}
-            </p>
-          ) : null}
-        </div>
-        <span className="rounded-full border border-realtor-primary/15 px-3 py-1 text-xs text-realtor-muted">
-          Fotello
-        </span>
-      </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <CopyLinkButton url={href} label="Copy" />
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener"
-          className="rounded-md bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-realtor-primary-light"
-        >
-          Open gallery
-        </a>
-      </div>
-    </div>
   );
 }
 
@@ -900,10 +837,6 @@ function iGuideDownloadUrl(url: string): string {
   return `/api/iguide/download?url=${encodeURIComponent(url)}`;
 }
 
-function fotelloEmbedUrl(deliverableId: string): string {
-  return `/api/fotello/embed/${encodeURIComponent(deliverableId)}`;
-}
-
 function VideoSection({
   downloads,
   streamingLinks,
@@ -1158,17 +1091,11 @@ function hasPhotoAsset(deliverable: DeliverableRow): boolean {
   return (
     metadataImageUrls(deliverable.metadata).length > 0 ||
     Boolean(photoDownloadUrl(deliverable.metadata, "mls_photo_zip_url")) ||
-    Boolean(photoDownloadUrl(deliverable.metadata, "high_res_photo_zip_url")) ||
-    (deliverable.source === "fotello" &&
-      Boolean(deliverable.url) &&
-      deliverable.url !== "about:blank")
+    Boolean(photoDownloadUrl(deliverable.metadata, "high_res_photo_zip_url"))
   );
 }
 
 function photoDownloadDetail(deliverable: DeliverableRow): string {
-  if (deliverable.source === "fotello") {
-    return "Fotello edited photo gallery";
-  }
   if (photoDownloadUrl(deliverable.metadata, "mls_photo_zip_url")) {
     return "MLS download available";
   }
