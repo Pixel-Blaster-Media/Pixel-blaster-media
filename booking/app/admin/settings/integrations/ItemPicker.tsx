@@ -24,7 +24,7 @@ export default function ItemPicker({
   return (
     <div className="flex flex-wrap items-end gap-2">
       <label className="flex-1">
-        <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+        <span className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
           Default service item
         </span>
         <select
@@ -33,7 +33,7 @@ export default function ItemPicker({
             setSelected(e.target.value);
             setSaved(false);
           }}
-          className="mt-1 w-full rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
+          className="admin-input mt-1"
         >
           <option value="" disabled>
             Pick one…
@@ -57,12 +57,12 @@ export default function ItemPicker({
             else setSaved(true);
           });
         }}
-        className="rounded-full border border-white/15 px-3 py-2 text-sm text-white hover:border-brand-light hover:text-brand-light disabled:opacity-50"
+        className="rounded-full border border-realtor-primary/20 bg-white px-3 py-2 text-sm font-semibold text-realtor-primary hover:border-realtor-primary/40 hover:bg-realtor-primary/5 disabled:opacity-50"
       >
         {pending ? "Saving…" : saved ? "✓ Saved" : "Save"}
       </button>
       {error ? (
-        <p role="alert" className="w-full text-xs text-red-300">
+        <p role="alert" className="w-full text-xs text-red-700">
           {error}
         </p>
       ) : null}

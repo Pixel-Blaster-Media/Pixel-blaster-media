@@ -138,7 +138,7 @@ export default function CredentialsForm({
         return (
           <div key={f.name}>
             <label className="block">
-              <span className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-ink-muted">
+              <span className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-realtor-muted">
                 <span>{f.label}</span>
                 <StatusBadge status={status} onClear={() => clearField(f.name)} />
               </span>
@@ -154,10 +154,10 @@ export default function CredentialsForm({
                 }
                 autoComplete="off"
                 spellCheck={false}
-                className="mt-1 w-full rounded-xl border border-white/10 bg-ink-soft px-3 py-2 font-mono text-xs text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+                className="admin-input mt-1 font-mono text-xs"
               />
               {f.helper ? (
-                <span className="mt-1 block text-[11px] text-ink-muted">
+                <span className="mt-1 block text-[11px] text-realtor-muted">
                   {f.helper}
                 </span>
               ) : null}
@@ -170,7 +170,7 @@ export default function CredentialsForm({
         <p
           className={
             "text-xs " +
-            (message.kind === "ok" ? "text-emerald-300" : "text-red-300")
+            (message.kind === "ok" ? "text-emerald-700" : "text-red-700")
           }
         >
           {message.text}
@@ -181,7 +181,7 @@ export default function CredentialsForm({
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-full bg-brand px-4 py-1.5 text-xs font-semibold text-white hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-full bg-realtor-primary px-4 py-1.5 text-xs font-semibold text-white hover:bg-realtor-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isPending ? "Saving…" : "Save credentials"}
         </button>
@@ -189,7 +189,7 @@ export default function CredentialsForm({
           type="button"
           disabled={isPending}
           onClick={clearAllFields}
-          className="rounded-full border border-red-300/30 px-4 py-1.5 text-xs font-semibold text-red-200 hover:border-red-300 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-full border border-red-200 bg-white px-4 py-1.5 text-xs font-semibold text-red-700 hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
         >
           Clear all saved
         </button>
@@ -207,7 +207,7 @@ function StatusBadge({
 }) {
   if (!status || status.source === "none") {
     return (
-      <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-ink-muted">
+      <span className="rounded-full border border-realtor-primary/15 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
         Not set
       </span>
     );
@@ -216,7 +216,7 @@ function StatusBadge({
     return (
       <span
         title={status.hint ? `Ends in ${status.hint}` : undefined}
-        className="rounded-full border border-amber-400/30 bg-amber-400/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-amber-200"
+        className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700"
       >
         From env {status.hint ? `· ${status.hint}` : ""}
       </span>
@@ -226,14 +226,14 @@ function StatusBadge({
     <span className="flex items-center gap-2">
       <span
         title={status.hint ? `Ends in ${status.hint}` : undefined}
-        className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-emerald-200"
+        className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700"
       >
         Saved {status.hint ? `· ${status.hint}` : ""}
       </span>
       <button
         type="button"
         onClick={onClear}
-        className="text-[10px] uppercase tracking-wider text-red-300 hover:text-red-200"
+        className="text-[10px] font-semibold uppercase tracking-wider text-red-700 hover:text-red-800"
       >
         Clear
       </button>

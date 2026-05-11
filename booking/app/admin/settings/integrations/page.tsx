@@ -115,12 +115,14 @@ export default async function IntegrationsPage({
 
   return (
     <div className="space-y-10">
-      <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
-        <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+      <header className="realtor-panel rounded-2xl p-4">
+        <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
           Settings
         </p>
-        <h1 className="mt-1 text-2xl font-bold text-white">Integrations</h1>
-        <p className="mt-2 text-sm text-ink-muted">
+        <h1 className="mt-1 text-2xl font-bold text-realtor-text">
+          Integrations
+        </h1>
+        <p className="mt-2 text-sm text-realtor-muted">
           Third-party services that plug into the booking system.
         </p>
       </header>
@@ -128,7 +130,7 @@ export default async function IntegrationsPage({
       {flashError ? (
         <p
           role="alert"
-          className="rounded-2xl border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-200"
+          className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
         >
           QuickBooks connection failed ({flashError}). Double-check your
           Intuit app's redirect URI matches{" "}
@@ -137,7 +139,7 @@ export default async function IntegrationsPage({
         </p>
       ) : null}
       {flashOk ? (
-        <p className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-3 text-sm text-emerald-200">
+        <p className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
           QuickBooks connected. Pick a default service item below and you're
           ready to invoice.
         </p>
@@ -145,7 +147,7 @@ export default async function IntegrationsPage({
       {googleFlashError ? (
         <p
           role="alert"
-          className="rounded-2xl border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-200"
+          className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
         >
           Google Calendar connection failed ({googleFlashError}). Double-check
           that your OAuth app&apos;s authorized redirect URI matches{" "}
@@ -154,20 +156,20 @@ export default async function IntegrationsPage({
         </p>
       ) : null}
       {googleFlashOk ? (
-        <p className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-3 text-sm text-emerald-200">
+        <p className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
           Google Calendar connected. Busy blocks from{" "}
           {googleConnection?.google_account_email ?? "your calendar"} now hide
           booking slots, and new bookings land on your calendar automatically.
         </p>
       ) : null}
 
-      <section className="rounded-2xl border border-white/10 bg-ink-soft/50 p-5 shadow-lg shadow-black/10">
+      <section className="realtor-elevated-panel rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-white">
+            <h2 className="text-lg font-semibold text-realtor-text">
               Email (Resend)
             </h2>
-            <p className="mt-1 text-sm text-ink-muted">
+            <p className="mt-1 text-sm text-realtor-muted">
               Sends booking confirmations, admin notifications, and the
               &ldquo;shoot confirmed&rdquo; email with the portal magic link.
               Supabase magic-link / signup emails are configured separately
@@ -176,11 +178,11 @@ export default async function IntegrationsPage({
             </p>
           </div>
           {resendConfigured && emailFrom ? (
-            <span className="shrink-0 rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-emerald-200">
+            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
               Configured
             </span>
           ) : (
-            <span className="shrink-0 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-amber-200">
+            <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
               Not configured
             </span>
           )}
@@ -199,31 +201,31 @@ export default async function IntegrationsPage({
           statuses={{ api_key: resendApiKeyStatus }}
         />
 
-        <div className="mt-5 space-y-4 border-t border-white/5 pt-4">
+        <div className="mt-5 space-y-4 border-t border-realtor-primary/10 pt-4">
           <dl className="grid gap-y-1 text-sm md:grid-cols-[180px_1fr]">
-            <dt className="text-ink-muted">EMAIL_FROM</dt>
-            <dd className="text-white">
+            <dt className="text-realtor-muted">EMAIL_FROM</dt>
+            <dd className="text-realtor-text">
               {emailFrom ? (
                 <code className="text-xs">{emailFrom}</code>
               ) : (
-                <span className="text-amber-300">not set in Vercel env</span>
+                <span className="text-amber-700">not set in Vercel env</span>
               )}
             </dd>
-            <dt className="text-ink-muted">ADMIN_NOTIFICATION_EMAIL</dt>
-            <dd className="text-white">
+            <dt className="text-realtor-muted">ADMIN_NOTIFICATION_EMAIL</dt>
+            <dd className="text-realtor-text">
               {adminEmail ? (
                 <code className="text-xs">{adminEmail}</code>
               ) : (
-                <span className="text-ink-muted">—</span>
+                <span className="text-realtor-muted">—</span>
               )}
             </dd>
           </dl>
 
           <div>
-            <p className="text-xs uppercase tracking-wider text-brand-light">
+            <p className="text-xs uppercase tracking-wider text-realtor-primary">
               Send test email
             </p>
-            <p className="mt-1 text-xs text-ink-muted">
+            <p className="mt-1 text-xs text-realtor-muted">
               Sends a plain test email via the same pipeline that powers
               booking confirmations. The result below shows exactly what
               Resend returned — no guesswork.
@@ -238,11 +240,11 @@ export default async function IntegrationsPage({
       {/* iGUIDE — Portal API + webhook secret. Used by /admin/bookings to
           sync tour deliverables and by the webhook receiver to verify
           incoming events. */}
-      <section className="rounded-2xl border border-white/10 bg-ink-soft/50 p-5 shadow-lg shadow-black/10">
+      <section className="realtor-elevated-panel rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-white">iGUIDE</h2>
-            <p className="mt-1 text-sm text-ink-muted">
+            <h2 className="text-lg font-semibold text-realtor-text">iGUIDE</h2>
+            <p className="mt-1 text-sm text-realtor-muted">
               Connect this once so new iGUIDEs from your phone can be matched
               to bookings and synced into deliverables. iGUIDE has confirmed
               that listing every iGUIDE in your portal is not publicly available
@@ -250,34 +252,34 @@ export default async function IntegrationsPage({
             </p>
           </div>
           {iguideConfigured ? (
-            <span className="shrink-0 rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-emerald-200">
+            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
               Configured
             </span>
           ) : (
-            <span className="shrink-0 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-amber-200">
+            <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
               Not configured
             </span>
           )}
         </div>
 
-        <div className="mt-4 rounded-2xl border border-amber-300/30 bg-amber-400/10 p-4">
-          <p className="text-sm font-semibold text-amber-100">
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-semibold text-amber-900">
             Important iGUIDE limitation
           </p>
-          <p className="mt-1 text-xs text-amber-100/80">
+          <p className="mt-1 text-xs leading-relaxed text-amber-800">
             Your credentials can still be valid even though portal search does
             not work. iGUIDE support confirmed the list-all-iGUIDEs endpoint is
             not exposed for customer use yet. For now, use webhooks for new
             iGUIDEs and paste an existing tour URL, manage URL, alias, or Portal
-            ID on the booking/iGUIDE review page.
+            ID on the booking page.
           </p>
         </div>
 
-        <div className="mt-4 rounded-2xl border border-brand-light/20 bg-brand/10 p-4">
-          <p className="text-sm font-semibold text-white">
+        <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
+          <p className="text-sm font-semibold text-realtor-text">
             What to copy from iGUIDE
           </p>
-          <ol className="mt-2 list-inside list-decimal space-y-1 text-sm text-ink-muted">
+          <ol className="mt-2 list-inside list-decimal space-y-1 text-sm text-realtor-muted">
             <li>
               In iGUIDE, go to{" "}
               <strong>Settings → API Management → API Tokens</strong>.
@@ -297,16 +299,16 @@ export default async function IntegrationsPage({
           </ol>
         </div>
 
-        <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
+        <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-white/70 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
             Webhook URL for iGUIDE
           </p>
-          <p className="mt-1 text-xs text-ink-muted">
+          <p className="mt-1 text-xs text-realtor-muted">
             After saving the webhook secret below, paste this into iGUIDE&apos;s
             webhook setup and put your secret after the equals sign.
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <code className="min-w-0 flex-1 overflow-x-auto rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-xs text-white">
+            <code className="min-w-0 flex-1 overflow-x-auto rounded-xl border border-realtor-primary/15 bg-white px-3 py-2 text-xs text-realtor-text">
               {webhookUrlBase}YOUR_SECRET_HERE
             </code>
             <CopyTextButton value={`${webhookUrlBase}YOUR_SECRET_HERE`} />
@@ -347,11 +349,11 @@ export default async function IntegrationsPage({
 
       {/* Fotello — single API key, used for /getEnhance polling and
           listing creation. */}
-      <section className="rounded-2xl border border-white/10 bg-ink-soft/50 p-5 shadow-lg shadow-black/10">
+      <section className="realtor-elevated-panel rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-white">Fotello</h2>
-            <p className="mt-1 text-sm text-ink-muted">
+            <h2 className="text-lg font-semibold text-realtor-text">Fotello</h2>
+            <p className="mt-1 text-sm text-realtor-muted">
               When you track an enhance on a booking, we poll Fotello&apos;s
               <code className="mx-1 text-xs">/getEnhance</code> endpoint
               and surface the gallery on the realtor&apos;s portal once
@@ -359,11 +361,11 @@ export default async function IntegrationsPage({
             </p>
           </div>
           {fotelloConfigured ? (
-            <span className="shrink-0 rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-emerald-200">
+            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
               Configured
             </span>
           ) : (
-            <span className="shrink-0 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-amber-200">
+            <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
               Not configured
             </span>
           )}
@@ -382,11 +384,13 @@ export default async function IntegrationsPage({
         />
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-ink-soft/50 p-5 shadow-lg shadow-black/10">
+      <section className="realtor-elevated-panel rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-white">Google Calendar</h2>
-            <p className="mt-1 text-sm text-ink-muted">
+            <h2 className="text-lg font-semibold text-realtor-text">
+              Google Calendar
+            </h2>
+            <p className="mt-1 text-sm text-realtor-muted">
               Syncs your personal calendar with the booking system. Busy
               blocks (personal appointments, other commitments) hide their
               time slots from realtors, so nothing can double-book you. When
@@ -396,15 +400,15 @@ export default async function IntegrationsPage({
             </p>
           </div>
           {googleConnection ? (
-            <span className="shrink-0 rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-emerald-200">
+            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
               Connected
             </span>
           ) : googleConfigured ? (
-            <span className="shrink-0 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-amber-200">
+            <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
               Not connected
             </span>
           ) : (
-            <span className="shrink-0 rounded-full border border-white/15 px-2 py-0.5 text-[10px] uppercase tracking-wider text-ink-muted">
+            <span className="shrink-0 rounded-full border border-realtor-primary/15 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
               Not configured
             </span>
           )}
@@ -413,18 +417,18 @@ export default async function IntegrationsPage({
         {googleConnection ? (
           <div className="mt-5 space-y-4">
             <dl className="grid gap-y-1 text-sm md:grid-cols-[180px_1fr]">
-              <dt className="text-ink-muted">Connected account</dt>
-              <dd className="text-white">
+              <dt className="text-realtor-muted">Connected account</dt>
+              <dd className="text-realtor-text">
                 <code className="text-xs">
                   {googleConnection.google_account_email}
                 </code>
               </dd>
-              <dt className="text-ink-muted">Calendar</dt>
-              <dd className="text-white">
+              <dt className="text-realtor-muted">Calendar</dt>
+              <dd className="text-realtor-text">
                 <code className="text-xs">{googleConnection.calendar_id}</code>
               </dd>
-              <dt className="text-ink-muted">Connected</dt>
-              <dd className="text-white">
+              <dt className="text-realtor-muted">Connected</dt>
+              <dd className="text-realtor-text">
                 {new Date(googleConnection.connected_at).toLocaleString()}
               </dd>
             </dl>
@@ -432,7 +436,7 @@ export default async function IntegrationsPage({
           </div>
         ) : googleConfigured ? (
           <div className="mt-5 space-y-3">
-            <p className="text-sm text-ink-muted">
+            <p className="text-sm text-realtor-muted">
               Click Connect, approve the access request on Google, and you&apos;ll
               land back here. You can disconnect anytime — revokes access on
               Google&apos;s end too.
@@ -441,14 +445,14 @@ export default async function IntegrationsPage({
           </div>
         ) : (
           <div className="mt-5 space-y-3">
-            <p className="text-sm text-ink-muted">
+            <p className="text-sm text-realtor-muted">
               First-time setup:
             </p>
-            <ol className="list-inside list-decimal space-y-1 text-sm text-ink-muted">
+            <ol className="list-inside list-decimal space-y-1 text-sm text-realtor-muted">
               <li>
                 Create an OAuth 2.0 Client ID at{" "}
                 <a
-                  className="text-brand-light underline"
+                  className="text-realtor-primary underline"
                   href="https://console.cloud.google.com/apis/credentials"
                   target="_blank"
                   rel="noopener"
@@ -479,11 +483,13 @@ export default async function IntegrationsPage({
         )}
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-ink-soft/50 p-5 shadow-lg shadow-black/10">
+      <section className="realtor-elevated-panel rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-white">QuickBooks Online</h2>
-            <p className="mt-1 text-sm text-ink-muted">
+            <h2 className="text-lg font-semibold text-realtor-text">
+              QuickBooks Online
+            </h2>
+            <p className="mt-1 text-sm text-realtor-muted">
               When you click &quot;Send invoice&quot; on a booking, we upsert the
               realtor as a QB customer and create an invoice with line items
               from your pricing settings. Invoices land in QuickBooks exactly
@@ -491,11 +497,11 @@ export default async function IntegrationsPage({
             </p>
           </div>
           {connection ? (
-            <span className="shrink-0 rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-emerald-200">
+            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
               Connected · {connection.environment}
             </span>
           ) : (
-            <span className="shrink-0 rounded-full border border-white/15 px-2 py-0.5 text-[10px] uppercase tracking-wider text-ink-muted">
+            <span className="shrink-0 rounded-full border border-realtor-primary/15 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
               Not connected
             </span>
           )}
@@ -504,27 +510,27 @@ export default async function IntegrationsPage({
         {connection ? (
           <div className="mt-5 space-y-4">
             <dl className="grid gap-y-1 text-sm md:grid-cols-[180px_1fr]">
-              <dt className="text-ink-muted">Realm (company) id</dt>
-              <dd className="text-white">
+              <dt className="text-realtor-muted">Realm (company) id</dt>
+              <dd className="text-realtor-text">
                 <code className="text-xs">{connection.realm_id}</code>
               </dd>
-              <dt className="text-ink-muted">Connected</dt>
-              <dd className="text-white">
+              <dt className="text-realtor-muted">Connected</dt>
+              <dd className="text-realtor-text">
                 {new Date(connection.connected_at).toLocaleString()}
               </dd>
-              <dt className="text-ink-muted">Default service item</dt>
-              <dd className="text-white">
+              <dt className="text-realtor-muted">Default service item</dt>
+              <dd className="text-realtor-text">
                 {connection.default_item_id ? (
                   items?.find((i) => i.Id === connection.default_item_id)?.Name ??
                   connection.default_item_id
                 ) : (
-                  <span className="text-amber-300">Not set — pick one below</span>
+                  <span className="text-amber-700">Not set — pick one below</span>
                 )}
               </dd>
             </dl>
 
             {itemError ? (
-              <p className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200">
+              <p className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                 {itemError}
               </p>
             ) : (
@@ -538,14 +544,14 @@ export default async function IntegrationsPage({
           </div>
         ) : (
           <div className="mt-5 space-y-3">
-            <p className="text-sm text-ink-muted">
+            <p className="text-sm text-realtor-muted">
               First-time setup:
             </p>
-            <ol className="list-inside list-decimal space-y-1 text-sm text-ink-muted">
+            <ol className="list-inside list-decimal space-y-1 text-sm text-realtor-muted">
               <li>
                 Create an app at{" "}
                 <a
-                  className="text-brand-light underline"
+                  className="text-realtor-primary underline"
                   href="https://developer.intuit.com"
                   target="_blank"
                   rel="noopener"

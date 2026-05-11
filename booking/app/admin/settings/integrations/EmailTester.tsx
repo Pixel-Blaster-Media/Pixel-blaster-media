@@ -36,13 +36,13 @@ export default function EmailTester({ defaultTo }: { defaultTo: string }) {
           value={to}
           onChange={(e) => setTo(e.target.value)}
           placeholder="you@example.com"
-          className="rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+          className="admin-input"
         />
         <button
           type="button"
           disabled={sending || !to.trim()}
           onClick={onSend}
-          className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
+          className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-50"
         >
           {sending ? "Sending…" : "Send test email"}
         </button>
@@ -52,10 +52,10 @@ export default function EmailTester({ defaultTo }: { defaultTo: string }) {
         <div
           className={`rounded-2xl border p-3 text-xs ${
             result.ok && !result.skipped
-              ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
               : result.skipped
-                ? "border-amber-400/30 bg-amber-400/10 text-amber-200"
-                : "border-red-400/30 bg-red-400/10 text-red-200"
+                ? "border-amber-200 bg-amber-50 text-amber-800"
+                : "border-red-200 bg-red-50 text-red-800"
           }`}
         >
           <p className="font-semibold">
@@ -68,7 +68,7 @@ export default function EmailTester({ defaultTo }: { defaultTo: string }) {
           <dl className="mt-2 grid gap-y-0.5 text-[11px] md:grid-cols-[160px_1fr]">
             {result.id ? (
               <>
-                <dt className="text-ink-muted">Resend message id</dt>
+                <dt className="text-realtor-muted">Resend message id</dt>
                 <dd>
                   <code>{result.id}</code>
                 </dd>
@@ -76,17 +76,17 @@ export default function EmailTester({ defaultTo }: { defaultTo: string }) {
             ) : null}
             {result.error ? (
               <>
-                <dt className="text-ink-muted">Error</dt>
+                <dt className="text-realtor-muted">Error</dt>
                 <dd>{result.error}</dd>
               </>
             ) : null}
-            <dt className="text-ink-muted">RESEND_API_KEY</dt>
+            <dt className="text-realtor-muted">RESEND_API_KEY</dt>
             <dd>
               {result.config.resendApiKeyPresent
                 ? "set"
                 : "NOT set in Vercel env"}
             </dd>
-            <dt className="text-ink-muted">EMAIL_FROM</dt>
+            <dt className="text-realtor-muted">EMAIL_FROM</dt>
             <dd>
               {result.config.emailFrom ? (
                 <code>{result.config.emailFrom}</code>
@@ -96,7 +96,7 @@ export default function EmailTester({ defaultTo }: { defaultTo: string }) {
             </dd>
           </dl>
           {result.ok && !result.skipped ? (
-            <p className="mt-2 text-emerald-300/90">
+            <p className="mt-2 text-emerald-700">
               Check {to} — the email should land within a few seconds. If
               it doesn&apos;t, check Resend&apos;s dashboard → Logs.
             </p>

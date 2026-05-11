@@ -15,7 +15,7 @@ export default function IGuideTester({
   >(null);
 
   return (
-    <div className="mt-4 border-t border-white/5 pt-4">
+    <div className="mt-4 border-t border-realtor-primary/10 pt-4">
       <button
         type="button"
         disabled={disabled || isPending}
@@ -38,12 +38,12 @@ export default function IGuideTester({
             });
           });
         }}
-        className="rounded-full border border-white/15 px-4 py-1.5 text-xs font-semibold text-white hover:border-brand-light hover:bg-brand/10 disabled:cursor-not-allowed disabled:opacity-60"
+        className="rounded-full border border-realtor-primary/20 bg-white px-4 py-1.5 text-xs font-semibold text-realtor-primary hover:border-realtor-primary/40 hover:bg-realtor-primary/5 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isPending ? "Testing..." : "Test iGUIDE credentials"}
       </button>
       {disabled ? (
-        <p className="mt-2 text-xs text-ink-muted">
+        <p className="mt-2 text-xs text-realtor-muted">
           Save both the App ID and App Token before testing.
         </p>
       ) : null}
@@ -51,7 +51,7 @@ export default function IGuideTester({
         <p
           className={
             "mt-2 text-xs " +
-            (message.kind === "ok" ? "text-emerald-300" : "text-red-300")
+            (message.kind === "ok" ? "text-emerald-700" : "text-red-700")
           }
         >
           {message.text}
