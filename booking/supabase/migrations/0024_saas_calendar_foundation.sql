@@ -18,16 +18,19 @@ create table if not exists public.organizations (
   updated_at        timestamptz not null default now()
 );
 
+drop trigger if exists organizations_set_updated_at on public.organizations;
 create trigger organizations_set_updated_at
   before update on public.organizations
   for each row execute function public.set_updated_at();
 
 alter table public.organizations enable row level security;
 
+drop policy if exists "organizations: admin read" on public.organizations;
 create policy "organizations: admin read"
   on public.organizations for select
   using (public.is_admin());
 
+drop policy if exists "organizations: admin write" on public.organizations;
 create policy "organizations: admin write"
   on public.organizations for all
   using (public.is_admin())
@@ -58,10 +61,12 @@ create table if not exists public.organization_members (
 
 alter table public.organization_members enable row level security;
 
+drop policy if exists "organization_members: self or admin read" on public.organization_members;
 create policy "organization_members: self or admin read"
   on public.organization_members for select
   using (profile_id = auth.uid() or public.is_admin());
 
+drop policy if exists "organization_members: admin write" on public.organization_members;
 create policy "organization_members: admin write"
   on public.organization_members for all
   using (public.is_admin())
@@ -119,6 +124,9 @@ begin
   return new;
 end;
 $$;
+
+revoke all on function public.sync_profile_organization_membership()
+  from public, anon, authenticated;
 
 drop trigger if exists profiles_sync_organization_membership on public.profiles;
 create trigger profiles_sync_organization_membership
