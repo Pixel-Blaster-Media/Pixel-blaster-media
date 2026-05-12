@@ -48,7 +48,7 @@ export default async function BookStep1Page({
           What do you need?
         </h2>
         <p className="mt-1 text-sm text-realtor-muted">
-          Pick a bundle or build it out a-la-carte. Video add-ons (like
+          Pick a bundle or build it out à la carte. Video add-ons (like
           &ldquo;put me on camera&rdquo;) appear automatically when your
           selection includes video.
         </p>

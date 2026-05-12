@@ -127,17 +127,17 @@ values
   ),
   (
     'bundle', 'social_media_special', 'Social Media Special',
-    E'- Up to 50 Photos\n- One Take Reels video complimented by drone video\n- Up to 7 drone photos\n- iGuide Virtual Tour\n- Floor plans\n- Room Measurements\n- Outside Sq Ft.\n- Weekly analytics\n\nUp to 2,500 sq ft of measuring included. Extra billed $40 per 500 sq ft ($50 for iGuide Premium). Houses over 2,500 sq ft: +$50 video overage.',
+    E'- Up to 50 Photos\n- One Take Reel video complemented by drone video\n- Up to 7 drone photos\n- iGuide Virtual Tour\n- Floor plans\n- Room Measurements\n- Outside Sq Ft.\n- Weekly analytics\n\nUp to 2,500 sq ft of measuring included. Extra billed $40 per 500 sq ft ($50 for iGuide Premium). Houses over 2,500 sq ft: +$50 video overage.',
     120, 60000, true, 20
   ),
   (
     'bundle', 'social_media_plus', 'Social Media PLUS',
-    E'- Up to 50 Photos\n- 5 to 10 detail Photos\n- Video Tour complimented by drone video (vertical or horizontal)\n- Up to 7 drone photos\n- iGuide Virtual Tour\n- Floor plans\n- Room Measurements\n- Outside Sq Ft.\n- Weekly analytics\n\nUp to 2,500 sq ft of measuring included. Extra billed $40 per 500 sq ft ($50 for iGuide Premium). Houses over 2,500 sq ft: +$50 video overage.',
+    E'- Up to 50 Photos\n- 5 to 10 detail Photos\n- Video Tour complemented by drone video (vertical or horizontal)\n- Up to 7 drone photos\n- iGuide Virtual Tour\n- Floor plans\n- Room Measurements\n- Outside Sq Ft.\n- Weekly analytics\n\nUp to 2,500 sq ft of measuring included. Extra billed $40 per 500 sq ft ($50 for iGuide Premium). Houses over 2,500 sq ft: +$50 video overage.',
     180, 72500, true, 30
   ),
   (
     'bundle', 'ultimate', 'The Ultimate',
-    E'- Up to 50 Photos\n- 5 to 10 detail Photos\n- One Take reel video complimented by drone video\n- Video Tour complimented by drone video\n- Up to 7 drone photos\n- iGuide Virtual Tour\n- Floor plans\n- Room Measurements\n- Outside Sq Ft.\n- Weekly analytics\n\nUp to 2,500 sq ft of measuring included. Extra billed $40 per 500 sq ft ($50 for iGuide Premium). Houses over 3,000 sq ft: +$50 video overage.',
+    E'- Up to 50 Photos\n- 5 to 10 detail Photos\n- One Take Reel video complemented by drone video\n- Video Tour complemented by drone video\n- Up to 7 drone photos\n- iGuide Virtual Tour\n- Floor plans\n- Room Measurements\n- Outside Sq Ft.\n- Weekly analytics\n\nUp to 2,500 sq ft of measuring included. Extra billed $40 per 500 sq ft ($50 for iGuide Premium). Houses over 3,000 sq ft: +$50 video overage.',
     240, 95000, true, 40
   );
 

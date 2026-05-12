@@ -254,7 +254,7 @@ export default function CartPicker({
           })}
           {aLaCarte.length === 0 ? (
             <li className="p-4 text-sm text-ink-muted">
-              No a-la-carte items configured.
+              No à la carte items configured.
             </li>
           ) : null}
         </ul>
@@ -321,7 +321,7 @@ export default function CartPicker({
         </div>
         {cart.length === 0 ? (
           <p className="text-xs text-ink-muted">
-            Pick a bundle or add a-la-carte items to continue.
+            Pick a bundle or add à la carte items to continue.
           </p>
         ) : null}
       </div>

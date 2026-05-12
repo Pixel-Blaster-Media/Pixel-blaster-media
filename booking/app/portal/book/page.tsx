@@ -49,7 +49,7 @@ export default async function PortalBookPage({
   const rawServices = parseCsv(params.services);
   const rawAddOns = parseCsv(params.add_ons);
 
-  // Service = bundle OR a-la-carte slug. Reject anything not in the
+  // Service = bundle OR à la carte slug. Reject anything not in the
   // catalog so stale URLs don't crash subsequent lookups.
   const selectedSlugs = rawServices.filter(
     (s) => validBundleSlugs.has(s) || validALaCarteSlugs.has(s),

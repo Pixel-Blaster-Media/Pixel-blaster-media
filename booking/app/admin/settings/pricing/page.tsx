@@ -20,7 +20,7 @@ export default async function PricingPage() {
         </p>
         <h1 className="mt-1 text-2xl font-bold text-white">Pricing</h1>
         <p className="mt-2 text-sm text-ink-muted">
-          Bundles, a-la-carte items, and add-ons shown on the booking form
+          Bundles, à la carte items, and add-ons shown on the booking form
           and invoiced via QuickBooks. Edits here take effect immediately
           for new bookings. Existing bookings keep whatever price was
           locked in at booking time.

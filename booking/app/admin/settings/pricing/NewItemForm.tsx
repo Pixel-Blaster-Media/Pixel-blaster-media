@@ -19,7 +19,7 @@ export default function NewItemForm({ kind }: { kind: CatalogItemKind }) {
           onClick={() => setOpen(true)}
           className="text-xs font-semibold uppercase tracking-wider text-brand-light hover:text-white"
         >
-          + Add {kind === "addon" ? "add-on" : kind === "bundle" ? "bundle" : "a-la-carte item"}
+          + Add {kind === "addon" ? "add-on" : kind === "bundle" ? "bundle" : "à la carte item"}
         </button>
       </div>
     );

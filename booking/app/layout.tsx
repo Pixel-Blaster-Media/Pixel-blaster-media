@@ -28,8 +28,8 @@ export default function RootLayout({
       <body className="min-h-screen page-backdrop">
         <AuthSessionHandler />
         <header className="site-header border-b border-white/5">
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-            <Link href="/" className="flex items-center gap-2 font-semibold">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-4">
+            <Link href="/" className="flex shrink-0 items-center gap-2 whitespace-nowrap font-semibold">
               <span className="site-brand-primary text-white">
                 Pixel Blaster
               </span>
@@ -37,7 +37,7 @@ export default function RootLayout({
                 Booking
               </span>
             </Link>
-            <nav className="site-nav flex items-center gap-6 text-sm text-ink-muted">
+            <nav className="site-nav flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-muted md:gap-6">
               <Link href="/book" className="hover:text-white">
                 Book
               </Link>

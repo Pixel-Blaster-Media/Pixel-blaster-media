@@ -69,7 +69,7 @@ export async function getFullCatalog(): Promise<Catalog> {
 export interface CartLine {
   /** Catalog item id. */
   catalogItemId: string;
-  /** Always 1 for bundles + addons; can be >1 for a-la-carte. */
+  /** Always 1 for bundles + addons; can be >1 for à la carte. */
   quantity: number;
 }
 
@@ -120,10 +120,10 @@ export function computeCartTotals(
 
 /**
  * Enforce the cart rules:
- *   - At least one bundle OR one a-la-carte item.
+ *   - At least one bundle OR one à la carte item.
  *   - At most one bundle (bundles are mutually exclusive).
  *   - Add-ons with `require_has_video` need at least one video item in the
- *     cart (bundle or a-la-carte flagged `is_video`).
+ *     cart (bundle or à la carte flagged `is_video`).
  * Returns null if valid; otherwise a user-facing error string.
  */
 export function validateCart(
@@ -140,7 +140,7 @@ export function validateCart(
     .filter((x): x is { row: CatalogItemRow; qty: number } => !!x.row);
 
   if (items.length === 0) {
-    return "Pick at least one package or a-la-carte item.";
+    return "Pick at least one package or à la carte item.";
   }
 
   const bundles = items.filter((x) => x.row.kind === "bundle");
@@ -150,7 +150,7 @@ export function validateCart(
 
   const nonAddon = items.filter((x) => x.row.kind !== "addon");
   if (nonAddon.length === 0) {
-    return "Pick at least one package or a-la-carte item (add-ons alone are not enough).";
+    return "Pick at least one package or à la carte item (add-ons alone are not enough).";
   }
 
   const hasVideo = nonAddon.some((x) => x.row.is_video);
@@ -158,7 +158,7 @@ export function validateCart(
     (x) => x.row.kind === "addon" && x.row.require_has_video,
   );
   if (videoOnlyAddon && !hasVideo) {
-    return `"${videoOnlyAddon.row.name}" requires a video package or a-la-carte item.`;
+    return `"${videoOnlyAddon.row.name}" requires a video package or à la carte item.`;
   }
 
   return null;

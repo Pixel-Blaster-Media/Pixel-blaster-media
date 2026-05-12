@@ -54,7 +54,7 @@ export function validateBookingRequest(
   }
 
   if (!Array.isArray(input.cart) || input.cart.length === 0) {
-    errors.services = "Pick a bundle or at least one a-la-carte item.";
+    errors.services = "Pick a bundle or at least one à la carte item.";
   }
 
   if (
