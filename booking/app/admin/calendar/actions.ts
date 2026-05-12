@@ -24,60 +24,88 @@ interface ActionResult {
   bookingId?: string;
 }
 
-interface RealtorLookupResult {
+interface RealtorSearchResult {
   ok: boolean;
   error?: string;
-  realtor?: {
-    email: string;
-    fullName: string;
-    phone: string;
-    brokerage: string;
-  };
+  realtors: RealtorSearchItem[];
 }
 
-interface InsertedRow {
+export interface RealtorSearchItem {
   id: string;
+  email: string;
+  fullName: string;
+  phone: string;
+  brokerage: string;
 }
 
-interface ProfileLookupRow {
+interface ProfileSearchRow {
+  id: string;
   email: string;
   full_name: string | null;
   phone: string | null;
   brokerage: string | null;
 }
 
-export async function lookupRealtor(
-  email: string,
-): Promise<RealtorLookupResult> {
+interface InsertedRow {
+  id: string;
+}
+
+export async function searchRealtors(
+  query: string,
+): Promise<RealtorSearchResult> {
   await requireAdmin();
 
-  const normalizedEmail = email.trim().toLowerCase();
-  if (!normalizedEmail || !normalizedEmail.includes("@")) {
-    return { ok: false };
+  const term = query.trim();
+  if (term.length < 2) {
+    return { ok: true, realtors: [] };
   }
 
+  const safeTerm = term.replace(/[%_]/g, "");
+  const pattern = `%${safeTerm}%`;
   const supabase = await getServerSupabase();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("email, full_name, phone, brokerage")
-    .eq("email", normalizedEmail)
-    .limit(1)
-    .maybeSingle<ProfileLookupRow>();
+  const [nameRes, emailRes] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, email, full_name, phone, brokerage")
+      .eq("role", "realtor")
+      .ilike("full_name", pattern)
+      .order("full_name", { ascending: true, nullsFirst: false })
+      .limit(8)
+      .returns<ProfileSearchRow[]>(),
+    supabase
+      .from("profiles")
+      .select("id, email, full_name, phone, brokerage")
+      .eq("role", "realtor")
+      .ilike("email", pattern)
+      .order("email", { ascending: true })
+      .limit(8)
+      .returns<ProfileSearchRow[]>(),
+  ]);
 
-  if (error) {
-    console.warn("[admin-calendar] realtor lookup failed", error.message);
-    return { ok: false, error: "Could not check realtor. Enter details manually." };
+  const firstError = nameRes.error ?? emailRes.error;
+  if (firstError) {
+    console.warn("[admin-calendar] realtor search failed", firstError.message);
+    return {
+      ok: false,
+      error: "Could not search realtors. Enter details manually.",
+      realtors: [],
+    };
   }
 
-  if (!data) return { ok: false };
+  const byId = new Map<string, RealtorSearchItem>();
+  for (const row of [...(nameRes.data ?? []), ...(emailRes.data ?? [])]) {
+    byId.set(row.id, {
+      id: row.id,
+      email: row.email,
+      fullName: row.full_name ?? "",
+      phone: row.phone ?? "",
+      brokerage: row.brokerage ?? "",
+    });
+  }
+
   return {
     ok: true,
-    realtor: {
-      email: data.email,
-      fullName: data.full_name ?? "",
-      phone: data.phone ?? "",
-      brokerage: data.brokerage ?? "",
-    },
+    realtors: Array.from(byId.values()).slice(0, 8),
   };
 }
 

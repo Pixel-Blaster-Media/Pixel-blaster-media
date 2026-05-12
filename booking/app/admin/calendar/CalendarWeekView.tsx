@@ -3,13 +3,17 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { InputHTMLAttributes, ReactNode } from "react";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 import AddressAutocomplete, {
   type PlaceParts,
 } from "@/app/_components/AddressAutocomplete";
 import { addCalendarBlock } from "@/app/admin/settings/availability/actions";
-import { createAdminShoot, lookupRealtor } from "./actions";
+import {
+  createAdminShoot,
+  searchRealtors,
+  type RealtorSearchItem,
+} from "./actions";
 
 interface CalendarItem {
   id: string;
@@ -68,6 +72,13 @@ export default function CalendarWeekView({
   const [mode, setMode] = useState<"shoot" | "block">("shoot");
   const [error, setError] = useState<string | null>(null);
   const [lookupMessage, setLookupMessage] = useState<string | null>(null);
+  const [realtorSearchResults, setRealtorSearchResults] = useState<
+    RealtorSearchItem[]
+  >([]);
+  const [isRealtorSearchOpen, setIsRealtorSearchOpen] = useState(false);
+  const [selectedRealtorId, setSelectedRealtorId] = useState<string | null>(
+    null,
+  );
   const [realtor, setRealtor] = useState({
     contact_name: "",
     contact_email: "",
@@ -98,31 +109,63 @@ export default function CalendarWeekView({
   const selectedSlot = selected
     ? toDateTimeLocal(selected.day.dateInput, selected.hour, selected.minute)
     : null;
-  const checkRealtor = () => {
-    const email = realtor.contact_email.trim();
-    if (!email.includes("@")) {
-      setLookupMessage("Enter a full email, then check.");
+
+  useEffect(() => {
+    const query = realtor.contact_name.trim();
+    if (selectedRealtorId || query.length < 2) {
+      setRealtorSearchResults([]);
+      setIsRealtorSearchOpen(false);
       return;
     }
-    setLookupMessage("Checking realtor...");
-    startLookupTransition(async () => {
-      try {
-        const result = await lookupRealtor(email);
-        if (!result.ok || !result.realtor) {
-          setLookupMessage(result.error ?? "New realtor. Enter details below.");
-          return;
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setLookupMessage("Searching saved realtors...");
+      startLookupTransition(async () => {
+        try {
+          const result = await searchRealtors(query);
+          if (cancelled) return;
+          if (!result.ok) {
+            setRealtorSearchResults([]);
+            setIsRealtorSearchOpen(false);
+            setLookupMessage(
+              result.error ?? "Could not search realtors. Enter details manually.",
+            );
+            return;
+          }
+          setRealtorSearchResults(result.realtors);
+          setIsRealtorSearchOpen(result.realtors.length > 0);
+          setLookupMessage(
+            result.realtors.length === 0
+              ? "No saved realtor found. Enter the email below."
+              : null,
+          );
+        } catch {
+          if (cancelled) return;
+          setRealtorSearchResults([]);
+          setIsRealtorSearchOpen(false);
+          setLookupMessage("Could not search realtors. Enter details manually.");
         }
-        setRealtor({
-          contact_email: result.realtor.email,
-          contact_name: result.realtor.fullName,
-          contact_phone: result.realtor.phone,
-          brokerage: result.realtor.brokerage,
-        });
-        setLookupMessage("Realtor found.");
-      } catch {
-        setLookupMessage("Could not check realtor. Enter details manually.");
-      }
+      });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [realtor.contact_name, selectedRealtorId]);
+
+  const selectRealtor = (result: RealtorSearchItem) => {
+    setSelectedRealtorId(result.id);
+    setRealtor({
+      contact_name: result.fullName || result.email,
+      contact_email: result.email,
+      contact_phone: result.phone,
+      brokerage: result.brokerage,
     });
+    setRealtorSearchResults([]);
+    setIsRealtorSearchOpen(false);
+    setLookupMessage("Realtor selected.");
   };
 
   return (
@@ -354,49 +397,82 @@ export default function CalendarWeekView({
               <FormSection
                 step="2"
                 title="Realtor"
-                detail="Type the email, then check for a saved realtor if needed."
+                detail="Start with the name. Pick a saved realtor to fill the rest."
               >
                 <div className="grid gap-3 md:grid-cols-2">
-                  <label className="block">
-                    <span className="text-xs text-ink-muted">Realtor email</span>
-                    <div className="mt-1 flex gap-2">
+                  <label className="relative block">
+                    <span className="text-xs text-ink-muted">Realtor name</span>
+                    <div className="mt-1">
                       <input
-                        name="contact_email"
-                        type="email"
+                        name="contact_name"
+                        type="text"
                         required
-                        autoComplete="email"
-                        value={realtor.contact_email}
+                        autoComplete="off"
+                        value={realtor.contact_name}
+                        onFocus={() => {
+                          if (realtorSearchResults.length > 0) {
+                            setIsRealtorSearchOpen(true);
+                          }
+                        }}
+                        onBlur={() => {
+                          window.setTimeout(
+                            () => setIsRealtorSearchOpen(false),
+                            120,
+                          );
+                        }}
                         onChange={(event) => {
                           const value = event.currentTarget.value;
                           setLookupMessage(null);
+                          setSelectedRealtorId(null);
                           setRealtor((draft) => ({
                             ...draft,
-                            contact_email: value,
+                            contact_name: value,
+                            contact_email: "",
+                            contact_phone: "",
+                            brokerage: "",
                           }));
                         }}
-                        className="min-w-0 flex-1 rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white"
+                        className="w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white"
                       />
-                      <button
-                        type="button"
-                        onClick={checkRealtor}
-                        disabled={lookupPending}
-                        className="shrink-0 rounded-xl border border-brand/30 bg-brand/10 px-3 py-2 text-xs font-semibold text-brand-light transition hover:border-brand/50 hover:bg-brand/20 disabled:opacity-60"
-                      >
-                        {lookupPending ? "Checking..." : "Check"}
-                      </button>
+                      {isRealtorSearchOpen && realtorSearchResults.length > 0 ? (
+                        <ul className="absolute left-0 right-0 z-30 mt-1 max-h-60 overflow-auto rounded-xl border border-white/10 bg-ink shadow-2xl shadow-black/40">
+                          {realtorSearchResults.map((result) => (
+                            <li key={result.id}>
+                              <button
+                                type="button"
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  selectRealtor(result);
+                                }}
+                                className="block w-full px-3 py-2 text-left text-sm text-white transition hover:bg-brand/15"
+                              >
+                                <span className="block font-semibold">
+                                  {result.fullName || result.email}
+                                </span>
+                                <span className="block truncate text-xs text-ink-muted">
+                                  {[result.email, result.brokerage]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                     </div>
                   </label>
                   <TextField
-                    label="Realtor name"
-                    name="contact_name"
+                    label="Email"
+                    name="contact_email"
+                    type="email"
                     required
-                    autoComplete="name"
-                    value={realtor.contact_name}
+                    autoComplete="email"
+                    value={realtor.contact_email}
                     onChange={(event) => {
                       const value = event.currentTarget.value;
                       setRealtor((draft) => ({
                         ...draft,
-                        contact_name: value,
+                        contact_email: value,
                       }));
                     }}
                   />
