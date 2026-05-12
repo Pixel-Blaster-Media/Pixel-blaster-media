@@ -227,7 +227,6 @@ async function insertEvent(
     location: input.location,
     start: { dateTime: input.startISO },
     end: { dateTime: input.endISO },
-    source: { title: "Pixel Blaster Booking" },
   };
   if (input.attendeeEmail) {
     body.attendees = [
