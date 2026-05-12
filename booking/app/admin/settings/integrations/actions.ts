@@ -18,6 +18,11 @@ import {
   buildAuthorizeUrl as buildGoogleAuthorizeUrl,
   revokeToken as revokeGoogleToken,
 } from "@/lib/integrations/google-calendar/oauth";
+import {
+  deleteGoogleCalendarConnection,
+  getGoogleCalendarClient,
+  getGoogleCalendarConnection,
+} from "@/lib/integrations/google-calendar/client";
 import { buildAuthorizeUrl } from "@/lib/integrations/quickbooks/oauth";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
@@ -295,19 +300,86 @@ export async function startGoogleCalendarConnect(): Promise<void> {
  */
 export async function disconnectGoogleCalendar(): Promise<void> {
   await requireAdmin();
-  const supabase = getServiceSupabase();
-  const { data: conn } = await supabase
-    .from("google_calendar_connection")
-    .select("refresh_token")
-    .eq("id", 1)
-    .maybeSingle<{ refresh_token: string }>();
-
+  const conn = await getGoogleCalendarConnection();
   if (conn?.refresh_token) {
     await revokeGoogleToken(conn.refresh_token);
   }
 
-  await supabase.from("google_calendar_connection").delete().eq("id", 1);
+  await deleteGoogleCalendarConnection();
   revalidatePath("/admin/settings/integrations");
+}
+
+export async function testGoogleCalendarConnection(): Promise<{
+  ok: boolean;
+  eventUrl?: string;
+  calendarId?: string;
+  error?: string;
+  config: {
+    clientIdPresent: boolean;
+    clientSecretPresent: boolean;
+    connectionPresent: boolean;
+  };
+}> {
+  await requireAdmin();
+
+  const conn = await getGoogleCalendarConnection();
+
+  const config = {
+    clientIdPresent: Boolean(process.env.GOOGLE_CLIENT_ID),
+    clientSecretPresent: Boolean(process.env.GOOGLE_CLIENT_SECRET),
+    connectionPresent: Boolean(conn),
+  };
+
+  if (!config.clientIdPresent || !config.clientSecretPresent) {
+    return {
+      ok: false,
+      error:
+        "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set before calendar sync can work.",
+      config,
+    };
+  }
+
+  if (!config.connectionPresent) {
+    return {
+      ok: false,
+      error: "Google Calendar is not connected yet. Click Connect first.",
+      config,
+    };
+  }
+
+  try {
+    const client = await getGoogleCalendarClient();
+    if (!client) {
+      return {
+        ok: false,
+        error: "Google Calendar client could not be created.",
+        config,
+      };
+    }
+
+    const start = new Date(Date.now() + 15 * 60_000);
+    const end = new Date(start.getTime() + 15 * 60_000);
+    const event = await client.createEvent({
+      summary: "Pixel Blaster calendar sync test",
+      description:
+        "This short test event was created from the booking admin integrations page. You can delete it.",
+      startISO: start.toISOString(),
+      endISO: end.toISOString(),
+    });
+
+    return {
+      ok: true,
+      eventUrl: event.htmlLink,
+      calendarId: client.calendarId,
+      config,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      config,
+    };
+  }
 }
 
 /**

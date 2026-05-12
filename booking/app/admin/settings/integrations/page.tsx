@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { getGoogleCalendarConnection } from "@/lib/integrations/google-calendar/client";
 import { getCredentialSource } from "@/lib/integrations/credentials";
 import { getQBClient, QBOError } from "@/lib/integrations/quickbooks/client";
 import { getServerSupabase } from "@/lib/supabase/server";
@@ -14,6 +15,7 @@ import DisconnectButton from "./DisconnectButton";
 import EmailTester from "./EmailTester";
 import GoogleConnectButton from "./GoogleConnectButton";
 import GoogleDisconnectButton from "./GoogleDisconnectButton";
+import GoogleCalendarTester from "./GoogleCalendarTester";
 import IGuideTester from "./IGuideTester";
 import ItemPicker from "./ItemPicker";
 
@@ -22,8 +24,6 @@ export const dynamic = "force-dynamic";
 
 type ConnectionRow =
   Database["public"]["Tables"]["quickbooks_connection"]["Row"];
-type GoogleConnectionRow =
-  Database["public"]["Tables"]["google_calendar_connection"]["Row"];
 
 interface QBOItem {
   Id: string;
@@ -53,11 +53,7 @@ export default async function IntegrationsPage({
     .select("*")
     .eq("id", 1)
     .maybeSingle<ConnectionRow>();
-  const { data: googleConnection } = await supabase
-    .from("google_calendar_connection")
-    .select("*")
-    .eq("id", 1)
-    .maybeSingle<GoogleConnectionRow>();
+  const googleConnection = await getGoogleCalendarConnection();
 
   let items: QBOItem[] | null = null;
   let itemError: string | null = null;
@@ -108,6 +104,7 @@ export default async function IntegrationsPage({
   const googleConfigured = Boolean(
     process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET,
   );
+  const googleReady = Boolean(googleConnection && googleConfigured);
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
   const webhookUrlBase = appUrl
     ? `${appUrl}/api/integrations/iguide/webhook?secret=`
@@ -399,9 +396,13 @@ export default async function IntegrationsPage({
               contact info, and any notes.
             </p>
           </div>
-          {googleConnection ? (
+          {googleReady ? (
             <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
               Connected
+            </span>
+          ) : googleConnection ? (
+            <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+              Needs env vars
             </span>
           ) : googleConfigured ? (
             <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
@@ -416,6 +417,19 @@ export default async function IntegrationsPage({
 
         {googleConnection ? (
           <div className="mt-5 space-y-4">
+            {!googleConfigured ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <p className="font-semibold">
+                  Google Calendar is connected, but it cannot sync bookings yet.
+                </p>
+                <p className="mt-1">
+                  <code>GOOGLE_CLIENT_ID</code> and{" "}
+                  <code>GOOGLE_CLIENT_SECRET</code> are blank in the app
+                  environment. Add those values in Vercel, redeploy, then use
+                  the test below.
+                </p>
+              </div>
+            ) : null}
             <dl className="grid gap-y-1 text-sm md:grid-cols-[180px_1fr]">
               <dt className="text-realtor-muted">Connected account</dt>
               <dd className="text-realtor-text">
@@ -432,6 +446,7 @@ export default async function IntegrationsPage({
                 {new Date(googleConnection.connected_at).toLocaleString()}
               </dd>
             </dl>
+            <GoogleCalendarTester />
             <GoogleDisconnectButton />
           </div>
         ) : googleConfigured ? (

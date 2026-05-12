@@ -13,6 +13,7 @@ import { getCredential } from "@/lib/integrations/credentials";
  *   - POST /createUpload   { filename }                       → { id, url, expires }
  *   - POST /createEnhance  { upload_ids, listing_id, shot_type } → { id }
  *   - GET  /getEnhance     ?id=...                            → Enhance
+ *   - POST /v1/prepare-download { listing_id, photo_formats, sections } → ZIP URL
  *
  * Our current workflow uses only /getEnhance (you upload in Fotello's UI,
  * we poll for completion). The other endpoints are here so a future
@@ -25,6 +26,13 @@ export const FOTELLO_BASE_URL =
 
 export type FotelloStatus = "in_progress" | "completed" | "pending" | "failed";
 export type FotelloShotType = "interior" | "exterior";
+export type FotelloPhotoFormat = "mls" | "print" | "original";
+export type FotelloDownloadSection =
+  | "photos"
+  | "videos"
+  | "virtual_tours"
+  | "floor_plans"
+  | "property_websites";
 
 export interface FotelloEnhance {
   id: string;
@@ -47,6 +55,12 @@ export interface FotelloUpload {
   id: string;
   url: string;
   expires: string;
+}
+
+export interface FotelloPreparedDownload {
+  download_url: string;
+  total_items: number;
+  processed_items: number;
 }
 
 export class FotelloError extends Error {
@@ -75,6 +89,11 @@ function normalizeFotelloApiKey(key: string): string {
   return key.trim().replace(/^Bearer\s+/i, "").replace(/\u0430/g, "a");
 }
 
+function authorizationHeader(path: string, key: string): string {
+  const normalized = normalizeFotelloApiKey(key);
+  return path.startsWith("/v1/") ? `Bearer ${normalized}` : normalized;
+}
+
 async function request<T>(
   method: "GET" | "POST",
   path: string,
@@ -93,8 +112,8 @@ async function request<T>(
       "Content-Type": "application/json",
       // Fotello's docs label this as BearerAuth, but the Cloud Function
       // currently accepts the raw `api-...` token in Authorization. Sending
-      // `Bearer api-...` returns 401.
-      Authorization: normalizeFotelloApiKey(token),
+      // `Bearer api-...` returns 401 on the original non-v1 endpoints.
+      Authorization: authorizationHeader(path, token),
     },
     body: init.body ? JSON.stringify(init.body) : undefined,
     cache: "no-store",
@@ -140,6 +159,32 @@ export function createEnhance(
       upload_ids: input.uploadIds,
       listing_id: input.listingId,
       shot_type: input.shotType ?? "interior",
+    },
+  });
+}
+
+export function fotelloListingShareLink(listingId: string): string {
+  return `https://app.fotello.co/listings/${encodeURIComponent(
+    listingId.trim(),
+  )}/shared`;
+}
+
+export interface PrepareDownloadInput {
+  listingId: string;
+  photoFormats?: FotelloPhotoFormat[];
+  sections?: FotelloDownloadSection[];
+}
+
+export function prepareDownload(
+  input: PrepareDownloadInput,
+): Promise<FotelloPreparedDownload> {
+  return request<FotelloPreparedDownload>("POST", "/v1/prepare-download", {
+    body: {
+      listing_id: input.listingId,
+      ...(input.photoFormats?.length
+        ? { photo_formats: input.photoFormats }
+        : {}),
+      ...(input.sections?.length ? { sections: input.sections } : {}),
     },
   });
 }

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -52,23 +53,70 @@ export interface CreatedEvent {
   htmlLink: string;
 }
 
+export interface CalendarConnectionScope {
+  organizationId?: string;
+}
+
+function organizationId(scope?: CalendarConnectionScope): string {
+  return scope?.organizationId ?? DEFAULT_ORGANIZATION_ID;
+}
+
+function isMissingOrganizationColumn(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: string; message?: string };
+  return (
+    candidate.code === "42703" ||
+    candidate.message?.includes("organization_id") === true
+  );
+}
+
+export async function getGoogleCalendarConnection(
+  scope?: CalendarConnectionScope,
+): Promise<ConnectionRow | null> {
+  const supabase = getServiceSupabase();
+  const orgId = organizationId(scope);
+  const scoped = await supabase
+    .from("google_calendar_connection")
+    .select("*")
+    .eq("organization_id", orgId)
+    .maybeSingle<ConnectionRow>();
+
+  if (!scoped.error) return scoped.data ?? null;
+
+  // Backward compatibility while production is between code deploy and the
+  // SaaS calendar migration. Remove this fallback once 0024 is everywhere.
+  if (!isMissingOrganizationColumn(scoped.error)) {
+    throw new Error(
+      `Load google calendar connection failed: ${scoped.error.message}`,
+    );
+  }
+
+  const legacy = await supabase
+    .from("google_calendar_connection")
+    .select("*")
+    .eq("id", 1)
+    .maybeSingle<ConnectionRow>();
+  if (legacy.error) {
+    throw new Error(
+      `Load google calendar connection failed: ${legacy.error.message}`,
+    );
+  }
+  return legacy.data ?? null;
+}
+
 /**
  * Load the connection row + (if needed) refresh the access token. Returns
  * null when the admin hasn't connected a calendar yet — availability code
  * should treat this as "no additional busy blocks to union in" and move on.
  */
-export async function getGoogleCalendarClient(): Promise<GoogleCalendarClient | null> {
+export async function getGoogleCalendarClient(
+  scope?: CalendarConnectionScope,
+): Promise<GoogleCalendarClient | null> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;
 
-  const supabase = getServiceSupabase();
-  const { data: conn } = await supabase
-    .from("google_calendar_connection")
-    .select("*")
-    .eq("id", 1)
-    .maybeSingle<ConnectionRow>();
-
+  const conn = await getGoogleCalendarConnection(scope);
   if (!conn) return null;
 
   const accessToken = await ensureAccessToken(conn, clientId, clientSecret);
@@ -123,7 +171,7 @@ async function ensureAccessToken(
         ? { refresh_token: refreshed.refresh_token }
         : {}),
     })
-    .eq("id", 1);
+    .eq("id", conn.id);
 
   return refreshed.access_token;
 }
@@ -246,6 +294,7 @@ async function deleteEventBestEffort(
 }
 
 export async function persistTokens(args: {
+  organizationId?: string;
   googleAccountEmail: string;
   refreshToken: string;
   accessToken: string;
@@ -261,6 +310,27 @@ export async function persistTokens(args: {
     .from("google_calendar_connection")
     .upsert(
       {
+        organization_id: organizationId(args),
+        google_account_email: args.googleAccountEmail,
+        refresh_token: args.refreshToken,
+        access_token: args.accessToken,
+        access_token_expires_at: expiresAt,
+        calendar_id: args.calendarId ?? "primary",
+        connected_by: args.connectedBy ?? null,
+      },
+      { onConflict: "organization_id" },
+    );
+  if (!error) return;
+
+  // Backward compatibility before migration 0024 is applied.
+  if (!isMissingOrganizationColumn(error)) {
+    throw new Error(`Save google connection failed: ${error.message}`);
+  }
+
+  const legacy = await supabase
+    .from("google_calendar_connection")
+    .upsert(
+      {
         id: 1,
         google_account_email: args.googleAccountEmail,
         refresh_token: args.refreshToken,
@@ -271,7 +341,19 @@ export async function persistTokens(args: {
       },
       { onConflict: "id" },
     );
-  if (error) throw new Error(`Save google connection failed: ${error.message}`);
+  if (legacy.error) {
+    throw new Error(`Save google connection failed: ${legacy.error.message}`);
+  }
+}
+
+export async function deleteGoogleCalendarConnection(
+  scope?: CalendarConnectionScope,
+): Promise<ConnectionRow | null> {
+  const supabase = getServiceSupabase();
+  const conn = await getGoogleCalendarConnection(scope);
+  if (!conn) return null;
+  await supabase.from("google_calendar_connection").delete().eq("id", conn.id);
+  return conn;
 }
 
 export function tokensFromExchange(tr: TokenResponse): {

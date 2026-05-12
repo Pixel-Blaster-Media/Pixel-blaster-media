@@ -56,6 +56,7 @@ export type ListingWebsiteTemplate =
 interface ProfilesTable {
   Row: {
     id: string;
+    organization_id: string;
     email: string;
     full_name: string | null;
     phone: string | null;
@@ -71,6 +72,7 @@ interface ProfilesTable {
   };
   Insert: {
     id: string;
+    organization_id?: string;
     email: string;
     full_name?: string | null;
     phone?: string | null;
@@ -89,6 +91,7 @@ interface ProfilesTable {
 interface PropertiesTable {
   Row: {
     id: string;
+    organization_id: string;
     owner_id: string;
     street_address: string;
     city: string | null;
@@ -102,6 +105,7 @@ interface PropertiesTable {
   };
   Insert: {
     id?: string;
+    organization_id?: string;
     owner_id: string;
     street_address: string;
     city?: string | null;
@@ -118,6 +122,7 @@ interface PropertiesTable {
 interface BookingsTable {
   Row: {
     id: string;
+    organization_id: string;
     property_id: string;
     owner_id: string;
     status: BookingStatus;
@@ -147,6 +152,7 @@ interface BookingsTable {
   };
   Insert: {
     id?: string;
+    organization_id?: string;
     property_id: string;
     owner_id: string;
     status?: BookingStatus;
@@ -179,6 +185,7 @@ interface BookingsTable {
 interface GoogleCalendarConnectionTable {
   Row: {
     id: number;
+    organization_id: string;
     google_account_email: string;
     calendar_id: string;
     refresh_token: string;
@@ -190,6 +197,7 @@ interface GoogleCalendarConnectionTable {
   };
   Insert: {
     id?: number;
+    organization_id?: string;
     google_account_email: string;
     calendar_id?: string;
     refresh_token: string;
@@ -198,6 +206,45 @@ interface GoogleCalendarConnectionTable {
     connected_by?: string | null;
   };
   Update: Partial<GoogleCalendarConnectionTable["Insert"]>;
+  Relationships: [];
+}
+
+interface OrganizationsTable {
+  Row: {
+    id: string;
+    name: string;
+    slug: string;
+    primary_color: string | null;
+    accent_color: string | null;
+    logo_url: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  Insert: {
+    id?: string;
+    name: string;
+    slug: string;
+    primary_color?: string | null;
+    accent_color?: string | null;
+    logo_url?: string | null;
+  };
+  Update: Partial<OrganizationsTable["Insert"]>;
+  Relationships: [];
+}
+
+interface OrganizationMembersTable {
+  Row: {
+    organization_id: string;
+    profile_id: string;
+    role: "owner" | "admin" | "member";
+    created_at: string;
+  };
+  Insert: {
+    organization_id: string;
+    profile_id: string;
+    role?: "owner" | "admin" | "member";
+  };
+  Update: Partial<OrganizationMembersTable["Insert"]>;
   Relationships: [];
 }
 
@@ -596,6 +643,8 @@ export interface Database {
   public: {
     Tables: {
       profiles: ProfilesTable;
+      organizations: OrganizationsTable;
+      organization_members: OrganizationMembersTable;
       properties: PropertiesTable;
       bookings: BookingsTable;
       deliverables: DeliverablesTable;
