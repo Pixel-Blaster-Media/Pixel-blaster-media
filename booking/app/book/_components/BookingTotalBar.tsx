@@ -21,6 +21,7 @@ export default function BookingTotalBar({
   ctaLabel = "Continue",
   disabled = false,
   note,
+  sticky = true,
 }: {
   items: BookingTotalItem[];
   selectedSlugs: string[];
@@ -31,6 +32,7 @@ export default function BookingTotalBar({
   ctaLabel?: string;
   disabled?: boolean;
   note?: string;
+  sticky?: boolean;
 }) {
   const selected = [...selectedSlugs, ...selectedAddOnSlugs]
     .map((slug) => items.find((item) => item.slug === slug))
@@ -50,7 +52,12 @@ export default function BookingTotalBar({
   const overageRows = rows.filter((row) => row.price.overageCents > 0);
 
   return (
-    <div className="sticky bottom-0 z-20 -mx-4 mt-5 border-t border-realtor-primary/15 bg-realtor-surface/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:rounded-3xl md:border md:p-4 md:shadow-lg md:shadow-realtor-primary/5">
+    <div
+      className={
+        (sticky ? "sticky bottom-0 z-20 " : "") +
+        "-mx-4 mt-5 border-t border-realtor-primary/15 bg-realtor-surface/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:rounded-3xl md:border md:p-4 md:shadow-lg md:shadow-realtor-primary/5"
+      }
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs uppercase tracking-wider text-realtor-muted">

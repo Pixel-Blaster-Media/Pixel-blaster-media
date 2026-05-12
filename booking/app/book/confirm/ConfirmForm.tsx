@@ -255,6 +255,7 @@ function SubmitTotalBar({
       submit
       disabled={pending}
       ctaLabel={pending ? "Booking..." : "Confirm booking"}
+      sticky={false}
     />
   );
 }
