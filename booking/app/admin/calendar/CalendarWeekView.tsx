@@ -201,7 +201,7 @@ export default function CalendarWeekView({
 
   return (
     <div className="max-w-full space-y-3 overflow-hidden md:space-y-4">
-      <div className="grid max-w-full grid-cols-3 gap-1.5 text-[10px] text-ink-muted md:flex md:flex-wrap md:items-center md:gap-3 md:text-xs">
+      <div className="hidden text-ink-muted md:flex md:flex-wrap md:items-center md:gap-3 md:text-xs">
         <span className="inline-flex min-w-0 items-center gap-1.5">
           <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#fffdf8] ring-1 ring-[#d8cab9]" />
           Working hours
@@ -309,7 +309,7 @@ export default function CalendarWeekView({
       </div>
 
       <div className="max-w-full space-y-2 overflow-hidden md:hidden">
-        <div className="grid max-w-full grid-cols-4 gap-1.5">
+        <div className="grid max-w-full grid-cols-7 gap-1">
           {days.map((day) => {
             const isSelected = day.dateInput === mobileDay?.dateInput;
             const dayItems = itemsByDay.get(day.dateInput) ?? [];
@@ -318,34 +318,62 @@ export default function CalendarWeekView({
                 key={day.key}
                 type="button"
                 onClick={() => setMobileDayKey(day.dateInput)}
-                className={`min-w-0 rounded-lg border px-2 py-1.5 text-left shadow-sm transition ${
+                className={`min-w-0 rounded-lg border px-1 py-1 text-center shadow-sm transition ${
                   isSelected
                     ? "border-[#3f7356] bg-[#3f7356] text-white"
                     : "border-[#d8cab9] bg-[#fffdf8] text-[#23332b]"
                 }`}
               >
                 <span
-                  className={`block text-[10px] uppercase tracking-wider ${
+                  className={`block text-[8px] uppercase tracking-wide ${
                     isSelected ? "text-white/75" : "text-[#6f7a70]"
                   }`}
                 >
-                  {day.shortLabel}
+                  {day.shortLabel.slice(0, 3)}
                 </span>
-                <span className="block truncate text-[11px] font-semibold">{day.label}</span>
+                <span className="mt-0.5 block text-[11px] font-semibold leading-none">
+                  {day.label.split(" ").at(-1)}
+                </span>
                 <span
-                  className={`mt-0.5 block truncate text-[9px] ${
-                    isSelected ? "text-white/75" : "text-[#6f7a70]"
+                  aria-label={
+                    dayItems.length > 0
+                      ? `${dayItems.length} item${dayItems.length === 1 ? "" : "s"}`
+                      : day.enabled
+                        ? "Open"
+                        : "Closed"
+                  }
+                  className={`mx-auto mt-1 block h-1.5 w-1.5 rounded-full ${
+                    dayItems.length > 0
+                      ? isSelected
+                        ? "bg-white/85"
+                        : "bg-[#3f7356]"
+                      : day.enabled
+                        ? isSelected
+                          ? "bg-white/45"
+                          : "bg-[#9fb79f]"
+                        : isSelected
+                          ? "bg-white/25"
+                          : "bg-[#d7d1c4]"
                   }`}
-                >
-                  {dayItems.length > 0
-                    ? `${dayItems.length} item${dayItems.length === 1 ? "" : "s"}`
-                    : day.enabled
-                      ? "Open"
-                      : "Closed"}
-                </span>
+                />
               </button>
             );
           })}
+        </div>
+
+        <div className="grid max-w-full grid-cols-3 gap-1 rounded-xl border border-[#d8cab9]/70 bg-[#fffdf8]/75 p-1.5 text-[9px] text-[#6f7a70]">
+          <span className="inline-flex min-w-0 items-center justify-center gap-1">
+            <span className="h-2 w-2 shrink-0 rounded-sm bg-[#fffdf8] ring-1 ring-[#d8cab9]" />
+            <span className="truncate">Working</span>
+          </span>
+          <span className="inline-flex min-w-0 items-center justify-center gap-1">
+            <span className="h-2 w-2 shrink-0 rounded-sm bg-[#d7d1c4] ring-1 ring-[#bdb4a5]" />
+            <span className="truncate">Blocked</span>
+          </span>
+          <span className="inline-flex min-w-0 items-center justify-center gap-1">
+            <span className="h-2 w-2 shrink-0 rounded-sm bg-[#dce9dc] ring-1 ring-[#89a68f]" />
+            <span className="truncate">Shoot</span>
+          </span>
         </div>
 
         {mobileDay ? (
