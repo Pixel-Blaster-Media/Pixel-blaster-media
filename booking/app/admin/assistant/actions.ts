@@ -242,6 +242,7 @@ async function loadAssistantContext(): Promise<{
   nowLocal: string;
   bookings: string[];
   realtors: string[];
+  knownAddresses: string[];
   bookingsById: Map<string, BookingContextRow>;
   lineItemIdsByBookingId: Map<string, string[]>;
   catalog: Catalog;
@@ -355,6 +356,20 @@ async function loadAssistantContext(): Promise<{
       `notes=${booking.client_notes ?? ""}`,
     ].join(" | ");
   });
+  const knownAddresses = unique(
+    bookingRows
+      .map((booking) =>
+        [
+          booking.properties?.street_address,
+          booking.unit_number ? `Unit ${booking.unit_number}` : null,
+          booking.properties?.city,
+          booking.properties?.postal_code,
+        ]
+          .filter(Boolean)
+          .join(", "),
+      )
+      .filter(Boolean),
+  ).slice(0, 80);
 
   const realtors = (realtorRes.data ?? []).map((realtor) =>
     [
@@ -370,6 +385,7 @@ async function loadAssistantContext(): Promise<{
     nowLocal: formatLocal(now.toISOString()),
     bookings,
     realtors,
+    knownAddresses,
     bookingsById,
     lineItemIdsByBookingId,
     catalog,
@@ -385,6 +401,7 @@ async function planWithOpenAI(
     nowLocal: string;
     bookings: string[];
     realtors: string[];
+    knownAddresses: string[];
     catalogLines: string[];
   },
 ): Promise<ModelPlan> {
@@ -405,8 +422,10 @@ async function planWithOpenAI(
             "Use only the provided booking and realtor context. The business timezone is America/Toronto. " +
             "Never claim you changed data. For any change, propose an action for confirmation. " +
             "Only propose cancel_booking when exactly one cancellable booking is clearly identified. " +
-            "For booking requests, propose create_booking only when realtor, exact date/time, property address, and services/catalog item ids are known. " +
-            "For 'same as last time', use the most relevant previous booking as sourceBookingId and copy its catalogItemIds/services; still require a new property address unless the user explicitly says same property/address. " +
+            "For booking requests, propose create_booking when realtor, exact date/time, street address, and services/catalog item ids are known. " +
+            "Street address means street number + street name; city, province, and postal code are helpful but optional. Do not ask for postal code before creating a booking. " +
+            "If the user gives a partial street address, use it as streetAddress. If it clearly matches one known address, use the highest-likelihood known address and mention that assumption in details. " +
+            "For 'same as last time', use the most relevant previous booking as sourceBookingId and copy its catalogItemIds/services; still require a new street address unless the user explicitly says same property/address. " +
             "Return scheduledLocal as YYYY-MM-DDTHH:mm in America/Toronto. " +
             "Keep messages short and plain.",
         },
@@ -424,6 +443,7 @@ async function planWithOpenAI(
             ],
             bookings: context.bookings,
             realtors: context.realtors,
+            knownAddresses: context.knownAddresses,
             catalog: context.catalogLines,
           }),
         },
@@ -462,7 +482,7 @@ function normalizePlan(
   },
 ): AdminAssistantResult {
   const actions: AdminAssistantAction[] = [];
-  const missing = [...plan.missing];
+  const missing = plan.missing.filter(isRequiredMissingField);
 
   for (const raw of plan.actions) {
     if (raw.type === "none") continue;
@@ -855,6 +875,20 @@ function parseOptionalInt(value: string): number | null {
   if (!value) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : null;
+}
+
+function isRequiredMissingField(value: string): boolean {
+  const normalized = value.toLowerCase();
+  return ![
+    "city",
+    "province",
+    "postal",
+    "postal code",
+    "zip",
+    "zip code",
+    "full address",
+    "full property address",
+  ].some((optional) => normalized.includes(optional));
 }
 
 function unique(values: string[]): string[] {
