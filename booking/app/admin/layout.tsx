@@ -8,13 +8,12 @@ import AdminMobileMenu from "./AdminMobileMenu";
 
 const NAV = [
   { href: "/admin/today", label: "Today" },
-  { href: "/admin/inbox", label: "Inbox" },
   { href: "/admin/bookings", label: "Bookings" },
   { href: "/admin/realtors", label: "Realtors" },
   { href: "/admin/calendar", label: "Calendar" },
   { href: "/admin/settings/availability", label: "Availability" },
   { href: "/admin/settings/pricing", label: "Pricing" },
-  { href: "/admin/settings/integrations", label: "Integrations" },
+  { href: "/admin/settings", label: "Settings" },
 ] as const;
 
 export default async function AdminLayout({
