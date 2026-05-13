@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { getGoogleCalendarConnection } from "@/lib/integrations/google-calendar/client";
 import { getCredentialSource } from "@/lib/integrations/credentials";
@@ -113,9 +114,12 @@ export default async function IntegrationsPage({
   return (
     <div className="space-y-10">
       <header className="realtor-panel rounded-2xl p-4">
-        <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
-          Settings
-        </p>
+        <Link
+          href="/admin/settings"
+          className="text-xs font-semibold uppercase tracking-[0.2em] text-realtor-primary hover:text-realtor-text"
+        >
+          ← Settings
+        </Link>
         <h1 className="mt-1 text-2xl font-bold text-realtor-text">
           Integrations
         </h1>

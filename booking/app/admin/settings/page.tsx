@@ -1,20 +1,35 @@
-import Link from "next/link";
+import SettingsHub from "./SettingsHub";
 
 const SETTINGS_SECTIONS = [
   {
     href: "/admin/settings/availability",
     title: "Availability",
     description: "Set working hours, closed days, and private calendar blocks.",
+    details: [
+      "Choose which days are open for bookings.",
+      "Adjust start and end times for each working day.",
+      "Add private blocks when you are unavailable.",
+    ],
   },
   {
     href: "/admin/settings/pricing",
     title: "Pricing",
     description: "Manage packages, add-ons, media badges, durations, and square-footage rules.",
+    details: [
+      "Update bundle prices and booking durations.",
+      "Control à-la-carte services and optional add-ons.",
+      "Tune square-footage pricing rules and package descriptions.",
+    ],
   },
   {
     href: "/admin/settings/integrations",
     title: "Integrations",
     description: "Connect Google Calendar, email, QuickBooks, iGUIDE, and delivery tools.",
+    details: [
+      "Manage Google Calendar sync.",
+      "Test confirmation emails and notification delivery.",
+      "Connect QuickBooks, iGUIDE, and related delivery tools.",
+    ],
   },
 ] as const;
 
@@ -36,22 +51,7 @@ export default function SettingsPage() {
         </p>
       </header>
 
-      <section className="grid gap-3 md:grid-cols-3">
-        {SETTINGS_SECTIONS.map((section) => (
-          <Link
-            key={section.href}
-            href={section.href}
-            className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/80 p-4 shadow-sm shadow-realtor-text/5 transition hover:border-realtor-primary/35 hover:bg-realtor-surface"
-          >
-            <h2 className="text-sm font-semibold text-realtor-text">
-              {section.title}
-            </h2>
-            <p className="mt-2 text-xs leading-5 text-realtor-muted">
-              {section.description}
-            </p>
-          </Link>
-        ))}
-      </section>
+      <SettingsHub sections={SETTINGS_SECTIONS} />
 
       <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/80 p-5 shadow-sm shadow-realtor-text/5">
         <div className="flex flex-wrap items-start justify-between gap-4">

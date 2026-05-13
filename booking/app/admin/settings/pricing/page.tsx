@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { getFullCatalog, type CatalogItemRow } from "@/lib/booking/catalog";
 import type { CatalogItemKind } from "@/lib/supabase/database.types";
@@ -15,9 +16,12 @@ export default async function PricingPage() {
   return (
     <div className="space-y-10">
       <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
-        <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
-          Settings
-        </p>
+        <Link
+          href="/admin/settings"
+          className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-light hover:text-white"
+        >
+          ← Settings
+        </Link>
         <h1 className="mt-1 text-2xl font-bold text-white">Pricing</h1>
         <p className="mt-2 text-sm text-ink-muted">
           Bundles, à la carte items, and add-ons shown on the booking form
