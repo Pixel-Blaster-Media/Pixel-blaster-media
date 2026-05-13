@@ -172,12 +172,12 @@ export default function CalendarWeekView({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3 text-xs text-ink-muted">
         <span className="inline-flex items-center gap-2">
-          <span className="h-3 w-3 rounded-sm bg-brand/10 ring-1 ring-brand/20" />
+          <span className="h-3 w-3 rounded-sm bg-white/[0.08] ring-1 ring-white/15" />
           Working hours
         </span>
         <span className="inline-flex items-center gap-2">
-          <span className="h-3 w-3 rounded-sm bg-white/[0.04] ring-1 ring-white/10" />
-          Outside hours
+          <span className="h-3 w-3 rounded-sm bg-black/35 ring-1 ring-white/10" />
+          Blocked/off hours
         </span>
         <span className="inline-flex items-center gap-2">
           <span className="h-3 w-3 rounded-sm bg-brand/25 ring-1 ring-brand-light/50" />
@@ -215,12 +215,12 @@ export default function CalendarWeekView({
           {days.map((day) => (
             <div
               key={day.key}
-              className="relative border-l border-white/10"
+              className="relative border-l border-white/10 bg-black/25"
               style={{ height: gridHeight }}
             >
               {day.enabled ? (
                 <div
-                  className="absolute left-0 right-0 bg-brand/10 ring-1 ring-inset ring-brand/15"
+                  className="absolute left-0 right-0 bg-white/[0.075] ring-1 ring-inset ring-white/10"
                   style={{
                     top:
                       ((day.workStartMinutes - START_HOUR * 60) / 60) *
@@ -231,8 +231,15 @@ export default function CalendarWeekView({
                   }}
                 />
               ) : (
-                <div className="absolute inset-0 bg-white/[0.025]" />
+                <div className="absolute inset-0 bg-black/25" />
               )}
+              {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, i) => (
+                <div
+                  key={`hour-line-${i}`}
+                  className="pointer-events-none absolute left-0 right-0 z-[1] border-t border-white/[0.09]"
+                  style={{ top: i * HOUR_HEIGHT }}
+                />
+              ))}
               {Array.from({ length: (END_HOUR - START_HOUR) * 2 }).map(
                 (_, slot) => {
                   const minutes = slot * SLOT_MINUTES;
@@ -252,7 +259,7 @@ export default function CalendarWeekView({
                         setMode("shoot");
                         setSelected({ day, hour, minute });
                       }}
-                      className="absolute left-0 right-0 border-t border-white/[0.06] transition hover:bg-brand/15"
+                      className="absolute left-0 right-0 z-[2] border-t border-white/[0.035] transition hover:bg-brand/15"
                       style={{
                         top: (minutes / 60) * HOUR_HEIGHT,
                         height: (SLOT_MINUTES / 60) * HOUR_HEIGHT,
