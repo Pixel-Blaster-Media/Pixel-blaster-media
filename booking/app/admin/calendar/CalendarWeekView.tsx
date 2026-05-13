@@ -53,6 +53,7 @@ const START_HOUR = 7;
 const END_HOUR = 20;
 const SLOT_MINUTES = 30;
 const HOUR_HEIGHT = 72;
+const MOBILE_HOUR_HEIGHT = 46;
 
 export default function CalendarWeekView({
   days,
@@ -122,7 +123,7 @@ export default function CalendarWeekView({
   const mobileTimelineStart = START_HOUR * 60;
   const mobileTimelineEnd = END_HOUR * 60;
   const mobileTimelineHeight =
-    ((mobileTimelineEnd - mobileTimelineStart) / 60) * HOUR_HEIGHT;
+    ((mobileTimelineEnd - mobileTimelineStart) / 60) * MOBILE_HOUR_HEIGHT;
   const mobileHourMarks = Array.from({
     length: END_HOUR - START_HOUR + 1,
   }).map((_, i) => mobileTimelineStart + i * 60);
@@ -317,7 +318,7 @@ export default function CalendarWeekView({
                 key={day.key}
                 type="button"
                 onClick={() => setMobileDayKey(day.dateInput)}
-                className={`min-w-[92px] rounded-2xl border px-3 py-2 text-left shadow-sm transition ${
+                className={`min-w-[76px] rounded-xl border px-2.5 py-2 text-left shadow-sm transition ${
                   isSelected
                     ? "border-[#3f7356] bg-[#3f7356] text-white"
                     : "border-[#d8cab9] bg-[#fffdf8] text-[#23332b]"
@@ -330,7 +331,7 @@ export default function CalendarWeekView({
                 >
                   {day.shortLabel}
                 </span>
-                <span className="block text-sm font-semibold">{day.label}</span>
+                <span className="block text-xs font-semibold">{day.label}</span>
                 <span
                   className={`mt-1 block text-[10px] ${
                     isSelected ? "text-white/75" : "text-[#6f7a70]"
@@ -348,17 +349,17 @@ export default function CalendarWeekView({
         </div>
 
         {mobileDay ? (
-          <section className="rounded-2xl border border-[#d8cab9]/80 bg-[#fffdf8] p-4 shadow-lg shadow-black/10">
+          <section className="rounded-2xl border border-[#d8cab9]/80 bg-[#fffdf8] p-3 shadow-lg shadow-black/10">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-wider text-[#6f7a70]">
                   Day view
                 </p>
-                <h2 className="mt-1 text-lg font-semibold text-[#23332b]">
+                <h2 className="mt-1 text-base font-semibold text-[#23332b]">
                   {mobileDay.shortLabel} {mobileDay.label}
                 </h2>
               </div>
-              <span className="rounded-full border border-[#d8cab9] bg-[#f7f4ed] px-3 py-1 text-xs text-[#6f7a70]">
+              <span className="rounded-full border border-[#d8cab9] bg-[#f7f4ed] px-2.5 py-1 text-[11px] text-[#6f7a70]">
                 {mobileDay.enabled
                   ? `${minutesToLabel(
                       mobileDay.workStartMinutes,
@@ -375,24 +376,24 @@ export default function CalendarWeekView({
                 Tap any open slot to add a shoot or block time.
               </p>
               <div
-                className="relative mt-4 overflow-hidden rounded-2xl border border-[#d8cab9] bg-[#d7d1c4]/55"
+                className="relative mt-3 overflow-hidden rounded-xl border border-[#d8cab9] bg-[#d7d1c4]/55"
                 style={{ height: mobileTimelineHeight }}
               >
                 {mobileDay.enabled ? (
                   <div
-                    className="absolute left-14 right-0 bg-[#fffdf8] ring-1 ring-inset ring-[#d8cab9]/80"
+                    className="absolute left-12 right-0 bg-[#fffdf8] ring-1 ring-inset ring-[#d8cab9]/80"
                     style={{
                       top:
                         ((mobileDay.workStartMinutes - mobileTimelineStart) / 60) *
-                        HOUR_HEIGHT,
+                        MOBILE_HOUR_HEIGHT,
                       height:
                         ((mobileDay.workEndMinutes - mobileDay.workStartMinutes) /
                           60) *
-                        HOUR_HEIGHT,
+                        MOBILE_HOUR_HEIGHT,
                     }}
                   />
                 ) : (
-                  <div className="absolute inset-y-0 left-14 right-0 bg-[#d0cabd]/70" />
+                  <div className="absolute inset-y-0 left-12 right-0 bg-[#d0cabd]/70" />
                 )}
 
                 {mobileHourMarks.map((minutes) => (
@@ -400,10 +401,10 @@ export default function CalendarWeekView({
                     key={`mobile-hour-${minutes}`}
                     className="pointer-events-none absolute left-0 right-0 z-[1] border-t border-[#ded6c8]/80"
                     style={{
-                      top: ((minutes - mobileTimelineStart) / 60) * HOUR_HEIGHT,
+                      top: ((minutes - mobileTimelineStart) / 60) * MOBILE_HOUR_HEIGHT,
                     }}
                   >
-                    <span className="absolute left-2 top-1 text-[10px] font-semibold text-[#6f7a70]">
+                    <span className="absolute left-1.5 top-1 text-[9px] font-semibold text-[#6f7a70]">
                       {minutesToLabel(minutes)}
                     </span>
                   </div>
@@ -429,18 +430,18 @@ export default function CalendarWeekView({
                           minute: slot.minute,
                         });
                       }}
-                      className="absolute left-14 right-0 z-[2] border-t border-[#ede6d9]/60 transition hover:bg-[#3f7356]/10 active:bg-[#3f7356]/10"
+                      className="absolute left-12 right-0 z-[2] border-t border-[#ede6d9]/60 transition hover:bg-[#3f7356]/10 active:bg-[#3f7356]/10"
                       style={{
                         top:
-                          ((minutes - mobileTimelineStart) / 60) * HOUR_HEIGHT,
-                        height: (SLOT_MINUTES / 60) * HOUR_HEIGHT,
+                          ((minutes - mobileTimelineStart) / 60) * MOBILE_HOUR_HEIGHT,
+                        height: (SLOT_MINUTES / 60) * MOBILE_HOUR_HEIGHT,
                       }}
                     />
                   );
                 })}
 
                 {mobileDayItems.length === 0 ? (
-                  <div className="absolute left-[4.25rem] right-3 top-3 z-[3] rounded-xl border border-dashed border-[#d8cab9] bg-[#f7f4ed]/85 px-3 py-2 text-xs text-[#6f7a70]">
+                  <div className="absolute left-14 right-2 top-2 z-[3] rounded-lg border border-dashed border-[#d8cab9] bg-[#f7f4ed]/85 px-2.5 py-2 text-xs text-[#6f7a70]">
                     Nothing booked yet.
                   </div>
                 ) : null}
@@ -479,6 +480,30 @@ export default function CalendarWeekView({
               Close
             </button>
           </div>
+
+          <label className="mt-4 block rounded-2xl border border-white/10 bg-ink/60 p-3">
+            <span className="text-xs font-semibold text-ink-muted">
+              Adjust time manually
+            </span>
+            <input
+              type="time"
+              value={`${String(selected.hour).padStart(2, "0")}:${String(
+                selected.minute,
+              ).padStart(2, "0")}`}
+              step={SLOT_MINUTES * 60}
+              onChange={(event) => {
+                const [hour, minute] = event.currentTarget.value
+                  .split(":")
+                  .map(Number);
+                if (Number.isFinite(hour) && Number.isFinite(minute)) {
+                  setSelected((current) =>
+                    current ? { ...current, hour, minute } : current,
+                  );
+                }
+              }}
+              className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white"
+            />
+          </label>
 
           <div className="mt-4 inline-flex rounded-full border border-white/10 bg-ink p-1 text-xs">
             <button
@@ -953,12 +978,12 @@ function MobileTimelineEvent({
   const startMinutes = localMinutesFromIso(item.startsAt);
   const endMinutes = localMinutesFromIso(item.endsAt);
   const top =
-    ((Math.max(startMinutes, rangeStart) - rangeStart) / 60) * HOUR_HEIGHT;
+    ((Math.max(startMinutes, rangeStart) - rangeStart) / 60) * MOBILE_HOUR_HEIGHT;
   const height = Math.max(
     ((Math.min(endMinutes, rangeEnd) - Math.max(startMinutes, rangeStart)) /
       60) *
-      HOUR_HEIGHT,
-    56,
+      MOBILE_HOUR_HEIGHT,
+    44,
   );
   const classes =
     item.kind === "booking"
@@ -966,7 +991,7 @@ function MobileTimelineEvent({
       : "border-[#a69d8d]/50 bg-[#d7d1c4] text-[#36423a]";
   const content = (
     <div
-      className={`absolute left-[4.25rem] right-2 z-10 overflow-hidden rounded-2xl border px-3 py-2 shadow-sm ${classes}`}
+      className={`absolute left-14 right-1.5 z-10 overflow-hidden rounded-xl border px-2.5 py-1.5 shadow-sm ${classes}`}
       style={{ top, height }}
     >
       <div className="flex h-full min-w-0 flex-col justify-between gap-1">
@@ -974,10 +999,10 @@ function MobileTimelineEvent({
           <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70">
             {formatDateTimeRange(item.startsAt, item.endsAt)}
           </p>
-          <p className="mt-0.5 break-words text-sm font-semibold leading-tight">
+          <p className="mt-0.5 line-clamp-2 break-words text-xs font-semibold leading-tight">
             {item.title}
           </p>
-          <p className="mt-0.5 line-clamp-2 break-words text-[11px] leading-snug opacity-75">
+          <p className="mt-0.5 line-clamp-1 break-words text-[10px] leading-snug opacity-75">
             {item.subtitle}
           </p>
         </div>

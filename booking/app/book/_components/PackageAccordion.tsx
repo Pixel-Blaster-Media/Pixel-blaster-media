@@ -150,7 +150,7 @@ export default function PackageAccordion({
                     }
                   }}
                   className={
-                    "realtor-package-card flex h-full min-w-0 cursor-pointer flex-col rounded-2xl border p-5 transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
+                    "realtor-package-card flex h-full min-w-0 cursor-pointer flex-col rounded-2xl border p-4 transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 md:p-5 " +
                     (selected
                       ? "realtor-package-card-selected"
                       : b.highlight
@@ -161,7 +161,7 @@ export default function PackageAccordion({
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-base font-semibold text-realtor-text">
+                        <h4 className="text-sm font-semibold text-realtor-text md:text-base">
                           {b.name}
                         </h4>
                         {b.badge ? (
@@ -171,18 +171,18 @@ export default function PackageAccordion({
                         ) : null}
                       </div>
                       {b.ideal_for ? (
-                        <p className="mt-1 text-sm leading-5 text-realtor-muted">
+                        <p className="mt-1 text-xs leading-5 text-realtor-muted md:text-sm">
                           {b.ideal_for}
                         </p>
                       ) : (
-                        <p className="mt-1 text-sm leading-5 text-realtor-muted">
+                        <p className="mt-1 text-xs leading-5 text-realtor-muted md:text-sm">
                           {shortDescription(b.description)}
                         </p>
                       )}
                     </div>
                     <div className="flex shrink-0 items-start gap-3">
                       <div className="rounded-2xl bg-realtor-surface-muted/70 px-3 py-2 text-right ring-1 ring-realtor-primary/10">
-                        <p className="text-xl font-semibold text-realtor-text">
+                        <p className="text-lg font-semibold text-realtor-text md:text-xl">
                           ${(b.price_cents / 100).toFixed(0)}
                         </p>
                         <p className="text-[11px] uppercase tracking-wider text-realtor-muted">
@@ -422,35 +422,47 @@ function PackageDetails({
   inverted?: boolean;
 }) {
   const lines = descriptionLines(item.description);
-  return (
-    <div
+  const content = lines.length > 0 ? (
+    <ul
       className={
-        "mt-3 rounded-lg border p-3 " +
-        (inverted
-          ? "border-white/18 bg-white/10"
-          : "border-realtor-primary/15 bg-realtor-soft/65")
+        "grid gap-1.5 text-xs sm:grid-cols-2 " +
+        (inverted ? "text-white/78" : "text-realtor-muted")
       }
     >
-      {lines.length > 0 ? (
-        <ul
-          className={
-            "grid gap-1.5 text-xs sm:grid-cols-2 " +
-            (inverted ? "text-white/78" : "text-realtor-muted")
-          }
-        >
-          {lines.map((line) => (
-            <li key={line} className="flex gap-2">
-              <span className={inverted ? "mt-0.5 text-realtor-accent" : "mt-0.5 text-realtor-primary"}>✓</span>
-              <span>{line}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className={inverted ? "text-xs text-white/72" : "text-xs text-realtor-muted"}>
-          Package details will appear here once configured.
-        </p>
-      )}
-    </div>
+      {lines.map((line) => (
+        <li key={line} className="flex gap-2">
+          <span className={inverted ? "mt-0.5 text-realtor-accent" : "mt-0.5 text-realtor-primary"}>✓</span>
+          <span>{line}</span>
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <p className={inverted ? "text-xs text-white/72" : "text-xs text-realtor-muted"}>
+      Package details will appear here once configured.
+    </p>
+  );
+
+  const boxClass =
+    "mt-3 rounded-lg border p-3 " +
+    (inverted
+      ? "border-white/18 bg-white/10"
+      : "border-realtor-primary/15 bg-realtor-soft/65");
+
+  return (
+    <>
+      <div className={`${boxClass} hidden md:block`}>{content}</div>
+      <details
+        className={`${boxClass} md:hidden`}
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-realtor-primary [&::-webkit-details-marker]:hidden">
+          <span>Package details</span>
+          <span aria-hidden="true">▾</span>
+        </summary>
+        <div className="mt-3">{content}</div>
+      </details>
+    </>
   );
 }
 
