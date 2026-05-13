@@ -62,9 +62,9 @@ export default function HoursEditor({
         </label>
       </div>
 
-      <div className={`mt-4 grid grid-cols-2 gap-2 transition ${isOpen ? "opacity-100" : "opacity-45"}`}>
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-realtor-muted">
+      <div className={`mt-4 grid grid-cols-1 gap-2 transition sm:grid-cols-2 ${isOpen ? "opacity-100" : "opacity-45"}`}>
+        <label className="min-w-0 rounded-xl border border-realtor-primary/15 bg-realtor-surface p-2">
+          <span className="block text-[11px] font-semibold uppercase tracking-wider text-realtor-muted">
             Start
           </span>
           <input
@@ -72,11 +72,11 @@ export default function HoursEditor({
             name="start_time"
             defaultValue={startTime}
             disabled={!isOpen}
-            className="mt-1 box-border w-full min-w-0 rounded-xl border border-realtor-primary/15 bg-realtor-surface px-2 py-2 text-sm text-realtor-text outline-none [color-scheme:light] focus:border-realtor-primary/45 disabled:cursor-not-allowed"
+            className="mt-1 box-border block w-full min-w-0 max-w-full appearance-none border-0 bg-transparent p-0 text-sm font-semibold text-realtor-text outline-none [color-scheme:light] disabled:cursor-not-allowed"
           />
         </label>
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-realtor-muted">
+        <label className="min-w-0 rounded-xl border border-realtor-primary/15 bg-realtor-surface p-2">
+          <span className="block text-[11px] font-semibold uppercase tracking-wider text-realtor-muted">
             End
           </span>
           <input
@@ -84,7 +84,7 @@ export default function HoursEditor({
             name="end_time"
             defaultValue={endTime}
             disabled={!isOpen}
-            className="mt-1 box-border w-full min-w-0 rounded-xl border border-realtor-primary/15 bg-realtor-surface px-2 py-2 text-sm text-realtor-text outline-none [color-scheme:light] focus:border-realtor-primary/45 disabled:cursor-not-allowed"
+            className="mt-1 box-border block w-full min-w-0 max-w-full appearance-none border-0 bg-transparent p-0 text-sm font-semibold text-realtor-text outline-none [color-scheme:light] disabled:cursor-not-allowed"
           />
         </label>
       </div>
