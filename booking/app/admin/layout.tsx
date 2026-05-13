@@ -3,6 +3,8 @@ import Link from "next/link";
 import { signOut } from "@/lib/auth/sign-out";
 import { requireAdmin } from "@/lib/auth/require-admin";
 
+import AdminAssistant from "./AdminAssistant";
+
 const NAV = [
   { href: "/admin/today", label: "Today" },
   { href: "/admin/inbox", label: "Inbox" },
@@ -51,7 +53,10 @@ export default async function AdminLayout({
           </form>
         </nav>
       </aside>
-      <section>{children}</section>
+      <section className="space-y-6">
+        <AdminAssistant />
+        {children}
+      </section>
     </div>
   );
 }

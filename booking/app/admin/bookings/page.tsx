@@ -1,9 +1,11 @@
 import Link from "next/link";
 
-import { BOOKING_STATUSES } from "@/lib/booking/booking-status";
+import { BOOKING_STATUSES, isCancellable } from "@/lib/booking/booking-status";
 import { labelForService } from "@/lib/booking/services";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type { BookingStatus } from "@/lib/supabase/database.types";
+
+import CancelBookingButton from "./CancelBookingButton";
 
 export const metadata = { title: "Bookings" };
 export const dynamic = "force-dynamic";
@@ -109,40 +111,61 @@ export default async function BookingsPage({
             const profile = b.profiles;
             const meta = BOOKING_STATUSES[b.status];
             return (
-              <li key={b.id}>
-                <Link
-                  href={`/admin/bookings/${b.id}`}
-                  className="block rounded-2xl border border-white/10 bg-ink-soft/45 p-4 transition hover:border-brand-light/40 hover:bg-white/[0.035]"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-white">
-                        {property?.street_address ?? "—"}
-                        {property?.city ? (
-                          <span className="text-ink-muted"> · {property.city}</span>
-                        ) : null}
-                      </p>
-                      <p className="mt-0.5 text-xs text-ink-muted">
-                        {profile?.full_name ?? profile?.email ?? "Unknown realtor"}
-                      </p>
-                      <p className="mt-2 line-clamp-2 text-xs text-ink-muted">
-                        {b.services.map(labelForService).join(", ") || "—"}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <span
-                        className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${meta.pill}`}
+              <li
+                key={b.id}
+                className="rounded-2xl border border-white/10 bg-ink-soft/45 p-4 transition hover:border-brand-light/40 hover:bg-white/[0.035]"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <Link
+                    href={`/admin/bookings/${b.id}`}
+                    className="min-w-0 flex-1"
+                  >
+                    <p className="font-semibold text-white">
+                      {property?.street_address ?? "—"}
+                      {property?.city ? (
+                        <span className="text-ink-muted">
+                          {" "}
+                          · {property.city}
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="mt-0.5 text-xs text-ink-muted">
+                      {profile?.full_name ??
+                        profile?.email ??
+                        "Unknown realtor"}
+                    </p>
+                    <p className="mt-2 line-clamp-2 text-xs text-ink-muted">
+                      {b.services.map(labelForService).join(", ") || "—"}
+                    </p>
+                  </Link>
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${meta.pill}`}
+                    >
+                      {meta.label}
+                    </span>
+                    <span className="text-[10px] text-ink-muted">
+                      {b.scheduled_at
+                        ? new Date(b.scheduled_at).toLocaleString()
+                        : "no date"}
+                    </span>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Link
+                        href={`/admin/bookings/${b.id}`}
+                        className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:border-brand-light"
                       >
-                        {meta.label}
-                      </span>
-                      <span className="text-[10px] text-ink-muted">
-                        {b.scheduled_at
-                          ? new Date(b.scheduled_at).toLocaleString()
-                          : "no date"}
-                      </span>
+                        Open
+                      </Link>
+                      {isCancellable(b.status) ? (
+                        <CancelBookingButton
+                          bookingId={b.id}
+                          label="Cancel"
+                          compact
+                        />
+                      ) : null}
                     </div>
                   </div>
-                </Link>
+                </div>
               </li>
             );
           })}

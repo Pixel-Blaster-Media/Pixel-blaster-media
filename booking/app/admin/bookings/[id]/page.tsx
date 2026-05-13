@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import {
   BOOKING_STATUSES,
+  isCancellable,
   nextBookingStatuses,
 } from "@/lib/booking/booking-status";
 import {
@@ -32,6 +33,7 @@ import type {
   ListingWebsiteTemplate,
 } from "@/lib/supabase/database.types";
 
+import CancelBookingButton from "../CancelBookingButton";
 import BookingActions, {
   DeliveryEmailPanel,
   ManualLinksPanel,
@@ -299,6 +301,9 @@ export default async function BookingDetailPage({
               >
                 Map
               </a>
+            ) : null}
+            {isCancellable(booking.status) ? (
+              <CancelBookingButton bookingId={booking.id} />
             ) : null}
             <Link
               href="/admin/today"
