@@ -95,6 +95,11 @@ export default function CalendarWeekView({
   });
   const [pending, startTransition] = useTransition();
   const [lookupPending, startLookupTransition] = useTransition();
+  const [mobileDayKey, setMobileDayKey] = useState(() => {
+    const today = dateInputForLocalDate();
+    if (days.some((day) => day.dateInput === today)) return today;
+    return days.find((day) => day.enabled)?.dateInput ?? days[0]?.dateInput ?? "";
+  });
 
   const itemsByDay = useMemo(() => {
     const map = new Map<string, CalendarItem[]>();
@@ -109,6 +114,24 @@ export default function CalendarWeekView({
   const selectedSlot = selected
     ? toDateTimeLocal(selected.day.dateInput, selected.hour, selected.minute)
     : null;
+  const mobileDay =
+    days.find((day) => day.dateInput === mobileDayKey) ?? days[0] ?? null;
+  const mobileDayItems = mobileDay
+    ? itemsByDay.get(mobileDay.dateInput) ?? []
+    : [];
+  const mobileSlots = useMemo(() => {
+    if (!mobileDay?.enabled) return [];
+    const start = Math.max(mobileDay.workStartMinutes, START_HOUR * 60);
+    const end = Math.min(mobileDay.workEndMinutes, END_HOUR * 60);
+    const slots: { hour: number; minute: number }[] = [];
+    for (let minutes = start; minutes < end; minutes += SLOT_MINUTES) {
+      slots.push({
+        hour: Math.floor(minutes / 60),
+        minute: minutes % 60,
+      });
+    }
+    return slots;
+  }, [mobileDay]);
 
   useEffect(() => {
     const query = realtor.contact_name.trim();
@@ -185,7 +208,7 @@ export default function CalendarWeekView({
         </span>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-[#d8cab9]/70 bg-[#fffdf8]/80 shadow-lg shadow-black/10">
+      <div className="hidden overflow-x-auto rounded-2xl border border-[#d8cab9]/70 bg-[#fffdf8]/80 shadow-lg shadow-black/10 md:block">
         <div className="grid min-w-[980px] grid-cols-[64px_repeat(7,minmax(120px,1fr))]">
           <div className="border-b border-[#d8cab9]/70 bg-[#fffdf8] px-2 py-3" />
           {days.map((day) => (
@@ -277,47 +300,116 @@ export default function CalendarWeekView({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-ink-soft/45 p-4 md:hidden">
-        <p className="text-sm font-semibold text-white">This week</p>
-        <div className="mt-3 space-y-3">
+      <div className="space-y-3 md:hidden">
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
           {days.map((day) => {
+            const isSelected = day.dateInput === mobileDay?.dateInput;
             const dayItems = itemsByDay.get(day.dateInput) ?? [];
             return (
-              <div key={day.key}>
-                <p className="text-xs uppercase tracking-wider text-ink-muted">
-                  {day.shortLabel} {day.label}
-                  {day.enabled
-                    ? ` · ${minutesToLabel(day.workStartMinutes)}-${minutesToLabel(
-                        day.workEndMinutes,
-                      )}`
-                    : " · closed"}
-                </p>
-                {dayItems.length > 0 ? (
-                  <ul className="mt-1 space-y-1">
-                    {dayItems.map((item) => (
-                      <li key={`${item.kind}-${item.id}`}>
-                        {item.href ? (
-                          <Link
-                            href={item.href}
-                            className="block rounded-xl border border-white/10 bg-ink px-3 py-2"
-                          >
-                            <MobileItem item={item} />
-                          </Link>
-                        ) : (
-                          <div className="rounded-xl border border-white/10 bg-ink px-3 py-2">
-                            <MobileItem item={item} />
-                          </div>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-1 text-xs text-ink-muted">No items.</p>
-                )}
-              </div>
+              <button
+                key={day.key}
+                type="button"
+                onClick={() => setMobileDayKey(day.dateInput)}
+                className={`min-w-[86px] rounded-2xl border px-3 py-2 text-left shadow-sm transition ${
+                  isSelected
+                    ? "border-[#3f7356] bg-[#3f7356] text-white"
+                    : "border-[#d8cab9] bg-[#fffdf8] text-[#23332b]"
+                }`}
+              >
+                <span
+                  className={`block text-[10px] uppercase tracking-wider ${
+                    isSelected ? "text-white/75" : "text-[#6f7a70]"
+                  }`}
+                >
+                  {day.shortLabel}
+                </span>
+                <span className="block text-sm font-semibold">{day.label}</span>
+                <span
+                  className={`mt-1 block text-[10px] ${
+                    isSelected ? "text-white/75" : "text-[#6f7a70]"
+                  }`}
+                >
+                  {dayItems.length > 0
+                    ? `${dayItems.length} item${dayItems.length === 1 ? "" : "s"}`
+                    : day.enabled
+                      ? "Open"
+                      : "Closed"}
+                </span>
+              </button>
             );
           })}
         </div>
+
+        {mobileDay ? (
+          <section className="rounded-2xl border border-[#d8cab9]/80 bg-[#fffdf8] p-4 shadow-lg shadow-black/10">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-[#6f7a70]">
+                  Day view
+                </p>
+                <h2 className="mt-1 text-lg font-semibold text-[#23332b]">
+                  {mobileDay.shortLabel} {mobileDay.label}
+                </h2>
+              </div>
+              <span className="rounded-full border border-[#d8cab9] bg-[#f7f4ed] px-3 py-1 text-xs text-[#6f7a70]">
+                {mobileDay.enabled
+                  ? `${minutesToLabel(
+                      mobileDay.workStartMinutes,
+                    )}-${minutesToLabel(mobileDay.workEndMinutes)}`
+                  : "Closed"}
+              </span>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {mobileDayItems.length > 0 ? (
+                mobileDayItems.map((item) => (
+                  <MobileCalendarCard key={`${item.kind}-${item.id}`} item={item} />
+                ))
+              ) : (
+                <div className="rounded-2xl border border-dashed border-[#d8cab9] bg-[#f7f4ed]/70 px-4 py-5 text-sm text-[#6f7a70]">
+                  No shoots or blocks on this day yet.
+                </div>
+              )}
+            </div>
+
+            <div className="mt-5 border-t border-[#d8cab9]/70 pt-4">
+              <p className="text-sm font-semibold text-[#23332b]">
+                Add something here
+              </p>
+              <p className="mt-1 text-xs text-[#6f7a70]">
+                Tap a time to create a shoot, then switch to block time if you
+                just need to close it off.
+              </p>
+              {mobileSlots.length > 0 ? (
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {mobileSlots.map((slot) => (
+                    <button
+                      key={`${slot.hour}:${slot.minute}`}
+                      type="button"
+                      onClick={() => {
+                        setError(null);
+                        setLookupMessage(null);
+                        setMode("shoot");
+                        setSelected({
+                          day: mobileDay,
+                          hour: slot.hour,
+                          minute: slot.minute,
+                        });
+                      }}
+                      className="rounded-xl border border-[#d8cab9] bg-white px-3 py-2 text-sm font-semibold text-[#23332b] transition hover:border-[#3f7356] hover:bg-[#edf4ee]"
+                    >
+                      {formatTime(slot.hour, slot.minute)}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 rounded-xl border border-[#d8cab9] bg-[#f7f4ed] px-3 py-2 text-sm text-[#6f7a70]">
+                  This day is marked closed.
+                </p>
+              )}
+            </div>
+          </section>
+        ) : null}
       </div>
 
       {selected ? (
@@ -802,17 +894,29 @@ function CatalogPicker({ items }: { items: CatalogItemOption[] }) {
   );
 }
 
-function MobileItem({ item }: { item: CalendarItem }) {
-  return (
-    <>
-      <p className="text-xs font-semibold text-white">
-        {formatDateTimeRange(item.startsAt, item.endsAt)} · {item.title}
-      </p>
-      <p className="mt-0.5 truncate text-[11px] text-ink-muted">
-        {item.subtitle}
-      </p>
-    </>
+function MobileCalendarCard({ item }: { item: CalendarItem }) {
+  const content = (
+    <div className="rounded-2xl border border-[#d8cab9] bg-white px-4 py-3 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#6f7a70]">
+            {formatDateTimeRange(item.startsAt, item.endsAt)}
+          </p>
+          <p className="mt-1 truncate text-sm font-semibold text-[#23332b]">
+            {item.title}
+          </p>
+          <p className="mt-0.5 truncate text-xs text-[#6f7a70]">
+            {item.subtitle}
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full border border-[#8ba98f] bg-[#eaf3ea] px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#3f7356]">
+          {item.statusLabel ?? (item.kind === "block" ? "Blocked" : "Shoot")}
+        </span>
+      </div>
+    </div>
   );
+
+  return item.href ? <Link href={item.href}>{content}</Link> : content;
 }
 
 function CalendarEvent({ item }: { item: CalendarItem }) {
@@ -895,4 +999,11 @@ function toDateTimeLocal(date: string, hour: number, minute: number): string {
   return `${date}T${String(normalizedHour).padStart(2, "0")}:${String(
     minute,
   ).padStart(2, "0")}`;
+}
+
+function dateInputForLocalDate(date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    "0",
+  )}-${String(date.getDate()).padStart(2, "0")}`;
 }
