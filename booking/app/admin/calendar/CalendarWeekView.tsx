@@ -489,7 +489,7 @@ export default function CalendarWeekView({
       </div>
 
       {selected ? (
-        <div className="fixed inset-x-4 bottom-4 z-50 max-h-[82vh] overflow-y-auto rounded-2xl border border-brand/30 bg-ink-soft p-4 shadow-2xl shadow-black/50 md:left-auto md:w-[560px]">
+        <div className="fixed inset-x-4 bottom-4 z-50 max-h-[82vh] overflow-y-auto rounded-2xl border border-brand/30 bg-ink-soft/95 p-4 shadow-2xl shadow-black/50 backdrop-blur-xl md:left-auto md:w-[560px]">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-white">
@@ -509,7 +509,7 @@ export default function CalendarWeekView({
             </button>
           </div>
 
-          <label className="mt-4 block rounded-2xl border border-white/10 bg-ink/60 p-3">
+          <label className="mt-4 block overflow-hidden rounded-2xl border border-white/10 bg-ink/75 p-3">
             <span className="text-xs font-semibold text-ink-muted">
               Adjust time manually
             </span>
@@ -529,7 +529,7 @@ export default function CalendarWeekView({
                   );
                 }
               }}
-              className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white"
+              className="mt-1 box-border block w-full min-w-0 max-w-full appearance-none rounded-xl border border-white/10 bg-ink px-3 py-2 text-left text-sm text-white [color-scheme:dark]"
             />
           </label>
 
@@ -953,44 +953,79 @@ function CatalogPicker({ items }: { items: CatalogItemOption[] }) {
               {group.title}
             </legend>
             <div className="mt-2 grid gap-2 md:grid-cols-2">
-              {groupItems.map((item) => (
-                <label
-                  key={item.id}
-                  className="flex min-h-[76px] gap-3 rounded-2xl border border-white/10 bg-ink p-3 text-sm text-white transition hover:border-brand/40 hover:bg-white/[0.03]"
-                >
-                  <input
-                    type="checkbox"
-                    name="catalog_item_id"
-                    value={item.id}
-                    className="mt-1 h-4 w-4 rounded border-white/20 bg-ink"
-                  />
-                  <span>
-                    <span className="flex flex-wrap items-center gap-2 font-semibold">
-                      {item.name}
-                      {item.badge ? (
-                        <span className="rounded border border-brand/30 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-brand-light">
-                          {item.badge}
+              {groupItems.map((item) => {
+                const inputId = `catalog-item-${item.id}`;
+                return (
+                  <div
+                    key={item.id}
+                    className="rounded-2xl border border-white/10 bg-ink p-3 text-sm text-white transition hover:border-brand/40 hover:bg-white/[0.03]"
+                  >
+                    <div className="flex gap-3">
+                      <input
+                        id={inputId}
+                        type="checkbox"
+                        name="catalog_item_id"
+                        value={item.id}
+                        className="mt-1 h-4 w-4 shrink-0 rounded border-white/20 bg-ink"
+                      />
+                      <label htmlFor={inputId} className="min-w-0 flex-1 cursor-pointer">
+                        <span className="flex flex-wrap items-center gap-2 font-semibold">
+                          {item.name}
+                          {item.badge ? (
+                            <span className="rounded border border-brand/30 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-brand-light">
+                              {item.badge}
+                            </span>
+                          ) : null}
                         </span>
-                      ) : null}
-                    </span>
-                    <span className="mt-1 block text-xs text-ink-muted">
-                      {formatPrice(item.priceCents)} ·{" "}
-                      {formatDuration(item.durationMinutes)}
-                      {item.requireHasVideo ? " · needs video" : ""}
-                    </span>
+                        <span className="mt-1 block text-xs text-ink-muted">
+                          {formatPrice(item.priceCents)} ·{" "}
+                          {formatDuration(item.durationMinutes)}
+                          {item.requireHasVideo ? " · needs video" : ""}
+                        </span>
+                      </label>
+                    </div>
                     {item.description ? (
-                      <span className="mt-1 line-clamp-2 block text-xs text-ink-muted">
-                        {item.description}
-                      </span>
+                      <CatalogDescription description={item.description} />
                     ) : null}
-                  </span>
-                </label>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           </fieldset>
         );
       })}
     </div>
+  );
+}
+
+function CatalogDescription({ description }: { description: string }) {
+  const lines = description
+    .split(/\s+-\s+|\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const preview = lines[0] ?? description;
+  const detailLines = lines.length > 1 ? lines : [description];
+
+  return (
+    <details className="group mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-ink-muted marker:hidden">
+        <span className="line-clamp-1 min-w-0">{preview}</span>
+        <span className="shrink-0 text-[10px] uppercase tracking-wider text-brand-light group-open:hidden">
+          Details
+        </span>
+        <span className="hidden shrink-0 text-[10px] uppercase tracking-wider text-brand-light group-open:inline">
+          Hide
+        </span>
+      </summary>
+      <ul className="mt-2 space-y-1.5 border-t border-white/10 pt-2 text-xs leading-5 text-ink-muted">
+        {detailLines.map((line, index) => (
+          <li key={`${line}-${index}`} className="flex gap-2">
+            <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-brand-light/70" />
+            <span>{line}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
