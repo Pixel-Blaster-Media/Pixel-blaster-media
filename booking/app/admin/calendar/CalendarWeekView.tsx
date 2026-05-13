@@ -490,7 +490,7 @@ export default function CalendarWeekView({
 
       {selected ? (
         <div className="fixed inset-x-4 bottom-4 z-50 max-h-[82vh] overflow-y-auto rounded-2xl border border-brand/30 bg-ink-soft/95 p-4 shadow-2xl shadow-black/50 backdrop-blur-xl md:left-auto md:w-[560px]">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="relative pr-16">
             <div>
               <p className="text-sm font-semibold text-white">
                 {selected.day.label} at{" "}
@@ -503,7 +503,7 @@ export default function CalendarWeekView({
             <button
               type="button"
               onClick={() => setSelected(null)}
-              className="text-xs text-ink-muted hover:text-white"
+              className="absolute right-0 top-0 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:border-brand-light hover:bg-brand/20"
             >
               Close
             </button>
