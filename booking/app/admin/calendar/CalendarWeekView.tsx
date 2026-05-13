@@ -404,7 +404,7 @@ export default function CalendarWeekView({
                 Tap any open slot to add a shoot or block time.
               </p>
               <div
-                className="relative mt-3 overflow-hidden rounded-2xl border border-[#d8cab9] bg-[#d7d1c4]/55"
+                className="relative mt-3 overflow-hidden rounded-r-2xl border border-[#d8cab9] bg-[#d7d1c4]/55"
                 style={{ height: mobileTimelineHeight }}
               >
                 {mobileDay.enabled ? (
