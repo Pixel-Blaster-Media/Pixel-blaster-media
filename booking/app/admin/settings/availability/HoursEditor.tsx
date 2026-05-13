@@ -72,7 +72,7 @@ export default function HoursEditor({
             name="start_time"
             defaultValue={startTime}
             disabled={!isOpen}
-            className="mt-1 box-border block w-full min-w-0 max-w-full appearance-none border-0 bg-transparent p-0 text-sm font-semibold text-realtor-text outline-none [color-scheme:light] disabled:cursor-not-allowed"
+            className="mt-1 box-border block h-9 w-full min-w-0 max-w-full appearance-none border-0 bg-transparent p-0 text-center text-sm font-semibold leading-9 text-realtor-text outline-none [color-scheme:light] disabled:cursor-not-allowed"
           />
         </label>
         <label className="min-w-0 rounded-xl border border-realtor-primary/15 bg-realtor-surface p-2">
@@ -84,7 +84,7 @@ export default function HoursEditor({
             name="end_time"
             defaultValue={endTime}
             disabled={!isOpen}
-            className="mt-1 box-border block w-full min-w-0 max-w-full appearance-none border-0 bg-transparent p-0 text-sm font-semibold text-realtor-text outline-none [color-scheme:light] disabled:cursor-not-allowed"
+            className="mt-1 box-border block h-9 w-full min-w-0 max-w-full appearance-none border-0 bg-transparent p-0 text-center text-sm font-semibold leading-9 text-realtor-text outline-none [color-scheme:light] disabled:cursor-not-allowed"
           />
         </label>
       </div>
