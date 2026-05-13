@@ -172,39 +172,39 @@ export default function CalendarWeekView({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3 text-xs text-ink-muted">
         <span className="inline-flex items-center gap-2">
-          <span className="h-3 w-3 rounded-sm bg-white/[0.08] ring-1 ring-white/15" />
+          <span className="h-3 w-3 rounded-sm bg-[#fffdf8] ring-1 ring-[#d8cab9]" />
           Working hours
         </span>
         <span className="inline-flex items-center gap-2">
-          <span className="h-3 w-3 rounded-sm bg-black/35 ring-1 ring-white/10" />
+          <span className="h-3 w-3 rounded-sm bg-[#d7d1c4] ring-1 ring-[#bdb4a5]" />
           Blocked/off hours
         </span>
         <span className="inline-flex items-center gap-2">
-          <span className="h-3 w-3 rounded-sm bg-brand/25 ring-1 ring-brand-light/50" />
+          <span className="h-3 w-3 rounded-sm bg-[#dce9dc] ring-1 ring-[#89a68f]" />
           Shoot
         </span>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-white/10 bg-ink-soft/45 shadow-lg shadow-black/10">
+      <div className="overflow-x-auto rounded-2xl border border-[#d8cab9]/70 bg-[#fffdf8]/80 shadow-lg shadow-black/10">
         <div className="grid min-w-[980px] grid-cols-[64px_repeat(7,minmax(120px,1fr))]">
-          <div className="border-b border-white/10 bg-ink px-2 py-3" />
+          <div className="border-b border-[#d8cab9]/70 bg-[#fffdf8] px-2 py-3" />
           {days.map((day) => (
             <div
               key={day.key}
-              className="border-b border-l border-white/10 bg-ink px-3 py-3"
+              className="border-b border-l border-[#d8cab9]/70 bg-[#fffdf8] px-3 py-3"
             >
-              <p className="text-xs uppercase tracking-wider text-ink-muted">
+              <p className="text-xs uppercase tracking-wider text-[#6f7a70]">
                 {day.shortLabel}
               </p>
-              <p className="text-sm font-semibold text-white">{day.label}</p>
+              <p className="text-sm font-semibold text-[#23332b]">{day.label}</p>
             </div>
           ))}
 
-          <div className="relative bg-ink" style={{ height: gridHeight }}>
+          <div className="relative bg-[#fffdf8]" style={{ height: gridHeight }}>
             {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, i) => (
               <div
                 key={i}
-                className="absolute right-2 text-[10px] text-ink-muted"
+                className="absolute right-2 text-[10px] text-[#6f7a70]"
                 style={{ top: i * HOUR_HEIGHT - 6 }}
               >
                 {formatHour(START_HOUR + i)}
@@ -215,12 +215,12 @@ export default function CalendarWeekView({
           {days.map((day) => (
             <div
               key={day.key}
-              className="relative border-l border-white/10 bg-black/25"
+              className="relative border-l border-[#d8cab9]/65 bg-[#d7d1c4]/55"
               style={{ height: gridHeight }}
             >
               {day.enabled ? (
                 <div
-                  className="absolute left-0 right-0 bg-white/[0.075] ring-1 ring-inset ring-white/10"
+                  className="absolute left-0 right-0 bg-[#fffdf8] ring-1 ring-inset ring-[#d8cab9]/80"
                   style={{
                     top:
                       ((day.workStartMinutes - START_HOUR * 60) / 60) *
@@ -231,12 +231,12 @@ export default function CalendarWeekView({
                   }}
                 />
               ) : (
-                <div className="absolute inset-0 bg-black/25" />
+                <div className="absolute inset-0 bg-[#d0cabd]/70" />
               )}
               {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, i) => (
                 <div
                   key={`hour-line-${i}`}
-                  className="pointer-events-none absolute left-0 right-0 z-[1] border-t border-white/[0.09]"
+                  className="pointer-events-none absolute left-0 right-0 z-[1] border-t border-[#ded6c8]/80"
                   style={{ top: i * HOUR_HEIGHT }}
                 />
               ))}
@@ -259,7 +259,7 @@ export default function CalendarWeekView({
                         setMode("shoot");
                         setSelected({ day, hour, minute });
                       }}
-                      className="absolute left-0 right-0 z-[2] border-t border-white/[0.035] transition hover:bg-brand/15"
+                      className="absolute left-0 right-0 z-[2] border-t border-[#ede6d9]/60 transition hover:bg-[#3f7356]/10"
                       style={{
                         top: (minutes / 60) * HOUR_HEIGHT,
                         height: (SLOT_MINUTES / 60) * HOUR_HEIGHT,
@@ -824,8 +824,8 @@ function CalendarEvent({ item }: { item: CalendarItem }) {
   const height = Math.max(((endMinutes - startMinutes) / 60) * HOUR_HEIGHT, 32);
   const classes =
     item.kind === "booking"
-      ? "border-brand-light/50 bg-brand/25 text-white hover:bg-brand/35"
-      : "border-white/15 bg-white/[0.08] text-ink-muted";
+      ? "border-[#8ba98f] bg-[#dce9dc] text-[#23332b] hover:bg-[#d2e1d2]"
+      : "border-[#a69d8d]/45 bg-[#c9c3b6]/80 text-[#36423a]";
   const content = (
     <div
       className={`absolute left-1 right-1 z-10 overflow-hidden rounded-xl border px-2 py-1 text-left shadow-sm ${classes}`}
