@@ -20,6 +20,7 @@ export default function HoursEditor({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
+  const [isOpen, setIsOpen] = useState(enabled);
 
   return (
     <form
@@ -32,49 +33,86 @@ export default function HoursEditor({
           else setOk(true);
         });
       }}
-      className="grid items-center gap-3 md:grid-cols-[140px_1fr_1fr_auto_auto]"
+      className={`rounded-2xl border p-4 transition ${
+        isOpen
+          ? "border-realtor-primary/15 bg-realtor-surface/85 shadow-sm shadow-realtor-text/5"
+          : "border-realtor-primary/10 bg-realtor-surface-muted/45"
+      }`}
     >
       <input type="hidden" name="day_of_week" value={dayOfWeek} />
-      <span className="text-sm text-white">{dayName}</span>
-      <label className="flex items-center gap-2 text-xs text-ink-muted">
-        <span>Start</span>
-        <input
-          type="time"
-          name="start_time"
-          defaultValue={startTime}
-          className="flex-1 rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
-        />
-      </label>
-      <label className="flex items-center gap-2 text-xs text-ink-muted">
-        <span>End</span>
-        <input
-          type="time"
-          name="end_time"
-          defaultValue={endTime}
-          className="flex-1 rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-sm text-white"
-        />
-      </label>
-      <label className="flex items-center gap-2 text-xs text-ink-muted">
-        <input
-          type="checkbox"
-          name="enabled"
-          defaultChecked={enabled}
-          className="h-4 w-4 accent-brand-light"
-        />
-        <span>Open</span>
-      </label>
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-full border border-white/15 px-3 py-1.5 text-xs text-white hover:border-brand-light hover:text-brand-light disabled:opacity-50"
-      >
-        {pending ? "Saving…" : ok ? "✓ Saved" : "Save"}
-      </button>
-      {error ? (
-        <p className="md:col-span-5 text-xs text-red-300" role="alert">
-          {error}
-        </p>
-      ) : null}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-realtor-text">{dayName}</p>
+          <p className="mt-0.5 text-xs text-realtor-muted">
+            {isOpen ? `${formatDisplayTime(startTime)} – ${formatDisplayTime(endTime)}` : "Closed"}
+          </p>
+        </div>
+        <label className="flex shrink-0 cursor-pointer items-center gap-2 text-xs font-semibold text-realtor-muted">
+          <span>{isOpen ? "Open" : "Closed"}</span>
+          <input
+            type="checkbox"
+            name="enabled"
+            checked={isOpen}
+            onChange={(event) => setIsOpen(event.currentTarget.checked)}
+            className="peer sr-only"
+          />
+          <span className="relative h-6 w-11 rounded-full border border-realtor-primary/20 bg-realtor-surface-muted transition peer-checked:border-realtor-primary/40 peer-checked:bg-realtor-primary">
+            <span className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition peer-checked:translate-x-5" />
+          </span>
+        </label>
+      </div>
+
+      <div className={`mt-4 grid grid-cols-2 gap-2 transition ${isOpen ? "opacity-100" : "opacity-45"}`}>
+        <label className="block">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-realtor-muted">
+            Start
+          </span>
+          <input
+            type="time"
+            name="start_time"
+            defaultValue={startTime}
+            disabled={!isOpen}
+            className="mt-1 box-border w-full min-w-0 rounded-xl border border-realtor-primary/15 bg-realtor-surface px-2 py-2 text-sm text-realtor-text outline-none [color-scheme:light] focus:border-realtor-primary/45 disabled:cursor-not-allowed"
+          />
+        </label>
+        <label className="block">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-realtor-muted">
+            End
+          </span>
+          <input
+            type="time"
+            name="end_time"
+            defaultValue={endTime}
+            disabled={!isOpen}
+            className="mt-1 box-border w-full min-w-0 rounded-xl border border-realtor-primary/15 bg-realtor-surface px-2 py-2 text-sm text-realtor-text outline-none [color-scheme:light] focus:border-realtor-primary/45 disabled:cursor-not-allowed"
+          />
+        </label>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-full border border-realtor-primary/20 px-4 py-2 text-xs font-semibold text-realtor-primary transition hover:bg-realtor-primary/10 disabled:opacity-50"
+        >
+          {pending ? "Saving…" : ok ? "✓ Saved" : "Save"}
+        </button>
+        {error ? (
+          <p className="text-xs text-red-700" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </div>
     </form>
   );
+}
+
+function formatDisplayTime(value: string) {
+  const [hourRaw, minuteRaw] = value.split(":");
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return value;
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
 }

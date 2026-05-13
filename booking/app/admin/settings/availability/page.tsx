@@ -66,52 +66,63 @@ export default async function AvailabilityPage() {
   }
 
   return (
-    <div className="space-y-10">
-      <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
+    <div className="space-y-6 pb-10">
+      <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-5 shadow-lg shadow-realtor-text/10">
         <Link
           href="/admin/settings"
-          className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-light hover:text-white"
+          className="text-xs font-semibold uppercase tracking-[0.2em] text-realtor-primary/80 hover:text-realtor-text"
         >
           ← Settings
         </Link>
-        <h1 className="mt-1 text-2xl font-bold text-white">Availability</h1>
-        <p className="mt-2 text-sm text-ink-muted">
-          Your working hours and one-off busy blocks. Realtors see the result
-          as open slots on the portal calendar — they never see raw blocks
-          or labels.
+        <h1 className="mt-2 text-2xl font-semibold text-realtor-text md:text-3xl">
+          Availability
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-realtor-muted">
+          Set working hours and private busy blocks. Realtors only see open
+          booking slots — never your private labels.
         </p>
       </header>
 
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
-          Weekly hours
-        </h2>
-        <ul className="mt-4 divide-y divide-white/5 rounded-2xl border border-white/10 bg-ink-soft/50">
+      <section className="space-y-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-realtor-primary/80">
+            Weekly hours
+          </p>
+          <h2 className="mt-1 text-lg font-semibold text-realtor-text">
+            When bookings are allowed
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-realtor-muted">
+            Toggle each day open or closed, then save the days you change.
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {hours.map((h) => (
-            <li key={h.day_of_week} className="p-4">
-              <HoursEditor
-                dayOfWeek={h.day_of_week}
-                dayName={DAY_NAMES[h.day_of_week]}
-                startTime={h.start_time.slice(0, 5)}
-                endTime={h.end_time.slice(0, 5)}
-                enabled={h.enabled}
-              />
-            </li>
+            <HoursEditor
+              key={h.day_of_week}
+              dayOfWeek={h.day_of_week}
+              dayName={DAY_NAMES[h.day_of_week]}
+              startTime={h.start_time.slice(0, 5)}
+              endTime={h.end_time.slice(0, 5)}
+              enabled={h.enabled}
+            />
           ))}
-        </ul>
+        </div>
       </section>
 
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
-          Busy blocks
-        </h2>
-        <p className="mt-1 text-xs text-ink-muted">
-          Vacations, personal appointments, holidays — anything that shouldn't
-          be bookable. Only you can see these.
-        </p>
-        <div className="mt-4">
-          <BlocksManager blocks={blocksRes.data ?? []} />
+      <section className="space-y-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-realtor-primary/80">
+            Busy blocks
+          </p>
+          <h2 className="mt-1 text-lg font-semibold text-realtor-text">
+            Time you do not want booked
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-realtor-muted">
+            Vacations, personal appointments, holidays — anything that should
+            hide from the booking calendar.
+          </p>
         </div>
+        <BlocksManager blocks={blocksRes.data ?? []} />
       </section>
     </div>
   );
