@@ -53,7 +53,7 @@ const START_HOUR = 7;
 const END_HOUR = 20;
 const SLOT_MINUTES = 30;
 const HOUR_HEIGHT = 72;
-const MOBILE_HOUR_HEIGHT = 46;
+const MOBILE_HOUR_HEIGHT = 36;
 
 export default function CalendarWeekView({
   days,
@@ -200,18 +200,18 @@ export default function CalendarWeekView({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 text-xs text-ink-muted">
-        <span className="inline-flex items-center gap-2">
-          <span className="h-3 w-3 rounded-sm bg-[#fffdf8] ring-1 ring-[#d8cab9]" />
+    <div className="max-w-full space-y-3 overflow-hidden md:space-y-4">
+      <div className="grid max-w-full grid-cols-3 gap-1.5 text-[10px] text-ink-muted md:flex md:flex-wrap md:items-center md:gap-3 md:text-xs">
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#fffdf8] ring-1 ring-[#d8cab9]" />
           Working hours
         </span>
-        <span className="inline-flex items-center gap-2">
-          <span className="h-3 w-3 rounded-sm bg-[#d7d1c4] ring-1 ring-[#bdb4a5]" />
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#d7d1c4] ring-1 ring-[#bdb4a5]" />
           Blocked/off hours
         </span>
-        <span className="inline-flex items-center gap-2">
-          <span className="h-3 w-3 rounded-sm bg-[#dce9dc] ring-1 ring-[#89a68f]" />
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#dce9dc] ring-1 ring-[#89a68f]" />
           Shoot
         </span>
       </div>
@@ -227,7 +227,7 @@ export default function CalendarWeekView({
               <p className="text-xs uppercase tracking-wider text-[#6f7a70]">
                 {day.shortLabel}
               </p>
-              <p className="text-sm font-semibold text-[#23332b]">{day.label}</p>
+              <p className="text-xs font-semibold text-[#23332b]">{day.label}</p>
             </div>
           ))}
 
@@ -308,8 +308,8 @@ export default function CalendarWeekView({
         </div>
       </div>
 
-      <div className="space-y-3 md:hidden">
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="max-w-full space-y-2 overflow-hidden md:hidden">
+        <div className="grid max-w-full grid-cols-4 gap-1.5">
           {days.map((day) => {
             const isSelected = day.dateInput === mobileDay?.dateInput;
             const dayItems = itemsByDay.get(day.dateInput) ?? [];
@@ -318,7 +318,7 @@ export default function CalendarWeekView({
                 key={day.key}
                 type="button"
                 onClick={() => setMobileDayKey(day.dateInput)}
-                className={`min-w-[76px] rounded-xl border px-2.5 py-2 text-left shadow-sm transition ${
+                className={`min-w-0 rounded-lg border px-2 py-1.5 text-left shadow-sm transition ${
                   isSelected
                     ? "border-[#3f7356] bg-[#3f7356] text-white"
                     : "border-[#d8cab9] bg-[#fffdf8] text-[#23332b]"
@@ -331,9 +331,9 @@ export default function CalendarWeekView({
                 >
                   {day.shortLabel}
                 </span>
-                <span className="block text-xs font-semibold">{day.label}</span>
+                <span className="block truncate text-[11px] font-semibold">{day.label}</span>
                 <span
-                  className={`mt-1 block text-[10px] ${
+                  className={`mt-0.5 block truncate text-[9px] ${
                     isSelected ? "text-white/75" : "text-[#6f7a70]"
                   }`}
                 >
@@ -349,17 +349,17 @@ export default function CalendarWeekView({
         </div>
 
         {mobileDay ? (
-          <section className="rounded-2xl border border-[#d8cab9]/80 bg-[#fffdf8] p-3 shadow-lg shadow-black/10">
-            <div className="flex items-start justify-between gap-3">
+          <section className="max-w-full overflow-hidden rounded-xl border border-[#d8cab9]/80 bg-[#fffdf8] p-2.5 shadow-lg shadow-black/10">
+            <div className="flex items-start justify-between gap-2">
               <div>
-                <p className="text-xs uppercase tracking-wider text-[#6f7a70]">
+                <p className="text-[10px] uppercase tracking-wider text-[#6f7a70]">
                   Day view
                 </p>
-                <h2 className="mt-1 text-base font-semibold text-[#23332b]">
+                <h2 className="mt-0.5 text-sm font-semibold text-[#23332b]">
                   {mobileDay.shortLabel} {mobileDay.label}
                 </h2>
               </div>
-              <span className="rounded-full border border-[#d8cab9] bg-[#f7f4ed] px-2.5 py-1 text-[11px] text-[#6f7a70]">
+              <span className="shrink-0 rounded-full border border-[#d8cab9] bg-[#f7f4ed] px-2 py-1 text-[10px] text-[#6f7a70]">
                 {mobileDay.enabled
                   ? `${minutesToLabel(
                       mobileDay.workStartMinutes,
@@ -368,11 +368,11 @@ export default function CalendarWeekView({
               </span>
             </div>
 
-            <div className="mt-5 border-t border-[#d8cab9]/70 pt-4">
-              <p className="text-sm font-semibold text-[#23332b]">
+            <div className="mt-3 border-t border-[#d8cab9]/70 pt-3">
+              <p className="text-xs font-semibold text-[#23332b]">
                 Daily calendar
               </p>
-              <p className="mt-1 text-xs text-[#6f7a70]">
+              <p className="mt-0.5 text-[10px] text-[#6f7a70]">
                 Tap any open slot to add a shoot or block time.
               </p>
               <div
@@ -381,7 +381,7 @@ export default function CalendarWeekView({
               >
                 {mobileDay.enabled ? (
                   <div
-                    className="absolute left-12 right-0 bg-[#fffdf8] ring-1 ring-inset ring-[#d8cab9]/80"
+                    className="absolute left-9 right-0 bg-[#fffdf8] ring-1 ring-inset ring-[#d8cab9]/80"
                     style={{
                       top:
                         ((mobileDay.workStartMinutes - mobileTimelineStart) / 60) *
@@ -393,7 +393,7 @@ export default function CalendarWeekView({
                     }}
                   />
                 ) : (
-                  <div className="absolute inset-y-0 left-12 right-0 bg-[#d0cabd]/70" />
+                  <div className="absolute inset-y-0 left-9 right-0 bg-[#d0cabd]/70" />
                 )}
 
                 {mobileHourMarks.map((minutes) => (
@@ -404,7 +404,7 @@ export default function CalendarWeekView({
                       top: ((minutes - mobileTimelineStart) / 60) * MOBILE_HOUR_HEIGHT,
                     }}
                   >
-                    <span className="absolute left-1.5 top-1 text-[9px] font-semibold text-[#6f7a70]">
+                    <span className="absolute left-1 top-0.5 text-[8px] font-semibold text-[#6f7a70]">
                       {minutesToLabel(minutes)}
                     </span>
                   </div>
@@ -430,7 +430,7 @@ export default function CalendarWeekView({
                           minute: slot.minute,
                         });
                       }}
-                      className="absolute left-12 right-0 z-[2] border-t border-[#ede6d9]/60 transition hover:bg-[#3f7356]/10 active:bg-[#3f7356]/10"
+                      className="absolute left-9 right-0 z-[2] border-t border-[#ede6d9]/60 transition hover:bg-[#3f7356]/10 active:bg-[#3f7356]/10"
                       style={{
                         top:
                           ((minutes - mobileTimelineStart) / 60) * MOBILE_HOUR_HEIGHT,
@@ -441,7 +441,7 @@ export default function CalendarWeekView({
                 })}
 
                 {mobileDayItems.length === 0 ? (
-                  <div className="absolute left-14 right-2 top-2 z-[3] rounded-lg border border-dashed border-[#d8cab9] bg-[#f7f4ed]/85 px-2.5 py-2 text-xs text-[#6f7a70]">
+                  <div className="absolute left-11 right-1.5 top-1.5 z-[3] rounded-lg border border-dashed border-[#d8cab9] bg-[#f7f4ed]/85 px-2 py-1.5 text-[10px] text-[#6f7a70]">
                     Nothing booked yet.
                   </div>
                 ) : null}
@@ -991,22 +991,22 @@ function MobileTimelineEvent({
       : "border-[#a69d8d]/50 bg-[#d7d1c4] text-[#36423a]";
   const content = (
     <div
-      className={`absolute left-14 right-1.5 z-10 overflow-hidden rounded-xl border px-2.5 py-1.5 shadow-sm ${classes}`}
+      className={`absolute left-11 right-1 z-10 overflow-hidden rounded-lg border px-2 py-1 shadow-sm ${classes}`}
       style={{ top, height }}
     >
       <div className="flex h-full min-w-0 flex-col justify-between gap-1">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70">
+          <p className="text-[8px] font-semibold uppercase tracking-wider opacity-70">
             {formatDateTimeRange(item.startsAt, item.endsAt)}
           </p>
-          <p className="mt-0.5 line-clamp-2 break-words text-xs font-semibold leading-tight">
+          <p className="mt-0.5 line-clamp-1 break-words text-[11px] font-semibold leading-tight">
             {item.title}
           </p>
-          <p className="mt-0.5 line-clamp-1 break-words text-[10px] leading-snug opacity-75">
+          <p className="mt-0.5 line-clamp-1 break-words text-[9px] leading-snug opacity-75">
             {item.subtitle}
           </p>
         </div>
-        <span className="w-fit rounded-full border border-current/25 bg-white/40 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
+        <span className="w-fit rounded-full border border-current/25 bg-white/40 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wider">
           {item.statusLabel ?? (item.kind === "block" ? "Blocked" : "Shoot")}
         </span>
       </div>

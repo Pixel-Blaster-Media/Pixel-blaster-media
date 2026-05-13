@@ -25,8 +25,8 @@ export default async function AdminLayout({
 
   return (
     <div
-      className="admin-earth realtor-theme realtor-backdrop grid min-h-screen w-full overflow-x-hidden px-4 pb-32 sm:px-6 md:grid-cols-[220px_1fr] md:gap-8 md:px-6 md:py-10"
-      style={{ paddingTop: "max(1rem, env(safe-area-inset-top, 0px))" }}
+      className="admin-earth realtor-theme realtor-backdrop grid min-h-screen w-full max-w-full overflow-x-hidden px-3 pb-32 sm:px-6 md:grid-cols-[220px_1fr] md:gap-8 md:px-6 md:py-10"
+      style={{ paddingTop: "max(4rem, calc(env(safe-area-inset-top, 0px) + 2.5rem))" }}
     >
       <div className="md:hidden">
         <details className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/90 p-3 shadow-lg shadow-realtor-text/10">
@@ -96,7 +96,7 @@ export default async function AdminLayout({
           </form>
         </nav>
       </aside>
-      <section className="space-y-6">
+      <section className="min-w-0 max-w-full space-y-6 overflow-hidden">
         <AdminAssistant />
         {children}
       </section>
