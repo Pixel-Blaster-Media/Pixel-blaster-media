@@ -119,19 +119,27 @@ export default function CalendarWeekView({
   const mobileDayItems = mobileDay
     ? itemsByDay.get(mobileDay.dateInput) ?? []
     : [];
+  const mobileTimelineStart = START_HOUR * 60;
+  const mobileTimelineEnd = END_HOUR * 60;
+  const mobileTimelineHeight =
+    ((mobileTimelineEnd - mobileTimelineStart) / 60) * HOUR_HEIGHT;
+  const mobileHourMarks = Array.from({
+    length: END_HOUR - START_HOUR + 1,
+  }).map((_, i) => mobileTimelineStart + i * 60);
   const mobileSlots = useMemo(() => {
-    if (!mobileDay?.enabled) return [];
-    const start = Math.max(mobileDay.workStartMinutes, START_HOUR * 60);
-    const end = Math.min(mobileDay.workEndMinutes, END_HOUR * 60);
     const slots: { hour: number; minute: number }[] = [];
-    for (let minutes = start; minutes < end; minutes += SLOT_MINUTES) {
+    for (
+      let minutes = mobileTimelineStart;
+      minutes < mobileTimelineEnd;
+      minutes += SLOT_MINUTES
+    ) {
       slots.push({
         hour: Math.floor(minutes / 60),
         minute: minutes % 60,
       });
     }
     return slots;
-  }, [mobileDay]);
+  }, [mobileTimelineEnd, mobileTimelineStart]);
   useEffect(() => {
     const query = realtor.contact_name.trim();
     if (selectedRealtorId || query.length < 2) {
@@ -359,64 +367,93 @@ export default function CalendarWeekView({
               </span>
             </div>
 
-            <div className="mt-5 space-y-4 border-t border-[#d8cab9]/70 pt-4">
-              <div>
-                <p className="text-sm font-semibold text-[#23332b]">
-                  Booked items
-                </p>
-                <p className="mt-1 text-xs text-[#6f7a70]">
-                  Clean mobile view — no squeezed week grid.
-                </p>
-              </div>
+            <div className="mt-5 border-t border-[#d8cab9]/70 pt-4">
+              <p className="text-sm font-semibold text-[#23332b]">
+                Daily calendar
+              </p>
+              <p className="mt-1 text-xs text-[#6f7a70]">
+                Tap any open slot to add a shoot or block time.
+              </p>
+              <div
+                className="relative mt-4 overflow-hidden rounded-2xl border border-[#d8cab9] bg-[#d7d1c4]/55"
+                style={{ height: mobileTimelineHeight }}
+              >
+                {mobileDay.enabled ? (
+                  <div
+                    className="absolute left-14 right-0 bg-[#fffdf8] ring-1 ring-inset ring-[#d8cab9]/80"
+                    style={{
+                      top:
+                        ((mobileDay.workStartMinutes - mobileTimelineStart) / 60) *
+                        HOUR_HEIGHT,
+                      height:
+                        ((mobileDay.workEndMinutes - mobileDay.workStartMinutes) /
+                          60) *
+                        HOUR_HEIGHT,
+                    }}
+                  />
+                ) : (
+                  <div className="absolute inset-y-0 left-14 right-0 bg-[#d0cabd]/70" />
+                )}
 
-              {mobileDayItems.length > 0 ? (
-                <div className="space-y-2">
-                  {mobileDayItems.map((item) => (
-                    <MobileAgendaEvent key={`${item.kind}-${item.id}`} item={item} />
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-dashed border-[#d8cab9] bg-[#f7f4ed]/70 px-3 py-3 text-sm text-[#6f7a70]">
-                  Nothing booked yet.
-                </div>
-              )}
-
-              {mobileDay.enabled ? (
-                <div>
-                  <p className="text-sm font-semibold text-[#23332b]">
-                    Add a time
-                  </p>
-                  <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
-                    {mobileSlots.map((slot) => (
-                      <button
-                        key={`${slot.hour}:${slot.minute}`}
-                        type="button"
-                        aria-label={`Add something at ${formatTime(
-                          slot.hour,
-                          slot.minute,
-                        )}`}
-                        onClick={() => {
-                          setError(null);
-                          setLookupMessage(null);
-                          setMode("shoot");
-                          setSelected({
-                            day: mobileDay,
-                            hour: slot.hour,
-                            minute: slot.minute,
-                          });
-                        }}
-                        className="rounded-full border border-[#d8cab9] bg-white px-2 py-2 text-xs font-semibold text-[#3f7356] transition hover:border-[#3f7356] hover:bg-[#edf4ee] active:bg-[#edf4ee]"
-                      >
-                        {formatTime(slot.hour, slot.minute).replace(" ", "")}
-                      </button>
-                    ))}
+                {mobileHourMarks.map((minutes) => (
+                  <div
+                    key={`mobile-hour-${minutes}`}
+                    className="pointer-events-none absolute left-0 right-0 z-[1] border-t border-[#ded6c8]/80"
+                    style={{
+                      top: ((minutes - mobileTimelineStart) / 60) * HOUR_HEIGHT,
+                    }}
+                  >
+                    <span className="absolute left-2 top-1 text-[10px] font-semibold text-[#6f7a70]">
+                      {minutesToLabel(minutes)}
+                    </span>
                   </div>
-                </div>
-              ) : (
-                <p className="rounded-xl border border-[#d8cab9] bg-[#f7f4ed] px-3 py-2 text-sm text-[#6f7a70]">
-                  This day is marked closed.
-                </p>
-              )}
+                ))}
+
+                {mobileSlots.map((slot) => {
+                  const minutes = slot.hour * 60 + slot.minute;
+                  return (
+                    <button
+                      key={`${slot.hour}:${slot.minute}`}
+                      type="button"
+                      aria-label={`Add something at ${formatTime(
+                        slot.hour,
+                        slot.minute,
+                      )}`}
+                      onClick={() => {
+                        setError(null);
+                        setLookupMessage(null);
+                        setMode("shoot");
+                        setSelected({
+                          day: mobileDay,
+                          hour: slot.hour,
+                          minute: slot.minute,
+                        });
+                      }}
+                      className="absolute left-14 right-0 z-[2] border-t border-[#ede6d9]/60 transition hover:bg-[#3f7356]/10 active:bg-[#3f7356]/10"
+                      style={{
+                        top:
+                          ((minutes - mobileTimelineStart) / 60) * HOUR_HEIGHT,
+                        height: (SLOT_MINUTES / 60) * HOUR_HEIGHT,
+                      }}
+                    />
+                  );
+                })}
+
+                {mobileDayItems.length === 0 ? (
+                  <div className="absolute left-[4.25rem] right-3 top-3 z-[3] rounded-xl border border-dashed border-[#d8cab9] bg-[#f7f4ed]/85 px-3 py-2 text-xs text-[#6f7a70]">
+                    Nothing booked yet.
+                  </div>
+                ) : null}
+
+                {mobileDayItems.map((item) => (
+                  <MobileTimelineEvent
+                    key={`${item.kind}-${item.id}`}
+                    item={item}
+                    rangeStart={mobileTimelineStart}
+                    rangeEnd={mobileTimelineEnd}
+                  />
+                ))}
+              </div>
             </div>
           </section>
         ) : null}
@@ -904,29 +941,54 @@ function CatalogPicker({ items }: { items: CatalogItemOption[] }) {
   );
 }
 
-function MobileAgendaEvent({ item }: { item: CalendarItem }) {
+function MobileTimelineEvent({
+  item,
+  rangeStart,
+  rangeEnd,
+}: {
+  item: CalendarItem;
+  rangeStart: number;
+  rangeEnd: number;
+}) {
+  const startMinutes = localMinutesFromIso(item.startsAt);
+  const endMinutes = localMinutesFromIso(item.endsAt);
+  const top =
+    ((Math.max(startMinutes, rangeStart) - rangeStart) / 60) * HOUR_HEIGHT;
+  const height = Math.max(
+    ((Math.min(endMinutes, rangeEnd) - Math.max(startMinutes, rangeStart)) /
+      60) *
+      HOUR_HEIGHT,
+    56,
+  );
   const classes =
     item.kind === "booking"
       ? "border-[#8ba98f] bg-[#dce9dc] text-[#23332b]"
       : "border-[#a69d8d]/50 bg-[#d7d1c4] text-[#36423a]";
   const content = (
-    <div className={`rounded-2xl border px-3 py-3 shadow-sm ${classes}`}>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+    <div
+      className={`absolute left-[4.25rem] right-2 z-10 overflow-hidden rounded-2xl border px-3 py-2 shadow-sm ${classes}`}
+      style={{ top, height }}
+    >
+      <div className="flex h-full min-w-0 flex-col justify-between gap-1">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-wider opacity-70">
+          <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70">
             {formatDateTimeRange(item.startsAt, item.endsAt)}
           </p>
-          <p className="mt-1 break-words text-sm font-semibold">{item.title}</p>
-          <p className="mt-0.5 break-words text-xs opacity-75">{item.subtitle}</p>
+          <p className="mt-0.5 break-words text-sm font-semibold leading-tight">
+            {item.title}
+          </p>
+          <p className="mt-0.5 line-clamp-2 break-words text-[11px] leading-snug opacity-75">
+            {item.subtitle}
+          </p>
         </div>
-        <span className="w-fit rounded-full border border-current/25 bg-white/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider">
+        <span className="w-fit rounded-full border border-current/25 bg-white/40 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
           {item.statusLabel ?? (item.kind === "block" ? "Blocked" : "Shoot")}
         </span>
       </div>
     </div>
   );
 
-  return item.href ? <Link className="block" href={item.href}>{content}</Link> : content;
+  return item.href ? <Link href={item.href}>{content}</Link> : content;
 }
 
 function CalendarEvent({ item }: { item: CalendarItem }) {
@@ -962,6 +1024,11 @@ function CalendarEvent({ item }: { item: CalendarItem }) {
 function parseLocalParts(iso: string): { hour: number; minute: number } {
   const d = new Date(iso);
   return { hour: d.getHours(), minute: d.getMinutes() };
+}
+
+function localMinutesFromIso(iso: string): number {
+  const parts = parseLocalParts(iso);
+  return parts.hour * 60 + parts.minute;
 }
 
 function formatHour(hour: number): string {
