@@ -35,28 +35,37 @@ export default function Home() {
       <section className="grid gap-4 md:grid-cols-3">
         <Feature
           title="Book online"
-          body="Pick services, pick a time, pick add-ons. Phase 2 replaces Acuity with a native flow."
+          body="Pick services, choose a time, and add the extras you need without the back-and-forth."
         />
         <Feature
-          title="iGuide tours + floor plans"
-          body="Auto-pulled into your property dashboard once they're published. No more hunting for links."
+          title="Everything tracked"
+          body="Bookings, realtor details, shoot notes, invoices, tour links, and galleries stay organized in one dashboard."
         />
         <Feature
-          title="Fotello galleries"
-          body="Your client gallery embedded right alongside the tour and floor plan for every listing."
+          title="Client portal"
+          body="Realtors can come back for photos, iGuide tours, floor plans, video links, and listing website tools."
         />
       </section>
 
       <section className="realtor-elevated-panel rounded-2xl p-6">
-        <h2 className="text-lg font-semibold text-realtor-text">Roadmap</h2>
-        <ol className="mt-4 grid gap-2 text-sm text-realtor-muted md:grid-cols-2">
-          <Phase n={1} label="Foundation (this PR)" done />
-          <Phase n={2} label="Custom booking form + email confirmations" />
-          <Phase n={3} label="Admin job-tracking dashboard" />
-          <Phase n={4} label="iGuide API integration" />
-          <Phase n={5} label="Fotello API integration" />
-          <Phase n={6} label="Realtor magic-link portal" />
-        </ol>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-realtor-primary">
+          Built for real estate shoots
+        </p>
+        <h2 className="mt-2 text-2xl font-semibold text-realtor-text">
+          A cleaner handoff from booking to delivery.
+        </h2>
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-realtor-muted">
+          The goal is simple: less admin work for Pixel Blaster, less confusion
+          for realtors, and one reliable place for every deliverable after the
+          shoot is done.
+        </p>
+        <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold text-realtor-primary">
+          <span className="rounded-full bg-realtor-primary/10 px-3 py-1">Photos</span>
+          <span className="rounded-full bg-realtor-primary/10 px-3 py-1">iGuide</span>
+          <span className="rounded-full bg-realtor-primary/10 px-3 py-1">Floor plans</span>
+          <span className="rounded-full bg-realtor-primary/10 px-3 py-1">Video</span>
+          <span className="rounded-full bg-realtor-primary/10 px-3 py-1">Listing sites</span>
+        </div>
       </section>
     </div>
   );
@@ -71,29 +80,3 @@ function Feature({ title, body }: { title: string; body: string }) {
   );
 }
 
-function Phase({
-  n,
-  label,
-  done = false,
-}: {
-  n: number;
-  label: string;
-  done?: boolean;
-}) {
-  return (
-    <li className="flex items-center gap-3">
-      <span
-        className={
-          "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs " +
-          (done
-            ? "border-realtor-primary bg-realtor-primary/20 text-realtor-primary"
-            : "border-realtor-primary/20 text-realtor-muted")
-        }
-        aria-hidden
-      >
-        {done ? "✓" : n}
-      </span>
-      <span className={done ? "text-realtor-text" : ""}>{label}</span>
-    </li>
-  );
-}

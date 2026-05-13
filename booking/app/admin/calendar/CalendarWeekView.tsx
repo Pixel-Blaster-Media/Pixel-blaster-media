@@ -132,20 +132,6 @@ export default function CalendarWeekView({
     }
     return slots;
   }, [mobileDay]);
-  const mobileTimelineStart = mobileDay?.enabled
-    ? Math.max(mobileDay.workStartMinutes, START_HOUR * 60)
-    : START_HOUR * 60;
-  const mobileTimelineEnd = mobileDay?.enabled
-    ? Math.min(mobileDay.workEndMinutes, END_HOUR * 60)
-    : END_HOUR * 60;
-  const mobileTimelineHeight = Math.max(
-    ((mobileTimelineEnd - mobileTimelineStart) / 60) * HOUR_HEIGHT,
-    HOUR_HEIGHT,
-  );
-  const mobileHourMarks = Array.from({
-    length: Math.floor((mobileTimelineEnd - mobileTimelineStart) / 60) + 1,
-  }).map((_, i) => mobileTimelineStart + i * 60);
-
   useEffect(() => {
     const query = realtor.contact_name.trim();
     if (selectedRealtorId || query.length < 2) {
@@ -314,7 +300,7 @@ export default function CalendarWeekView({
       </div>
 
       <div className="space-y-3 md:hidden">
-        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {days.map((day) => {
             const isSelected = day.dateInput === mobileDay?.dateInput;
             const dayItems = itemsByDay.get(day.dateInput) ?? [];
@@ -323,7 +309,7 @@ export default function CalendarWeekView({
                 key={day.key}
                 type="button"
                 onClick={() => setMobileDayKey(day.dateInput)}
-                className={`min-w-[86px] rounded-2xl border px-3 py-2 text-left shadow-sm transition ${
+                className={`min-w-[92px] rounded-2xl border px-3 py-2 text-left shadow-sm transition ${
                   isSelected
                     ? "border-[#3f7356] bg-[#3f7356] text-white"
                     : "border-[#d8cab9] bg-[#fffdf8] text-[#23332b]"
@@ -373,77 +359,61 @@ export default function CalendarWeekView({
               </span>
             </div>
 
-            <div className="mt-5 border-t border-[#d8cab9]/70 pt-4">
-              <p className="text-sm font-semibold text-[#23332b]">
-                Daily timeline
-              </p>
-              <p className="mt-1 text-xs text-[#6f7a70]">
-                Tap an open time to add a shoot or block time.
-              </p>
-              {mobileDay.enabled ? (
-                <div
-                  className="relative mt-4 rounded-2xl border border-[#d8cab9] bg-white"
-                  style={{ height: mobileTimelineHeight }}
-                >
-                  {mobileHourMarks.map((minutes) => (
-                    <div
-                      key={`mobile-hour-${minutes}`}
-                      className="absolute left-0 right-0 border-t border-[#e2d8c8]"
-                      style={{
-                        top:
-                          ((minutes - mobileTimelineStart) / 60) * HOUR_HEIGHT,
-                      }}
-                    >
-                      <span className="absolute left-3 top-1 text-[11px] font-semibold text-[#6f7a70]">
-                        {minutesToLabel(minutes)}
-                      </span>
-                    </div>
-                  ))}
-                  {mobileSlots.map((slot) => (
-                    <button
-                      key={`${slot.hour}:${slot.minute}`}
-                      type="button"
-                      aria-label={`Add something at ${formatTime(
-                        slot.hour,
-                        slot.minute,
-                      )}`}
-                      onClick={() => {
-                        setError(null);
-                        setLookupMessage(null);
-                        setMode("shoot");
-                        setSelected({
-                          day: mobileDay,
-                          hour: slot.hour,
-                          minute: slot.minute,
-                        });
-                      }}
-                      className="absolute left-16 right-2 rounded-xl border-t border-[#f1eadf] transition hover:bg-[#edf4ee] active:bg-[#edf4ee]"
-                      style={{
-                        top:
-                          (((slot.hour * 60 + slot.minute) -
-                            mobileTimelineStart) /
-                            60) *
-                          HOUR_HEIGHT,
-                        height: (SLOT_MINUTES / 60) * HOUR_HEIGHT,
-                      }}
-                    />
-                  ))}
-                  {mobileDayItems.length === 0 ? (
-                    <div className="absolute left-16 right-3 top-3 rounded-xl border border-dashed border-[#d8cab9] bg-[#f7f4ed]/70 px-3 py-2 text-xs text-[#6f7a70]">
-                      Nothing booked yet.
-                    </div>
-                  ) : null}
+            <div className="mt-5 space-y-4 border-t border-[#d8cab9]/70 pt-4">
+              <div>
+                <p className="text-sm font-semibold text-[#23332b]">
+                  Booked items
+                </p>
+                <p className="mt-1 text-xs text-[#6f7a70]">
+                  Clean mobile view — no squeezed week grid.
+                </p>
+              </div>
+
+              {mobileDayItems.length > 0 ? (
+                <div className="space-y-2">
                   {mobileDayItems.map((item) => (
-                    <MobileTimelineEvent
-                      key={`${item.kind}-${item.id}`}
-                      item={item}
-                      rangeStart={mobileTimelineStart}
-                      rangeEnd={mobileTimelineEnd}
-                    />
+                    <MobileAgendaEvent key={`${item.kind}-${item.id}`} item={item} />
                   ))}
                 </div>
               ) : (
-                <p className="mt-3 rounded-xl border border-[#d8cab9] bg-[#f7f4ed] px-3 py-2 text-sm text-[#6f7a70]">
+                <div className="rounded-2xl border border-dashed border-[#d8cab9] bg-[#f7f4ed]/70 px-3 py-3 text-sm text-[#6f7a70]">
+                  Nothing booked yet.
+                </div>
+              )}
+
+              {mobileDay.enabled ? (
+                <div>
+                  <p className="text-sm font-semibold text-[#23332b]">
+                    Add a time
+                  </p>
+                  <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                    {mobileSlots.map((slot) => (
+                      <button
+                        key={`${slot.hour}:${slot.minute}`}
+                        type="button"
+                        aria-label={`Add something at ${formatTime(
+                          slot.hour,
+                          slot.minute,
+                        )}`}
+                        onClick={() => {
+                          setError(null);
+                          setLookupMessage(null);
+                          setMode("shoot");
+                          setSelected({
+                            day: mobileDay,
+                            hour: slot.hour,
+                            minute: slot.minute,
+                          });
+                        }}
+                        className="rounded-full border border-[#d8cab9] bg-white px-2 py-2 text-xs font-semibold text-[#3f7356] transition hover:border-[#3f7356] hover:bg-[#edf4ee] active:bg-[#edf4ee]"
+                      >
+                        {formatTime(slot.hour, slot.minute).replace(" ", "")}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="rounded-xl border border-[#d8cab9] bg-[#f7f4ed] px-3 py-2 text-sm text-[#6f7a70]">
                   This day is marked closed.
                 </p>
               )}
@@ -934,50 +904,29 @@ function CatalogPicker({ items }: { items: CatalogItemOption[] }) {
   );
 }
 
-function MobileTimelineEvent({
-  item,
-  rangeStart,
-  rangeEnd,
-}: {
-  item: CalendarItem;
-  rangeStart: number;
-  rangeEnd: number;
-}) {
-  const startMinutes = localMinutesFromIso(item.startsAt);
-  const endMinutes = localMinutesFromIso(item.endsAt);
-  const top =
-    ((Math.max(startMinutes, rangeStart) - rangeStart) / 60) * HOUR_HEIGHT;
-  const height = Math.max(
-    ((Math.min(endMinutes, rangeEnd) - Math.max(startMinutes, rangeStart)) /
-      60) *
-      HOUR_HEIGHT,
-    44,
-  );
+function MobileAgendaEvent({ item }: { item: CalendarItem }) {
   const classes =
     item.kind === "booking"
       ? "border-[#8ba98f] bg-[#dce9dc] text-[#23332b]"
       : "border-[#a69d8d]/50 bg-[#d7d1c4] text-[#36423a]";
   const content = (
-    <div
-      className={`absolute left-16 right-2 z-10 overflow-hidden rounded-2xl border px-3 py-2 shadow-sm ${classes}`}
-      style={{ top, height }}
-    >
-      <div className="flex items-start justify-between gap-3">
+    <div className={`rounded-2xl border px-3 py-3 shadow-sm ${classes}`}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wider opacity-70">
             {formatDateTimeRange(item.startsAt, item.endsAt)}
           </p>
-          <p className="mt-1 truncate text-sm font-semibold">{item.title}</p>
-          <p className="mt-0.5 truncate text-xs opacity-75">{item.subtitle}</p>
+          <p className="mt-1 break-words text-sm font-semibold">{item.title}</p>
+          <p className="mt-0.5 break-words text-xs opacity-75">{item.subtitle}</p>
         </div>
-        <span className="shrink-0 rounded-full border border-current/25 bg-white/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider">
+        <span className="w-fit rounded-full border border-current/25 bg-white/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider">
           {item.statusLabel ?? (item.kind === "block" ? "Blocked" : "Shoot")}
         </span>
       </div>
     </div>
   );
 
-  return item.href ? <Link href={item.href}>{content}</Link> : content;
+  return item.href ? <Link className="block" href={item.href}>{content}</Link> : content;
 }
 
 function CalendarEvent({ item }: { item: CalendarItem }) {
@@ -1013,11 +962,6 @@ function CalendarEvent({ item }: { item: CalendarItem }) {
 function parseLocalParts(iso: string): { hour: number; minute: number } {
   const d = new Date(iso);
   return { hour: d.getHours(), minute: d.getMinutes() };
-}
-
-function localMinutesFromIso(iso: string): number {
-  const parts = parseLocalParts(iso);
-  return parts.hour * 60 + parts.minute;
 }
 
 function formatHour(hour: number): string {

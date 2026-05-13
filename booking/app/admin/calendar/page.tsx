@@ -184,41 +184,41 @@ export default async function AdminCalendarPage({
 
   return (
     <div className="space-y-6">
-      <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+      <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
             Week of {formatHeaderDate(weekStart)}
           </p>
-          <h1 className="mt-1 text-2xl font-bold text-white">Calendar</h1>
-          <p className="mt-2 text-sm text-ink-muted">
+          <h1 className="mt-1 text-2xl font-bold text-realtor-text">Calendar</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-realtor-muted">
             Shoots and private busy blocks in one weekly schedule. Working
-            hours are highlighted; click an empty time to block it off or start
+            hours are highlighted; tap an empty time to block it off or start
             a booking.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
           <Link
             href={`/admin/calendar?week=${prevWeek}`}
-            className="rounded-full border border-white/10 px-3 py-1.5 text-ink-muted transition hover:border-white/30 hover:text-white"
+            className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-3 py-1.5 text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
           >
             Previous
           </Link>
           <Link
             href="/admin/calendar"
-            className="rounded-full border border-white/10 px-3 py-1.5 text-ink-muted transition hover:border-white/30 hover:text-white"
+            className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-3 py-1.5 text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
           >
             This week
           </Link>
           <Link
             href={`/admin/calendar?week=${nextWeek}`}
-            className="rounded-full border border-white/10 px-3 py-1.5 text-ink-muted transition hover:border-white/30 hover:text-white"
+            className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-3 py-1.5 text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
           >
             Next
           </Link>
           <Link
             href="/admin/settings/availability"
-            className="rounded-full border border-white/10 px-3 py-1.5 text-ink-muted transition hover:border-white/30 hover:text-white"
+            className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-3 py-1.5 text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
           >
             Hours + blocks
           </Link>
