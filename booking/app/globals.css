@@ -369,6 +369,22 @@ body:has(.realtor-theme) .portal-nav-pill {
   color: var(--realtor-text);
 }
 
+body:has(.admin-earth) {
+  background: var(--realtor-bg);
+}
+
+body:has(.admin-earth) .site-main {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+}
+
+body:has(.admin-earth) .site-footer {
+  margin-top: 0;
+  background: var(--realtor-bg);
+  border-color: var(--realtor-border);
+}
+
 .admin-earth .text-white,
 .admin-earth .text-white\/90,
 .admin-earth .text-white\/80 {

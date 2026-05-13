@@ -24,7 +24,7 @@ export default async function AdminLayout({
   const admin = await requireAdmin();
 
   return (
-    <div className="admin-earth realtor-theme realtor-backdrop -mx-6 -my-12 grid min-h-screen gap-8 px-6 py-8 md:grid-cols-[220px_1fr] md:py-10">
+    <div className="admin-earth realtor-theme realtor-backdrop grid min-h-screen w-full overflow-x-hidden px-4 py-4 sm:px-6 md:grid-cols-[220px_1fr] md:gap-8 md:px-6 md:py-10">
       <div className="md:hidden">
         <details className="rounded-2xl border border-white/10 bg-ink-soft/80 p-3 shadow-lg shadow-black/10">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-1 py-1 text-sm font-semibold text-white [&::-webkit-details-marker]:hidden">

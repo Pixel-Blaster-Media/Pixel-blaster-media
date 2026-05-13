@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import {
+  type PointerEvent,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 
 import {
   askAdminAssistant,
@@ -19,8 +24,21 @@ const EXAMPLES = [
 export default function AdminAssistant() {
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState<AdminAssistantResult | null>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [bubblePosition, setBubblePosition] = useState({
+    right: 16,
+    bottom: 20,
+  });
   const [pending, startTransition] = useTransition();
   const [confirming, setConfirming] = useState<string | null>(null);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    startRight: number;
+    startBottom: number;
+    moved: boolean;
+  } | null>(null);
+  const ignoreClickRef = useRef(false);
 
   function ask(input = prompt) {
     const value = input.trim();
@@ -58,8 +76,56 @@ export default function AdminAssistant() {
     });
   }
 
-  return (
-    <section className="rounded-2xl border border-white/10 bg-ink-soft/60 p-4 shadow-lg shadow-black/10">
+  function startBubbleDrag(event: PointerEvent<HTMLButtonElement>) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      startRight: bubblePosition.right,
+      startBottom: bubblePosition.bottom,
+      moved: false,
+    };
+  }
+
+  function moveBubble(event: PointerEvent<HTMLButtonElement>) {
+    if (!dragRef.current) return;
+    const dx = event.clientX - dragRef.current.startX;
+    const dy = event.clientY - dragRef.current.startY;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      dragRef.current.moved = true;
+    }
+    setBubblePosition({
+      right: clamp(
+        dragRef.current.startRight - dx,
+        12,
+        Math.max(12, window.innerWidth - 70),
+      ),
+      bottom: clamp(
+        dragRef.current.startBottom - dy,
+        12,
+        Math.max(12, window.innerHeight - 82),
+      ),
+    });
+  }
+
+  function stopBubbleDrag() {
+    if (dragRef.current?.moved) {
+      ignoreClickRef.current = true;
+    }
+    dragRef.current = null;
+  }
+
+  function openBubble() {
+    if (ignoreClickRef.current) {
+      ignoreClickRef.current = false;
+      return;
+    }
+    setMobileOpen(true);
+  }
+
+  const panel = (
+    <>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
@@ -108,6 +174,7 @@ export default function AdminAssistant() {
               onClick={() => {
                 setPrompt(example);
                 ask(example);
+                setMobileOpen(true);
               }}
               className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-ink-muted transition hover:border-brand-light/50 hover:text-white"
             >
@@ -122,8 +189,54 @@ export default function AdminAssistant() {
           onConfirm={confirm}
         />
       )}
-    </section>
+    </>
   );
+
+  return (
+    <>
+      <section className="hidden rounded-2xl border border-white/10 bg-ink-soft/60 p-4 shadow-lg shadow-black/10 md:block">
+        {panel}
+      </section>
+
+      <div className="md:hidden">
+        {mobileOpen ? (
+          <section className="fixed inset-x-3 bottom-5 z-[80] max-h-[82vh] overflow-y-auto rounded-2xl border border-white/10 bg-ink-soft p-4 shadow-2xl shadow-black/30">
+            <div className="mb-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setMobileOpen(false)}
+                className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-ink-muted hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+            {panel}
+          </section>
+        ) : (
+          <button
+            type="button"
+            onPointerDown={startBubbleDrag}
+            onPointerMove={moveBubble}
+            onPointerUp={stopBubbleDrag}
+            onPointerCancel={stopBubbleDrag}
+            onClick={openBubble}
+            className="fixed z-[80] flex h-14 w-14 touch-none select-none items-center justify-center rounded-full border border-white/20 bg-brand text-lg font-bold text-white shadow-2xl shadow-black/30"
+            style={{
+              right: bubblePosition.right,
+              bottom: bubblePosition.bottom,
+            }}
+            aria-label="Open Pixel Assistant"
+          >
+            AI
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }
 
 function AssistantResult({
