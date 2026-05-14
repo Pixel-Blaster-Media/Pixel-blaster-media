@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
   const supabase = getServiceSupabase();
   const { error } = await supabase.from("quickbooks_connection").upsert(
     {
-      id: 1,
+      organization_id: admin.organizationId,
       environment,
       realm_id: realmId,
       refresh_token: tokens.refresh_token,
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
       access_token_expires_at: expiresAt,
       connected_by: admin.userId,
     },
-    { onConflict: "id" },
+    { onConflict: "organization_id" },
   );
 
   if (error) {

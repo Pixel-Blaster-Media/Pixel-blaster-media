@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { getServerSupabase } from "@/lib/supabase/server";
 
 import BlocksManager from "./BlocksManager";
@@ -34,17 +35,20 @@ interface CalendarBlockRow {
 }
 
 export default async function AvailabilityPage() {
+  const admin = await requireAdmin();
   const supabase = await getServerSupabase();
 
   const [hoursRes, blocksRes] = await Promise.all([
     supabase
       .from("business_hours")
       .select("day_of_week, start_time, end_time, enabled")
+      .eq("organization_id", admin.organizationId)
       .order("day_of_week")
       .returns<BusinessHoursRow[]>(),
     supabase
       .from("calendar_blocks")
       .select("id, starts_at, ends_at, label")
+      .eq("organization_id", admin.organizationId)
       .gte("ends_at", new Date().toISOString())
       .order("starts_at")
       .returns<CalendarBlockRow[]>(),

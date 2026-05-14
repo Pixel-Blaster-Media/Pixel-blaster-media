@@ -1,5 +1,6 @@
 import "server-only";
 
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -15,17 +16,28 @@ export interface Catalog {
   addons: CatalogItemRow[];
 }
 
+export interface CatalogScope {
+  organizationId?: string;
+}
+
+function catalogOrganizationId(scope?: CatalogScope): string {
+  return scope?.organizationId ?? DEFAULT_ORGANIZATION_ID;
+}
+
 /**
  * Load the active catalog for the public booking form.
  * Uses the service role so anonymous visitors can read it regardless of RLS
  * timing — the table is public-readable anyway, this just avoids a round-trip
  * through auth for unauthenticated requests.
  */
-export async function getActiveCatalog(): Promise<Catalog> {
+export async function getActiveCatalog(
+  scope?: CatalogScope,
+): Promise<Catalog> {
   const supabase = getServiceSupabase();
   const { data, error } = await supabase
     .from("catalog_items")
     .select("*")
+    .eq("organization_id", catalogOrganizationId(scope))
     .eq("active", true)
     .order("display_order", { ascending: true })
     .returns<CatalogItemRow[]>();
@@ -45,11 +57,12 @@ export async function getActiveCatalog(): Promise<Catalog> {
 /**
  * Load the FULL catalog (active + inactive) for the admin pricing page.
  */
-export async function getFullCatalog(): Promise<Catalog> {
+export async function getFullCatalog(scope?: CatalogScope): Promise<Catalog> {
   const supabase = getServiceSupabase();
   const { data, error } = await supabase
     .from("catalog_items")
     .select("*")
+    .eq("organization_id", catalogOrganizationId(scope))
     .order("kind", { ascending: true })
     .order("display_order", { ascending: true })
     .returns<CatalogItemRow[]>();

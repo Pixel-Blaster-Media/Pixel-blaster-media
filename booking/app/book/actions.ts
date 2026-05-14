@@ -14,6 +14,7 @@ import {
 import { getActiveCatalog, getCatalogItemPrice } from "@/lib/booking/catalog";
 import { sendEmail } from "@/lib/email/resend";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -140,9 +141,10 @@ export async function createPublicBooking(
   const userId = authResult.userId;
   const userEmail = authResult.email;
   const userDisplayName = authResult.fullName ?? authResult.email;
+  const organizationId = authResult.organizationId;
 
   // -------- Re-validate catalog items --------
-  const catalog = await getActiveCatalog();
+  const catalog = await getActiveCatalog({ organizationId });
   const bySlug = new Map<string, (typeof catalog.bundles)[number]>();
   for (const r of catalog.bundles) bySlug.set(r.slug, r);
   for (const r of catalog.aLaCarte) bySlug.set(r.slug, r);
@@ -178,7 +180,9 @@ export async function createPublicBooking(
   );
 
   // -------- Re-check slot availability (defends against races) --------
-  const stillFree = await isSlotAvailable(slotStart, duration);
+  const stillFree = await isSlotAvailable(slotStart, duration, {
+    organizationId,
+  });
   if (!stillFree) {
     return {
       ok: false,
@@ -196,6 +200,7 @@ export async function createPublicBooking(
     .from("properties")
     .select("id")
     .eq("owner_id", userId)
+    .eq("organization_id", organizationId)
     .eq("street_address", streetAddress)
     .limit(1)
     .maybeSingle<InsertedRow>();
@@ -205,6 +210,7 @@ export async function createPublicBooking(
     const { data: created, error: propErr } = await supabase
       .from("properties")
       .insert({
+        organization_id: organizationId,
         owner_id: userId,
         street_address: streetAddress,
         city: city || null,
@@ -229,6 +235,7 @@ export async function createPublicBooking(
   const { data: booking, error: bookErr } = await supabase
     .from("bookings")
     .insert({
+      organization_id: organizationId,
       property_id: propertyId,
       owner_id: userId,
       status: "confirmed",
@@ -282,7 +289,7 @@ export async function createPublicBooking(
 
   // -------- Google Calendar event (best-effort) --------
   try {
-    const gcal = await getGoogleCalendarClient();
+    const gcal = await getGoogleCalendarClient({ organizationId });
     if (gcal) {
       const endAt = new Date(slotStart.getTime() + duration * 60_000);
       const serviceLabels = validServices.map((s) => s.name).join(", ");
@@ -325,7 +332,8 @@ export async function createPublicBooking(
           google_calendar_event_id: event.id,
           google_calendar_event_url: event.htmlLink,
         })
-        .eq("id", booking.id);
+        .eq("id", booking.id)
+        .eq("organization_id", organizationId);
     }
   } catch (err) {
     console.warn("[book] google calendar event create failed", err);
@@ -396,6 +404,7 @@ interface ResolveUserOk {
   userId: string;
   email: string;
   fullName: string | null;
+  organizationId: string;
 }
 interface ResolveUserErr {
   ok: false;
@@ -420,15 +429,21 @@ async function resolveUser(params: {
     if (userId) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("id, email, full_name")
+        .select("id, email, full_name, organization_id")
         .eq("id", userId)
-        .maybeSingle<{ id: string; email: string; full_name: string | null }>();
+        .maybeSingle<{
+          id: string;
+          email: string;
+          full_name: string | null;
+          organization_id: string | null;
+        }>();
       if (profile) {
         return {
           ok: true,
           userId: profile.id,
           email: profile.email,
           fullName: profile.full_name,
+          organizationId: profile.organization_id ?? DEFAULT_ORGANIZATION_ID,
         };
       }
     }
@@ -487,6 +502,7 @@ async function resolveUser(params: {
     }
     // Top up phone/brokerage if the user left them empty before.
     await maybeFillProfile(service, userId, {
+      organizationId: DEFAULT_ORGANIZATION_ID,
       full_name: params.contactName,
       phone: params.contactPhone,
       brokerage: params.brokerage,
@@ -494,9 +510,14 @@ async function resolveUser(params: {
 
     const { data: profile } = await service
       .from("profiles")
-      .select("id, email, full_name")
+      .select("id, email, full_name, organization_id")
       .eq("id", userId)
-      .maybeSingle<{ id: string; email: string; full_name: string | null }>();
+      .maybeSingle<{
+        id: string;
+        email: string;
+        full_name: string | null;
+        organization_id: string | null;
+      }>();
     if (!profile) {
       return {
         ok: false,
@@ -511,6 +532,7 @@ async function resolveUser(params: {
       userId: profile.id,
       email: profile.email,
       fullName: profile.full_name,
+      organizationId: profile.organization_id ?? DEFAULT_ORGANIZATION_ID,
     };
   }
 
@@ -552,6 +574,7 @@ async function resolveUser(params: {
 
   const newUserId = created.user.id;
   await maybeFillProfile(service, newUserId, {
+    organizationId: DEFAULT_ORGANIZATION_ID,
     full_name: params.contactName,
     phone: params.contactPhone,
     brokerage: params.brokerage,
@@ -583,13 +606,19 @@ async function resolveUser(params: {
     userId: newUserId,
     email: params.contactEmail,
     fullName: params.contactName,
+    organizationId: DEFAULT_ORGANIZATION_ID,
   };
 }
 
 async function maybeFillProfile(
   supabase: ReturnType<typeof getServiceSupabase>,
   userId: string,
-  fields: { full_name?: string; phone?: string; brokerage?: string },
+  fields: {
+    organizationId: string;
+    full_name?: string;
+    phone?: string;
+    brokerage?: string;
+  },
 ): Promise<void> {
   // Only write fields that are currently empty — don't clobber anything
   // the admin set manually.
@@ -604,6 +633,7 @@ async function maybeFillProfile(
     }>();
 
   const updates: ProfileUpdate = {};
+  updates.organization_id = fields.organizationId;
   if (!current?.full_name && fields.full_name) {
     updates.full_name = fields.full_name;
   }

@@ -134,7 +134,7 @@ interface ModelPlan {
 export async function askAdminAssistant(
   prompt: string,
 ): Promise<AdminAssistantResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const request = prompt.trim();
   if (request.length < 3) {
@@ -156,7 +156,7 @@ export async function askAdminAssistant(
     };
   }
 
-  const context = await loadAssistantContext();
+  const context = await loadAssistantContext(admin.organizationId);
   const modelPlan = await planWithOpenAI(request, context);
   return normalizePlan(modelPlan, context);
 }
@@ -164,7 +164,7 @@ export async function askAdminAssistant(
 export async function confirmAdminAssistantAction(
   action: AdminAssistantAction,
 ): Promise<AdminAssistantResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   if (action.type === "create_booking") {
     return createBookingFromAssistant(action);
@@ -184,6 +184,7 @@ export async function confirmAdminAssistantAction(
   const { data: booking, error } = await supabase
     .from("bookings")
     .select("id, status")
+    .eq("organization_id", admin.organizationId)
     .eq("id", action.bookingId)
     .single<{ id: string; status: BookingStatus }>();
 
@@ -238,7 +239,7 @@ export async function confirmAdminAssistantAction(
   };
 }
 
-async function loadAssistantContext(): Promise<{
+async function loadAssistantContext(organizationId: string): Promise<{
   nowLocal: string;
   bookings: string[];
   realtors: string[];
@@ -261,6 +262,7 @@ async function loadAssistantContext(): Promise<{
       .select(
         "id, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, unit_number, client_notes, properties(street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage)",
       )
+      .eq("organization_id", organizationId)
       .gte("scheduled_at", oneYearAgo.toISOString())
       .lte("scheduled_at", ninetyDaysAhead.toISOString())
       .order("scheduled_at", { ascending: true, nullsFirst: false })
@@ -269,11 +271,12 @@ async function loadAssistantContext(): Promise<{
     supabase
       .from("profiles")
       .select("id, full_name, email, phone, brokerage")
+      .eq("organization_id", organizationId)
       .eq("role", "realtor")
       .order("full_name", { ascending: true, nullsFirst: false })
       .limit(80)
       .returns<ProfileContextRow[]>(),
-    getActiveCatalog(),
+    getActiveCatalog({ organizationId }),
   ]);
 
   if (bookingRes.error) {

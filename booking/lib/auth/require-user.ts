@@ -7,6 +7,7 @@ import type { UserRole } from "@/lib/supabase/database.types";
 
 export interface UserContext {
   userId: string;
+  organizationId: string;
   email: string;
   fullName: string | null;
   role: UserRole;
@@ -14,6 +15,7 @@ export interface UserContext {
 
 interface ProfileRow {
   id: string;
+  organization_id: string;
   email: string;
   full_name: string | null;
   role: UserRole;
@@ -47,7 +49,7 @@ export async function requireUser(nextPath?: string): Promise<UserContext> {
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("id, email, full_name, role")
+    .select("id, organization_id, email, full_name, role")
     .eq("id", userId)
     .single<ProfileRow>();
 
@@ -58,6 +60,7 @@ export async function requireUser(nextPath?: string): Promise<UserContext> {
 
   return {
     userId: profile.id,
+    organizationId: profile.organization_id,
     email: profile.email,
     fullName: profile.full_name,
     role: profile.role,

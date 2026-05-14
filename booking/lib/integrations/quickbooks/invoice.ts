@@ -89,10 +89,11 @@ export async function createInvoiceForBooking(
   const { data: existing } = await supabase
     .from("bookings")
     .select(
-      "quickbooks_invoice_id, quickbooks_invoice_url, quickbooks_invoice_status",
+      "organization_id, quickbooks_invoice_id, quickbooks_invoice_url, quickbooks_invoice_status",
     )
     .eq("id", input.bookingId)
     .maybeSingle<{
+      organization_id: string;
       quickbooks_invoice_id: string | null;
       quickbooks_invoice_url: string | null;
       quickbooks_invoice_status: string | null;
@@ -117,7 +118,7 @@ export async function createInvoiceForBooking(
   const { data: conn } = await supabase
     .from("quickbooks_connection")
     .select("*")
-    .eq("id", 1)
+    .eq("organization_id", existing?.organization_id ?? "")
     .maybeSingle<ConnectionRow>();
 
   if (!conn) {
@@ -154,6 +155,7 @@ export async function createInvoiceForBooking(
     const { data: priceRows, error: priceErr } = await supabase
       .from("service_prices")
       .select("service_id, price_cents, taxable")
+      .eq("organization_id", existing?.organization_id ?? "")
       .returns<ServicePriceRow[]>();
     if (priceErr) return { ok: false, error: priceErr.message };
 
@@ -188,7 +190,9 @@ export async function createInvoiceForBooking(
 
   let qb;
   try {
-    qb = await getQBClient();
+    qb = await getQBClient({
+      organizationId: existing?.organization_id,
+    });
   } catch (err) {
     return {
       ok: false,
@@ -201,6 +205,7 @@ export async function createInvoiceForBooking(
     .from("bookings")
     .update({ quickbooks_invoice_status: "creating" })
     .eq("id", input.bookingId)
+    .eq("organization_id", existing?.organization_id ?? "")
     .is("quickbooks_invoice_id", null)
     .or(
       "quickbooks_invoice_status.is.null,quickbooks_invoice_status.neq.creating",
@@ -322,9 +327,12 @@ export async function refreshInvoiceStatus(
   const supabase = getServiceSupabase();
   const { data: booking } = await supabase
     .from("bookings")
-    .select("quickbooks_invoice_id")
+    .select("organization_id, quickbooks_invoice_id")
     .eq("id", bookingId)
-    .maybeSingle<{ quickbooks_invoice_id: string | null }>();
+    .maybeSingle<{
+      organization_id: string;
+      quickbooks_invoice_id: string | null;
+    }>();
 
   if (!booking?.quickbooks_invoice_id) {
     return { ok: false, error: "No invoice to refresh." };
@@ -332,7 +340,7 @@ export async function refreshInvoiceStatus(
 
   let qb;
   try {
-    qb = await getQBClient();
+    qb = await getQBClient({ organizationId: booking.organization_id });
   } catch (err) {
     return {
       ok: false,

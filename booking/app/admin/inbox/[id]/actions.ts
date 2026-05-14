@@ -28,12 +28,13 @@ export interface ActionResult {
  * status flip, used so the inbox shows "someone's looking at this."
  */
 export async function markReviewing(requestId: string): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const supabase = getServiceSupabase();
   const { error } = await supabase
     .from("booking_requests")
     .update({ status: "reviewing" })
     .eq("id", requestId)
+    .eq("organization_id", admin.organizationId)
     .in("status", ["new"]);
 
   if (error) return { ok: false, error: error.message };
@@ -47,12 +48,13 @@ export async function markReviewing(requestId: string): Promise<ActionResult> {
  * is the admin will reply by email manually if needed.
  */
 export async function declineRequest(requestId: string): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const supabase = getServiceSupabase();
   const { error } = await supabase
     .from("booking_requests")
     .update({ status: "declined" })
-    .eq("id", requestId);
+    .eq("id", requestId)
+    .eq("organization_id", admin.organizationId);
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin/inbox");
@@ -81,7 +83,7 @@ export async function acceptRequest(
   requestId: string,
   scheduledAt: string | null,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const supabase = getServiceSupabase();
 
   // 1. Load the request.
@@ -89,6 +91,7 @@ export async function acceptRequest(
     .from("booking_requests")
     .select("*")
     .eq("id", requestId)
+    .eq("organization_id", admin.organizationId)
     .single<BookingRequestRow>();
 
   if (loadErr || !req) {
@@ -133,6 +136,7 @@ export async function acceptRequest(
   await supabase
     .from("profiles")
     .update({
+      organization_id: admin.organizationId,
       full_name: req.contact_name,
       phone: req.contact_phone,
       brokerage: req.brokerage,
@@ -143,6 +147,7 @@ export async function acceptRequest(
   const { data: property, error: propErr } = await supabase
     .from("properties")
     .insert({
+      organization_id: admin.organizationId,
       owner_id: userId,
       street_address: req.street_address,
       city: req.city,
@@ -160,6 +165,7 @@ export async function acceptRequest(
   const { data: booking, error: bookErr } = await supabase
     .from("bookings")
     .insert({
+      organization_id: admin.organizationId,
       property_id: property.id,
       owner_id: userId,
       status: "confirmed",
@@ -195,7 +201,8 @@ export async function acceptRequest(
   const { error: updErr } = await supabase
     .from("booking_requests")
     .update({ status: "accepted", booking_id: booking.id })
-    .eq("id", requestId);
+    .eq("id", requestId)
+    .eq("organization_id", admin.organizationId);
 
   if (updErr) {
     console.warn("[accept] booking_request update failed", updErr);
@@ -208,7 +215,9 @@ export async function acceptRequest(
   // reschedule affordance to push the event at that point.
   if (scheduledAt) {
     try {
-      const gcal = await getGoogleCalendarClient();
+      const gcal = await getGoogleCalendarClient({
+        organizationId: admin.organizationId,
+      });
       if (gcal) {
         const startDate = new Date(scheduledAt);
         const duration = Math.max(
@@ -240,7 +249,8 @@ export async function acceptRequest(
             google_calendar_event_id: event.id,
             google_calendar_event_url: event.htmlLink,
           })
-          .eq("id", booking.id);
+          .eq("id", booking.id)
+          .eq("organization_id", admin.organizationId);
       }
     } catch (err) {
       console.warn("[accept] google calendar event create failed", err);

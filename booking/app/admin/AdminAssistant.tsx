@@ -24,10 +24,10 @@ const EXAMPLES = [
 export default function AdminAssistant() {
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState<AdminAssistantResult | null>(null);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [bubblePosition, setBubblePosition] = useState({
-    right: 16,
-    bottom: 92,
+    right: 20,
+    bottom: 24,
   });
   const [pending, startTransition] = useTransition();
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -121,7 +121,7 @@ export default function AdminAssistant() {
       ignoreClickRef.current = false;
       return;
     }
-    setMobileOpen(true);
+    setAssistantOpen(true);
   }
 
   const panel = (
@@ -174,7 +174,7 @@ export default function AdminAssistant() {
               onClick={() => {
                 setPrompt(example);
                 ask(example);
-                setMobileOpen(true);
+                setAssistantOpen(true);
               }}
               className="rounded-full border border-realtor-primary/15 bg-realtor-surface/70 px-3 py-1.5 text-xs text-realtor-muted transition hover:border-realtor-primary/45 hover:text-realtor-primary"
             >
@@ -194,43 +194,44 @@ export default function AdminAssistant() {
 
   return (
     <>
-      <section className="hidden rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10 md:block">
-        {panel}
-      </section>
+      {assistantOpen ? (
+        <section
+          className="fixed inset-x-3 z-[80] max-h-[78vh] overflow-y-auto rounded-2xl border border-realtor-primary/20 bg-[#fffdf8] p-4 text-realtor-text shadow-2xl shadow-realtor-text/25 md:inset-x-auto md:right-6 md:w-[440px]"
+          style={{
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.75rem)",
+          }}
+        >
+          <div className="mb-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setAssistantOpen(false)}
+              className="rounded-full border border-realtor-primary/15 px-3 py-1 text-xs font-semibold text-realtor-muted hover:text-realtor-primary"
+            >
+              Close
+            </button>
+          </div>
+          {panel}
+        </section>
+      ) : null}
 
-      <div className="md:hidden">
-        {mobileOpen ? (
-          <section className="fixed inset-x-3 z-[80] max-h-[78vh] overflow-y-auto rounded-2xl border border-realtor-primary/20 bg-[#fffdf8] p-4 text-realtor-text shadow-2xl shadow-realtor-text/25" style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.75rem)" }}>
-            <div className="mb-3 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setMobileOpen(false)}
-                className="rounded-full border border-realtor-primary/15 px-3 py-1 text-xs font-semibold text-realtor-muted hover:text-realtor-primary"
-              >
-                Close
-              </button>
-            </div>
-            {panel}
-          </section>
-        ) : (
-          <button
-            type="button"
-            onPointerDown={startBubbleDrag}
-            onPointerMove={moveBubble}
-            onPointerUp={stopBubbleDrag}
-            onPointerCancel={stopBubbleDrag}
-            onClick={openBubble}
-            className="fixed z-[80] flex h-14 w-14 touch-none select-none items-center justify-center rounded-full border border-realtor-primary/20 bg-realtor-primary text-lg font-bold text-white shadow-2xl shadow-realtor-text/30"
-            style={{
-              right: bubblePosition.right,
-              bottom: bubblePosition.bottom,
-            }}
-            aria-label="Open Pixel Assistant"
-          >
-            AI
-          </button>
-        )}
-      </div>
+      {!assistantOpen ? (
+        <button
+          type="button"
+          onPointerDown={startBubbleDrag}
+          onPointerMove={moveBubble}
+          onPointerUp={stopBubbleDrag}
+          onPointerCancel={stopBubbleDrag}
+          onClick={openBubble}
+          className="fixed z-[80] flex h-14 w-14 touch-none select-none items-center justify-center rounded-full border border-realtor-primary/20 bg-realtor-primary text-lg font-bold text-white shadow-2xl shadow-realtor-text/30 transition hover:scale-105 hover:bg-realtor-primary-light"
+          style={{
+            right: bubblePosition.right,
+            bottom: bubblePosition.bottom,
+          }}
+          aria-label="Open Pixel Assistant"
+        >
+          AI
+        </button>
+      ) : null}
     </>
   );
 }

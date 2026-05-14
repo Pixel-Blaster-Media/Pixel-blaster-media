@@ -53,7 +53,7 @@ interface InsertedRow {
 export async function searchRealtors(
   query: string,
 ): Promise<RealtorSearchResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const term = query.trim();
   if (term.length < 2) {
@@ -67,6 +67,7 @@ export async function searchRealtors(
     supabase
       .from("profiles")
       .select("id, email, full_name, phone, brokerage")
+      .eq("organization_id", admin.organizationId)
       .eq("role", "realtor")
       .ilike("full_name", pattern)
       .order("full_name", { ascending: true, nullsFirst: false })
@@ -75,6 +76,7 @@ export async function searchRealtors(
     supabase
       .from("profiles")
       .select("id, email, full_name, phone, brokerage")
+      .eq("organization_id", admin.organizationId)
       .eq("role", "realtor")
       .ilike("email", pattern)
       .order("email", { ascending: true })
@@ -112,7 +114,7 @@ export async function searchRealtors(
 export async function createAdminShoot(
   formData: FormData,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const scheduledRaw = str(formData, "scheduled_at");
   const scheduledAt = businessDateTimeLocalToUtc(scheduledRaw);
@@ -139,7 +141,7 @@ export async function createAdminShoot(
   if (!contactName) return { ok: false, error: "Enter the realtor's name." };
   if (!streetAddress) return { ok: false, error: "Enter the property address." };
 
-  const catalog = await getActiveCatalog();
+  const catalog = await getActiveCatalog({ organizationId: admin.organizationId });
   const byId = new Map<string, CatalogItemRow>();
   for (const item of catalog.bundles) byId.set(item.id, item);
   for (const item of catalog.aLaCarte) byId.set(item.id, item);
@@ -153,7 +155,9 @@ export async function createAdminShoot(
 
   const totals = computeCartTotals(cart, catalog);
   const duration = Math.max(totals.totalDurationMinutes, 60);
-  const stillFree = await isSlotAvailable(scheduledAt, duration);
+  const stillFree = await isSlotAvailable(scheduledAt, duration, {
+    organizationId: admin.organizationId,
+  });
   if (!stillFree) {
     return {
       ok: false,
@@ -173,6 +177,7 @@ export async function createAdminShoot(
 
   const supabase = getServiceSupabase();
   const userId = await findOrCreateRealtor({
+    organizationId: admin.organizationId,
     email: contactEmail,
     fullName: contactName,
   });
@@ -185,9 +190,11 @@ export async function createAdminShoot(
       phone: contactPhone || null,
       brokerage: brokerage || null,
     })
+    .eq("organization_id", admin.organizationId)
     .eq("id", userId);
 
   const propertyId = await findOrCreateProperty({
+    organizationId: admin.organizationId,
     ownerId: userId,
     streetAddress,
     city,
@@ -202,6 +209,7 @@ export async function createAdminShoot(
   const { data: booking, error: bookingError } = await supabase
     .from("bookings")
     .insert({
+      organization_id: admin.organizationId,
       property_id: propertyId,
       owner_id: userId,
       status: "confirmed",
@@ -242,6 +250,7 @@ export async function createAdminShoot(
   }
 
   await createGoogleEventBestEffort({
+    organizationId: admin.organizationId,
     bookingId: booking.id,
     contactEmail,
     contactName,
@@ -273,6 +282,7 @@ export async function createAdminShoot(
 }
 
 async function findOrCreateRealtor(args: {
+  organizationId: string;
   email: string;
   fullName: string;
 }): Promise<string | null> {
@@ -280,6 +290,7 @@ async function findOrCreateRealtor(args: {
   const { data: profile } = await supabase
     .from("profiles")
     .select("id")
+    .eq("organization_id", args.organizationId)
     .eq("email", args.email)
     .limit(1)
     .maybeSingle<InsertedRow>();
@@ -290,7 +301,17 @@ async function findOrCreateRealtor(args: {
     email_confirm: true,
     user_metadata: { full_name: args.fullName },
   });
-  if (created.user) return created.user.id;
+  if (created.user) {
+    await supabase
+      .from("profiles")
+      .update({
+        organization_id: args.organizationId,
+        full_name: args.fullName,
+        role: "realtor",
+      })
+      .eq("id", created.user.id);
+    return created.user.id;
+  }
 
   if (error?.message.toLowerCase().includes("already")) {
     const { data: list } = await supabase.auth.admin.listUsers({
@@ -310,6 +331,7 @@ async function findOrCreateRealtor(args: {
 }
 
 async function findOrCreateProperty(args: {
+  organizationId: string;
   ownerId: string;
   streetAddress: string;
   city: string;
@@ -320,6 +342,7 @@ async function findOrCreateProperty(args: {
   const { data: existing } = await supabase
     .from("properties")
     .select("id")
+    .eq("organization_id", args.organizationId)
     .eq("owner_id", args.ownerId)
     .eq("street_address", args.streetAddress)
     .limit(1)
@@ -329,6 +352,7 @@ async function findOrCreateProperty(args: {
   const { data: created, error } = await supabase
     .from("properties")
     .insert({
+      organization_id: args.organizationId,
       owner_id: args.ownerId,
       street_address: args.streetAddress,
       city: args.city || null,
@@ -346,6 +370,7 @@ async function findOrCreateProperty(args: {
 }
 
 async function createGoogleEventBestEffort(args: {
+  organizationId: string;
   bookingId: string;
   contactEmail: string;
   contactName: string;
@@ -361,7 +386,9 @@ async function createGoogleEventBestEffort(args: {
   scheduledEndsAt: string;
 }) {
   try {
-    const gcal = await getGoogleCalendarClient();
+    const gcal = await getGoogleCalendarClient({
+      organizationId: args.organizationId,
+    });
     if (!gcal) return;
 
     const supabase = getServiceSupabase();
@@ -391,6 +418,7 @@ async function createGoogleEventBestEffort(args: {
         google_calendar_event_id: event.id,
         google_calendar_event_url: event.htmlLink,
       })
+      .eq("organization_id", args.organizationId)
       .eq("id", args.bookingId);
   } catch (err) {
     console.warn("[admin-calendar] google calendar event create failed", err);

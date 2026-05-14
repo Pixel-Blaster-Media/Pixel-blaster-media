@@ -23,8 +23,11 @@ export default function BlocksManager({ blocks }: { blocks: Block[] }) {
           startPending(async () => {
             const res = await addCalendarBlock(fd);
             if (!res.ok) setError(res.error ?? "Add failed.");
-            else
-              (document.getElementById("block-form") as HTMLFormElement | null)?.reset();
+            else {
+              (
+                document.getElementById("block-form") as HTMLFormElement | null
+              )?.reset();
+            }
           });
         }}
         id="block-form"
@@ -71,7 +74,10 @@ export default function BlocksManager({ blocks }: { blocks: Block[] }) {
           {pending ? "Adding…" : "Add block"}
         </button>
         {error ? (
-          <p className="text-xs text-red-700 md:col-span-2 xl:col-span-4" role="alert">
+          <p
+            className="text-xs text-red-700 md:col-span-2 xl:col-span-4"
+            role="alert"
+          >
             {error}
           </p>
         ) : null}

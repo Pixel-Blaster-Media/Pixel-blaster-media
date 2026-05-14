@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { getFullCatalog, type CatalogItemRow } from "@/lib/booking/catalog";
 import type { CatalogItemKind } from "@/lib/supabase/database.types";
 
@@ -11,7 +12,10 @@ export const metadata: Metadata = { title: "Pricing" };
 export const dynamic = "force-dynamic";
 
 export default async function PricingPage() {
-  const { bundles, aLaCarte, addons } = await getFullCatalog();
+  const admin = await requireAdmin();
+  const { bundles, aLaCarte, addons } = await getFullCatalog({
+    organizationId: admin.organizationId,
+  });
 
   return (
     <div className="space-y-10">

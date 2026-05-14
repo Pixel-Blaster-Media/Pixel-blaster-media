@@ -7,12 +7,14 @@ import type { UserRole } from "@/lib/supabase/database.types";
 
 export interface AdminContext {
   userId: string;
+  organizationId: string;
   email: string;
   fullName: string | null;
 }
 
 interface ProfileLookupRow {
   id: string;
+  organization_id: string;
   email: string;
   full_name: string | null;
   role: UserRole;
@@ -56,7 +58,7 @@ export async function requireAdmin(): Promise<AdminContext> {
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("id, email, full_name, role")
+    .select("id, organization_id, email, full_name, role")
     .eq("id", userId)
     .single<ProfileLookupRow>();
 
@@ -71,6 +73,7 @@ export async function requireAdmin(): Promise<AdminContext> {
 
   return {
     userId: profile.id,
+    organizationId: profile.organization_id,
     email: profile.email,
     fullName: profile.full_name,
   };

@@ -30,9 +30,25 @@ import { getCredential } from "@/lib/integrations/credentials";
 
 const DEFAULT_BASE_URL = "https://manage.youriguide.com/api/v1";
 
-async function getCredentials(): Promise<{ appId: string; appToken: string; baseUrl: string } | null> {
-  const appId = await getCredential("iguide", "app_id", "IGUIDE_APP_ID");
-  const appToken = await getCredential("iguide", "app_token", "IGUIDE_APP_TOKEN");
+interface PortalScope {
+  organizationId?: string;
+}
+
+async function getCredentials(
+  scope?: PortalScope,
+): Promise<{ appId: string; appToken: string; baseUrl: string } | null> {
+  const appId = await getCredential(
+    "iguide",
+    "app_id",
+    "IGUIDE_APP_ID",
+    scope?.organizationId,
+  );
+  const appToken = await getCredential(
+    "iguide",
+    "app_token",
+    "IGUIDE_APP_TOKEN",
+    scope?.organizationId,
+  );
   if (!appId || !appToken) return null;
   const baseUrl = (process.env.IGUIDE_API_BASE?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, "");
   return { appId, appToken, baseUrl };
@@ -53,8 +69,9 @@ export interface PortalResult<T> {
 async function portalFetch<T>(
   path: string,
   init: RequestInit = {},
+  scope?: PortalScope,
 ): Promise<PortalResult<T>> {
-  const creds = await getCredentials();
+  const creds = await getCredentials(scope);
   if (!creds) {
     return {
       ok: false,
@@ -302,13 +319,15 @@ export interface IGuideWorkOrderResponse {
 // ===========================================================================
 
 /** Verify the configured iGuide credentials without touching any booking data. */
-export async function testPortalCredentials(): Promise<
+export async function testPortalCredentials(
+  scope?: PortalScope,
+): Promise<
   PortalResult<{ appId: string }>
 > {
   return portalFetch<{ appId: string }>("/integrations/test", {
     method: "POST",
     body: JSON.stringify({}),
-  });
+  }, scope);
 }
 
 /**
@@ -320,11 +339,12 @@ export async function testPortalCredentials(): Promise<
  */
 export async function createIGuide(
   input: IGuideCreateInput,
+  scope?: PortalScope,
 ): Promise<PortalResult<IGuideCreateResponse>> {
   return portalFetch<IGuideCreateResponse>("/iguides/", {
     method: "POST",
     body: JSON.stringify(input),
-  });
+  }, scope);
 }
 
 /** Read the current state of a work order we previously created. */

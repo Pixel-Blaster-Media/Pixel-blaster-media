@@ -8,6 +8,7 @@ import type { ListingWebsiteTemplate } from "@/lib/supabase/database.types";
 
 interface PropertyOwnerRow {
   id: string;
+  organization_id: string;
   owner_id: string;
   street_address: string;
   city: string | null;
@@ -44,9 +45,10 @@ export async function savePortalListingWebsite(
 
   const { data: property, error: propertyError } = await service
     .from("properties")
-    .select("id, owner_id, street_address, city, bookings(id, created_at, scheduled_at)")
+    .select("id, organization_id, owner_id, street_address, city, bookings(id, created_at, scheduled_at)")
     .eq("id", propertyId)
     .eq("owner_id", user.userId)
+    .eq("organization_id", user.organizationId)
     .single<PropertyOwnerRow>();
 
   if (propertyError || !property) {
@@ -98,6 +100,7 @@ export async function savePortalListingWebsite(
   const latestBooking = pickLatest(property.bookings);
   const { error } = await service.from("listing_websites").upsert(
     {
+      organization_id: property.organization_id,
       property_id: property.id,
       booking_id: latestBooking?.id ?? null,
       owner_id: user.userId,

@@ -88,9 +88,12 @@ export async function startQuickBooksConnect(): Promise<void> {
  * token is already expired.
  */
 export async function disconnectQuickBooks(): Promise<void> {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const supabase = getServiceSupabase();
-  await supabase.from("quickbooks_connection").delete().eq("id", 1);
+  await supabase
+    .from("quickbooks_connection")
+    .delete()
+    .eq("organization_id", admin.organizationId);
   revalidatePath("/admin/settings/integrations");
 }
 
@@ -113,7 +116,7 @@ export async function sendTestEmail(
     emailFrom: string | null;
   };
 }> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const trimmed = to.trim();
   if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
@@ -125,6 +128,7 @@ export async function sendTestEmail(
           "resend",
           "api_key",
           "RESEND_API_KEY",
+          admin.organizationId,
         )),
         emailFrom: process.env.EMAIL_FROM ?? null,
       },
@@ -152,6 +156,7 @@ export async function sendTestEmail(
         "resend",
         "api_key",
         "RESEND_API_KEY",
+        admin.organizationId,
       )),
       emailFrom: process.env.EMAIL_FROM ?? null,
     },
@@ -199,7 +204,12 @@ export async function saveIntegrationCredentials(
     return { ok: false, error: "No valid fields to save." };
   }
 
-  const result = await saveCredentials(provider, fields, admin.userId);
+  const result = await saveCredentials(
+    provider,
+    fields,
+    admin.userId,
+    admin.organizationId,
+  );
   if (!result.ok) return result;
   revalidatePath("/admin/settings/integrations");
   return { ok: true };
@@ -209,7 +219,7 @@ export async function clearIntegrationCredentials(
   provider: string,
   fields: string[],
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireAdmin();
+  const admin = await requireAdmin();
   if (!isProvider(provider)) {
     return { ok: false, error: `Unknown provider "${provider}".` };
   }
@@ -218,7 +228,11 @@ export async function clearIntegrationCredentials(
   if (valid.length === 0) {
     return { ok: false, error: "Nothing valid to clear." };
   }
-  const result = await clearCredentialFields(provider, valid);
+  const result = await clearCredentialFields(
+    provider,
+    valid,
+    admin.organizationId,
+  );
   if (!result.ok) return result;
   revalidatePath("/admin/settings/integrations");
   return { ok: true };
@@ -229,8 +243,10 @@ export async function testIGuideCredentials(): Promise<{
   error?: string;
   appIdLast4?: string;
 }> {
-  await requireAdmin();
-  const result = await testPortalCredentials();
+  const admin = await requireAdmin();
+  const result = await testPortalCredentials({
+    organizationId: admin.organizationId,
+  });
   if (!result.ok || !result.data?.appId) {
     return {
       ok: false,
@@ -299,13 +315,15 @@ export async function startGoogleCalendarConnect(): Promise<void> {
  * access tokens stop working immediately.
  */
 export async function disconnectGoogleCalendar(): Promise<void> {
-  await requireAdmin();
-  const conn = await getGoogleCalendarConnection();
+  const admin = await requireAdmin();
+  const conn = await getGoogleCalendarConnection({
+    organizationId: admin.organizationId,
+  });
   if (conn?.refresh_token) {
     await revokeGoogleToken(conn.refresh_token);
   }
 
-  await deleteGoogleCalendarConnection();
+  await deleteGoogleCalendarConnection({ organizationId: admin.organizationId });
   revalidatePath("/admin/settings/integrations");
 }
 
@@ -320,9 +338,11 @@ export async function testGoogleCalendarConnection(): Promise<{
     connectionPresent: boolean;
   };
 }> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
-  const conn = await getGoogleCalendarConnection();
+  const conn = await getGoogleCalendarConnection({
+    organizationId: admin.organizationId,
+  });
 
   const config = {
     clientIdPresent: Boolean(process.env.GOOGLE_CLIENT_ID),
@@ -348,7 +368,9 @@ export async function testGoogleCalendarConnection(): Promise<{
   }
 
   try {
-    const client = await getGoogleCalendarClient();
+    const client = await getGoogleCalendarClient({
+      organizationId: admin.organizationId,
+    });
     if (!client) {
       return {
         ok: false,
@@ -390,7 +412,7 @@ export async function testGoogleCalendarConnection(): Promise<{
 export async function setDefaultItem(
   itemId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireAdmin();
+  const admin = await requireAdmin();
   if (!itemId || !/^\d+$/.test(itemId)) {
     return { ok: false, error: "Invalid item id." };
   }
@@ -398,7 +420,7 @@ export async function setDefaultItem(
   const { error } = await supabase
     .from("quickbooks_connection")
     .update({ default_item_id: itemId })
-    .eq("id", 1);
+    .eq("organization_id", admin.organizationId);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin/settings/integrations");
   return { ok: true };

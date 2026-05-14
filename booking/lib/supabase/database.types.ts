@@ -250,12 +250,14 @@ interface OrganizationMembersTable {
 
 interface IntegrationCredentialsTable {
   Row: {
+    organization_id: string;
     provider: string;
     credentials: Record<string, string>;
     updated_at: string;
     updated_by: string | null;
   };
   Insert: {
+    organization_id?: string;
     provider: string;
     credentials?: Record<string, string>;
     updated_by?: string | null;
@@ -368,6 +370,7 @@ interface DeliverablesTable {
 interface BookingRequestsTable {
   Row: {
     id: string;
+    organization_id: string;
     status: BookingRequestStatus;
     contact_name: string;
     contact_email: string;
@@ -392,6 +395,7 @@ interface BookingRequestsTable {
   };
   Insert: {
     id?: string;
+    organization_id?: string;
     status?: BookingRequestStatus;
     contact_name: string;
     contact_email: string;
@@ -418,6 +422,7 @@ interface BookingRequestsTable {
 
 interface BusinessHoursTable {
   Row: {
+    organization_id: string;
     day_of_week: number; // 0 = Sunday, 6 = Saturday
     start_time: string; // HH:MM:SS
     end_time: string;
@@ -425,6 +430,7 @@ interface BusinessHoursTable {
     updated_at: string;
   };
   Insert: {
+    organization_id?: string;
     day_of_week: number;
     start_time: string;
     end_time: string;
@@ -437,6 +443,7 @@ interface BusinessHoursTable {
 interface CalendarBlocksTable {
   Row: {
     id: string;
+    organization_id: string;
     starts_at: string;
     ends_at: string;
     label: string | null;
@@ -445,6 +452,7 @@ interface CalendarBlocksTable {
   };
   Insert: {
     id?: string;
+    organization_id?: string;
     starts_at: string;
     ends_at: string;
     label?: string | null;
@@ -456,6 +464,7 @@ interface CalendarBlocksTable {
 interface QuickBooksConnectionTable {
   Row: {
     id: number;
+    organization_id: string;
     environment: "sandbox" | "production";
     realm_id: string;
     refresh_token: string;
@@ -468,6 +477,7 @@ interface QuickBooksConnectionTable {
   };
   Insert: {
     id?: number;
+    organization_id?: string;
     environment: "sandbox" | "production";
     realm_id: string;
     refresh_token: string;
@@ -483,6 +493,7 @@ interface QuickBooksConnectionTable {
 interface ServicePricesTable {
   Row: {
     service_id: string;
+    organization_id: string;
     price_cents: number;
     taxable: boolean;
     updated_at: string;
@@ -490,6 +501,7 @@ interface ServicePricesTable {
   };
   Insert: {
     service_id: string;
+    organization_id?: string;
     price_cents?: number;
     taxable?: boolean;
     updated_by?: string | null;
@@ -501,6 +513,7 @@ interface ServicePricesTable {
 interface CatalogItemsTable {
   Row: {
     id: string;
+    organization_id: string;
     kind: CatalogItemKind;
     slug: string;
     name: string;
@@ -525,6 +538,7 @@ interface CatalogItemsTable {
   };
   Insert: {
     id?: string;
+    organization_id?: string;
     kind: CatalogItemKind;
     slug: string;
     name: string;
@@ -593,6 +607,7 @@ interface BookingNotificationsTable {
 interface ListingWebsitesTable {
   Row: {
     id: string;
+    organization_id: string;
     property_id: string;
     booking_id: string | null;
     owner_id: string;
@@ -616,6 +631,7 @@ interface ListingWebsitesTable {
   };
   Insert: {
     id?: string;
+    organization_id?: string;
     property_id: string;
     booking_id?: string | null;
     owner_id: string;
@@ -666,6 +682,14 @@ export interface Database {
     Functions: {
       is_admin: {
         Args: Record<string, never>;
+        Returns: boolean;
+      };
+      current_organization_id: {
+        Args: Record<string, never>;
+        Returns: string;
+      };
+      is_organization_admin: {
+        Args: { target_org_id: string };
         Returns: boolean;
       };
     };

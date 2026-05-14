@@ -32,7 +32,8 @@ async function setPropertyArchived(
     .from("properties")
     .update({ archived_at: archived ? new Date().toISOString() : null })
     .eq("id", propertyId)
-    .eq("owner_id", user.userId);
+    .eq("owner_id", user.userId)
+    .eq("organization_id", user.organizationId);
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/portal");

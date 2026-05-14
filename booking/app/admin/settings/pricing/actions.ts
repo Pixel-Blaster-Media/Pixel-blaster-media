@@ -50,7 +50,7 @@ function slugify(raw: string): string {
 export async function createCatalogItem(
   formData: FormData,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const kindRaw = ((formData.get("kind") as string | null) ?? "").trim();
   if (!VALID_KINDS.includes(kindRaw as CatalogItemKind)) {
@@ -91,6 +91,7 @@ export async function createCatalogItem(
   const idealFor = ((formData.get("ideal_for") as string | null) ?? "").trim();
 
   const insert: CatalogItemInsert = {
+    organization_id: admin.organizationId,
     kind,
     slug,
     name,
@@ -121,7 +122,7 @@ export async function createCatalogItem(
 export async function updateCatalogItem(
   formData: FormData,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const id = ((formData.get("id") as string | null) ?? "").trim();
   if (!id) return { ok: false, error: "Missing id." };
@@ -178,6 +179,7 @@ export async function updateCatalogItem(
   const { error } = await supabase
     .from("catalog_items")
     .update(update)
+    .eq("organization_id", admin.organizationId)
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
@@ -235,11 +237,15 @@ function parseSqftPricing(
 }
 
 export async function deleteCatalogItem(id: string): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
   if (!id) return { ok: false, error: "Missing id." };
 
   const supabase = getServiceSupabase();
-  const { error } = await supabase.from("catalog_items").delete().eq("id", id);
+  const { error } = await supabase
+    .from("catalog_items")
+    .delete()
+    .eq("organization_id", admin.organizationId)
+    .eq("id", id);
   // Foreign key from booking_line_items has `on delete restrict` so this will
   // fail if the item is referenced by a booking — surface the DB message.
   if (error) return { ok: false, error: error.message };

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { getGoogleCalendarConnection } from "@/lib/integrations/google-calendar/client";
 import { getCredentialSource } from "@/lib/integrations/credentials";
 import { getQBClient, QBOError } from "@/lib/integrations/quickbooks/client";
@@ -47,20 +48,23 @@ export default async function IntegrationsPage({
     google_error?: string;
   }>;
 }) {
+  const admin = await requireAdmin();
   const params = await searchParams;
   const supabase = await getServerSupabase();
   const { data: connection } = await supabase
     .from("quickbooks_connection")
     .select("*")
-    .eq("id", 1)
+    .eq("organization_id", admin.organizationId)
     .maybeSingle<ConnectionRow>();
-  const googleConnection = await getGoogleCalendarConnection();
+  const googleConnection = await getGoogleCalendarConnection({
+    organizationId: admin.organizationId,
+  });
 
   let items: QBOItem[] | null = null;
   let itemError: string | null = null;
   if (connection) {
     try {
-      const qb = await getQBClient();
+      const qb = await getQBClient({ organizationId: admin.organizationId });
       const res = await qb.query<ItemQueryResponse>(
         "SELECT Id, Name, Type, Active FROM Item WHERE Type = 'Service' MAXRESULTS 100",
       );
@@ -87,11 +91,31 @@ export default async function IntegrationsPage({
     iguideAppTokenStatus,
     iguideWebhookStatus,
   ]: CredentialFieldStatus[] = await Promise.all([
-    getCredentialSource("resend", "api_key", "RESEND_API_KEY"),
-    getCredentialSource("fotello", "api_key", "FOTELLO_API_KEY"),
-    getCredentialSource("iguide", "app_id", "IGUIDE_APP_ID"),
-    getCredentialSource("iguide", "app_token", "IGUIDE_APP_TOKEN"),
-    getCredentialSource("iguide", "webhook_secret", "IGUIDE_WEBHOOK_SECRET"),
+    getCredentialSource(
+      "resend",
+      "api_key",
+      "RESEND_API_KEY",
+      admin.organizationId,
+    ),
+    getCredentialSource(
+      "fotello",
+      "api_key",
+      "FOTELLO_API_KEY",
+      admin.organizationId,
+    ),
+    getCredentialSource("iguide", "app_id", "IGUIDE_APP_ID", admin.organizationId),
+    getCredentialSource(
+      "iguide",
+      "app_token",
+      "IGUIDE_APP_TOKEN",
+      admin.organizationId,
+    ),
+    getCredentialSource(
+      "iguide",
+      "webhook_secret",
+      "IGUIDE_WEBHOOK_SECRET",
+      admin.organizationId,
+    ),
   ]);
 
   const resendConfigured = resendApiKeyStatus.source !== "none";

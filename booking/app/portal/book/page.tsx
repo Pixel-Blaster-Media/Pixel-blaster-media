@@ -35,8 +35,8 @@ export default async function PortalBookPage({
   }>;
 }) {
   const params = await searchParams;
-  await requireUser("/portal/book");
-  const catalog = await getActiveCatalog();
+  const user = await requireUser("/portal/book");
+  const catalog = await getActiveCatalog({ organizationId: user.organizationId });
 
   const bundles = catalog.bundles.map(toDTO);
   const aLaCarte = catalog.aLaCarte.map(toDTO);
@@ -85,7 +85,11 @@ export default async function PortalBookPage({
 
   const selectedSlot = params.slot ?? null;
   const daysOfSlots =
-    selectedSlugs.length > 0 ? await loadSlotsForNextDays(duration, 28) : [];
+    selectedSlugs.length > 0
+      ? await loadSlotsForNextDays(duration, 28, {
+          organizationId: user.organizationId,
+        })
+      : [];
 
   const whenLabel = selectedSlot ? formatSlotLabel(new Date(selectedSlot)) : null;
 

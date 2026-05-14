@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { BOOKING_STATUSES } from "@/lib/booking/booking-status";
 import { BUSINESS_TZ } from "@/lib/booking/availability";
 import { getActiveCatalog } from "@/lib/booking/catalog";
@@ -70,6 +71,7 @@ export default async function AdminCalendarPage({
 }: {
   searchParams: Promise<{ week?: string }>;
 }) {
+  const admin = await requireAdmin();
   const params = await searchParams;
   const todayKey = localDateKey(new Date());
   const weekStart = startOfWeekKey(params.week ?? todayKey);
@@ -87,6 +89,7 @@ export default async function AdminCalendarPage({
       .select(
         "id, status, scheduled_at, scheduled_ends_at, services, add_ons, properties(street_address), profiles(full_name, email)",
       )
+      .eq("organization_id", admin.organizationId)
       .not("scheduled_at", "is", null)
       .gte("scheduled_at", rangeStart.toISOString())
       .lt("scheduled_at", rangeEnd.toISOString())
@@ -96,6 +99,7 @@ export default async function AdminCalendarPage({
     supabase
       .from("calendar_blocks")
       .select("id, starts_at, ends_at, label")
+      .eq("organization_id", admin.organizationId)
       .gte("ends_at", rangeStart.toISOString())
       .lt("starts_at", rangeEnd.toISOString())
       .order("starts_at")
@@ -103,8 +107,9 @@ export default async function AdminCalendarPage({
     supabase
       .from("business_hours")
       .select("day_of_week, start_time, end_time, enabled")
+      .eq("organization_id", admin.organizationId)
       .returns<BusinessHoursRow[]>(),
-    getActiveCatalog(),
+    getActiveCatalog({ organizationId: admin.organizationId }),
   ]);
 
   const hoursByDow = new Map(
@@ -186,43 +191,45 @@ export default async function AdminCalendarPage({
     <div className="max-w-full space-y-4 overflow-hidden md:space-y-6">
       <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-3 shadow-lg shadow-realtor-text/10 md:p-4">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
-            Week of {formatHeaderDate(weekStart)}
-          </p>
-          <h1 className="mt-1 text-xl font-bold text-realtor-text md:text-2xl">Calendar</h1>
-          <p className="mt-2 hidden max-w-2xl text-sm leading-6 text-realtor-muted sm:block">
-            Shoots and private busy blocks in one weekly schedule. Working
-            hours are highlighted; tap an empty time to block it off or start
-            a booking.
-          </p>
-        </div>
-        <div className="grid w-full grid-cols-2 gap-2 text-xs sm:flex sm:w-auto sm:flex-wrap">
-          <Link
-            href={`/admin/calendar?week=${prevWeek}`}
-            className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-2.5 py-1.5 text-center text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary sm:px-3"
-          >
-            Previous
-          </Link>
-          <Link
-            href="/admin/calendar"
-            className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-2.5 py-1.5 text-center text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary sm:px-3"
-          >
-            This week
-          </Link>
-          <Link
-            href={`/admin/calendar?week=${nextWeek}`}
-            className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-2.5 py-1.5 text-center text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary sm:px-3"
-          >
-            Next
-          </Link>
-          <Link
-            href="/admin/settings/availability"
-            className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-2.5 py-1.5 text-center text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary sm:px-3"
-          >
-            Hours + blocks
-          </Link>
-        </div>
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
+              Week of {formatHeaderDate(weekStart)}
+            </p>
+            <h1 className="mt-1 text-xl font-bold text-realtor-text md:text-2xl">
+              Calendar
+            </h1>
+            <p className="mt-2 hidden max-w-2xl text-sm leading-6 text-realtor-muted sm:block">
+              Shoots and private busy blocks in one weekly schedule. Working
+              hours are highlighted; tap an empty time to block it off or start
+              a booking.
+            </p>
+          </div>
+          <div className="grid w-full grid-cols-2 gap-2 text-xs sm:flex sm:w-auto sm:flex-wrap">
+            <Link
+              href={`/admin/calendar?week=${prevWeek}`}
+              className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-2.5 py-1.5 text-center text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary sm:px-3"
+            >
+              Previous
+            </Link>
+            <Link
+              href="/admin/calendar"
+              className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-2.5 py-1.5 text-center text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary sm:px-3"
+            >
+              This week
+            </Link>
+            <Link
+              href={`/admin/calendar?week=${nextWeek}`}
+              className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-2.5 py-1.5 text-center text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary sm:px-3"
+            >
+              Next
+            </Link>
+            <Link
+              href="/admin/settings/availability"
+              className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-2.5 py-1.5 text-center text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary sm:px-3"
+            >
+              Hours + blocks
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -235,7 +242,9 @@ export default async function AdminCalendarPage({
   );
 }
 
-function catalogToOptions(catalog: Awaited<ReturnType<typeof getActiveCatalog>>): CatalogItemOption[] {
+function catalogToOptions(
+  catalog: Awaited<ReturnType<typeof getActiveCatalog>>,
+): CatalogItemOption[] {
   return [...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(
     (item) => ({
       id: item.id,

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { totalDurationMinutes } from "./services";
 
@@ -37,6 +38,14 @@ export interface Slot {
   end: string;
 }
 
+export interface AvailabilityScope {
+  organizationId?: string;
+}
+
+function availabilityOrganizationId(scope?: AvailabilityScope): string {
+  return scope?.organizationId ?? DEFAULT_ORGANIZATION_ID;
+}
+
 interface BusinessHoursRow {
   day_of_week: number;
   start_time: string;
@@ -69,14 +78,17 @@ export async function listAvailableSlots({
   from,
   to,
   durationMinutes,
+  organizationId,
 }: {
   from: Date;
   to: Date;
   durationMinutes: number;
+  organizationId?: string;
 }): Promise<Slot[]> {
   if (durationMinutes <= 0) return [];
 
   const supabase = getServiceSupabase();
+  const orgId = availabilityOrganizationId({ organizationId });
 
   // Pull the three inputs in parallel. These are all small datasets so we
   // can afford to fetch the full rows; the filtering happens in memory.
@@ -84,16 +96,19 @@ export async function listAvailableSlots({
     supabase
       .from("business_hours")
       .select("day_of_week, start_time, end_time, enabled")
+      .eq("organization_id", orgId)
       .returns<BusinessHoursRow[]>(),
     supabase
       .from("calendar_blocks")
       .select("starts_at, ends_at")
+      .eq("organization_id", orgId)
       .lte("starts_at", to.toISOString())
       .gte("ends_at", from.toISOString())
       .returns<CalendarBlockRow[]>(),
     supabase
       .from("bookings")
       .select("scheduled_at, scheduled_ends_at, services, add_ons, status")
+      .eq("organization_id", orgId)
       .in("status", ["requested", "confirmed", "shot", "editing", "delivered"])
       .not("scheduled_at", "is", null)
       .gte("scheduled_at", addMinutes(from, -6 * 60).toISOString())
@@ -101,7 +116,7 @@ export async function listAvailableSlots({
       .returns<BookingRow[]>(),
     // Optional Google Calendar free/busy union. If no calendar is
     // connected, returns [] so slot computation is unaffected.
-    fetchGoogleBusy(from, to),
+    fetchGoogleBusy(from, to, { organizationId: orgId }),
   ]);
 
   const hoursByDow = new Map<number, BusinessHoursRow>();
@@ -172,11 +187,13 @@ export async function listAvailableSlots({
 export async function isSlotAvailable(
   start: Date,
   durationMinutes: number,
+  scope?: AvailabilityScope,
 ): Promise<boolean> {
   const slots = await listAvailableSlots({
     from: addMinutes(start, -1),
     to: addMinutes(start, durationMinutes + 1),
     durationMinutes,
+    organizationId: scope?.organizationId,
   });
   return slots.some((s) => new Date(s.start).getTime() === start.getTime());
 }
@@ -203,9 +220,10 @@ export function businessDateTimeLocalToUtc(value: string): Date | null {
 async function fetchGoogleBusy(
   from: Date,
   to: Date,
+  scope?: AvailabilityScope,
 ): Promise<{ start: Date; end: Date }[]> {
   try {
-    const client = await getGoogleCalendarClient();
+    const client = await getGoogleCalendarClient(scope);
     if (!client) return [];
     return await client.getBusy(from, to);
   } catch (err) {

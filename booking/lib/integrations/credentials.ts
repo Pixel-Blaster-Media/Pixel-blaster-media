@@ -1,5 +1,6 @@
 import "server-only";
 
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
 /**
@@ -28,6 +29,7 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 export type Provider = "fotello" | "iguide" | "resend";
 
 interface CredentialsRow {
+  organization_id: string;
   provider: string;
   credentials: Record<string, string>;
 }
@@ -35,16 +37,25 @@ interface CredentialsRow {
 // Per-process cache. Cold starts in serverless reset this naturally,
 // and a single warm request never reads the same row twice. We
 // invalidate on any save via clearCredentialsCache().
-const cache = new Map<Provider, Record<string, string>>();
+const cache = new Map<string, Record<string, string>>();
 
-async function loadProvider(provider: Provider): Promise<Record<string, string>> {
-  const cached = cache.get(provider);
+function cacheKey(provider: Provider, organizationId: string): string {
+  return `${organizationId}:${provider}`;
+}
+
+async function loadProvider(
+  provider: Provider,
+  organizationId = DEFAULT_ORGANIZATION_ID,
+): Promise<Record<string, string>> {
+  const key = cacheKey(provider, organizationId);
+  const cached = cache.get(key);
   if (cached) return cached;
 
   const supabase = getServiceSupabase();
   const { data, error } = await supabase
     .from("integration_credentials")
-    .select("provider, credentials")
+    .select("organization_id, provider, credentials")
+    .eq("organization_id", organizationId)
     .eq("provider", provider)
     .maybeSingle<CredentialsRow>();
 
@@ -57,7 +68,7 @@ async function loadProvider(provider: Provider): Promise<Record<string, string>>
   }
 
   const row = data?.credentials ?? {};
-  cache.set(provider, row);
+  cache.set(key, row);
   return row;
 }
 
@@ -70,8 +81,9 @@ export async function getCredential(
   provider: Provider,
   field: string,
   envVar: string,
+  organizationId = DEFAULT_ORGANIZATION_ID,
 ): Promise<string | null> {
-  const row = await loadProvider(provider);
+  const row = await loadProvider(provider, organizationId);
   const fromDb = row[field]?.trim();
   if (fromDb) return fromDb;
   const fromEnv = process.env[envVar]?.trim();
@@ -89,8 +101,9 @@ export async function getCredentialSource(
   provider: Provider,
   field: string,
   envVar: string,
+  organizationId = DEFAULT_ORGANIZATION_ID,
 ): Promise<{ source: CredentialSource; hint?: string }> {
-  const row = await loadProvider(provider);
+  const row = await loadProvider(provider, organizationId);
   const fromDb = row[field]?.trim();
   if (fromDb) {
     return { source: "db", hint: lastFour(fromDb) };
@@ -111,10 +124,11 @@ export async function saveCredentials(
   provider: Provider,
   fields: Record<string, string>,
   updatedBy: string | null,
+  organizationId = DEFAULT_ORGANIZATION_ID,
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = getServiceSupabase();
 
-  const existing = await loadProvider(provider);
+  const existing = await loadProvider(provider, organizationId);
   const merged: Record<string, string> = { ...existing };
   for (const [k, v] of Object.entries(fields)) {
     const trimmed = (v ?? "").trim();
@@ -123,14 +137,18 @@ export async function saveCredentials(
 
   const { error } = await supabase
     .from("integration_credentials")
-    .upsert({
-      provider,
-      credentials: merged,
-      updated_by: updatedBy,
-    });
+    .upsert(
+      {
+        organization_id: organizationId,
+        provider,
+        credentials: merged,
+        updated_by: updatedBy,
+      },
+      { onConflict: "organization_id,provider" },
+    );
 
   if (error) return { ok: false, error: error.message };
-  clearCredentialsCache(provider);
+  clearCredentialsCache(provider, organizationId);
   return { ok: true };
 }
 
@@ -142,9 +160,10 @@ export async function saveCredentials(
 export async function clearCredentialFields(
   provider: Provider,
   fields: string[],
+  organizationId = DEFAULT_ORGANIZATION_ID,
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = getServiceSupabase();
-  const existing = await loadProvider(provider);
+  const existing = await loadProvider(provider, organizationId);
   const next: Record<string, string> = { ...existing };
   for (const f of fields) delete next[f];
 
@@ -153,21 +172,26 @@ export async function clearCredentialFields(
     const { error } = await supabase
       .from("integration_credentials")
       .delete()
+      .eq("organization_id", organizationId)
       .eq("provider", provider);
     if (error) return { ok: false, error: error.message };
   } else {
     const { error } = await supabase
       .from("integration_credentials")
       .update({ credentials: next })
+      .eq("organization_id", organizationId)
       .eq("provider", provider);
     if (error) return { ok: false, error: error.message };
   }
-  clearCredentialsCache(provider);
+  clearCredentialsCache(provider, organizationId);
   return { ok: true };
 }
 
-export function clearCredentialsCache(provider?: Provider): void {
-  if (provider) cache.delete(provider);
+export function clearCredentialsCache(
+  provider?: Provider,
+  organizationId = DEFAULT_ORGANIZATION_ID,
+): void {
+  if (provider) cache.delete(cacheKey(provider, organizationId));
   else cache.clear();
 }
 

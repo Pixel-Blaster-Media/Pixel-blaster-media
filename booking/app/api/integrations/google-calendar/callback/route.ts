@@ -99,6 +99,7 @@ export async function GET(request: NextRequest) {
     const email = emailFromIdToken(tokens.id_token) ?? "unknown";
 
     await persistTokens({
+      organizationId: admin.organizationId,
       googleAccountEmail: email,
       refreshToken,
       accessToken,

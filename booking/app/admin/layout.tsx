@@ -12,7 +12,6 @@ const NAV = [
   { href: "/admin/realtors", label: "Realtors" },
   { href: "/admin/calendar", label: "Calendar" },
   { href: "/admin/settings/availability", label: "Availability" },
-  { href: "/admin/settings/pricing", label: "Pricing" },
   { href: "/admin/settings", label: "Settings" },
 ] as const;
 
@@ -26,7 +25,9 @@ export default async function AdminLayout({
   return (
     <div
       className="admin-earth realtor-theme realtor-backdrop grid min-h-screen w-full max-w-full overflow-x-hidden px-3 pb-32 sm:px-6 md:grid-cols-[220px_1fr] md:gap-8 md:px-6 md:py-10"
-      style={{ paddingTop: "max(1rem, calc(env(safe-area-inset-top, 0px) + 0.75rem))" }}
+      style={{
+        paddingTop: "max(1rem, calc(env(safe-area-inset-top, 0px) + 0.75rem))",
+      }}
     >
       <div className="md:hidden">
         <AdminMobileMenu
@@ -41,7 +42,9 @@ export default async function AdminLayout({
           <p className="text-[11px] uppercase tracking-wider text-realtor-primary/80">
             Signed in
           </p>
-          <p className="mt-1 truncate text-realtor-text">{admin.fullName ?? admin.email}</p>
+          <p className="mt-1 truncate text-realtor-text">
+            {admin.fullName ?? admin.email}
+          </p>
           <p className="truncate text-xs text-realtor-muted">{admin.email}</p>
         </div>
         <nav className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/70 p-2 text-sm shadow-sm shadow-realtor-text/5">

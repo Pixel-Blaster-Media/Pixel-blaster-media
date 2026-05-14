@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requireAdmin } from "@/lib/auth/require-admin";
+import {
+  requireAdmin,
+  type AdminContext,
+} from "@/lib/auth/require-admin";
 import { nextBookingStatuses } from "@/lib/booking/booking-status";
 import { cancelBooking } from "@/lib/booking/cancel";
 import { buildDeliveryLinks } from "@/lib/booking/delivery-links";
@@ -33,7 +36,7 @@ import {
   createInvoiceForBooking,
   refreshInvoiceStatus as refreshInvoiceInQBO,
 } from "@/lib/integrations/quickbooks/invoice";
-import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
+import { getServiceSupabase } from "@/lib/supabase/server";
 import type {
   BookingStatus,
   DeliverableType,
@@ -175,6 +178,22 @@ const LISTING_WEBSITE_INCLUDED_SECTIONS = [
   "property_websites",
 ] as const;
 
+async function requireAdminForBooking(
+  bookingId: string,
+): Promise<AdminContext | null> {
+  const admin = await requireAdmin();
+  const service = getServiceSupabase();
+  const { data, error } = await service
+    .from("bookings")
+    .select("id")
+    .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId)
+    .maybeSingle<{ id: string }>();
+
+  if (error || !data) return null;
+  return admin;
+}
+
 /**
  * Move a booking forward in the status pipeline.
  *
@@ -186,13 +205,15 @@ export async function updateBookingStatus(
   bookingId: string,
   next: BookingStatus,
 ): Promise<ActionResult> {
-  await requireAdmin();
-  const supabase = await getServerSupabase();
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
+  const service = getServiceSupabase();
 
-  const { data: current, error: loadErr } = await supabase
+  const { data: current, error: loadErr } = await service
     .from("bookings")
     .select("status")
     .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId)
     .single<BookingStatusRow>();
 
   if (loadErr || !current) return { ok: false, error: "Booking not found." };
@@ -205,11 +226,11 @@ export async function updateBookingStatus(
     };
   }
 
-  const service = getServiceSupabase();
   const { error } = await service
     .from("bookings")
     .update({ status: next })
-    .eq("id", bookingId);
+    .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId);
 
   if (error) return { ok: false, error: error.message };
 
@@ -227,8 +248,11 @@ export async function updateBookingStatus(
 export async function cancelBookingAsAdmin(
   bookingId: string,
 ): Promise<ActionResult> {
-  await requireAdmin();
-  const result = await cancelBooking(bookingId, "admin");
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
+  const result = await cancelBooking(bookingId, "admin", {
+    organizationId: admin.organizationId,
+  });
   if (!result.ok) return { ok: false, error: result.error };
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${bookingId}`);
@@ -247,7 +271,8 @@ export async function addManualDeliverable(
   bookingId: string,
   formData: FormData,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
 
   const type = (formData.get("type") as string | null) ?? "";
   const url = ((formData.get("url") as string | null) ?? "").trim();
@@ -273,16 +298,16 @@ export async function addManualDeliverable(
     return { ok: false, error: "URL doesn't look valid." };
   }
 
-  const supabase = await getServerSupabase();
-  const { data: booking, error: bookErr } = await supabase
+  const service = getServiceSupabase();
+  const { data: booking, error: bookErr } = await service
     .from("bookings")
     .select("id, property_id")
     .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId)
     .single<BookingMinimalRow>();
 
   if (bookErr || !booking) return { ok: false, error: "Booking not found." };
 
-  const service = getServiceSupabase();
   const { error } = await service.from("deliverables").insert({
     booking_id: booking.id,
     property_id: booking.property_id,
@@ -307,12 +332,14 @@ export async function deleteDeliverable(
   bookingId: string,
   deliverableId: string,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
   const service = getServiceSupabase();
   const { error } = await service
     .from("deliverables")
     .delete()
-    .eq("id", deliverableId);
+    .eq("id", deliverableId)
+    .eq("booking_id", bookingId);
 
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/admin/bookings/${bookingId}`);
@@ -323,7 +350,8 @@ export async function saveListingWebsite(
   bookingId: string,
   formData: FormData,
 ): Promise<ActionResult & { slug?: string; publicUrl?: string }> {
-  await requireAdmin();
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
 
   const service = getServiceSupabase();
   const { data: booking, error: bookingError } = await service
@@ -332,6 +360,7 @@ export async function saveListingWebsite(
       "id, property_id, owner_id, properties(street_address, city), profiles(email, full_name, phone, brokerage)",
     )
     .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId)
     .single<BookingForListingWebsiteRow>();
 
   if (bookingError || !booking) return { ok: false, error: "Booking not found." };
@@ -395,6 +424,7 @@ export async function saveListingWebsite(
 
   const { error } = await service.from("listing_websites").upsert(
     {
+      organization_id: admin.organizationId,
       property_id: booking.property_id,
       booking_id: booking.id,
       owner_id: booking.owner_id,
@@ -434,7 +464,8 @@ export async function sendDeliveryReadyEmail(
 ): Promise<
   ActionResult & { resent?: boolean; sentAt?: string; recipientCount?: number }
 > {
-  const admin = await requireAdmin();
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
   const service = getServiceSupabase();
 
   const { data: booking, error: bookingError } = await service
@@ -443,6 +474,7 @@ export async function sendDeliveryReadyEmail(
       "id, property_id, properties(street_address), profiles(email, full_name, delivery_cc_emails)",
     )
     .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId)
     .single<BookingForDeliveryEmailRow>();
 
   if (bookingError || !booking) {
@@ -638,7 +670,8 @@ export async function saveIGuideId(
     portalId?: string | null;
   }
 > {
-  await requireAdmin();
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
 
   const trimmed = rawInput.trim();
 
@@ -647,7 +680,8 @@ export async function saveIGuideId(
     const { error } = await service
       .from("bookings")
       .update({ iguide_id: null, iguide_portal_id: null })
-      .eq("id", bookingId);
+      .eq("id", bookingId)
+      .eq("organization_id", admin.organizationId);
     if (error) return { ok: false, error: error.message };
     revalidatePath(`/admin/bookings/${bookingId}`);
     return { ok: true, iguideId: null, portalId: null };
@@ -673,6 +707,7 @@ export async function saveIGuideId(
       .from("bookings")
       .select("id, scheduled_at, properties(street_address, city)")
       .eq("iguide_portal_id", portalId)
+      .eq("organization_id", admin.organizationId)
       .neq("id", bookingId)
       .maybeSingle<ExistingIGuideBookingRow>();
 
@@ -700,7 +735,8 @@ export async function saveIGuideId(
   const { error } = await service
     .from("bookings")
     .update(update)
-    .eq("id", bookingId);
+    .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId);
 
   if (error) return { ok: false, error: error.message };
 
@@ -723,13 +759,15 @@ type BookingUpdatePayload = {
 export async function syncIGuide(
   bookingId: string,
 ): Promise<ActionResult & { upserts?: number; address?: string; portalId?: string }> {
-  await requireAdmin();
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
 
-  const supabase = await getServerSupabase();
-  const { data: booking, error } = await supabase
+  const service = getServiceSupabase();
+  const { data: booking, error } = await service
     .from("bookings")
     .select("id, property_id, iguide_id, iguide_portal_id")
     .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId)
     .single<BookingWithIGuideRow>();
 
   if (error || !booking) return { ok: false, error: "Booking not found." };
@@ -756,7 +794,8 @@ export async function saveIGuidePhotoDownloads(
   bookingId: string,
   formData: FormData,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
 
   const mlsUrl =
     ((formData.get("mls_photo_zip_url") as string | null) ?? "").trim() ||
@@ -779,6 +818,7 @@ export async function saveIGuidePhotoDownloads(
     .from("bookings")
     .select("id, property_id")
     .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId)
     .single<BookingMinimalRow>();
 
   if (bookingError || !booking) return { ok: false, error: "Booking not found." };
@@ -853,15 +893,17 @@ export async function createIGuideForBooking(
     workOrderId?: string | null;
   }
 > {
-  await requireAdmin();
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
 
-  const supabase = await getServerSupabase();
-  const { data: booking, error } = await supabase
+  const service = getServiceSupabase();
+  const { data: booking, error } = await service
     .from("bookings")
     .select(
       "id, property_id, unit_number, iguide_id, iguide_portal_id, properties(street_address, city, province, postal_code)",
     )
     .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId)
     .single<BookingForIGuideCreateRow>();
 
   if (error || !booking) return { ok: false, error: "Booking not found." };
@@ -883,25 +925,28 @@ export async function createIGuideForBooking(
     };
   }
 
-  const webhookConfig = await buildIGuideWebhookConfig();
+  const webhookConfig = await buildIGuideWebhookConfig(admin.organizationId);
   if (!webhookConfig.ok) {
     return { ok: false, error: webhookConfig.error };
   }
 
-  const result = await createIGuideInPortal({
-    type: "standard",
-    industry: "residential",
-    address: {
-      country: "CA",
-      provinceState: booking.properties.province ?? "ON",
-      city: booking.properties.city ?? "",
-      postalCode: booking.properties.postal_code ?? "",
-      streetNumber: address.streetNumber,
-      streetName: address.streetName,
-      ...(booking.unit_number ? { unit: booking.unit_number } : {}),
+  const result = await createIGuideInPortal(
+    {
+      type: "standard",
+      industry: "residential",
+      address: {
+        country: "CA",
+        provinceState: booking.properties.province ?? "ON",
+        city: booking.properties.city ?? "",
+        postalCode: booking.properties.postal_code ?? "",
+        streetNumber: address.streetNumber,
+        streetName: address.streetName,
+        ...(booking.unit_number ? { unit: booking.unit_number } : {}),
+      },
+      webhooks: webhookConfig.webhooks,
     },
-    webhooks: webhookConfig.webhooks,
-  });
+    { organizationId: admin.organizationId },
+  );
 
   if (!result.ok || !result.data) {
     return {
@@ -913,14 +958,14 @@ export async function createIGuideForBooking(
     return { ok: false, error: "iGuide response did not include an id." };
   }
 
-  const service = getServiceSupabase();
   const { error: updateErr } = await service
     .from("bookings")
     .update({
       iguide_portal_id: result.data.id,
       iguide_id: result.data.alias ?? booking.iguide_id,
     })
-    .eq("id", bookingId);
+    .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId);
 
   if (updateErr) return { ok: false, error: updateErr.message };
 
@@ -944,7 +989,7 @@ export async function createIGuideForBooking(
   };
 }
 
-async function buildIGuideWebhookConfig(): Promise<
+async function buildIGuideWebhookConfig(organizationId: string): Promise<
   | {
       ok: true;
       webhooks: Array<{
@@ -959,6 +1004,7 @@ async function buildIGuideWebhookConfig(): Promise<
     "iguide",
     "webhook_secret",
     "IGUIDE_WEBHOOK_SECRET",
+    organizationId,
   );
 
   if (!appUrl) {
@@ -1023,15 +1069,17 @@ export async function createInvoice(
     totalCents?: number;
   }
 > {
-  await requireAdmin();
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
 
-  const supabase = await getServerSupabase();
-  const { data: booking, error } = await supabase
+  const service = getServiceSupabase();
+  const { data: booking, error } = await service
     .from("bookings")
     .select(
       "id, services, add_ons, property_id, owner_id, properties(street_address, city, postal_code), profiles(email, full_name, phone, brokerage)",
     )
     .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId)
     .single<BookingForInvoiceRow>();
 
   if (error || !booking) return { ok: false, error: "Booking not found." };
@@ -1063,7 +1111,8 @@ export async function createInvoice(
 export async function refreshInvoice(
   bookingId: string,
 ): Promise<ActionResult & { status?: string }> {
-  await requireAdmin();
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
   const result = await refreshInvoiceInQBO(bookingId);
   if (!result.ok) return { ok: false, error: result.error };
   revalidatePath(`/admin/bookings/${bookingId}`);
@@ -1078,7 +1127,8 @@ export async function saveFotelloListingId(
   bookingId: string,
   rawInput: string,
 ): Promise<ActionResult & { listingId?: string | null }> {
-  await requireAdmin();
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
   const trimmed = extractFotelloListingId(rawInput);
   const listingId = trimmed === "" ? null : trimmed;
   // Fotello listing ids are Firebase-style strings; we don't enforce a
@@ -1089,7 +1139,8 @@ export async function saveFotelloListingId(
   const { error } = await service
     .from("bookings")
     .update({ fotello_listing_id: listingId })
-    .eq("id", bookingId);
+    .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId);
 
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/admin/bookings/${bookingId}`);
@@ -1121,13 +1172,15 @@ export async function saveFotelloDeliveryLinks(
   bookingId: string,
   formData: FormData,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
 
   const service = getServiceSupabase();
   const { data: booking, error } = await service
     .from("bookings")
     .select("id, property_id, fotello_listing_id")
     .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId)
     .single<{
       id: string;
       property_id: string;
@@ -1221,7 +1274,8 @@ export async function prepareFotelloUpload(
     uploads?: Array<{ id: string; url: string; expires: string }>;
   }
 > {
-  await requireAdmin();
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
 
   const cleanFilenames = filenames
     .map((filename) => filename.trim())
@@ -1236,6 +1290,7 @@ export async function prepareFotelloUpload(
     .from("bookings")
     .select("id, property_id, fotello_listing_id, properties(street_address, city)")
     .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId)
     .single<BookingFotelloRow>();
 
   if (error || !booking) return { ok: false, error: "Booking not found." };
@@ -1248,7 +1303,8 @@ export async function prepareFotelloUpload(
       const { error: updateError } = await service
         .from("bookings")
         .update({ fotello_listing_id: listingId })
-        .eq("id", booking.id);
+        .eq("id", booking.id)
+        .eq("organization_id", admin.organizationId);
       if (updateError) return { ok: false, error: updateError.message };
     }
 
@@ -1281,7 +1337,8 @@ export async function startFotelloEnhance(
   uploadIds: string[],
   listingId: string,
 ): Promise<ActionResult & { enhanceId?: string; status?: string }> {
-  await requireAdmin();
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
 
   const cleanUploadIds = uploadIds.map((id) => id.trim()).filter(Boolean);
   const cleanListingId = listingId.trim();
@@ -1297,6 +1354,7 @@ export async function startFotelloEnhance(
     .from("bookings")
     .select("id, property_id, fotello_listing_id")
     .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId)
     .single<{
       id: string;
       property_id: string;
@@ -1308,7 +1366,8 @@ export async function startFotelloEnhance(
     const { error: updateError } = await service
       .from("bookings")
       .update({ fotello_listing_id: cleanListingId })
-      .eq("id", booking.id);
+      .eq("id", booking.id)
+      .eq("organization_id", admin.organizationId);
     if (updateError) return { ok: false, error: updateError.message };
   }
 
@@ -1350,15 +1409,17 @@ export async function trackFotelloEnhance(
   enhanceId: string,
   shotType: FotelloShotType,
 ): Promise<ActionResult & { status?: string }> {
-  await requireAdmin();
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
   const trimmed = enhanceId.trim();
   if (!trimmed) return { ok: false, error: "Enhance ID is required." };
 
-  const supabase = await getServerSupabase();
-  const { data: booking, error } = await supabase
+  const service = getServiceSupabase();
+  const { data: booking, error } = await service
     .from("bookings")
     .select("id, property_id, fotello_listing_id")
     .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId)
     .single<{
       id: string;
       property_id: string;
@@ -1393,12 +1454,14 @@ export async function untrackFotelloEnhance(
   bookingId: string,
   deliverableId: string,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
   const service = getServiceSupabase();
   const { error } = await service
     .from("deliverables")
     .delete()
     .eq("id", deliverableId)
+    .eq("booking_id", bookingId)
     .eq("source", "fotello");
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/admin/bookings/${bookingId}`);

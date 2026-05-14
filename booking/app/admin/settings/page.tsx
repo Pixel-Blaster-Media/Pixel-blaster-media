@@ -2,19 +2,10 @@ import SettingsHub from "./SettingsHub";
 
 const SETTINGS_SECTIONS = [
   {
-    href: "/admin/settings/availability",
-    title: "Availability",
-    description: "Set working hours, closed days, and private calendar blocks.",
-    details: [
-      "Choose which days are open for bookings.",
-      "Adjust start and end times for each working day.",
-      "Add private blocks when you are unavailable.",
-    ],
-  },
-  {
     href: "/admin/settings/pricing",
     title: "Pricing",
-    description: "Manage packages, add-ons, media badges, durations, and square-footage rules.",
+    description:
+      "Manage packages, add-ons, media badges, durations, and square-footage rules.",
     details: [
       "Update bundle prices and booking durations.",
       "Control à-la-carte services and optional add-ons.",

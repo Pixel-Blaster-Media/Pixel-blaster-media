@@ -64,7 +64,7 @@ export async function createSelfBooking(
   }
 
   // Re-validate slugs against the live catalog — don't trust the client.
-  const catalog = await getActiveCatalog();
+  const catalog = await getActiveCatalog({ organizationId: user.organizationId });
   const bySlug = new Map<string, (typeof catalog.bundles)[number]>();
   for (const r of catalog.bundles) bySlug.set(r.slug, r);
   for (const r of catalog.aLaCarte) bySlug.set(r.slug, r);
@@ -103,7 +103,9 @@ export async function createSelfBooking(
     60,
   );
 
-  const stillFree = await isSlotAvailable(slotStart, duration);
+  const stillFree = await isSlotAvailable(slotStart, duration, {
+    organizationId: user.organizationId,
+  });
   if (!stillFree) {
     return {
       ok: false,
@@ -117,6 +119,7 @@ export async function createSelfBooking(
   const { data: existing } = await supabase
     .from("properties")
     .select("id")
+    .eq("organization_id", user.organizationId)
     .eq("owner_id", user.userId)
     .eq("street_address", streetAddress)
     .limit(1)
@@ -132,11 +135,13 @@ export async function createSelfBooking(
         archived_at: null,
       })
       .eq("id", propertyId)
+      .eq("organization_id", user.organizationId)
       .eq("owner_id", user.userId);
   } else {
     const { data: created, error: propErr } = await supabase
       .from("properties")
       .insert({
+        organization_id: user.organizationId,
         owner_id: user.userId,
         street_address: streetAddress,
         city: city || null,
@@ -160,6 +165,7 @@ export async function createSelfBooking(
   const { data: booking, error: bookErr } = await supabase
     .from("bookings")
     .insert({
+      organization_id: user.organizationId,
       property_id: propertyId,
       owner_id: user.userId,
       status: "confirmed",
@@ -207,7 +213,9 @@ export async function createSelfBooking(
   // block the booking since everything's already persisted). If successful,
   // we stash the event id on the booking so we can later update/cancel it.
   try {
-    const gcal = await getGoogleCalendarClient();
+    const gcal = await getGoogleCalendarClient({
+      organizationId: user.organizationId,
+    });
     if (gcal) {
       const endAt = new Date(slotStart.getTime() + duration * 60_000);
       const serviceLabels = validServices.map((s) => s.name).join(", ");
@@ -236,6 +244,7 @@ export async function createSelfBooking(
           google_calendar_event_id: event.id,
           google_calendar_event_url: event.htmlLink,
         })
+        .eq("organization_id", user.organizationId)
         .eq("id", booking.id);
     }
   } catch (err) {

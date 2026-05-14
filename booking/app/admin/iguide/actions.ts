@@ -30,7 +30,7 @@ interface BookingRow {
 export async function linkIGuideWebhookEvent(
   formData: FormData,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const eventId = String(formData.get("event_id") ?? "");
   const bookingId = String(formData.get("booking_id") ?? "");
@@ -49,6 +49,7 @@ export async function linkIGuideWebhookEvent(
       .from("bookings")
       .select("id, property_id, iguide_id, iguide_portal_id")
       .eq("id", bookingId)
+      .eq("organization_id", admin.organizationId)
       .single<BookingRow>(),
   ]);
 
@@ -144,7 +145,7 @@ export async function ignoreIGuideWebhookEvents(
 export async function linkIGuidePortalTour(
   formData: FormData,
 ): Promise<void> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const bookingId = String(formData.get("booking_id") ?? "");
   const portalId = String(formData.get("portal_id") ?? "").trim();
@@ -156,6 +157,7 @@ export async function linkIGuidePortalTour(
     .from("bookings")
     .select("id, property_id, iguide_id, iguide_portal_id")
     .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId)
     .single<BookingRow>();
 
   if (!booking) return;
@@ -166,7 +168,8 @@ export async function linkIGuidePortalTour(
       iguide_portal_id: portalId,
       ...(alias ? { iguide_id: alias } : {}),
     })
-    .eq("id", booking.id);
+    .eq("id", booking.id)
+    .eq("organization_id", admin.organizationId);
 
   if (!error) {
     await syncIGuideForBooking({
@@ -183,7 +186,7 @@ export async function linkIGuidePortalTour(
 export async function linkManualIGuideToBooking(
   formData: FormData,
 ): Promise<void> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const bookingId = String(formData.get("booking_id") ?? "");
   const pasted = String(formData.get("iguide_ref") ?? "").trim();
@@ -198,6 +201,7 @@ export async function linkManualIGuideToBooking(
     .from("bookings")
     .select("id, property_id, iguide_id, iguide_portal_id")
     .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId)
     .single<BookingRow>();
 
   if (!booking) return;
@@ -214,7 +218,8 @@ export async function linkManualIGuideToBooking(
       ...(portalId ? { iguide_portal_id: portalId } : {}),
       ...(alias ? { iguide_id: alias } : {}),
     })
-    .eq("id", booking.id);
+    .eq("id", booking.id)
+    .eq("organization_id", admin.organizationId);
 
   if (!error) {
     await syncIGuideForBooking(next);

@@ -44,7 +44,9 @@ export default function HoursEditor({
         <div>
           <p className="text-sm font-semibold text-realtor-text">{dayName}</p>
           <p className="mt-0.5 text-xs text-realtor-muted">
-            {isOpen ? `${formatDisplayTime(startTime)} – ${formatDisplayTime(endTime)}` : "Closed"}
+            {isOpen
+              ? `${formatDisplayTime(startTime)} – ${formatDisplayTime(endTime)}`
+              : "Closed"}
           </p>
         </div>
         <label className="flex shrink-0 cursor-pointer items-center gap-2 text-xs font-semibold text-realtor-muted">
@@ -62,7 +64,11 @@ export default function HoursEditor({
         </label>
       </div>
 
-      <div className={`mt-4 grid grid-cols-1 gap-2 transition sm:grid-cols-2 ${isOpen ? "opacity-100" : "opacity-45"}`}>
+      <div
+        className={`mt-4 grid grid-cols-1 gap-2 transition sm:grid-cols-2 ${
+          isOpen ? "opacity-100" : "opacity-45"
+        }`}
+      >
         <label className="min-w-0 rounded-xl border border-realtor-primary/15 bg-realtor-surface p-2">
           <span className="block text-[11px] font-semibold uppercase tracking-wider text-realtor-muted">
             Start
@@ -71,8 +77,9 @@ export default function HoursEditor({
             type="time"
             name="start_time"
             defaultValue={startTime}
-            disabled={!isOpen}
-            className="relative -top-0.5 mt-1 box-border block w-full min-w-0 max-w-full appearance-none border-0 bg-transparent p-0 text-center text-sm font-semibold text-realtor-text outline-none [color-scheme:light] disabled:cursor-not-allowed"
+            readOnly={!isOpen}
+            aria-disabled={!isOpen}
+            className="relative -top-0.5 mt-1 box-border block w-full min-w-0 max-w-full appearance-none border-0 bg-transparent p-0 text-center text-sm font-semibold text-realtor-text outline-none [color-scheme:light] aria-disabled:cursor-not-allowed"
           />
         </label>
         <label className="min-w-0 rounded-xl border border-realtor-primary/15 bg-realtor-surface p-2">
@@ -83,8 +90,9 @@ export default function HoursEditor({
             type="time"
             name="end_time"
             defaultValue={endTime}
-            disabled={!isOpen}
-            className="relative -top-0.5 mt-1 box-border block w-full min-w-0 max-w-full appearance-none border-0 bg-transparent p-0 text-center text-sm font-semibold text-realtor-text outline-none [color-scheme:light] disabled:cursor-not-allowed"
+            readOnly={!isOpen}
+            aria-disabled={!isOpen}
+            className="relative -top-0.5 mt-1 box-border block w-full min-w-0 max-w-full appearance-none border-0 bg-transparent p-0 text-center text-sm font-semibold text-realtor-text outline-none [color-scheme:light] aria-disabled:cursor-not-allowed"
           />
         </label>
       </div>

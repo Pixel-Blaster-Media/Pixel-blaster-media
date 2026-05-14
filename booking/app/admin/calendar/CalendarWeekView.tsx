@@ -115,6 +115,9 @@ export default function CalendarWeekView({
   const selectedSlot = selected
     ? toDateTimeLocal(selected.day.dateInput, selected.hour, selected.minute)
     : null;
+  const selectedTimeOptions = selected
+    ? buildTimeOptionsForDay(selected.day)
+    : [];
   const mobileDay =
     days.find((day) => day.dateInput === mobileDayKey) ?? days[0] ?? null;
   const mobileDayItems = mobileDay
@@ -274,12 +277,18 @@ export default function CalendarWeekView({
               {Array.from({ length: (END_HOUR - START_HOUR) * 2 }).map(
                 (_, slot) => {
                   const minutes = slot * SLOT_MINUTES;
+                  const absoluteMinutes = START_HOUR * 60 + minutes;
                   const hour = START_HOUR + Math.floor(minutes / 60);
                   const minute = minutes % 60;
+                  const slotIsWorking = isWithinWorkingHours(
+                    day,
+                    absoluteMinutes,
+                  );
                   return (
                     <button
                       key={slot}
                       type="button"
+                      disabled={!slotIsWorking}
                       aria-label={`Select ${day.label} ${formatTime(
                         hour,
                         minute,
@@ -290,7 +299,12 @@ export default function CalendarWeekView({
                         setMode("shoot");
                         setSelected({ day, hour, minute });
                       }}
-                      className="absolute left-0 right-0 z-[2] border-t border-[#ede6d9]/60 transition hover:bg-[#3f7356]/10"
+                      className={
+                        "absolute left-0 right-0 z-[2] border-t border-[#ede6d9]/60 transition " +
+                        (slotIsWorking
+                          ? "hover:bg-[#3f7356]/10"
+                          : "cursor-not-allowed")
+                      }
                       style={{
                         top: (minutes / 60) * HOUR_HEIGHT,
                         height: (SLOT_MINUTES / 60) * HOUR_HEIGHT,
@@ -440,10 +454,15 @@ export default function CalendarWeekView({
 
                 {mobileSlots.map((slot) => {
                   const minutes = slot.hour * 60 + slot.minute;
+                  const slotIsWorking = isWithinWorkingHours(
+                    mobileDay,
+                    minutes,
+                  );
                   return (
                     <button
                       key={`${slot.hour}:${slot.minute}`}
                       type="button"
+                      disabled={!slotIsWorking}
                       aria-label={`Add something at ${formatTime(
                         slot.hour,
                         slot.minute,
@@ -458,7 +477,12 @@ export default function CalendarWeekView({
                           minute: slot.minute,
                         });
                       }}
-                      className="absolute left-10 right-0 z-[2] border-t border-[#ede6d9]/60 transition hover:bg-[#3f7356]/10 active:bg-[#3f7356]/10"
+                      className={
+                        "absolute left-10 right-0 z-[2] border-t border-[#ede6d9]/60 transition " +
+                        (slotIsWorking
+                          ? "hover:bg-[#3f7356]/10 active:bg-[#3f7356]/10"
+                          : "cursor-not-allowed")
+                      }
                       style={{
                         top:
                           ((minutes - mobileTimelineStart) / 60) * MOBILE_HOUR_HEIGHT,
@@ -513,12 +537,10 @@ export default function CalendarWeekView({
             <span className="text-xs font-semibold text-ink-muted">
               Adjust time manually
             </span>
-            <input
-              type="time"
+            <select
               value={`${String(selected.hour).padStart(2, "0")}:${String(
                 selected.minute,
               ).padStart(2, "0")}`}
-              step={SLOT_MINUTES * 60}
               onChange={(event) => {
                 const [hour, minute] = event.currentTarget.value
                   .split(":")
@@ -529,8 +551,14 @@ export default function CalendarWeekView({
                   );
                 }
               }}
-              className="mt-1 box-border block w-full min-w-0 max-w-full appearance-none rounded-xl border border-white/10 bg-ink px-3 py-2 text-left text-sm text-white [color-scheme:dark]"
-            />
+              className="mt-1 box-border block w-full min-w-0 max-w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-left text-sm text-white outline-none [color-scheme:dark] focus:border-brand-light/60"
+            >
+              {selectedTimeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
 
           <div className="mt-4 inline-flex rounded-full border border-white/10 bg-ink p-1 text-xs">
@@ -1117,6 +1145,34 @@ function parseLocalParts(iso: string): { hour: number; minute: number } {
 function localMinutesFromIso(iso: string): number {
   const parts = parseLocalParts(iso);
   return parts.hour * 60 + parts.minute;
+}
+
+function isWithinWorkingHours(day: DayColumn, minutes: number): boolean {
+  return (
+    day.enabled &&
+    minutes >= day.workStartMinutes &&
+    minutes < day.workEndMinutes
+  );
+}
+
+function buildTimeOptionsForDay(
+  day: DayColumn,
+): { value: string; label: string }[] {
+  const start = Math.max(day.workStartMinutes, START_HOUR * 60);
+  const end = Math.min(day.workEndMinutes, END_HOUR * 60);
+  const options: { value: string; label: string }[] = [];
+  for (let minutes = start; minutes < end; minutes += SLOT_MINUTES) {
+    const hour = Math.floor(minutes / 60);
+    const minute = minutes % 60;
+    options.push({
+      value: `${String(hour).padStart(2, "0")}:${String(minute).padStart(
+        2,
+        "0",
+      )}`,
+      label: formatTime(hour, minute),
+    });
+  }
+  return options;
 }
 
 function formatHour(hour: number): string {

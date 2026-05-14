@@ -1,5 +1,6 @@
 import "server-only";
 
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -51,17 +52,28 @@ export interface QBOClient {
   query<T = unknown>(queryString: string): Promise<T>;
 }
 
+export interface QBConnectionScope {
+  organizationId?: string;
+}
+
+function qbOrganizationId(scope?: QBConnectionScope): string {
+  return scope?.organizationId ?? DEFAULT_ORGANIZATION_ID;
+}
+
 /**
  * Load the singleton connection row, refresh the token if needed, and
  * return a client. Throws if no connection exists — caller should
  * surface that as "connect QuickBooks first" in the UI.
  */
-export async function getQBClient(): Promise<QBOClient> {
+export async function getQBClient(
+  scope?: QBConnectionScope,
+): Promise<QBOClient> {
   const supabase = getServiceSupabase();
+  const orgId = qbOrganizationId(scope);
   const { data: conn, error } = await supabase
     .from("quickbooks_connection")
     .select("*")
-    .eq("id", 1)
+    .eq("organization_id", orgId)
     .maybeSingle<ConnectionRow>();
 
   if (error) throw new Error(`QBO connection lookup failed: ${error.message}`);
@@ -158,7 +170,7 @@ async function ensureFreshToken(
       access_token_expires_at: newExpiry,
       refresh_token: tokens.refresh_token,
     })
-    .eq("id", 1);
+    .eq("id", conn.id);
 
   if (error) {
     console.error("[qbo] failed to persist refreshed token", error);

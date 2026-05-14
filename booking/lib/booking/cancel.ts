@@ -17,6 +17,7 @@ export interface CancelResult {
 
 interface BookingRow {
   id: string;
+  organization_id: string;
   owner_id: string;
   status: BookingStatus;
   scheduled_at: string | null;
@@ -58,16 +59,23 @@ interface BookingRow {
 export async function cancelBooking(
   bookingId: string,
   initiator: "admin" | "realtor",
+  scope?: { organizationId?: string },
 ): Promise<CancelResult> {
   const supabase = getServiceSupabase();
 
-  const { data: booking, error: loadErr } = await supabase
+  let bookingQuery = supabase
     .from("bookings")
     .select(
-      "id, owner_id, status, scheduled_at, services, add_ons, property_id, google_calendar_event_id, properties(street_address, city, postal_code), profiles(email, full_name)",
+      "id, organization_id, owner_id, status, scheduled_at, services, add_ons, property_id, google_calendar_event_id, properties(street_address, city, postal_code), profiles(email, full_name)",
     )
-    .eq("id", bookingId)
-    .maybeSingle<BookingRow>();
+    .eq("id", bookingId);
+
+  if (scope?.organizationId) {
+    bookingQuery = bookingQuery.eq("organization_id", scope.organizationId);
+  }
+
+  const { data: booking, error: loadErr } =
+    await bookingQuery.maybeSingle<BookingRow>();
 
   if (loadErr || !booking) {
     return { ok: false, error: "Booking not found." };
@@ -81,7 +89,7 @@ export async function cancelBooking(
   }
 
   // 1) Flip the status.
-  const { error: updateErr } = await supabase
+  let updateQuery = supabase
     .from("bookings")
     .update({
       status: "cancelled",
@@ -90,6 +98,12 @@ export async function cancelBooking(
     })
     .eq("id", bookingId);
 
+  if (scope?.organizationId) {
+    updateQuery = updateQuery.eq("organization_id", scope.organizationId);
+  }
+
+  const { error: updateErr } = await updateQuery;
+
   if (updateErr) {
     return { ok: false, error: updateErr.message };
   }
@@ -97,7 +111,9 @@ export async function cancelBooking(
   // 2) Delete the Google Calendar event (best-effort).
   if (booking.google_calendar_event_id) {
     try {
-      const client = await getGoogleCalendarClient();
+      const client = await getGoogleCalendarClient({
+        organizationId: booking.organization_id,
+      });
       if (client) {
         await client.deleteEvent(booking.google_calendar_event_id);
       }

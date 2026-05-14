@@ -18,7 +18,7 @@ export interface ActionResult {
 export async function saveBusinessHour(
   formData: FormData,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const dow = Number(formData.get("day_of_week"));
   const start = ((formData.get("start_time") as string | null) ?? "").trim();
@@ -28,7 +28,10 @@ export async function saveBusinessHour(
   if (!Number.isInteger(dow) || dow < 0 || dow > 6) {
     return { ok: false, error: "Invalid day." };
   }
-  if (!/^\d{2}:\d{2}(:\d{2})?$/.test(start) || !/^\d{2}:\d{2}(:\d{2})?$/.test(end)) {
+  if (
+    !/^\d{2}:\d{2}(:\d{2})?$/.test(start) ||
+    !/^\d{2}:\d{2}(:\d{2})?$/.test(end)
+  ) {
     return { ok: false, error: "Times must be HH:MM." };
   }
   if (start >= end) {
@@ -39,6 +42,7 @@ export async function saveBusinessHour(
   const { error } = await supabase
     .from("business_hours")
     .update({ start_time: start, end_time: end, enabled })
+    .eq("organization_id", admin.organizationId)
     .eq("day_of_week", dow);
 
   if (error) return { ok: false, error: error.message };
@@ -54,7 +58,7 @@ export async function saveBusinessHour(
 export async function addCalendarBlock(
   formData: FormData,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const starts = ((formData.get("starts_at") as string | null) ?? "").trim();
   const ends = ((formData.get("ends_at") as string | null) ?? "").trim();
@@ -75,6 +79,7 @@ export async function addCalendarBlock(
 
   const supabase = getServiceSupabase();
   const { error } = await supabase.from("calendar_blocks").insert({
+    organization_id: admin.organizationId,
     starts_at: startsDate.toISOString(),
     ends_at: endsDate.toISOString(),
     label,
@@ -89,11 +94,12 @@ export async function addCalendarBlock(
 export async function deleteCalendarBlock(
   blockId: string,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const supabase = getServiceSupabase();
   const { error } = await supabase
     .from("calendar_blocks")
     .delete()
+    .eq("organization_id", admin.organizationId)
     .eq("id", blockId);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin/settings/availability");

@@ -32,7 +32,7 @@ const ALLOWED_IMAGE_TYPES = new Set([
 export async function updateRealtorProfile(
   formData: FormData,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const profileId = cleanText(formData.get("profile_id"));
   if (!profileId) return { ok: false, error: "Missing realtor profile." };
@@ -61,6 +61,7 @@ export async function updateRealtorProfile(
     .from("profiles")
     .select("profile_photo_url, brokerage_logo_url")
     .eq("id", profileId)
+    .eq("organization_id", admin.organizationId)
     .eq("role", "realtor")
     .maybeSingle<ProfileMediaRow>();
   if (currentProfileError) {
@@ -72,6 +73,7 @@ export async function updateRealtorProfile(
 
   const profilePhoto = await resolveImageField({
     service,
+    organizationId: admin.organizationId,
     profileId,
     kind: "headshot",
     fileEntry: formData.get("profile_photo_file"),
@@ -82,6 +84,7 @@ export async function updateRealtorProfile(
 
   const brokerageLogo = await resolveImageField({
     service,
+    organizationId: admin.organizationId,
     profileId,
     kind: "logo",
     fileEntry: formData.get("brokerage_logo_file"),
@@ -105,6 +108,7 @@ export async function updateRealtorProfile(
     .from("profiles")
     .update(update)
     .eq("id", profileId)
+    .eq("organization_id", admin.organizationId)
     .eq("role", "realtor")
     .select("id")
     .maybeSingle<{ id: string }>();
@@ -166,6 +170,7 @@ function parseOptionalUrl(
 
 async function resolveImageField({
   service,
+  organizationId,
   profileId,
   kind,
   fileEntry,
@@ -173,6 +178,7 @@ async function resolveImageField({
   clear,
 }: {
   service: ServiceSupabase;
+  organizationId: string;
   profileId: string;
   kind: "headshot" | "logo";
   fileEntry: FormDataEntryValue | null;
@@ -183,6 +189,7 @@ async function resolveImageField({
 
   const uploaded = await uploadImageIfPresent(
     service,
+    organizationId,
     profileId,
     kind,
     fileEntry,
@@ -195,6 +202,7 @@ async function resolveImageField({
 
 async function uploadImageIfPresent(
   service: ServiceSupabase,
+  organizationId: string,
   profileId: string,
   kind: "headshot" | "logo",
   entry: FormDataEntryValue | null,
@@ -214,18 +222,27 @@ async function uploadImageIfPresent(
 
   const extension = extensionFor(entry);
   const bytes = Buffer.from(await entry.arrayBuffer());
-  return storeImageBytes(service, profileId, kind, bytes, entry.type, extension);
+  return storeImageBytes(
+    service,
+    organizationId,
+    profileId,
+    kind,
+    bytes,
+    entry.type,
+    extension,
+  );
 }
 
 async function storeImageBytes(
   service: ServiceSupabase,
+  organizationId: string,
   profileId: string,
   kind: "headshot" | "logo",
   bytes: Buffer,
   contentType: string,
   extension: string,
 ): Promise<{ ok: true; url: string | null } | { ok: false; error: string }> {
-  const path = `realtors/${profileId}/${kind}-${Date.now()}-${randomUUID()}.${extension}`;
+  const path = `organizations/${organizationId}/realtors/${profileId}/${kind}-${Date.now()}-${randomUUID()}.${extension}`;
 
   const { error } = await service.storage
     .from(PROFILE_MEDIA_BUCKET)

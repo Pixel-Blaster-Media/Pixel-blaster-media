@@ -1,6 +1,7 @@
 import "server-only";
 
 import { BUSINESS_TZ, listAvailableSlots } from "@/lib/booking/availability";
+import type { OrganizationScope } from "@/lib/organizations/context";
 
 export interface DisplaySlot {
   /** ISO UTC string — what we round-trip through the URL / form. */
@@ -23,6 +24,7 @@ export interface SlotsByDay {
 export async function loadSlotsForNextDays(
   durationMinutes: number,
   days: number,
+  scope?: OrganizationScope,
 ): Promise<SlotsByDay[]> {
   const now = new Date();
   const from = new Date(now);
@@ -32,7 +34,12 @@ export async function loadSlotsForNextDays(
   const to = new Date(from);
   to.setDate(to.getDate() + days);
 
-  const slots = await listAvailableSlots({ from, to, durationMinutes });
+  const slots = await listAvailableSlots({
+    from,
+    to,
+    durationMinutes,
+    organizationId: scope?.organizationId,
+  });
 
   const dayFmt = new Intl.DateTimeFormat("en-US", {
     timeZone: BUSINESS_TZ,
