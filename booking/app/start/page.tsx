@@ -15,13 +15,12 @@ export default function StartPage() {
             Pixel platform beta
           </p>
           <h1 className="mt-3 text-4xl font-semibold leading-tight text-realtor-text md:text-5xl">
-            Create a booking system for your media company.
+            Create your booking account.
           </h1>
           <p className="mt-5 text-base leading-7 text-realtor-muted">
-            This sets up your company workspace, admin login, starter booking
-            catalog, default availability, and public booking link. You can tune
-            pricing, connect Google Calendar, and manage realtor accounts after
-            signing in.
+            Sign up first, then set up the business from inside your dashboard.
+            Your workspace starts with a starter catalog, default availability,
+            and a private admin area you can customize.
           </p>
         </div>
 
