@@ -20,6 +20,18 @@ export interface CompanySetupInput {
   sourceCatalogOrganizationId?: string;
 }
 
+export interface ExistingUserCompanySetupInput {
+  userId: string;
+  companyName: string;
+  slug: string;
+  adminName: string;
+  adminEmail: string;
+  primaryColor: string;
+  accentColor: string;
+  copyCatalog: boolean;
+  sourceCatalogOrganizationId?: string;
+}
+
 export interface CompanySetupResult {
   ok: boolean;
   error?: string;
@@ -36,18 +48,11 @@ export async function createCompanyWorkspace(
   input: CompanySetupInput,
 ): Promise<CompanySetupResult> {
   const service = getServiceSupabase();
-  const validation = validateCompanySetupInput(input);
+  const validation = validateCompanySetupInput(input, { requirePassword: true });
   if (validation) return { ok: false, error: validation };
 
-  const { data: existingOrg, error: slugError } = await service
-    .from("organizations")
-    .select("id")
-    .eq("slug", input.slug)
-    .maybeSingle<{ id: string }>();
-  if (slugError) return { ok: false, error: slugError.message };
-  if (existingOrg) {
-    return { ok: false, error: "That company handle is already taken." };
-  }
+  const slugCheck = await ensureSlugAvailable(input.slug);
+  if (slugCheck) return { ok: false, error: slugCheck };
 
   if (await emailHasAccount(input.adminEmail)) {
     return {
@@ -57,34 +62,20 @@ export async function createCompanyWorkspace(
     };
   }
 
-  const { data: organization, error: orgError } = await service
-    .from("organizations")
-    .insert({
-      name: input.companyName,
-      slug: input.slug,
-      primary_color: input.primaryColor,
-      accent_color: input.accentColor,
-    })
-    .select("id, name, slug")
-    .single<{ id: string; name: string; slug: string }>();
-
-  if (orgError || !organization) {
+  let organization: { id: string; name: string; slug: string };
+  try {
+    organization = await createOrganization(input);
+  } catch (err) {
     return {
       ok: false,
-      error: orgError?.message ?? "Could not create company.",
+      error: err instanceof Error ? err.message : "Could not create company.",
     };
   }
 
   let createdUserId: string | null = null;
 
   try {
-    await seedBusinessHours(organization.id);
-    if (input.copyCatalog) {
-      await copyStarterCatalog(
-        input.sourceCatalogOrganizationId ?? DEFAULT_ORGANIZATION_ID,
-        organization.id,
-      );
-    }
+    await seedStarterWorkspace(input, organization.id);
 
     const { data: created, error: createUserError } =
       await service.auth.admin.createUser({
@@ -132,6 +123,64 @@ export async function createCompanyWorkspace(
   };
 }
 
+export async function createCompanyWorkspaceForExistingUser(
+  input: ExistingUserCompanySetupInput,
+): Promise<CompanySetupResult> {
+  const service = getServiceSupabase();
+  const validation = validateCompanySetupInput(input, { requirePassword: false });
+  if (validation) return { ok: false, error: validation };
+  if (!input.userId) return { ok: false, error: "Missing signed-in user." };
+
+  const slugCheck = await ensureSlugAvailable(input.slug);
+  if (slugCheck) return { ok: false, error: slugCheck };
+
+  let organization: { id: string; name: string; slug: string };
+  try {
+    organization = await createOrganization(input);
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Could not create company.",
+    };
+  }
+
+  try {
+    await seedStarterWorkspace(input, organization.id);
+
+    const { error: profileError } = await service.from("profiles").upsert({
+      id: input.userId,
+      organization_id: organization.id,
+      email: input.adminEmail,
+      full_name: input.adminName,
+      role: "admin",
+    });
+    if (profileError) throw new Error(profileError.message);
+
+    const { error: memberError } = await service
+      .from("organization_members")
+      .upsert({
+        organization_id: organization.id,
+        profile_id: input.userId,
+        role: "owner",
+      });
+    if (memberError) throw new Error(memberError.message);
+  } catch (err) {
+    await cleanupFailedCompany(organization.id, null);
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Company setup failed.",
+    };
+  }
+
+  return {
+    ok: true,
+    companyName: organization.name,
+    slug: organization.slug,
+    adminEmail: input.adminEmail,
+    bookingPath: `/book?org=${organization.slug}`,
+  };
+}
+
 export function cleanText(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -146,7 +195,10 @@ export function normalizeCompanySlug(value: string): string {
     .slice(0, 60);
 }
 
-function validateCompanySetupInput(input: CompanySetupInput): string | null {
+function validateCompanySetupInput(
+  input: CompanySetupInput | ExistingUserCompanySetupInput,
+  options: { requirePassword: boolean },
+): string | null {
   if (!input.companyName) return "Company name is required.";
   if (input.companyName.length > 80) return "Company name is too long.";
   if (!input.slug || !SLUG_RE.test(input.slug)) {
@@ -154,12 +206,62 @@ function validateCompanySetupInput(input: CompanySetupInput): string | null {
   }
   if (!input.adminName) return "First admin name is required.";
   if (!input.adminEmail.includes("@")) return "First admin email is invalid.";
-  if (input.adminPassword.length < 10) {
+  if (
+    options.requirePassword &&
+    "adminPassword" in input &&
+    input.adminPassword.length < 10
+  ) {
     return "Temporary password must be at least 10 characters.";
   }
   if (!HEX_COLOR_RE.test(input.primaryColor)) return "Primary color is invalid.";
   if (!HEX_COLOR_RE.test(input.accentColor)) return "Accent color is invalid.";
   return null;
+}
+
+async function ensureSlugAvailable(slug: string): Promise<string | null> {
+  const service = getServiceSupabase();
+  const { data: existingOrg, error: slugError } = await service
+    .from("organizations")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle<{ id: string }>();
+  if (slugError) return slugError.message;
+  if (existingOrg) return "That company handle is already taken.";
+  return null;
+}
+
+async function createOrganization(
+  input: CompanySetupInput | ExistingUserCompanySetupInput,
+): Promise<{ id: string; name: string; slug: string }> {
+  const service = getServiceSupabase();
+  const { data: organization, error: orgError } = await service
+    .from("organizations")
+    .insert({
+      name: input.companyName,
+      slug: input.slug,
+      primary_color: input.primaryColor,
+      accent_color: input.accentColor,
+    })
+    .select("id, name, slug")
+    .single<{ id: string; name: string; slug: string }>();
+
+  if (orgError || !organization) {
+    throw new Error(orgError?.message ?? "Could not create company.");
+  }
+  return organization;
+}
+
+async function seedStarterWorkspace(
+  input: CompanySetupInput | ExistingUserCompanySetupInput,
+  organizationId: string,
+): Promise<void> {
+  await seedBusinessHours(organizationId);
+  if (input.copyCatalog) {
+    await copyStarterCatalog(
+      input.sourceCatalogOrganizationId ?? DEFAULT_ORGANIZATION_ID,
+      organizationId,
+    );
+  }
 }
 
 async function seedBusinessHours(organizationId: string): Promise<void> {

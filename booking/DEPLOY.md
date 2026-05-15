@@ -119,7 +119,45 @@ Go back to the Supabase tab you left open (URL Configuration).
    ```
 3. Save.
 
-### 2.6 Smoke test
+### 2.6 Optional — Google / Apple sign-in
+
+Email and password works without this. Do this section when you want the
+**Continue with Google** and **Continue with Apple** buttons to work.
+
+In Supabase, go to **Authentication → URL Configuration** and make sure these
+redirect URLs are allowed:
+
+```
+https://your-vercel-url.vercel.app/**
+https://your-vercel-url.vercel.app/auth/callback
+http://localhost:3000/**
+http://localhost:3000/auth/callback
+```
+
+For Google:
+
+1. In Supabase, go to **Authentication → Providers → Google** and copy the
+   callback URL shown there. It will look like:
+   `https://YOUR-PROJECT-REF.supabase.co/auth/v1/callback`.
+2. In Google Cloud, create an **OAuth Client ID → Web application**.
+3. Add that Supabase callback URL under **Authorized redirect URIs**.
+4. Copy the Google **Client ID** and **Client Secret** back into Supabase's
+   Google provider settings.
+5. Enable the provider and save.
+
+For Apple:
+
+1. You need an Apple Developer account.
+2. Create/configure a Services ID for web sign-in.
+3. Use your Supabase project domain as the website domain and
+   `https://YOUR-PROJECT-REF.supabase.co/auth/v1/callback` as the return URL.
+4. Generate Apple's client secret and paste the Services ID + secret into
+   Supabase's Apple provider settings.
+
+Apple's setup is more annoying than Google's and the secret must be rotated
+periodically, so Google is the quickest first win.
+
+### 2.7 Smoke test
 
 1. Open your Vercel URL in an incognito window.
 2. You should see the Pixel Blaster Booking landing page (teal headline, "Book the shoot. Get everything in one place.")

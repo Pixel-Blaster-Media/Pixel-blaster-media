@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import OAuthButtons from "../oauth/OAuthButtons";
 import PasswordSignInForm from "../password/PasswordSignInForm";
 
 export const metadata: Metadata = {
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; oauth_error?: string }>;
 }) {
   const params = await searchParams;
   return (
@@ -25,6 +26,17 @@ export default async function SignInPage({
           tools.
         </p>
       </header>
+      {params.oauth_error ? (
+        <p
+          role="alert"
+          className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        >
+          {params.oauth_error === "apple"
+            ? "Apple sign-in is not ready yet. Use email/password for now, or enable Apple in Supabase Auth first."
+            : "Google sign-in is not ready yet. Use email/password for now, or enable Google in Supabase Auth first."}
+        </p>
+      ) : null}
+      <OAuthButtons mode="sign-in" next={params.next ?? "/admin"} />
       <PasswordSignInForm next={params.next} />
       <div className="space-y-2 text-xs text-realtor-muted">
         <p>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import OAuthButtons from "../oauth/OAuthButtons";
 import PasswordSignInForm from "./PasswordSignInForm";
 
 export const metadata: Metadata = {
@@ -27,6 +28,7 @@ export default async function PasswordSignInPage({
           tools.
         </p>
       </header>
+      <OAuthButtons mode="sign-in" next={params.next ?? "/admin"} />
       <PasswordSignInForm next={params.next} />
       <p className="text-xs text-realtor-muted">
         Prefer a magic link?{" "}

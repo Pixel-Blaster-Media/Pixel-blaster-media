@@ -67,17 +67,6 @@ export default function StartCompanyForm() {
         </div>
       </section>
 
-      <section className="realtor-warm-panel rounded-3xl p-5 md:p-6">
-        <p className="text-sm font-semibold text-realtor-text">
-          Google and Apple sign-in
-        </p>
-        <p className="mt-2 text-sm leading-6 text-realtor-muted">
-          Those can be added next once the Supabase OAuth providers are
-          configured. Email/password gets the signup flow working now without
-          extra provider setup.
-        </p>
-      </section>
-
       {state.error ? (
         <p
           role="alert"
