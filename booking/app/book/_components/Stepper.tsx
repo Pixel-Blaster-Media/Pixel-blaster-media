@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import {
+  serializeWizardState,
   stepCompleteness,
   WIZARD_STEPS,
   type StepId,
@@ -102,23 +103,7 @@ function isStepDone(
 }
 
 function buildQuerySuffix(state: WizardState): string {
-  // Reuse the shared serializer — but we only emit fields that are set.
-  const params = new URLSearchParams();
-  if (state.services.length) params.set("services", state.services.join(","));
-  if (state.addOns.length) params.set("add_ons", state.addOns.join(","));
-  if (state.streetAddress) params.set("address", state.streetAddress);
-  if (state.unitNumber) params.set("unit", state.unitNumber);
-  if (state.city) params.set("city", state.city);
-  if (state.postalCode) params.set("postal", state.postalCode);
-  if (state.squareFootage != null)
-    params.set("sqft", String(state.squareFootage));
-  if (state.isVacant) params.set("vacant", state.isVacant);
-  if (state.includeBasement != null) {
-    params.set("basement", state.includeBasement ? "1" : "0");
-  }
-  if (state.shotRequests.length) params.set("shots", state.shotRequests.join(","));
-  if (state.shootNotes) params.set("shoot_notes", state.shootNotes);
-  if (state.slot) params.set("slot", state.slot);
+  const params = serializeWizardState(state);
   const q = params.toString();
   return q ? `?${q}` : "";
 }

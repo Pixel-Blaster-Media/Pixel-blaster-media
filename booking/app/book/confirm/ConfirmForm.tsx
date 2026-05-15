@@ -5,7 +5,10 @@ import { useActionState, useEffect, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 
 import { checkEmailAction, createPublicBooking, type BookResult } from "../actions";
-import type { WizardState } from "@/lib/booking/wizard-state";
+import {
+  serializeWizardState,
+  type WizardState,
+} from "@/lib/booking/wizard-state";
 import BookingTotalBar, {
   type BookingTotalItem,
 } from "../_components/BookingTotalBar";
@@ -68,6 +71,9 @@ export default function ConfirmForm({
   return (
     <form action={formAction} className="space-y-5">
       {/* Carry wizard state into the action */}
+      {state.organizationSlug ? (
+        <input type="hidden" name="org" value={state.organizationSlug} />
+      ) : null}
       {state.services.map((s) => (
         <input key={s} type="hidden" name="services" value={s} />
       ))}
@@ -311,19 +317,5 @@ function Field({
 }
 
 function buildQuery(state: WizardState): string {
-  const out = new URLSearchParams();
-  if (state.services.length) out.set("services", state.services.join(","));
-  if (state.addOns.length) out.set("add_ons", state.addOns.join(","));
-  if (state.streetAddress) out.set("address", state.streetAddress);
-  if (state.unitNumber) out.set("unit", state.unitNumber);
-  if (state.city) out.set("city", state.city);
-  if (state.postalCode) out.set("postal", state.postalCode);
-  if (state.squareFootage != null)
-    out.set("sqft", String(state.squareFootage));
-  if (state.isVacant) out.set("vacant", state.isVacant);
-  if (state.includeBasement != null) {
-    out.set("basement", state.includeBasement ? "1" : "0");
-  }
-  if (state.slot) out.set("slot", state.slot);
-  return out.toString();
+  return serializeWizardState(state).toString();
 }

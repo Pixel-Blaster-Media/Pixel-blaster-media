@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { getActiveCatalog, getCatalogItemPrice } from "@/lib/booking/catalog";
 import { formatSlotLabel } from "@/lib/booking/slot-display";
 import {
   parseWizardState,
+  serializeWizardState,
   stepCompleteness,
 } from "@/lib/booking/wizard-state";
+import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type { UserRole } from "@/lib/supabase/database.types";
 
@@ -34,29 +36,34 @@ export default async function BookStep4Page({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const state = parseWizardState(await searchParams);
-  const c = stepCompleteness(state);
-  if (!c.step1) redirect("/book");
-  if (!c.step2) redirect(`/book/property?${serializeForRedirect(state)}`);
-  if (!c.step3) redirect(`/book/schedule?${serializeForRedirect(state)}`);
+  const organization = await resolvePublicBookingOrganization(
+    state.organizationSlug,
+  );
+  if (!organization) notFound();
+  const scopedState = { ...state, organizationSlug: organization.slug };
+  const c = stepCompleteness(scopedState);
+  if (!c.step1) redirect(`/book?${serializeForRedirect(scopedState)}`);
+  if (!c.step2) redirect(`/book/property?${serializeForRedirect(scopedState)}`);
+  if (!c.step3) redirect(`/book/schedule?${serializeForRedirect(scopedState)}`);
 
   const profile = await loadSessionProfile();
-  const catalog = await getActiveCatalog();
+  const catalog = await getActiveCatalog({ organizationId: organization.id });
 
   const bySlug = new Map<string, (typeof catalog.bundles)[number]>();
   for (const r of catalog.bundles) bySlug.set(r.slug, r);
   for (const r of catalog.aLaCarte) bySlug.set(r.slug, r);
   for (const r of catalog.addons) bySlug.set(r.slug, r);
 
-  const selectedItems = state.services
+  const selectedItems = scopedState.services
     .map((s) => bySlug.get(s))
     .filter((x): x is NonNullable<typeof x> => !!x);
-  const selectedAddons = state.addOns
+  const selectedAddons = scopedState.addOns
     .map((s) => bySlug.get(s))
     .filter((x): x is NonNullable<typeof x> => !!x);
 
   const pricedItems = [...selectedItems, ...selectedAddons].map((item) => ({
     item,
-    price: getCatalogItemPrice(item, state.squareFootage),
+    price: getCatalogItemPrice(item, scopedState.squareFootage),
   }));
   const totalCents = pricedItems.reduce(
     (n, row) => n + row.price.totalPriceCents,
@@ -68,19 +75,21 @@ export default async function BookStep4Page({
     60,
   );
 
-  const whenLabel = state.slot ? formatSlotLabel(new Date(state.slot)) : "";
+  const whenLabel = scopedState.slot
+    ? formatSlotLabel(new Date(scopedState.slot))
+    : "";
   const addressLine = [
-    state.streetAddress,
-    state.unitNumber && `Unit ${state.unitNumber}`,
-    state.city,
-    state.postalCode,
+    scopedState.streetAddress,
+    scopedState.unitNumber && `Unit ${scopedState.unitNumber}`,
+    scopedState.city,
+    scopedState.postalCode,
   ]
     .filter(Boolean)
     .join(", ");
 
   return (
     <>
-      <Stepper current={4} state={state} />
+      <Stepper current={4} state={scopedState} />
 
       <section>
         <h2 className="text-lg font-semibold text-realtor-text md:text-xl">
@@ -103,7 +112,7 @@ export default async function BookStep4Page({
       </section>
 
       <ConfirmUpsellPanel
-        state={state}
+        state={scopedState}
         catalog={[...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(
           (item) => ({
             slug: item.slug,
@@ -152,40 +161,45 @@ export default async function BookStep4Page({
             }
           />
           <Row label="Address" value={addressLine} />
-          {state.squareFootage != null ? (
-            <Row label="Size" value={`${state.squareFootage} sqft (approx.)`} />
+          {scopedState.squareFootage != null ? (
+            <Row
+              label="Size"
+              value={`${scopedState.squareFootage} sqft (approx.)`}
+            />
           ) : null}
-          {state.isVacant ? (
+          {scopedState.isVacant ? (
             <Row
               label="Occupancy"
               value={
-                state.isVacant === "vacant"
+                scopedState.isVacant === "vacant"
                   ? "Vacant"
-                  : state.isVacant === "partial"
+                  : scopedState.isVacant === "partial"
                     ? "Partially occupied"
                     : "Occupied"
               }
             />
           ) : null}
-          {state.includeBasement != null ? (
+          {scopedState.includeBasement != null ? (
             <Row
               label="Basement"
-              value={state.includeBasement ? "Include in shoot" : "Skip"}
+              value={scopedState.includeBasement ? "Include in shoot" : "Skip"}
             />
           ) : null}
-          {state.shotRequests.length || state.shootNotes ? (
+          {scopedState.shotRequests.length || scopedState.shootNotes ? (
             <Row
               label="Shot notes"
               value={
                 <span className="space-y-1">
-                  {state.shotRequests.length ? (
+                  {scopedState.shotRequests.length ? (
                     <span className="block">
-                      {state.shotRequests.map(formatShotRequest).join(", ")}
+                      {scopedState.shotRequests
+                        .map(formatShotRequest)
+                        .join(", ")}
                     </span>
                   ) : null}
-                  {state.shootNotes ? (
+                  {scopedState.shootNotes ? (
                     <span className="block text-realtor-muted">
-                      {state.shootNotes}
+                      {scopedState.shootNotes}
                     </span>
                   ) : null}
                 </span>
@@ -204,7 +218,7 @@ export default async function BookStep4Page({
                       <span key={row.item.id} className="block">
                         {row.item.name}: +$
                         {(row.price.overageCents / 100).toFixed(0)} for{" "}
-                        {state.squareFootage?.toLocaleString()} sqft
+                        {scopedState.squareFootage?.toLocaleString()} sqft
                       </span>
                     ))}
                 </span>
@@ -221,7 +235,7 @@ export default async function BookStep4Page({
       </section>
 
       <ConfirmForm
-        state={state}
+        state={scopedState}
         profile={profile}
         items={[...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(
           (item) => ({
@@ -295,22 +309,7 @@ async function loadSessionProfile(): Promise<SessionProfile | null> {
 }
 
 function serializeForRedirect(state: ReturnType<typeof parseWizardState>) {
-  const out = new URLSearchParams();
-  if (state.services.length) out.set("services", state.services.join(","));
-  if (state.addOns.length) out.set("add_ons", state.addOns.join(","));
-  if (state.streetAddress) out.set("address", state.streetAddress);
-  if (state.unitNumber) out.set("unit", state.unitNumber);
-  if (state.city) out.set("city", state.city);
-  if (state.postalCode) out.set("postal", state.postalCode);
-  if (state.squareFootage != null)
-    out.set("sqft", String(state.squareFootage));
-  if (state.isVacant) out.set("vacant", state.isVacant);
-  if (state.includeBasement != null) {
-    out.set("basement", state.includeBasement ? "1" : "0");
-  }
-  if (state.shotRequests.length) out.set("shots", state.shotRequests.join(","));
-  if (state.shootNotes) out.set("shoot_notes", state.shootNotes);
-  return out.toString();
+  return serializeWizardState(state).toString();
 }
 
 function formatShotRequest(slug: string): string {

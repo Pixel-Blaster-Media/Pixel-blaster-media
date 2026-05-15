@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
 import type { CatalogItemDTO } from "@/app/_components/CartPicker";
 import {
@@ -6,6 +7,7 @@ import {
   type CatalogItemRow,
 } from "@/lib/booking/catalog";
 import { parseWizardState } from "@/lib/booking/wizard-state";
+import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
 
 import AIPackageRecommender from "./_components/AIPackageRecommender";
 import PackageAccordion from "./_components/PackageAccordion";
@@ -22,7 +24,12 @@ export default async function BookStep1Page({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const state = parseWizardState(await searchParams);
-  const catalog = await getActiveCatalog();
+  const organization = await resolvePublicBookingOrganization(
+    state.organizationSlug,
+  );
+  if (!organization) notFound();
+  const scopedState = { ...state, organizationSlug: organization.slug };
+  const catalog = await getActiveCatalog({ organizationId: organization.id });
 
   const bundles = catalog.bundles.map(toDTO);
   const aLaCarte = catalog.aLaCarte.map(toDTO);
@@ -41,7 +48,7 @@ export default async function BookStep1Page({
 
   return (
     <>
-      <Stepper current={1} state={state} />
+      <Stepper current={1} state={scopedState} />
 
       <section>
         <h2 className="text-lg font-semibold text-realtor-text md:text-xl">
@@ -51,6 +58,9 @@ export default async function BookStep1Page({
           Pick a bundle or build it out à la carte. Video add-ons (like
           &ldquo;put me on camera&rdquo;) appear automatically when your
           selection includes video.
+        </p>
+        <p className="mt-2 text-xs font-semibold uppercase tracking-wider text-realtor-primary/80">
+          Booking with {organization.name}
         </p>
       </section>
 

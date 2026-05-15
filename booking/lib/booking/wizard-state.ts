@@ -14,6 +14,8 @@
 export type VacancyState = "vacant" | "occupied" | "partial";
 
 export interface WizardState {
+  /** Booking company handle. Omitted means the default Pixel Blaster tenant. */
+  organizationSlug: string | null;
   /** Step 1 — bundle + a-la-carte slugs (separate from add_ons for video gating). */
   services: string[];
   /** Step 1 — add-on slugs (on_camera, etc.). */
@@ -39,6 +41,7 @@ export function parseWizardState(
   raw: Record<string, string | string[] | undefined>,
 ): WizardState {
   return {
+    organizationSlug: organizationSlug(raw.org),
     services: parseCsv(raw.services),
     addOns: parseCsv(raw.add_ons),
     streetAddress: str(raw.address),
@@ -57,6 +60,7 @@ export function parseWizardState(
 /** Serialize state back to query-param form for step-to-step navigation. */
 export function serializeWizardState(s: Partial<WizardState>): URLSearchParams {
   const out = new URLSearchParams();
+  if (s.organizationSlug) out.set("org", s.organizationSlug);
   if (s.services?.length) out.set("services", s.services.join(","));
   if (s.addOns?.length) out.set("add_ons", s.addOns.join(","));
   if (s.streetAddress) out.set("address", s.streetAddress);
@@ -133,4 +137,11 @@ function boolOrNull(v: string | string[] | undefined): boolean | null {
   if (s === "1" || s === "true") return true;
   if (s === "0" || s === "false") return false;
   return null;
+}
+
+function organizationSlug(v: string | string[] | undefined): string | null {
+  const s = str(v).toLowerCase();
+  if (!s) return null;
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s)) return null;
+  return s.slice(0, 60);
 }

@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { getActiveCatalog } from "@/lib/booking/catalog";
 import {
   parseWizardState,
+  serializeWizardState,
   stepCompleteness,
 } from "@/lib/booking/wizard-state";
+import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
 
 import Stepper from "../_components/Stepper";
 import PropertyForm from "./PropertyForm";
@@ -21,17 +23,24 @@ export default async function BookStep2Page({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const state = parseWizardState(await searchParams);
-  const catalog = await getActiveCatalog();
+  const organization = await resolvePublicBookingOrganization(
+    state.organizationSlug,
+  );
+  if (!organization) notFound();
+  const scopedState = { ...state, organizationSlug: organization.slug };
+  const catalog = await getActiveCatalog({ organizationId: organization.id });
 
   // Guard — can't be here without step 1 done.
-  if (!stepCompleteness(state).step1) {
-    const qs = new URLSearchParams();
+  if (!stepCompleteness(scopedState).step1) {
+    const qs = serializeWizardState({
+      organizationSlug: scopedState.organizationSlug,
+    });
     redirect(`/book${qs.toString() ? `?${qs.toString()}` : ""}`);
   }
 
   return (
     <>
-      <Stepper current={2} state={state} />
+      <Stepper current={2} state={scopedState} />
 
       <section>
         <h2 className="text-lg font-semibold text-realtor-text md:text-xl">
@@ -57,23 +66,26 @@ export default async function BookStep2Page({
             overage_price_cents: item.overage_price_cents,
           }),
         )}
-        selectedSlugs={state.services}
-        selectedAddOnSlugs={state.addOns}
+        selectedSlugs={scopedState.services}
+        selectedAddOnSlugs={scopedState.addOns}
         initial={{
-          address: state.streetAddress,
-          unit: state.unitNumber,
-          city: state.city,
-          postal: state.postalCode,
-          sqft: state.squareFootage == null ? "" : String(state.squareFootage),
-          vacant: state.isVacant ?? "",
-          basement:
-            state.includeBasement == null
+          address: scopedState.streetAddress,
+          unit: scopedState.unitNumber,
+          city: scopedState.city,
+          postal: scopedState.postalCode,
+          sqft:
+            scopedState.squareFootage == null
               ? ""
-              : state.includeBasement
+              : String(scopedState.squareFootage),
+          vacant: scopedState.isVacant ?? "",
+          basement:
+            scopedState.includeBasement == null
+              ? ""
+              : scopedState.includeBasement
                 ? "1"
                 : "0",
-          shotRequests: state.shotRequests,
-          shootNotes: state.shootNotes,
+          shotRequests: scopedState.shotRequests,
+          shootNotes: scopedState.shootNotes,
         }}
       />
     </>

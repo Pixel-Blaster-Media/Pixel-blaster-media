@@ -15,6 +15,7 @@ import { getActiveCatalog, getCatalogItemPrice } from "@/lib/booking/catalog";
 import { sendEmail } from "@/lib/email/resend";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
+import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
 import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -71,6 +72,7 @@ export async function createPublicBooking(
   const addOnSlugs = ((formData.getAll("add_ons") as string[]) ?? [])
     .map((s) => s.trim())
     .filter(Boolean);
+  const organizationSlug = str(formData, "org");
   const slotStartRaw = str(formData, "slot");
   const streetAddress = str(formData, "street_address");
   const unitNumber = str(formData, "unit_number");
@@ -111,6 +113,15 @@ export async function createPublicBooking(
   if (serviceSlugs.length === 0) {
     return { ok: false, errors: { _form: "Pick at least one service." } };
   }
+
+  const organization = await resolvePublicBookingOrganization(organizationSlug);
+  if (!organization) {
+    return {
+      ok: false,
+      errors: { _form: "That booking company was not found. Check the link." },
+    };
+  }
+
   if (!streetAddress) {
     return {
       ok: false,
@@ -131,6 +142,8 @@ export async function createPublicBooking(
 
   // -------- Resolve current user: existing session, sign-in, or sign-up --------
   const authResult = await resolveUser({
+    organizationId: organization.id,
+    organizationName: organization.name,
     contactEmail,
     contactName,
     contactPhone,
@@ -417,6 +430,8 @@ async function resolveUser(params: {
   contactPhone: string;
   brokerage: string;
   password: string;
+  organizationId: string;
+  organizationName: string;
 }): Promise<ResolveUserOk | ResolveUserErr> {
   // 1) Already signed in? Use the existing session.
   const supabase = await getServerSupabase();
@@ -438,6 +453,9 @@ async function resolveUser(params: {
           organization_id: string | null;
         }>();
       if (profile) {
+        if (profile.organization_id !== params.organizationId) {
+          return organizationMismatch(params.organizationName);
+        }
         return {
           ok: true,
           userId: profile.id,
@@ -500,14 +518,6 @@ async function resolveUser(params: {
         },
       };
     }
-    // Top up phone/brokerage if the user left them empty before.
-    await maybeFillProfile(service, userId, {
-      organizationId: DEFAULT_ORGANIZATION_ID,
-      full_name: params.contactName,
-      phone: params.contactPhone,
-      brokerage: params.brokerage,
-    });
-
     const { data: profile } = await service
       .from("profiles")
       .select("id, email, full_name, organization_id")
@@ -527,11 +537,22 @@ async function resolveUser(params: {
         },
       };
     }
+    if (profile.organization_id !== params.organizationId) {
+      return organizationMismatch(params.organizationName);
+    }
+    // Top up phone/brokerage if the user left them empty before, but only
+    // after confirming this account belongs to the requested company.
+    await maybeFillProfile(service, userId, {
+      organizationId: params.organizationId,
+      full_name: params.contactName,
+      phone: params.contactPhone,
+      brokerage: params.brokerage,
+    });
     return {
       ok: true,
       userId: profile.id,
       email: profile.email,
-      fullName: profile.full_name,
+      fullName: profile.full_name ?? params.contactName,
       organizationId: profile.organization_id ?? DEFAULT_ORGANIZATION_ID,
     };
   }
@@ -574,7 +595,8 @@ async function resolveUser(params: {
 
   const newUserId = created.user.id;
   await maybeFillProfile(service, newUserId, {
-    organizationId: DEFAULT_ORGANIZATION_ID,
+    organizationId: params.organizationId,
+    setOrganization: true,
     full_name: params.contactName,
     phone: params.contactPhone,
     brokerage: params.brokerage,
@@ -606,7 +628,21 @@ async function resolveUser(params: {
     userId: newUserId,
     email: params.contactEmail,
     fullName: params.contactName,
-    organizationId: DEFAULT_ORGANIZATION_ID,
+    organizationId: params.organizationId,
+  };
+}
+
+function organizationMismatch(organizationName: string): ResolveUserErr {
+  return {
+    ok: false,
+    result: {
+      ok: false,
+      errors: {
+        _form:
+          `You're signed into an account for another booking company. ` +
+          `Sign out first, then book with ${organizationName}.`,
+      },
+    },
   };
 }
 
@@ -615,6 +651,7 @@ async function maybeFillProfile(
   userId: string,
   fields: {
     organizationId: string;
+    setOrganization?: boolean;
     full_name?: string;
     phone?: string;
     brokerage?: string;
@@ -624,16 +661,19 @@ async function maybeFillProfile(
   // the admin set manually.
   const { data: current } = await supabase
     .from("profiles")
-    .select("full_name, phone, brokerage")
+    .select("organization_id, full_name, phone, brokerage")
     .eq("id", userId)
     .maybeSingle<{
+      organization_id: string | null;
       full_name: string | null;
       phone: string | null;
       brokerage: string | null;
     }>();
 
   const updates: ProfileUpdate = {};
-  updates.organization_id = fields.organizationId;
+  if (fields.setOrganization || !current?.organization_id) {
+    updates.organization_id = fields.organizationId;
+  }
   if (!current?.full_name && fields.full_name) {
     updates.full_name = fields.full_name;
   }

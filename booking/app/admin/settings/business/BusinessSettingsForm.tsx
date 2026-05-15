@@ -62,7 +62,10 @@ export default function BusinessSettingsForm({
                 className="mt-1 box-border w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text outline-none placeholder:text-realtor-muted/60 focus:border-realtor-primary/45"
               />
               <span className="mt-1 block text-xs leading-5 text-realtor-muted">
-                Reserved for future company booking pages and branded links.
+                Public booking link:{" "}
+                <code className="rounded-md bg-realtor-surface-muted px-1.5 py-0.5 text-realtor-text">
+                  /book?org={organization.slug}
+                </code>
               </span>
             </label>
           </div>
