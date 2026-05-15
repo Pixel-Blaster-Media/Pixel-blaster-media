@@ -33,7 +33,7 @@ export default function StartPage() {
             <li>Own company booking link</li>
             <li>Admin dashboard for bookings, calendar, pricing, and realtors</li>
             <li>Starter catalog copied from Pixel Blaster&apos;s setup</li>
-            <li>Separate tenant data so each company has its own workspace</li>
+            <li>Your own company workspace, separate from Pixel&apos;s controls</li>
           </ul>
         </div>
       </section>

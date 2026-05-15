@@ -70,24 +70,14 @@ export default function StartCompanyForm() {
 
   return (
     <form action={action} className="space-y-5">
-      <section className="realtor-elevated-panel grid gap-4 rounded-3xl p-5 md:grid-cols-2 md:p-6">
-        <div className="md:col-span-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-realtor-primary">
-            Invite
-          </p>
-          <p className="mt-2 text-sm leading-6 text-realtor-muted">
-            Enter the invite code from Pixel Blaster. This keeps the beta from
-            becoming a spam magnet before billing is connected.
-          </p>
-        </div>
-        <Field
-          label="Invite code"
-          name="invite_code"
-          type="password"
-          required
-          placeholder="Invite code"
-        />
-      </section>
+      <input
+        type="text"
+        name="website"
+        tabIndex={-1}
+        autoComplete="off"
+        className="hidden"
+        aria-hidden="true"
+      />
 
       <section className="realtor-warm-panel grid gap-4 rounded-3xl p-5 md:grid-cols-2 md:p-6">
         <div className="md:col-span-2">
