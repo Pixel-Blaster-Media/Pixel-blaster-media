@@ -82,7 +82,7 @@ export default function SettingsHub({
         })}
       </section>
 
-      <section className="hidden gap-3 md:grid md:grid-cols-3">
+      <section className="hidden gap-3 md:grid md:grid-cols-2 xl:grid-cols-4">
         {sections.map((section) => (
           <Link
             key={section.href}

@@ -1,4 +1,6 @@
 import SettingsHub from "./SettingsHub";
+import { requireAdmin } from "@/lib/auth/require-admin";
+import { isPlatformAdmin } from "@/lib/auth/require-platform-admin";
 
 const SETTINGS_SECTIONS = [
   {
@@ -37,7 +39,25 @@ const SETTINGS_SECTIONS = [
 
 export const metadata = { title: "Settings" };
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const admin = await requireAdmin();
+  const sections = isPlatformAdmin(admin)
+    ? [
+        ...SETTINGS_SECTIONS,
+        {
+          href: "/admin/settings/companies",
+          title: "Companies",
+          description:
+            "Create a new photography company with its own booking handle, admin, catalog, and setup checklist.",
+          details: [
+            "Add the business and first admin account.",
+            "Seed default working hours and copy a starter catalog.",
+            "Keep client-company data separate for SaaS rollout.",
+          ],
+        },
+      ]
+    : SETTINGS_SECTIONS;
+
   return (
     <div className="space-y-6">
       <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-5 shadow-lg shadow-realtor-text/10">
@@ -53,7 +73,7 @@ export default function SettingsPage() {
         </p>
       </header>
 
-      <SettingsHub sections={SETTINGS_SECTIONS} />
+      <SettingsHub sections={sections} />
 
       <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/80 p-5 shadow-sm shadow-realtor-text/5">
         <div className="flex flex-wrap items-start justify-between gap-4">
