@@ -2,6 +2,17 @@ import SettingsHub from "./SettingsHub";
 
 const SETTINGS_SECTIONS = [
   {
+    href: "/admin/settings/business",
+    title: "Business profile",
+    description:
+      "Edit the company name, booking handle, and brand colors for this organization.",
+    details: [
+      "Keep business identity separate per company.",
+      "Reserve a clean booking handle for future branded links.",
+      "Set the base colors future themes can use.",
+    ],
+  },
+  {
     href: "/admin/settings/pricing",
     title: "Pricing",
     description:
