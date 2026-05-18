@@ -10,6 +10,9 @@ import { parseWizardState } from "@/lib/booking/wizard-state";
 import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
 
 import AIPackageRecommender from "./_components/AIPackageRecommender";
+import BookingBrandHeader, {
+  BookingBrandFrame,
+} from "./_components/BookingBrandHeader";
 import PackageAccordion from "./_components/PackageAccordion";
 import Stepper from "./_components/Stepper";
 
@@ -47,7 +50,8 @@ export default async function BookStep1Page({
   const selectedAddOnSlugs = state.addOns.filter((s) => validAddonSlugs.has(s));
 
   return (
-    <>
+    <BookingBrandFrame organization={organization}>
+      <BookingBrandHeader organization={organization} />
       <Stepper current={1} state={scopedState} />
 
       <section>
@@ -77,7 +81,7 @@ export default async function BookStep1Page({
         selectedSlugs={selectedSlugs}
         selectedAddOnSlugs={selectedAddOnSlugs}
       />
-    </>
+    </BookingBrandFrame>
   );
 }
 

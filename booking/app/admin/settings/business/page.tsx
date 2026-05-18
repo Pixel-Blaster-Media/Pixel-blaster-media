@@ -15,6 +15,7 @@ interface OrganizationRow {
   slug: string;
   primary_color: string | null;
   accent_color: string | null;
+  logo_url: string | null;
 }
 
 export default async function BusinessSettingsPage() {
@@ -22,7 +23,7 @@ export default async function BusinessSettingsPage() {
   const service = getServiceSupabase();
   const { data: organization, error } = await service
     .from("organizations")
-    .select("id, name, slug, primary_color, accent_color")
+    .select("id, name, slug, primary_color, accent_color, logo_url")
     .eq("id", admin.organizationId)
     .maybeSingle<OrganizationRow>();
 

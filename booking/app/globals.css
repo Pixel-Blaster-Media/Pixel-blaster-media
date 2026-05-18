@@ -277,6 +277,16 @@ body:has(.realtor-theme) .site-footer {
   color: var(--realtor-muted);
 }
 
+body:has(.booking-shell) .site-header,
+body:has(.booking-shell) .site-footer {
+  display: none;
+}
+
+body.page-backdrop:has(.booking-shell) .site-main {
+  max-width: none;
+  padding: 0;
+}
+
 body:has(.realtor-theme) .site-main {
   padding-top: 1rem;
 }

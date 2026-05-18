@@ -12,6 +12,9 @@ import { resolvePublicBookingOrganization } from "@/lib/organizations/public-boo
 import { getServerSupabase } from "@/lib/supabase/server";
 import type { UserRole } from "@/lib/supabase/database.types";
 
+import BookingBrandHeader, {
+  BookingBrandFrame,
+} from "../_components/BookingBrandHeader";
 import Stepper from "../_components/Stepper";
 import ConfirmForm from "./ConfirmForm";
 import ConfirmUpsellPanel from "./ConfirmUpsellPanel";
@@ -88,7 +91,8 @@ export default async function BookStep4Page({
     .join(", ");
 
   return (
-    <>
+    <BookingBrandFrame organization={organization}>
+      <BookingBrandHeader organization={organization} />
       <Stepper current={4} state={scopedState} />
 
       <section>
@@ -250,7 +254,7 @@ export default async function BookStep4Page({
           }),
         )}
       />
-    </>
+    </BookingBrandFrame>
   );
 }
 

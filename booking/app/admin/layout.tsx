@@ -2,6 +2,11 @@ import Link from "next/link";
 
 import { signOut } from "@/lib/auth/sign-out";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import {
+  initialsForOrganization,
+  loadOrganizationBrand,
+  organizationThemeStyle,
+} from "@/lib/organizations/branding";
 
 import AdminAssistant from "./AdminAssistant";
 import AdminMobileMenu from "./AdminMobileMenu";
@@ -21,11 +26,13 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const admin = await requireAdmin();
+  const brand = await loadOrganizationBrand(admin.organizationId);
 
   return (
     <div
       className="admin-earth realtor-theme realtor-backdrop grid min-h-screen w-full max-w-full overflow-x-hidden px-3 pb-32 sm:px-6 md:grid-cols-[220px_1fr] md:gap-8 md:px-6 md:py-10"
       style={{
+        ...(brand ? organizationThemeStyle(brand) : {}),
         paddingTop: "max(1rem, calc(env(safe-area-inset-top, 0px) + 0.75rem))",
       }}
     >
@@ -39,6 +46,26 @@ export default async function AdminLayout({
 
       <aside className="hidden space-y-4 md:sticky md:top-16 md:block md:self-start">
         <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 text-sm shadow-lg shadow-realtor-text/10">
+          {brand ? (
+            <div className="mb-4 flex items-center gap-3 rounded-xl bg-realtor-primary/5 p-2 ring-1 ring-realtor-primary/10">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-realtor-primary/10 text-xs font-bold text-realtor-primary">
+                {brand.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={brand.logoUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  initialsForOrganization(brand.name)
+                )}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-realtor-text">
+                  {brand.name}
+                </p>
+                <p className="truncate text-[11px] text-realtor-muted">
+                  /book?org={brand.slug}
+                </p>
+              </div>
+            </div>
+          ) : null}
           <p className="text-[11px] uppercase tracking-wider text-realtor-primary/80">
             Signed in
           </p>

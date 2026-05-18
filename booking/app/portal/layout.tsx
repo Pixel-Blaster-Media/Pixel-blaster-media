@@ -3,6 +3,10 @@ import { redirect } from "next/navigation";
 
 import { signOut } from "@/lib/auth/sign-out";
 import { requireUser } from "@/lib/auth/require-user";
+import {
+  loadOrganizationBrand,
+  organizationThemeStyle,
+} from "@/lib/organizations/branding";
 import { getServerSupabase } from "@/lib/supabase/server";
 
 interface ProfilePhotoRow {
@@ -22,9 +26,13 @@ export default async function PortalLayout({
     redirect("/admin");
   }
   const profilePhotoUrl = await loadProfilePhotoUrl(user.userId);
+  const brand = await loadOrganizationBrand(user.organizationId);
 
   return (
-    <div className="portal-layout realtor-theme min-h-[60vh]">
+    <div
+      className="portal-layout realtor-theme min-h-[60vh]"
+      style={brand ? organizationThemeStyle(brand) : undefined}
+    >
       <header className="portal-header mb-6 flex flex-wrap items-center justify-between gap-3 rounded-3xl px-3 py-2.5 md:px-4 md:py-3">
         <div className="flex items-center gap-3">
           <span className="portal-mark" aria-hidden="true">

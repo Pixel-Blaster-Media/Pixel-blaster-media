@@ -9,6 +9,9 @@ import {
 } from "@/lib/booking/wizard-state";
 import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
 
+import BookingBrandHeader, {
+  BookingBrandFrame,
+} from "../_components/BookingBrandHeader";
 import Stepper from "../_components/Stepper";
 import PropertyForm from "./PropertyForm";
 
@@ -39,7 +42,8 @@ export default async function BookStep2Page({
   }
 
   return (
-    <>
+    <BookingBrandFrame organization={organization}>
+      <BookingBrandHeader organization={organization} />
       <Stepper current={2} state={scopedState} />
 
       <section>
@@ -88,6 +92,6 @@ export default async function BookStep2Page({
           shootNotes: scopedState.shootNotes,
         }}
       />
-    </>
+    </BookingBrandFrame>
   );
 }

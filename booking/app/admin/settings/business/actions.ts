@@ -23,6 +23,7 @@ export async function saveBusinessSettings(
   const slug = normalizeSlug(cleanText(formData.get("slug")));
   const primaryColor = cleanText(formData.get("primary_color")) || null;
   const accentColor = cleanText(formData.get("accent_color")) || null;
+  const logoUrl = cleanText(formData.get("logo_url")) || null;
 
   if (!name) {
     return { ok: false, error: "Business name is required." };
@@ -44,6 +45,9 @@ export async function saveBusinessSettings(
   }
   if (accentColor && !HEX_COLOR_RE.test(accentColor)) {
     return { ok: false, error: "Accent color must look like #c9a35b." };
+  }
+  if (logoUrl && !isSafeHttpUrl(logoUrl)) {
+    return { ok: false, error: "Logo URL must start with https:// or http://." };
   }
 
   const service = getServiceSupabase();
@@ -67,6 +71,7 @@ export async function saveBusinessSettings(
       slug,
       primary_color: primaryColor,
       accent_color: accentColor,
+      logo_url: logoUrl,
     })
     .eq("id", admin.organizationId);
 
@@ -89,4 +94,13 @@ function normalizeSlug(value: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function isSafeHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
 }

@@ -10,8 +10,11 @@ import {
 } from "@/lib/booking/wizard-state";
 import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
 
-import Stepper from "../_components/Stepper";
 import BookingTotalBar from "../_components/BookingTotalBar";
+import BookingBrandHeader, {
+  BookingBrandFrame,
+} from "../_components/BookingBrandHeader";
+import Stepper from "../_components/Stepper";
 import CalendarPicker from "./CalendarPicker";
 
 export const metadata: Metadata = {
@@ -59,7 +62,8 @@ export default async function BookStep3Page({
   });
 
   return (
-    <>
+    <BookingBrandFrame organization={organization}>
+      <BookingBrandHeader organization={organization} />
       <Stepper current={3} state={scopedState} />
 
       <section>
@@ -101,7 +105,7 @@ export default async function BookStep3Page({
         disabled={!scopedState.slot}
         ctaLabel={scopedState.slot ? "Continue" : "Pick a time"}
       />
-    </>
+    </BookingBrandFrame>
   );
 }
 

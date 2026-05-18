@@ -14,6 +14,7 @@ interface BusinessSettingsFormProps {
     slug: string;
     primary_color: string | null;
     accent_color: string | null;
+    logo_url: string | null;
   };
 }
 
@@ -27,6 +28,7 @@ export default function BusinessSettingsForm({
 
   const primaryColor = organization.primary_color ?? "#3f7f5f";
   const accentColor = organization.accent_color ?? "#c9a35b";
+  const [logoUrl, setLogoUrl] = useState(organization.logo_url ?? "");
 
   return (
     <form action={action} className="space-y-5">
@@ -66,6 +68,38 @@ export default function BusinessSettingsForm({
                 <code className="rounded-md bg-realtor-surface-muted px-1.5 py-0.5 text-realtor-text">
                   /book?org={organization.slug}
                 </code>
+              </span>
+            </label>
+
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
+                Logo URL
+              </span>
+              <span className="mt-1 flex items-center gap-3">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-realtor-primary/15 bg-realtor-primary/10 text-xs font-bold text-realtor-primary">
+                  {logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={logoUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    "Logo"
+                  )}
+                </span>
+                <input
+                  name="logo_url"
+                  type="url"
+                  value={logoUrl}
+                  onChange={(event) => setLogoUrl(event.currentTarget.value)}
+                  placeholder="https://example.com/logo.png"
+                  className="box-border min-w-0 flex-1 rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text outline-none placeholder:text-realtor-muted/60 focus:border-realtor-primary/45"
+                />
+              </span>
+              <span className="mt-1 block text-xs leading-5 text-realtor-muted">
+                This appears at the top of the public booking flow. Uploads can
+                come later; a logo image link works for now.
               </span>
             </label>
           </div>
