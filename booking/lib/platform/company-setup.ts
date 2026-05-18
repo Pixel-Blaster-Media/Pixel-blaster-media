@@ -291,34 +291,42 @@ async function copyStarterCatalog(
   if (error) throw new Error(`Could not read starter catalog: ${error.message}`);
   if (!data?.length) return;
 
-  const inserts: CatalogItemInsert[] = data.map((item) => ({
-    organization_id: toOrganizationId,
-    kind: item.kind as CatalogItemKind,
-    slug: item.slug,
-    name: item.name,
-    description: item.description,
-    duration_minutes: item.duration_minutes,
-    price_cents: item.price_cents,
-    sqft_pricing_enabled: item.sqft_pricing_enabled,
-    included_sqft: item.included_sqft,
-    overage_increment_sqft: item.overage_increment_sqft,
-    overage_price_cents: item.overage_price_cents,
-    taxable: item.taxable,
-    active: item.active,
-    display_order: item.display_order,
-    is_photo: item.is_photo,
-    is_video: item.is_video,
-    require_has_video: item.require_has_video,
-    badge: item.badge,
-    highlight: item.highlight,
-    ideal_for: item.ideal_for,
-  }));
+  const inserts: CatalogItemInsert[] = data.map((item) =>
+    compactCatalogInsert({
+      organization_id: toOrganizationId,
+      kind: item.kind as CatalogItemKind,
+      slug: item.slug,
+      name: item.name,
+      description: item.description,
+      duration_minutes: item.duration_minutes,
+      price_cents: item.price_cents,
+      sqft_pricing_enabled: item.sqft_pricing_enabled,
+      included_sqft: item.included_sqft,
+      overage_increment_sqft: item.overage_increment_sqft,
+      overage_price_cents: item.overage_price_cents,
+      taxable: item.taxable,
+      active: item.active,
+      display_order: item.display_order,
+      is_photo: item.is_photo,
+      is_video: item.is_video,
+      require_has_video: item.require_has_video,
+      badge: item.badge,
+      highlight: item.highlight,
+      ideal_for: item.ideal_for,
+    }),
+  );
   const { error: insertError } = await service
     .from("catalog_items")
     .insert(inserts);
   if (insertError) {
     throw new Error(`Could not copy starter catalog: ${insertError.message}`);
   }
+}
+
+function compactCatalogInsert(row: CatalogItemInsert): CatalogItemInsert {
+  return Object.fromEntries(
+    Object.entries(row).filter(([, value]) => value !== undefined),
+  ) as CatalogItemInsert;
 }
 
 async function cleanupFailedCompany(
