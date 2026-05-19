@@ -39,13 +39,14 @@ And set a rule for yourself: **never paste a secret key into this chat, any emai
 1. In the left sidebar, click **SQL Editor** (looks like a `>_` icon).
 2. Click **+ New query** in the top bar.
 3. In a new browser tab, open this file:
-   `https://github.com/Pixel-Blaster-Media/Pixel-blaster-media/blob/claude/real-estate-booking-site-X3Kyh/booking/supabase/setup.sql`
+   `https://github.com/Pixel-Blaster-Media/Pixel-blaster-media/blob/main/booking/supabase/setup.sql`
 4. Click the **Raw** button (top right of the file view) — the page will now show just the plain text.
 5. **Select all** (Cmd+A on Mac, Ctrl+A on Windows) → **Copy** (Cmd+C / Ctrl+C).
 6. Back in Supabase's SQL Editor, paste the whole thing.
-7. **Important:** near the bottom there's a line that says `admin_email text := 'you@example.com';` — change `you@example.com` to your real email (keep the quotes).
-8. Click the green **Run** button in the bottom right.
-9. Wait ~5 seconds. You should see **"Success. No rows returned"** and a line in the output like `Created admin user you@example.com with id ...`. That means the whole database is set up and your admin account exists.
+7. Click the green **Run** button in the bottom right.
+8. Wait for **"Success. No rows returned"**. That means the database schema is set up.
+
+This setup file creates the database tables, policies, starter catalog, and SaaS/company foundation. It does **not** create your login. After Vercel is connected in Stage 2, open the deployed site and use **Create account** to make the first company owner account.
 
 > **If you see a red error instead:** copy the error message, paste it to me in chat, and I'll tell you what to do. Don't try again on your own — running broken SQL twice can leave the database in a weird state.
 

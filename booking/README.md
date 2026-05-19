@@ -1,43 +1,40 @@
-# Pixel Blaster Booking
+# Pixel Booking
 
-Booking system + realtor delivery portal for [Pixel Blaster Media](https://www.pixelblastermedia.com).
-Lives in this `/booking` subfolder so the main marketing site at the repo
-root stays untouched. Deploys independently — recommended at
-`book.pixelblastermedia.com`.
+SaaS booking system + realtor delivery portal for real estate media companies.
+Pixel Blaster Media is the first/default company, but the app now supports
+company workspaces with their own branding, catalog, calendar, integrations,
+realtors, and delivery settings.
 
 > **👉 First-time deploy? Use [DEPLOY.md](./DEPLOY.md) instead of this
 > file.** It's a step-by-step non-coder walkthrough. This README is for
 > the ongoing developer-level reference.
 
-> **Status: Phase 5 — Fotello auto-sync is live.** All eight roadmap
-> phases shipped. Photographer pastes Fotello listing_id + enhance_ids
-> into the admin booking page; our backend polls Fotello, and when an
-> enhance completes the gallery shows up on the realtor portal as an
-> iframe (with a copy-link + open-in-new-tab fallback). Zero storage
-> on our side — galleries stay on Fotello via a server proxy that
-> refreshes expired signed URLs transparently.
+> **Status: SaaS beta.** Public company signup, branded booking pages,
+> calendar sync, admin/realtor portals, iGUIDE delivery, listing pages,
+> profile memory, and the AI assistant are in active beta. Fotello is
+> intentionally hidden from the main workflow until its delivery API shape
+> is finalized.
 
 ## Stack
 
-- **Next.js 14** (App Router, TypeScript, React 18)
+- **Next.js 15** (App Router, TypeScript, React 18)
 - **Tailwind CSS** for styling, brand-matched to the main site palette
 - **Supabase** — Postgres + Auth + Storage. Used via `@supabase/ssr` for
   cookie-based auth across server / client / route handlers.
 - **Vercel** for hosting (zero-config, set the project root to `booking/`)
-- Phase 4/5 will add server-side wrappers for the **iGuide** and **Fotello** APIs
+- Server-side wrappers for **iGUIDE**, **Fotello**, **QuickBooks**, **Google Calendar**, **Resend**, and **OpenAI**
 
-## Roadmap
+## Product Areas
 
-| Phase | Scope | State |
-|------:|-------|:------|
-| 1 | Next.js + Tailwind scaffold, Supabase schema, placeholder routes, deploy-ready | ✅ |
-| 2 | Public booking form → Supabase + Resend confirmation emails | ✅ |
-| 3 | Magic-link auth + admin inbox / job board / manual deliverable entry | ✅ |
-| 4 | iGuide RESO autofill sync + webhook (tour + floor plan) | ✅ |
-| 5 | Fotello API integration (auto-pull gallery) | ✅ this PR |
-| 6 | Realtor portal: sign in, list of listings, tour + floor plan + gallery per property | ✅ |
-| 7 | QuickBooks Online invoicing on delivery | ✅ this PR |
-| 8 | Private calendar: realtor self-serve booking + admin settings + agenda view | ✅ |
+| Area | State |
+|------|:------|
+| Public company signup + branded booking pages | ✅ beta |
+| Admin dashboard, Today command center, calendar, and bookings | ✅ beta |
+| Realtor portal, media delivery, custom listing pages | ✅ beta |
+| iGUIDE delivery sync and download links | ✅ beta |
+| Google Calendar, Resend, QuickBooks integrations | ✅ beta |
+| OpenAI-powered assistant and booking recommendations | ✅ beta |
+| Fotello API delivery | ⏸ hidden while API details are confirmed |
 
 ## Local development
 
@@ -55,13 +52,16 @@ App runs at <http://localhost:3000>. Health check: <http://localhost:3000/api/he
 
 | Path                    | Purpose                                                       |
 |-------------------------|---------------------------------------------------------------|
-| `/`                     | Booking app landing page                                      |
-| `/book`                 | Public booking form (working — writes to Supabase)            |
+| `/`                     | Platform landing page for company signup / sign-in            |
+| `/start`                | Public beta company signup                                    |
+| `/book`                 | Default Pixel Blaster public booking form                     |
+| `/book?org=company-slug`| Company-scoped public booking form                            |
 | `/book/success`         | Post-submit confirmation                                      |
-| `/auth/sign-in`         | Magic-link sign-in (admins + realtors share this)             |
+| `/auth/sign-in`         | Password / magic-link sign-in                                 |
 | `/auth/check-email`     | "We sent you a link" page                                     |
 | `/auth/callback`        | Code → session exchange (set by Supabase magic link)          |
 | `/admin`                | Redirects to `/admin/inbox`                                   |
+| `/admin/today`          | Daily command center                                          |
 | `/admin/inbox`          | Booking-request inbox with status filters                     |
 | `/admin/inbox/[id]`     | Single request detail; accept (creates booking) / decline     |
 | `/admin/bookings`       | Job board: confirmed bookings with status filters             |
@@ -73,7 +73,8 @@ App runs at <http://localhost:3000>. Health check: <http://localhost:3000/api/he
 | `/admin/calendar`       | 60-day agenda view of bookings + blocks                            |
 | `/admin/settings/availability` | Edit weekly hours + add / remove busy blocks                |
 | `/admin/settings/pricing`      | Edit per-service + add-on prices                            |
-| `/admin/settings/integrations` | Connect / disconnect QuickBooks + pick default service item |
+| `/admin/realtors`       | Realtor profile details, headshots, delivery CCs, agent memory |
+| `/admin/settings/integrations` | Connect Google Calendar, Resend, iGUIDE, OpenAI, etc. |
 | `/api/integrations/quickbooks/callback` | OAuth callback for QuickBooks consent flow         |
 | `/api/fotello/embed/[deliverableId]`   | Auth-gated proxy for Fotello gallery iframe src    |
 | `/api/health`           | Liveness probe — JSON `{ ok: true, ... }`                     |
@@ -85,67 +86,56 @@ App runs at <http://localhost:3000>. Health check: <http://localhost:3000/api/he
    - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
    - `anon` public key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `service_role` secret key → `SUPABASE_SERVICE_ROLE_KEY` (server only — never expose)
-3. Apply the migrations. Three options (in order of ease):
+3. Apply the database schema. Three options (in order of ease):
    - **Easiest:** paste `supabase/setup.sql` into the SQL Editor once
-     and click Run. That one file contains every migration plus an
-     admin-bootstrap at the bottom. (This is what [DEPLOY.md](./DEPLOY.md)
-     walks through.)
+     and click Run. That one file is generated from every migration in
+     `supabase/migrations/`. Use it only on a fresh/empty Supabase project.
    - **Manual per-migration:** paste each file from `supabase/migrations/`
      in numeric order and run one at a time. Useful when debugging.
    - **CLI:** install `supabase` CLI, link the project, then
      `supabase db push`.
-4. (Optional, recommended) Promote yourself to admin once you've signed up:
-   ```sql
-   update public.profiles set role = 'admin' where email = 'you@example.com';
-   ```
+4. Deploy the app and visit `/start` to create the first company account.
+   That flow creates the company, owner profile, starter catalog, working
+   hours, and default settings.
 
-The migrations set up:
+When migrations change, regenerate the one-paste setup file:
+
+```bash
+npm run db:setup
+```
+
+Do not run `supabase/setup.sql` against a live database with customer data.
+For live databases, apply only the new migration files.
+
+The schema sets up:
 
 - `profiles`, `properties`, `bookings`, `deliverables` tables (0001)
 - `booking_requests` table for unauthenticated public submissions (0002)
-- A trigger that auto-creates a `profiles` row on every Supabase Auth signup
-- An `is_admin()` helper + Row Level Security policies so realtors only ever
-  see their own data, while admins see everything
-
-### Becoming the first admin (Phase 3)
-
-Magic-link sign-in is gated to existing accounts only — random visitors
-can't spin up empty profiles by submitting the sign-in form. To bootstrap:
-
-1. Open Supabase **Authentication → Users → Add user**, enter your email,
-   tick "Auto Confirm User," and create. The DB trigger inserts a matching
-   `profiles` row.
-2. Promote yourself in SQL:
-   ```sql
-   update public.profiles set role = 'admin' where email = 'you@example.com';
-   ```
-3. Visit `/auth/sign-in`, enter the same email, click the magic link,
-   land on `/admin/inbox`.
+- `organizations` and organization-scoped data for SaaS tenant isolation
+- A trigger that auto-creates a `profiles` row on Supabase Auth signup
+- Organization-aware RLS policies so company admins and realtors stay scoped
+  to their own business data
 
 Realtor accounts get auto-provisioned the moment you click **Accept**
 on their booking request — no manual steps.
 
-### Realtor onboarding (Phase 6)
+### Realtor onboarding
 
-Realtor sign-ups are deliberately gated to existing accounts only —
-`shouldCreateUser: false` on `signInWithOtp` means random visitors can't
-provision empty profiles. The intended flow:
+Realtor accounts are created through a booking/admin workflow so each
+realtor belongs to the right company workspace. The intended flow:
 
-1. Realtor books a shoot via `/book` (public, no account needed).
+1. Realtor books a shoot via the company booking link (for Pixel Blaster,
+   `/book`; for another company, `/book?org=company-slug`).
 2. You accept the request from `/admin/inbox/[id]` — this silently
    creates an auth user + profile + property + confirmed booking.
-3. Send them the portal URL (`https://book.pixelblastermedia.com/portal`)
-   and their email. They request a magic link, click it, and land on
-   their listings.
-4. Each listing shows status + embedded virtual tour + floor plan +
-   any manual/Fotello gallery links, with a "Copy link" button next to
-   every URL so they can forward them to buyers.
+3. Delivery emails and portal links bring them back to `/portal`.
+4. Each listing shows status, media downloads, iGUIDE links, video links,
+   invoices, and custom listing page tools.
 
-A future enhancement worth building: auto-email the portal link on the
-"accepted" transition so you don't have to do it by hand. The plumbing
-(profile email + Resend) is already in place.
+Admins can also edit realtor profiles, headshots/logos, delivery CC emails,
+and private agent memory from `/admin/realtors`.
 
-### Configuring the calendar (Phase 8)
+### Configuring the calendar
 
 The migration seeds **Mon–Fri 9–5** as your working hours. Edit them in
 `/admin/settings/availability` once you're signed in as admin.
@@ -163,7 +153,7 @@ Other knobs:
 - **Block labels are private.** Only admins see the "Vacation — Hawaii"
   text on a block; realtors only see the slot as unavailable.
 
-### Setting up QuickBooks Online (Phase 7 invoicing)
+### Setting up QuickBooks Online
 
 One-time setup (takes ~5 min):
 
@@ -210,51 +200,27 @@ Failure modes that are handled gracefully:
 - Duplicate create on the same booking → no-op, returns the existing
   invoice id.
 
-### Setting up Fotello (Phase 5 sync)
+### Setting up Fotello
 
-Fotello hosts your enhanced photos for **one year**. We don't mirror —
-we just serve fresh gallery URLs through a server proxy. Much cleaner,
-zero storage cost on your side.
+Fotello work is currently hidden from the main admin workflow while the API
+delivery shape is confirmed. The app still has a sandbox and server-side
+client code, but iGUIDE/manual delivery is the production path for now.
 
 **One-time setup:**
 
 1. Email Fotello support (`support@fotello.co`) asking for your API key.
    Gavin on their team handles this — mention you're ready to integrate.
-2. When the key arrives in their secure chat, paste it straight into
-   Vercel env vars as `FOTELLO_API_KEY`. **Don't put it in email or
-   anywhere that syncs in plaintext.**
+2. When the key arrives in their secure chat, store it in Settings →
+   Integrations for the right company, or in Vercel as `FOTELLO_API_KEY`
+   for a single-company fallback. **Don't put it in email or anywhere
+   that syncs in plaintext.**
 3. Leave `FOTELLO_API_BASE` blank — the default points at their
    production Firebase Functions endpoint.
 
 **Per-shoot workflow:**
 
-1. You do your normal Fotello UI flow: create a listing, upload photos,
-   submit them for enhancement (one batch or multiple, interior +
-   exterior, etc.).
-2. Copy the **listing id** and each **enhance id** out of Fotello's
-   dashboard.
-3. In our admin booking detail page, in the Fotello section:
-   - Paste the listing id → **Save**.
-   - For each enhance: paste the id, pick interior/exterior, click
-     **Track**. We poll Fotello. If the enhance is already
-     `completed`, the gallery shows up on the realtor portal
-     immediately; if it's still `in_progress`, click **Refresh**
-     later and it'll flip to ready.
-4. Realtor's portal property page renders each ready gallery as an
-   iframe embedded in-page. Expired signed URLs are auto-refreshed by
-   `/api/fotello/embed/[id]` on every view.
-
-**If Fotello blocks iframing:** the portal also renders a "Copy gallery
-link" and "Open ↗" button above each iframe, so realtors always have a
-way to get to the gallery even if the iframe renders blank.
-
-**Future polish (not in this phase):**
-
-- Vercel cron that auto-polls in-progress enhances every 5 min so you
-  never have to click Refresh manually.
-- A "drop raw photos into admin" UI that calls createUpload +
-  createEnhance for you, cutting out the step of opening Fotello's UI
-  at all. Only worth building if the copy-paste step gets annoying.
+Keep the sandbox route admin-only and avoid exposing Fotello API keys or
+temporary signed URLs to the browser longer than needed.
 
 ### Setting up iGuide (Phase 4 sync + webhook)
 
@@ -311,8 +277,7 @@ either way.
 
 ## Deploying to Vercel
 
-1. Push this branch to GitHub (already wired to
-   `claude/real-estate-booking-site-X3Kyh`).
+1. Push `main` to GitHub.
 2. In Vercel, **New Project → import this repo**.
 3. Set **Root Directory** to `booking`.
 4. Add environment variables from `.env.example` in **Settings → Environment Variables**.
@@ -324,10 +289,9 @@ The main marketing site (`/index.html`, `/style.css`, etc. at the repo
 root) is **not** part of this Vercel project — it continues to deploy
 however it does today, untouched.
 
-### Linking from the main site (later)
+### Linking from the main site
 
-When Phase 2 ships and the booking flow is live, swap the Acuity URL in
-the root `index.html` nav from `https://PixelBlaster.as.me/` to
+Point any "Book now" button at the company's booking URL, for example
 `https://book.pixelblastermedia.com/book`. That's the only change to the
 main site that this whole project needs.
 
@@ -418,9 +382,8 @@ booking/
 - `SUPABASE_SERVICE_ROLE_KEY` bypasses Row Level Security. It must only
   ever be used in server code (`lib/supabase/server.ts → getServiceSupabase`)
   and never imported into a Client Component.
-- `iGuide` and `Fotello` API keys live in server-only env vars; Phase 4/5
-  will add `app/api/...` route handlers that proxy those calls so the keys
-  never reach the browser.
-- `metadata.robots` is set to `noindex/nofollow` in `app/layout.tsx` for
-  the duration of the scaffold. Flip that off in Phase 2 once the booking
-  flow actually works.
+- iGUIDE, Fotello, Resend, QuickBooks, Google Calendar, and OpenAI secrets
+  must stay server-side. Use Settings → Integrations or server-only Vercel
+  env vars, never `NEXT_PUBLIC_*`.
+- Public listing pages are intended to be shareable; admin, portal, and
+  booking-management routes remain auth-gated.

@@ -9,6 +9,7 @@
     "start": "next start -p 3000",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "db:setup": "bash scripts/generate-supabase-setup.sh",
     "db:types": "supabase gen types typescript --local > lib/supabase/database.types.ts"
   },
   "dependencies": {
