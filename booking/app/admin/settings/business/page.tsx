@@ -29,6 +29,7 @@ interface SetupStatus {
   availability: boolean;
   calendar: boolean;
   emailIdentity: boolean;
+  testBookingLink: boolean;
 }
 
 export default async function BusinessSettingsPage({
@@ -86,6 +87,7 @@ export default async function BusinessSettingsPage({
         organization.reply_to_email ||
         organization.admin_notification_email,
     ),
+    testBookingLink: Boolean(organization.slug && organization.name),
   };
 
   return (
@@ -147,8 +149,8 @@ function SetupChecklist({
             {completed}/{total} setup steps complete
           </h2>
           <p className="mt-1 text-sm leading-6 text-realtor-muted">
-            Keep this short: brand it, check the booking link, confirm pricing,
-            set hours, then connect the calendar.
+            Keep this short: brand it, set email identity, confirm pricing,
+            set hours, connect the calendar, then preview the booking link.
           </p>
         </div>
         <span className="rounded-full border border-realtor-primary/20 bg-realtor-primary/10 px-3 py-1 text-xs font-semibold text-realtor-primary">
@@ -192,6 +194,12 @@ function SetupChecklist({
           external
         />
         <ChecklistItem
+          done={status.emailIdentity}
+          title="Email identity"
+          body="Set sender name, reply-to, and admin alerts."
+          href="/admin/settings/business"
+        />
+        <ChecklistItem
           done={status.pricing}
           title="Pricing and packages"
           body="Review bundles, add-ons, durations, and square footage pricing."
@@ -214,10 +222,11 @@ function SetupChecklist({
           href="/admin/settings/integrations"
         />
         <ChecklistItem
-          done={status.emailIdentity}
-          title="Email identity"
-          body="Set sender name, reply-to, and admin alerts."
-          href="/admin/settings/business"
+          done={status.testBookingLink}
+          title="Preview booking"
+          body="Open the public booking page and make sure it feels right."
+          href={bookingUrl}
+          external
         />
       </div>
     </section>

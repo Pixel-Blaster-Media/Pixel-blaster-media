@@ -26,16 +26,22 @@ export async function startCompanySignup(
   const adminName = cleanText(formData.get("admin_name"));
   const adminEmail = cleanText(formData.get("admin_email")).toLowerCase();
   const adminPassword = String(formData.get("admin_password") ?? "");
-  const starterSlug = starterCompanySlug(adminEmail);
+  const companyName =
+    cleanText(formData.get("company_name")) || starterCompanyName(adminName);
+  const companySlug =
+    normalizeCompanySlug(cleanText(formData.get("company_slug"))) ||
+    starterCompanySlug(adminEmail);
+  const primaryColor = cleanText(formData.get("primary_color")) || "#3f7f5f";
+  const accentColor = cleanText(formData.get("accent_color")) || "#c9a35b";
 
   const result = await createCompanyWorkspace({
-    companyName: starterCompanyName(adminName),
-    slug: starterSlug,
+    companyName,
+    slug: companySlug,
     adminName: cleanText(formData.get("admin_name")),
     adminEmail,
     adminPassword,
-    primaryColor: "#3f7f5f",
-    accentColor: "#c9a35b",
+    primaryColor,
+    accentColor,
     copyCatalog: true,
   });
 

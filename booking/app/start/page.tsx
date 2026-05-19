@@ -22,12 +22,12 @@ export default async function StartPage({
             Pixel platform beta
           </p>
           <h1 className="mt-3 text-4xl font-semibold leading-tight text-realtor-text md:text-5xl">
-            Create your booking account.
+            Create your booking company.
           </h1>
           <p className="mt-5 text-base leading-7 text-realtor-muted">
-            Sign up first, then set up the business from inside your dashboard.
-            Your workspace starts with a starter catalog, default availability,
-            and a private admin area you can customize.
+            Start with your company name, booking link, colors, and owner
+            login. Your workspace opens with a starter catalog, default
+            availability, and a private admin area you can customize.
           </p>
         </div>
 
@@ -36,10 +36,10 @@ export default async function StartPage({
             What you get immediately
           </p>
           <ul className="mt-3 space-y-2 text-sm leading-6 text-realtor-muted">
-            <li>Own company booking link</li>
+            <li>Your own company booking link</li>
             <li>Admin dashboard for bookings, calendar, pricing, and realtors</li>
             <li>Starter catalog copied from Pixel Blaster&apos;s setup</li>
-            <li>Your own company workspace, separate from Pixel&apos;s controls</li>
+            <li>Separate company workspace with its own settings and alerts</li>
           </ul>
         </div>
       </section>
@@ -61,8 +61,8 @@ export default async function StartPage({
             Create with Google or Apple.
           </h2>
           <p className="mt-2 text-sm leading-6 text-realtor-muted">
-            We&apos;ll set up your private booking workspace after your account
-            is confirmed.
+            Fastest path: create your login, then finish branding from the
+            setup checklist inside your dashboard.
           </p>
           <div className="mt-5">
             <OAuthButtons mode="signup" />

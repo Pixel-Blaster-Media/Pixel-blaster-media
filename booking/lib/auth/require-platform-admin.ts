@@ -14,10 +14,21 @@ import { requireAdmin, type AdminContext } from "./require-admin";
  */
 export async function requirePlatformAdmin(): Promise<AdminContext> {
   const admin = await requireAdmin();
-  if (admin.organizationId !== DEFAULT_ORGANIZATION_ID) notFound();
+  if (!isPlatformAdmin(admin)) notFound();
   return admin;
 }
 
 export function isPlatformAdmin(admin: AdminContext): boolean {
+  const explicitEmails = configuredPlatformAdminEmails();
+  if (explicitEmails.length > 0) {
+    return explicitEmails.includes(admin.email.toLowerCase());
+  }
   return admin.organizationId === DEFAULT_ORGANIZATION_ID;
+}
+
+function configuredPlatformAdminEmails(): string[] {
+  return (process.env.PLATFORM_ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
 }

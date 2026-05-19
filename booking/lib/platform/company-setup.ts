@@ -241,6 +241,9 @@ async function createOrganization(
       slug: input.slug,
       primary_color: input.primaryColor,
       accent_color: input.accentColor,
+      email_from_name: input.companyName,
+      reply_to_email: input.adminEmail,
+      admin_notification_email: input.adminEmail,
     })
     .select("id, name, slug")
     .single<{ id: string; name: string; slug: string }>();

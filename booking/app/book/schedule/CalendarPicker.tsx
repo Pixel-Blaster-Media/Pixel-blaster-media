@@ -107,14 +107,7 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
     return (
       <div className="rounded-3xl border border-dashed border-realtor-primary/20 bg-realtor-surface-muted/70 p-6 text-sm text-realtor-muted">
         No openings in the next 4 weeks. Try a different service combo or
-        email{" "}
-        <a
-          href="mailto:info@pixelblastermedia.com"
-          className="text-brand-light underline"
-        >
-          info@pixelblastermedia.com
-        </a>
-        .
+        contact the photographer for a custom time.
       </div>
     );
   }
