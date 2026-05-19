@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
 import { getServerSupabase } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
@@ -51,6 +52,8 @@ export default async function IGuideReviewPage({
 }: {
   searchParams: Promise<{ view?: string }>;
 }) {
+  if (process.env.ENABLE_IGUIDE_REVIEW !== "1") notFound();
+
   const params = await searchParams;
   const view = params.view === "all" ? "all" : "likely";
   const supabase = await getServerSupabase();

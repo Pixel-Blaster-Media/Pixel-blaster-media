@@ -7,6 +7,7 @@ import {
   businessDateTimeLocalToUtc,
 } from "@/lib/booking/availability";
 import { labelForAddOn, labelForService } from "@/lib/booking/services";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type {
   BookingStatus,
@@ -27,7 +28,6 @@ interface BookingRow {
   client_notes: string | null;
   internal_notes: string | null;
   unit_number: string | null;
-  fotello_listing_id: string | null;
   iguide_id: string | null;
   iguide_portal_id: string | null;
   properties: {
@@ -61,12 +61,14 @@ export default async function AdminTodayPage() {
     return <p className="text-sm text-red-300">Could not build today view.</p>;
   }
 
+  const admin = await requireAdmin();
   const supabase = await getServerSupabase();
   const { data: bookings, error } = await supabase
     .from("bookings")
     .select(
-      "id, status, scheduled_at, scheduled_ends_at, services, add_ons, client_notes, internal_notes, unit_number, fotello_listing_id, iguide_id, iguide_portal_id, properties(street_address, city, province, postal_code), profiles(full_name, email, phone, brokerage)",
+      "id, status, scheduled_at, scheduled_ends_at, services, add_ons, client_notes, internal_notes, unit_number, iguide_id, iguide_portal_id, properties(street_address, city, province, postal_code), profiles(full_name, email, phone, brokerage)",
     )
+    .eq("organization_id", admin.organizationId)
     .not("scheduled_at", "is", null)
     .gte("scheduled_at", start.toISOString())
     .lt("scheduled_at", end.toISOString())
@@ -285,16 +287,16 @@ function ShootCard({
 
       <div className="mt-4 flex flex-wrap gap-2">
         <Link
-          href={`/admin/bookings/${booking.id}#fotello`}
+          href={`/admin/bookings/${booking.id}`}
           className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
         >
-          Fotello upload
+          Add media
         </Link>
         <Link
-          href={`/admin/bookings/${booking.id}#iguide`}
+          href={`/admin/bookings/${booking.id}?tab=delivery`}
           className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
         >
-          iGUIDE
+          Delivery
         </Link>
       </div>
     </li>
@@ -316,11 +318,11 @@ function taskStates(
   booking: BookingRow,
   deliverables: DeliverableRow[],
 ): Array<{ label: string; className: string }> {
-  const hasFotelloReady = deliverables.some(
-    (d) => d.source === "fotello" && d.ready_at,
+  const hasPhotosReady = deliverables.some(
+    (d) => d.source !== "fotello" && d.type === "photo_gallery" && d.ready_at,
   );
-  const hasFotelloPending = deliverables.some(
-    (d) => d.source === "fotello" && !d.ready_at,
+  const hasPhotosPending = deliverables.some(
+    (d) => d.source !== "fotello" && d.type === "photo_gallery" && !d.ready_at,
   );
   const hasIGuideReady = deliverables.some(
     (d) => d.source === "iguide" && d.type === "virtual_tour" && d.ready_at,
@@ -334,12 +336,12 @@ function taskStates(
 
   return [
     chip(
-      hasFotelloReady
+      hasPhotosReady
         ? "Photos ready"
-        : hasFotelloPending
-          ? "Photos processing"
-          : "Photos not uploaded",
-      hasFotelloReady ? "done" : hasFotelloPending ? "pending" : "todo",
+        : hasPhotosPending
+          ? "Photos pending"
+          : "Photos not linked",
+      hasPhotosReady ? "done" : hasPhotosPending ? "pending" : "todo",
     ),
     chip(
       hasIGuideReady

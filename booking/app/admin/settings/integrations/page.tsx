@@ -89,7 +89,6 @@ export default async function IntegrationsPage({
     resendApiKeyStatus,
     openAiApiKeyStatus,
     openAiModelStatus,
-    fotelloApiKeyStatus,
     iguideAppIdStatus,
     iguideAppTokenStatus,
     iguideWebhookStatus,
@@ -112,12 +111,6 @@ export default async function IntegrationsPage({
       "OPENAI_ASSISTANT_MODEL",
       admin.organizationId,
     ),
-    getCredentialSource(
-      "fotello",
-      "api_key",
-      "FOTELLO_API_KEY",
-      admin.organizationId,
-    ),
     getCredentialSource("iguide", "app_id", "IGUIDE_APP_ID", admin.organizationId),
     getCredentialSource(
       "iguide",
@@ -135,7 +128,6 @@ export default async function IntegrationsPage({
 
   const resendConfigured = resendApiKeyStatus.source !== "none";
   const openAiConfigured = openAiApiKeyStatus.source !== "none";
-  const fotelloConfigured = fotelloApiKeyStatus.source !== "none";
   const iguideConfigured =
     iguideAppIdStatus.source !== "none" &&
     iguideAppTokenStatus.source !== "none";
@@ -446,43 +438,6 @@ export default async function IntegrationsPage({
           }}
         />
         <IGuideTester disabled={!iguideConfigured} />
-      </section>
-
-      {/* Fotello — single API key, used for /getEnhance polling and
-          listing creation. */}
-      <section className="realtor-elevated-panel rounded-2xl p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-realtor-text">Fotello</h2>
-            <p className="mt-1 text-sm text-realtor-muted">
-              When you track an enhance on a booking, we poll Fotello&apos;s
-              <code className="mx-1 text-xs">/getEnhance</code> endpoint
-              and surface the gallery on the realtor&apos;s portal once
-              it&apos;s ready. Single API key, issued by Fotello support.
-            </p>
-          </div>
-          {fotelloConfigured ? (
-            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
-              Configured
-            </span>
-          ) : (
-            <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
-              Not configured
-            </span>
-          )}
-        </div>
-
-        <CredentialsForm
-          provider="fotello"
-          fields={[
-            {
-              name: "api_key",
-              label: "Fotello API key",
-              helper: "Bearer token issued by Fotello support.",
-            },
-          ]}
-          statuses={{ api_key: fotelloApiKeyStatus }}
-        />
       </section>
 
       <section className="realtor-elevated-panel rounded-2xl p-5">

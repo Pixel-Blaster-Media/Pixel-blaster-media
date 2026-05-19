@@ -74,28 +74,6 @@ export default async function SettingsPage() {
       </header>
 
       <SettingsHub sections={sections} />
-
-      <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/80 p-5 shadow-sm shadow-realtor-text/5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-realtor-primary/80">
-              Booking flow
-            </p>
-            <h2 className="mt-2 text-lg font-semibold text-realtor-text">
-              Manual confirmation
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-realtor-muted">
-              Current setup: bookings are confirmed automatically when the
-              schedule is free, so the Inbox tab is hidden. Later, this setting
-              can become a real toggle for businesses that want to approve each
-              request before it hits the calendar.
-            </p>
-          </div>
-          <span className="rounded-full border border-realtor-primary/20 bg-realtor-primary/10 px-3 py-1 text-xs font-semibold text-realtor-primary">
-            Auto-confirm on
-          </span>
-        </div>
-      </section>
     </div>
   );
 }

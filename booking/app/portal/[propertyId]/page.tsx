@@ -113,6 +113,7 @@ export default async function PropertyDetailPage({
       "id, street_address, city, postal_code, owner_id, bookings(id, status, scheduled_at, services, add_ons, square_footage, created_at, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents)",
     )
     .eq("id", propertyId)
+    .eq("organization_id", user.organizationId)
     .maybeSingle<PropertyRow>();
 
   if (!property) notFound();

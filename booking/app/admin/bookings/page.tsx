@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { BOOKING_STATUSES, isCancellable } from "@/lib/booking/booking-status";
 import { labelForService } from "@/lib/booking/services";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type { BookingStatus } from "@/lib/supabase/database.types";
 
@@ -46,12 +47,14 @@ export default async function BookingsPage({
   const filter = (FILTERS.find((f) => f.id === params.filter)?.id ??
     "active") as (typeof FILTERS)[number]["id"];
 
+  const admin = await requireAdmin();
   const supabase = await getServerSupabase();
   let query = supabase
     .from("bookings")
     .select(
       "id, status, scheduled_at, services, created_at, properties(street_address, city), profiles(full_name, email)",
     )
+    .eq("organization_id", admin.organizationId)
     .order("scheduled_at", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(200);

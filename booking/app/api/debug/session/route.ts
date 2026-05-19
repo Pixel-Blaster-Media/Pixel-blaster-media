@@ -5,14 +5,21 @@ export const dynamic = "force-dynamic";
 
 /**
  * Diagnostic endpoint — returns everything the server can see about
- * the current request's auth cookies. Intentionally unauthenticated
- * so it's usable when sign-in is broken.
+ * the current request's auth cookies. Disabled outside local/dev unless
+ * explicitly enabled with ENABLE_DEBUG_SESSION=1.
  *
  * Exposes the access_token JWT payload (NOT the signature) which is
  * already visible in the `#access_token=` fragment during sign-in, so
  * this endpoint reveals no more info than a signed-in user already has.
  */
 export async function GET(request: NextRequest) {
+  if (
+    process.env.NODE_ENV !== "development" &&
+    process.env.ENABLE_DEBUG_SESSION !== "1"
+  ) {
+    return new NextResponse("Not found", { status: 404 });
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const projectRef = supabaseUrl
     ? new URL(supabaseUrl).hostname.split(".")[0]

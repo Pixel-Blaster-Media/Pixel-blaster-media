@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function FotelloTestPage() {
   await requireAdmin();
+  if (process.env.ENABLE_FOTELLO_TEST !== "1") notFound();
 
   return (
     <div className="space-y-6">

@@ -68,6 +68,7 @@ export default async function PortalIndex({
       "id, street_address, city, postal_code, archived_at, bookings(id, status, scheduled_at, services, add_ons, square_footage, created_at)",
     )
     .eq("owner_id", user.userId)
+    .eq("organization_id", user.organizationId)
     .order("created_at", { ascending: false });
   query = archivedView
     ? query.not("archived_at", "is", null)

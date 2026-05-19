@@ -128,7 +128,7 @@ export default function CreateCompanyForm() {
               Create company
             </p>
             <p className="mt-1 max-w-2xl text-xs leading-5 text-realtor-muted">
-              Calendar, iGUIDE, QuickBooks, Fotello, and email credentials are
+              Calendar, iGUIDE, QuickBooks, AI, and email credentials are
               intentionally not copied. Each business connects its own accounts
               from Integrations.
             </p>
