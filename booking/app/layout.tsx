@@ -5,11 +5,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "Pixel Blaster Media — Booking & Client Portal",
-    template: "%s · Pixel Blaster Media",
+    default: "Pixel Booking — Real Estate Media Platform",
+    template: "%s · Pixel Booking",
   },
   description:
-    "Book real estate photography, iGuide virtual tours, and floor plans with Pixel Blaster Media. Realtors: access photos, tours, and deliverables in one place.",
+    "Real estate media booking, delivery, listing websites, and client portals for photography companies and realtors.",
   robots: {
     // Keep the standalone booking app out of search while it lives on a
     // temporary Vercel URL. Flip this on once the public domain is ready.
@@ -31,13 +31,19 @@ export default function RootLayout({
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-4">
             <Link href="/" className="flex shrink-0 items-center gap-2 whitespace-nowrap font-semibold">
               <span className="site-brand-primary text-white">
-                Pixel Blaster
+                Pixel
               </span>
               <span className="site-brand-accent text-brand-light">
                 Booking
               </span>
             </Link>
             <nav className="site-nav flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-muted md:gap-6">
+              <Link href="/start" className="hover:text-white">
+                Sign up
+              </Link>
+              <Link href="/auth/sign-in?next=/admin" className="hover:text-white">
+                Sign in
+              </Link>
               <Link href="/book" className="hover:text-white">
                 Book
               </Link>
@@ -63,8 +69,10 @@ export default function RootLayout({
               Greater Toronto Area
             </p>
             <p>
-              Booking portal —{" "}
-              <span className="text-ink-muted/70">client booking + delivery</span>
+              Platform beta —{" "}
+              <span className="text-ink-muted/70">
+                booking, delivery, and listing tools
+              </span>
             </p>
           </div>
         </footer>
