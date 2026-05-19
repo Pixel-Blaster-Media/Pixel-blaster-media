@@ -9,6 +9,7 @@ import {
 } from "@/lib/organizations/branding";
 
 import AdminAssistant from "./AdminAssistant";
+import CopyAdminBookingLinkButton from "./CopyAdminBookingLinkButton";
 import AdminMobileMenu from "./AdminMobileMenu";
 
 const NAV = [
@@ -26,6 +27,9 @@ export default async function AdminLayout({
 }) {
   const admin = await requireAdmin();
   const brand = await loadOrganizationBrand(admin.organizationId);
+  const bookingPath = brand?.slug ? `/book?org=${brand.slug}` : "/book";
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
+  const bookingUrl = appUrl ? `${appUrl}${bookingPath}` : bookingPath;
 
   return (
     <div
@@ -38,6 +42,7 @@ export default async function AdminLayout({
       <div className="md:hidden">
         <AdminMobileMenu
           adminLabel={admin.fullName ?? admin.email}
+          bookingUrl={bookingUrl}
           nav={NAV}
           signOutAction={signOut}
         />
@@ -60,7 +65,7 @@ export default async function AdminLayout({
                   {brand.name}
                 </p>
                 <p className="truncate text-[11px] text-realtor-muted">
-                  /book?org={brand.slug}
+                  {bookingPath}
                 </p>
               </div>
             </div>
@@ -72,6 +77,30 @@ export default async function AdminLayout({
             {admin.fullName ?? admin.email}
           </p>
           <p className="truncate text-xs text-realtor-muted">{admin.email}</p>
+        </div>
+        <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 text-sm shadow-sm shadow-realtor-text/5">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-realtor-primary/80">
+            Realtor booking link
+          </p>
+          <p className="mt-1 truncate rounded-xl border border-realtor-primary/10 bg-white/65 px-2 py-1.5 text-xs text-realtor-muted">
+            {bookingUrl}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <CopyAdminBookingLinkButton value={bookingUrl} compact />
+            <Link
+              href={bookingPath}
+              target="_blank"
+              className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-[11px] font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+            >
+              Preview
+            </Link>
+          </div>
+          <Link
+            href="/admin/settings/business"
+            className="mt-3 block text-[11px] font-semibold text-realtor-muted transition hover:text-realtor-primary"
+          >
+            Setup checklist →
+          </Link>
         </div>
         <nav className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/70 p-2 text-sm shadow-sm shadow-realtor-text/5">
           {NAV.map((item) => (

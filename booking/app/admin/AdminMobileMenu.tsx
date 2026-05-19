@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
+import CopyAdminBookingLinkButton from "./CopyAdminBookingLinkButton";
+
 type NavItem = {
   href: string;
   label: string;
@@ -11,10 +13,12 @@ type NavItem = {
 
 export default function AdminMobileMenu({
   adminLabel,
+  bookingUrl,
   nav,
   signOutAction,
 }: {
   adminLabel: string;
+  bookingUrl: string;
   nav: readonly NavItem[];
   signOutAction: () => void | Promise<void>;
 }) {
@@ -49,6 +53,22 @@ export default function AdminMobileMenu({
         </span>
       </summary>
       <nav className="mt-3 grid gap-1 border-t border-realtor-primary/10 pt-3 text-sm">
+        <div className="mb-2 rounded-2xl border border-realtor-primary/15 bg-white/60 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-realtor-primary/80">
+            Booking link
+          </p>
+          <p className="mt-1 truncate text-xs text-realtor-muted">{bookingUrl}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <CopyAdminBookingLinkButton value={bookingUrl} compact />
+            <Link
+              href={bookingUrl}
+              target="_blank"
+              className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-[11px] font-semibold text-realtor-primary"
+            >
+              Preview
+            </Link>
+          </div>
+        </div>
         {nav.map((item) => (
           <Link
             key={item.href}

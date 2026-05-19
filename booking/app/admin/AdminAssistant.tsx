@@ -25,6 +25,9 @@ export default function AdminAssistant() {
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState<AdminAssistantResult | null>(null);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [activity, setActivity] = useState<
+    Array<{ id: string; label: string; detail: string }>
+  >([]);
   const [bubblePosition, setBubblePosition] = useState({
     right: 20,
     bottom: 24,
@@ -59,10 +62,23 @@ export default function AdminAssistant() {
   }
 
   function confirm(action: AdminAssistantAction) {
-    setConfirming(action.bookingId);
+    setConfirming(actionKey(action));
     startTransition(async () => {
       try {
-        setResult(await confirmAdminAssistantAction(action));
+        const nextResult = await confirmAdminAssistantAction(action);
+        setResult(nextResult);
+        if (nextResult.ok) {
+          setActivity((current) =>
+            [
+              {
+                id: `${Date.now()}:${actionKey(action)}`,
+                label: activityLabel(action),
+                detail: action.details,
+              },
+              ...current,
+            ].slice(0, 4),
+          );
+        }
       } catch (err) {
         setResult({
           ok: false,
@@ -189,6 +205,29 @@ export default function AdminAssistant() {
           onConfirm={confirm}
         />
       )}
+
+      {activity.length > 0 ? (
+        <div className="mt-4 rounded-2xl border border-realtor-primary/10 bg-realtor-surface/65 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-realtor-muted">
+            Recent assistant activity
+          </p>
+          <div className="mt-2 space-y-2">
+            {activity.map((item) => (
+              <div
+                key={item.id}
+                className="rounded-xl border border-realtor-primary/10 bg-white/60 px-3 py-2"
+              >
+                <p className="text-xs font-semibold text-realtor-text">
+                  {item.label}
+                </p>
+                <p className="mt-0.5 line-clamp-2 text-[11px] text-realtor-muted">
+                  {item.detail}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </>
   );
 
@@ -264,16 +303,43 @@ function AssistantResult({
         <div className="mt-3 space-y-2">
           {result.actions.map((action) => (
             <div
-              key={`${action.type}:${action.bookingId}`}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-realtor-primary/12 bg-realtor-surface/80 p-3"
+              key={actionKey(action)}
+              className={
+                "flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 " +
+                (action.requiresConfirmation
+                  ? action.destructive
+                    ? "border-red-300 bg-red-50/80"
+                    : "border-amber-300 bg-amber-50/80"
+                  : "border-realtor-primary/12 bg-realtor-surface/80")
+              }
             >
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-realtor-text">
-                  {action.label}
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-realtor-text">
+                    {action.label}
+                  </p>
+                  {action.requiresConfirmation ? (
+                    <span
+                      className={
+                        "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider " +
+                        (action.destructive
+                          ? "border-red-300 bg-white/60 text-red-700"
+                          : "border-amber-300 bg-white/60 text-amber-800")
+                      }
+                    >
+                      Confirmation required
+                    </span>
+                  ) : null}
+                </div>
                 <p className="mt-0.5 text-xs text-realtor-muted">
                   {action.details}
                 </p>
+                {action.requiresConfirmation ? (
+                  <p className="mt-1 text-[11px] font-medium text-realtor-muted">
+                    Pixel Assistant will not change anything until you press the
+                    confirmation button.
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-wrap gap-2">
                 <Link
@@ -287,9 +353,14 @@ function AssistantResult({
                     type="button"
                     disabled={Boolean(confirming)}
                     onClick={() => onConfirm(action)}
-                    className="rounded-full border border-red-500/35 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:border-red-500 disabled:opacity-60"
+                    className={
+                      "rounded-full border px-3 py-1.5 text-xs font-semibold transition disabled:opacity-60 " +
+                      (action.destructive
+                        ? "border-red-500/35 bg-red-500/10 text-red-700 hover:border-red-500"
+                        : "border-amber-500/35 bg-amber-500/10 text-amber-800 hover:border-amber-500")
+                    }
                   >
-                    {confirming === action.bookingId
+                    {confirming === actionKey(action)
                       ? "Running..."
                       : action.type === "create_booking"
                         ? "Confirm booking"
@@ -307,4 +378,18 @@ function AssistantResult({
       ) : null}
     </div>
   );
+}
+
+function actionKey(action: AdminAssistantAction): string {
+  return `${action.type}:${action.bookingId}:${action.nextStatus ?? ""}`;
+}
+
+function activityLabel(action: AdminAssistantAction): string {
+  if (action.type === "create_booking") return "Created booking";
+  if (action.type === "cancel_booking") return "Cancelled booking";
+  if (action.type === "send_delivery_email") return "Sent delivery email";
+  if (action.type === "update_booking_status") {
+    return `Updated status${action.nextStatus ? ` to ${action.nextStatus}` : ""}`;
+  }
+  return action.label;
 }
