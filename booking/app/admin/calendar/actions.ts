@@ -15,6 +15,7 @@ import {
   type CatalogItemRow,
 } from "@/lib/booking/catalog";
 import { sendEmail } from "@/lib/email/resend";
+import { getOrganizationEmailSettings } from "@/lib/email/settings";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
 import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
 
@@ -268,6 +269,7 @@ export async function createAdminShoot(
 
   await sendConfirmationBestEffort({
     email: contactEmail,
+    organizationId: admin.organizationId,
     name: contactName,
     streetAddress: unitNumber
       ? `${streetAddress}, Unit ${unitNumber}`
@@ -427,6 +429,7 @@ async function createGoogleEventBestEffort(args: {
 
 async function sendConfirmationBestEffort(args: {
   email: string;
+  organizationId: string;
   name: string;
   streetAddress: string;
   scheduledAt: Date;
@@ -438,10 +441,12 @@ async function sendConfirmationBestEffort(args: {
       dateStyle: "full",
       timeStyle: "short",
     }).format(args.scheduledAt);
+    const emailSettings = await getOrganizationEmailSettings(args.organizationId);
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
     await sendEmail({
       to: args.email,
       subject: `Booking confirmed - ${args.streetAddress}`,
+      organizationId: args.organizationId,
       html: `
         <p>Hi ${escapeHtml(args.name)},</p>
         <p>Your shoot is booked and on our calendar.</p>
@@ -455,6 +460,7 @@ async function sendConfirmationBestEffort(args: {
             ? `<p>You can view this booking in your portal: <a href="${appUrl}/portal">${appUrl}/portal</a></p>`
             : ""
         }
+        <p>— ${escapeHtml(emailSettings.organizationName)}</p>
       `,
     });
   } catch (err) {

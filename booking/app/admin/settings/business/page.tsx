@@ -17,6 +17,9 @@ interface OrganizationRow {
   primary_color: string | null;
   accent_color: string | null;
   logo_url: string | null;
+  email_from_name: string | null;
+  reply_to_email: string | null;
+  admin_notification_email: string | null;
 }
 
 interface SetupStatus {
@@ -25,6 +28,7 @@ interface SetupStatus {
   pricing: boolean;
   availability: boolean;
   calendar: boolean;
+  emailIdentity: boolean;
 }
 
 export default async function BusinessSettingsPage({
@@ -44,7 +48,9 @@ export default async function BusinessSettingsPage({
   ] = await Promise.all([
     service
       .from("organizations")
-      .select("id, name, slug, primary_color, accent_color, logo_url")
+      .select(
+        "id, name, slug, primary_color, accent_color, logo_url, email_from_name, reply_to_email, admin_notification_email",
+      )
       .eq("id", admin.organizationId)
       .maybeSingle<OrganizationRow>(),
     service
@@ -75,6 +81,11 @@ export default async function BusinessSettingsPage({
     pricing: (activeCatalogCount ?? 0) > 0,
     availability: (hours ?? []).length > 0,
     calendar: Boolean(calendarConnection),
+    emailIdentity: Boolean(
+      organization.email_from_name ||
+        organization.reply_to_email ||
+        organization.admin_notification_email,
+    ),
   };
 
   return (
@@ -201,6 +212,12 @@ function SetupChecklist({
               : "Connect this so bookings write to the photographer's calendar."
           }
           href="/admin/settings/integrations"
+        />
+        <ChecklistItem
+          done={status.emailIdentity}
+          title="Email identity"
+          body="Set sender name, reply-to, and admin alerts."
+          href="/admin/settings/business"
         />
       </div>
     </section>

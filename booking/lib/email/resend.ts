@@ -1,6 +1,10 @@
 import "server-only";
 
 import { getCredential } from "@/lib/integrations/credentials";
+import {
+  formatFromAddress,
+  getOrganizationEmailSettings,
+} from "@/lib/email/settings";
 
 /**
  * Thin Resend wrapper.
@@ -22,6 +26,8 @@ interface SendEmailArgs {
   text?: string;
   /** Reply-To override; useful so client replies go to your real inbox. */
   replyTo?: string;
+  /** Company scope for credentials, sender display name, and reply-to defaults. */
+  organizationId?: string | null;
 }
 
 export interface SendEmailResult {
@@ -32,8 +38,20 @@ export interface SendEmailResult {
 }
 
 export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
-  const apiKey = await getCredential("resend", "api_key", "RESEND_API_KEY");
-  const from = process.env.EMAIL_FROM;
+  const [apiKey, settings] = await Promise.all([
+    getCredential(
+      "resend",
+      "api_key",
+      "RESEND_API_KEY",
+      args.organizationId ?? undefined,
+    ),
+    getOrganizationEmailSettings(args.organizationId),
+  ]);
+  const baseFrom = process.env.EMAIL_FROM;
+  const from = baseFrom
+    ? formatFromAddress(baseFrom, settings.fromName)
+    : null;
+  const replyTo = args.replyTo ?? settings.replyToEmail ?? undefined;
 
   if (!apiKey || !from) {
     console.warn(
@@ -62,7 +80,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
         subject: args.subject,
         html: args.html,
         text: args.text ?? stripHtml(args.html),
-        ...(args.replyTo ? { reply_to: args.replyTo } : {}),
+        ...(replyTo ? { reply_to: replyTo } : {}),
       }),
     });
 

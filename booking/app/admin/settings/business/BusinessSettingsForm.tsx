@@ -15,6 +15,9 @@ interface BusinessSettingsFormProps {
     primary_color: string | null;
     accent_color: string | null;
     logo_url: string | null;
+    email_from_name: string | null;
+    reply_to_email: string | null;
+    admin_notification_email: string | null;
   };
 }
 
@@ -143,6 +146,55 @@ export default function BusinessSettingsForm({
           </div>
         </section>
       </div>
+
+      <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/80 p-5 shadow-sm shadow-realtor-text/5">
+        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-realtor-primary/80">
+          Email identity
+        </p>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-realtor-muted">
+          These control how emails look and where replies go for this company.
+          The verified sender address still stays in Resend so delivery stays
+          reliable.
+        </p>
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
+              Sender name
+            </span>
+            <input
+              name="email_from_name"
+              defaultValue={organization.email_from_name ?? organization.name}
+              maxLength={80}
+              placeholder={organization.name}
+              className="mt-1 box-border w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text outline-none placeholder:text-realtor-muted/60 focus:border-realtor-primary/45"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
+              Reply-to email
+            </span>
+            <input
+              name="reply_to_email"
+              type="email"
+              defaultValue={organization.reply_to_email ?? ""}
+              placeholder="hello@company.com"
+              className="mt-1 box-border w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text outline-none placeholder:text-realtor-muted/60 focus:border-realtor-primary/45"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
+              Admin alerts
+            </span>
+            <input
+              name="admin_notification_email"
+              type="email"
+              defaultValue={organization.admin_notification_email ?? ""}
+              placeholder="owner@company.com"
+              className="mt-1 box-border w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text outline-none placeholder:text-realtor-muted/60 focus:border-realtor-primary/45"
+            />
+          </label>
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/80 p-5 shadow-sm shadow-realtor-text/5">
         <div className="flex flex-wrap items-center justify-between gap-4">

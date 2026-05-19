@@ -138,6 +138,7 @@ export async function sendTestEmail(
   const res = await sendEmail({
     to: trimmed,
     subject: "Pixel Blaster — test email",
+    organizationId: admin.organizationId,
     html: `
       <!doctype html>
       <html><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0b0f10;color:#e8eef0;padding:32px">

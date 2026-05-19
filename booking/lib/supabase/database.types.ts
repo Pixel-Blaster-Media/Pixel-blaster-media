@@ -219,6 +219,9 @@ interface OrganizationsTable {
     primary_color: string | null;
     accent_color: string | null;
     logo_url: string | null;
+    email_from_name: string | null;
+    reply_to_email: string | null;
+    admin_notification_email: string | null;
     created_at: string;
     updated_at: string;
   };
@@ -229,6 +232,9 @@ interface OrganizationsTable {
     primary_color?: string | null;
     accent_color?: string | null;
     logo_url?: string | null;
+    email_from_name?: string | null;
+    reply_to_email?: string | null;
+    admin_notification_email?: string | null;
   };
   Update: Partial<OrganizationsTable["Insert"]>;
   Relationships: [];

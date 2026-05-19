@@ -146,12 +146,14 @@ export function shootConfirmedEmail({
   scheduledAt,
   services,
   portalLink,
+  companyName = "Pixel Blaster Media",
 }: {
   contactName: string;
   streetAddress: string;
   scheduledAt: string | null;
   services: string[];
   portalLink: string;
+  companyName?: string;
 }) {
   const firstName = contactName.split(" ")[0] || contactName;
   const when = scheduledAt
@@ -208,7 +210,7 @@ export function shootConfirmedEmail({
   `;
 
   return {
-    subject: `Your Pixel Blaster shoot is confirmed — ${streetAddress}`,
+    subject: `Your ${companyName} shoot is confirmed — ${streetAddress}`,
     html,
   };
 }

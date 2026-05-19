@@ -13,6 +13,7 @@ import {
 } from "@/lib/booking/availability";
 import { getActiveCatalog, getCatalogItemPrice } from "@/lib/booking/catalog";
 import { sendEmail } from "@/lib/email/resend";
+import { getAdminNotificationEmail } from "@/lib/email/settings";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
@@ -369,6 +370,7 @@ export async function createPublicBooking(
     sendEmail({
       to: userEmail,
       subject: `Booking confirmed — ${emailAddressLine}`,
+      organizationId,
       html: `
         <p>Hi ${escapeHtml(userDisplayName)},</p>
         <p>Your shoot is booked and on our calendar.</p>
@@ -388,7 +390,7 @@ export async function createPublicBooking(
           photos, iGUIDE tours, floor plans, video links, invoices, and future
           bookings in one place.
         </p>
-        <p>— Pixel Blaster Media</p>
+        <p>— ${escapeHtml(organization.name)}</p>
       `,
     }),
     sendAdminNotification({
@@ -404,6 +406,7 @@ export async function createPublicBooking(
         email: userEmail,
         name: userDisplayName,
       },
+      organizationId,
     }),
   ]);
 
@@ -701,13 +704,15 @@ async function sendAdminNotification(args: {
     notes: string;
   };
   realtor: { email: string; name: string };
+  organizationId: string;
 }): Promise<void> {
-  const adminTo = process.env.ADMIN_NOTIFICATION_EMAIL;
+  const adminTo = await getAdminNotificationEmail(args.organizationId);
   if (!adminTo) return;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   await sendEmail({
     to: adminTo,
     subject: `New booking — ${args.booking.address}`,
+    organizationId: args.organizationId,
     html: `
       <p><strong>${escapeHtml(args.realtor.name)}</strong> just booked a shoot.</p>
       <p>

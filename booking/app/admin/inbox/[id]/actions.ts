@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { totalDurationMinutes } from "@/lib/booking/services";
 import { sendEmail } from "@/lib/email/resend";
+import { getOrganizationEmailSettings } from "@/lib/email/settings";
 import { shootConfirmedEmail } from "@/lib/email/templates";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
 import { getServiceSupabase } from "@/lib/supabase/server";
@@ -262,6 +263,7 @@ export async function acceptRequest(
   //    doesn't fail the accept — the core records already exist.
   await sendShootConfirmedEmail({
     email: req.contact_email,
+    organizationId: admin.organizationId,
     contactName: req.contact_name,
     streetAddress: req.street_address,
     scheduledAt,
@@ -284,6 +286,7 @@ export async function acceptRequest(
  */
 async function sendShootConfirmedEmail(args: {
   email: string;
+  organizationId: string;
   contactName: string;
   streetAddress: string;
   scheduledAt: string | null;
@@ -326,19 +329,22 @@ async function sendShootConfirmedEmail(args: {
     portalLink = fallback.toString();
   }
 
+  const emailSettings = await getOrganizationEmailSettings(args.organizationId);
   const mail = shootConfirmedEmail({
     contactName: args.contactName,
     streetAddress: args.streetAddress,
     scheduledAt: args.scheduledAt,
     services: args.services,
     portalLink,
+    companyName: emailSettings.organizationName,
   });
 
   const result = await sendEmail({
     to: args.email,
     subject: mail.subject,
     html: mail.html,
-    replyTo: process.env.ADMIN_NOTIFICATION_EMAIL,
+    organizationId: args.organizationId,
+    replyTo: emailSettings.replyToEmail ?? undefined,
   });
 
   if (!result.ok) {

@@ -9,6 +9,10 @@ import {
 } from "@/lib/booking/availability";
 import { getActiveCatalog, getCatalogItemPrice } from "@/lib/booking/catalog";
 import { sendEmail } from "@/lib/email/resend";
+import {
+  getAdminNotificationEmail,
+  getOrganizationEmailSettings,
+} from "@/lib/email/settings";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
@@ -251,7 +255,10 @@ export async function createSelfBooking(
     console.warn("[selfBook] google calendar event create failed", err);
   }
 
-  const adminTo = process.env.ADMIN_NOTIFICATION_EMAIL;
+  const [adminTo, emailSettings] = await Promise.all([
+    getAdminNotificationEmail(user.organizationId),
+    getOrganizationEmailSettings(user.organizationId),
+  ]);
   if (adminTo) {
     const when = new Intl.DateTimeFormat("en-US", {
       timeZone: BUSINESS_TZ,
@@ -263,6 +270,7 @@ export async function createSelfBooking(
     await sendEmail({
       to: adminTo,
       subject: `New self-booking — ${streetAddress}`,
+      organizationId: user.organizationId,
       html: `
         <p><strong>${user.fullName ?? user.email}</strong> just booked a shoot.</p>
         <p>
@@ -273,6 +281,7 @@ export async function createSelfBooking(
           ${notes ? `<strong>Notes:</strong> ${escapeHtml(notes)}<br>` : ""}
         </p>
         <p>Open in admin: ${process.env.NEXT_PUBLIC_APP_URL ?? ""}/admin/bookings/${booking.id}</p>
+        <p>Company: ${escapeHtml(emailSettings.organizationName)}</p>
       `,
       replyTo: user.email,
     });

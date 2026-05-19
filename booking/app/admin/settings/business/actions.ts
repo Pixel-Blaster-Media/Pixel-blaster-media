@@ -37,6 +37,10 @@ export async function saveBusinessSettings(
   const slug = normalizeSlug(cleanText(formData.get("slug")));
   const primaryColor = cleanText(formData.get("primary_color")) || null;
   const accentColor = cleanText(formData.get("accent_color")) || null;
+  const emailFromName = cleanText(formData.get("email_from_name")) || name;
+  const replyToEmail = cleanText(formData.get("reply_to_email")) || null;
+  const adminNotificationEmail =
+    cleanText(formData.get("admin_notification_email")) || null;
 
   if (!name) {
     return { ok: false, error: "Business name is required." };
@@ -58,6 +62,15 @@ export async function saveBusinessSettings(
   }
   if (accentColor && !HEX_COLOR_RE.test(accentColor)) {
     return { ok: false, error: "Accent color must look like #c9a35b." };
+  }
+  if (emailFromName.length > 80) {
+    return { ok: false, error: "Email sender name must be 80 characters or fewer." };
+  }
+  if (replyToEmail && !isEmail(replyToEmail)) {
+    return { ok: false, error: "Reply-to email does not look valid." };
+  }
+  if (adminNotificationEmail && !isEmail(adminNotificationEmail)) {
+    return { ok: false, error: "Admin notification email does not look valid." };
   }
   const service = getServiceSupabase();
   const [{ data: slugOwner, error: slugError }, { data: currentOrg, error: currentError }] =
@@ -99,6 +112,9 @@ export async function saveBusinessSettings(
       primary_color: primaryColor,
       accent_color: accentColor,
       logo_url: logo.url,
+      email_from_name: emailFromName,
+      reply_to_email: replyToEmail,
+      admin_notification_email: adminNotificationEmail,
     })
     .eq("id", admin.organizationId);
 
@@ -121,6 +137,10 @@ function normalizeSlug(value: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function isEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 async function resolveLogoField({

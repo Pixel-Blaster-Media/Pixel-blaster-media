@@ -3,6 +3,10 @@ import "server-only";
 import { BUSINESS_TZ } from "@/lib/booking/availability";
 import { isCancellable } from "@/lib/booking/booking-status";
 import { sendEmail } from "@/lib/email/resend";
+import {
+  getAdminNotificationEmail,
+  getOrganizationEmailSettings,
+} from "@/lib/email/settings";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { BookingStatus } from "@/lib/supabase/database.types";
@@ -152,6 +156,7 @@ export async function cancelBooking(
     realtorName,
     addressLine,
     whenLabel,
+    organizationId: booking.organization_id,
   });
 
   return {
@@ -168,14 +173,17 @@ async function sendCancellationEmail(args: {
   realtorName: string;
   addressLine: string;
   whenLabel: string;
+  organizationId: string;
 }): Promise<void> {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const emailSettings = await getOrganizationEmailSettings(args.organizationId);
 
   if (args.initiator === "admin") {
     if (!args.realtorEmail) return;
     await sendEmail({
       to: args.realtorEmail,
       subject: `Booking cancelled — ${args.addressLine}`,
+      organizationId: args.organizationId,
       html: `
         <p>Hi ${escapeHtml(args.realtorName)},</p>
         <p>
@@ -184,22 +192,27 @@ async function sendCancellationEmail(args: {
         </p>
         <p>
           If this was unexpected, reply to this email or reach out at
-          <a href="mailto:Info@PixelBlasterMedia.com">Info@PixelBlasterMedia.com</a>.
+          ${
+            emailSettings.replyToEmail
+              ? `<a href="mailto:${escapeHtml(emailSettings.replyToEmail)}">${escapeHtml(emailSettings.replyToEmail)}</a>`
+              : "the studio"
+          }.
           To book a different time, head to
           <a href="${appUrl}/book">${appUrl || "our booking page"}</a>.
         </p>
-        <p>— Pixel Blaster Media</p>
+        <p>— ${escapeHtml(emailSettings.organizationName)}</p>
       `,
     });
     return;
   }
 
   // Realtor-initiated → notify admin.
-  const adminTo = process.env.ADMIN_NOTIFICATION_EMAIL;
+  const adminTo = await getAdminNotificationEmail(args.organizationId);
   if (!adminTo) return;
   await sendEmail({
     to: adminTo,
     subject: `Booking cancelled by realtor — ${args.addressLine}`,
+    organizationId: args.organizationId,
     html: `
       <p>
         <strong>${escapeHtml(args.realtorName)}</strong>${

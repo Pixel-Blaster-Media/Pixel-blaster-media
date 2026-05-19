@@ -539,6 +539,7 @@ export async function sendDeliveryReadyEmail(
     ...(ccRecipients.length > 0 ? { cc: ccRecipients } : {}),
     subject: email.subject,
     html: email.html,
+    organizationId: admin.organizationId,
   });
   if (!sent.ok) return { ok: false, error: sent.error ?? "Email failed." };
 
