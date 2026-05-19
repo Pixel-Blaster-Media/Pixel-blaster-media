@@ -102,6 +102,7 @@ export async function updateRealtorProfile(
     website_url: websiteUrl.value,
     instagram_url: instagramUrl.value,
     delivery_cc_emails: deliveryCcEmails.emails,
+    internal_notes: cleanText(formData.get("internal_notes")) || null,
   };
 
   const { data: updatedProfile, error } = await service

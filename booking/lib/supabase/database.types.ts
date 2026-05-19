@@ -66,6 +66,7 @@ interface ProfilesTable {
     website_url: string | null;
     instagram_url: string | null;
     delivery_cc_emails: string[];
+    internal_notes: string | null;
     role: UserRole;
     created_at: string;
     updated_at: string;
@@ -82,6 +83,7 @@ interface ProfilesTable {
     website_url?: string | null;
     instagram_url?: string | null;
     delivery_cc_emails?: string[];
+    internal_notes?: string | null;
     role?: UserRole;
   };
   Update: Partial<ProfilesTable["Insert"]>;

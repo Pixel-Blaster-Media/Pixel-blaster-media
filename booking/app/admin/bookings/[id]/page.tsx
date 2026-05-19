@@ -82,6 +82,7 @@ interface BookingDetail {
     phone: string | null;
     brokerage: string | null;
     delivery_cc_emails: string[] | null;
+    internal_notes: string | null;
   } | null;
 }
 
@@ -150,7 +151,7 @@ export default async function BookingDetailPage({
       supabase
         .from("bookings")
         .select(
-          "id, status, scheduled_at, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, internal_notes, iguide_id, iguide_portal_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage, delivery_cc_emails)",
+          "id, status, scheduled_at, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, internal_notes, iguide_id, iguide_portal_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage, delivery_cc_emails, internal_notes)",
         )
         .eq("id", id)
         .single<BookingDetail>(),
@@ -395,6 +396,9 @@ export default async function BookingDetailPage({
               savedCcEmails={profile?.delivery_cc_emails ?? []}
               adminEmail={admin.email}
             />
+            {profile?.internal_notes ? (
+              <AgentNotesReminder notes={profile.internal_notes} />
+            ) : null}
             <DeliveryLinksPanel links={deliveryLinks} />
           </>
         }
@@ -498,6 +502,9 @@ function DetailsTab({
             }
           />
           <Row label="Brokerage" value={profile?.brokerage ?? "—"} />
+          {profile?.internal_notes ? (
+            <Note title="Agent notes" body={profile.internal_notes} />
+          ) : null}
         </Panel>
 
         <Panel title="Shoot details">
@@ -570,6 +577,19 @@ function DetailsTab({
         </Panel>
       </div>
     </>
+  );
+}
+
+function AgentNotesReminder({ notes }: { notes: string }) {
+  return (
+    <div className="rounded-2xl border border-amber-300/40 bg-amber-300/10 p-4 shadow-lg shadow-black/10">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-200">
+        Agent notes reminder
+      </p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-amber-50">
+        {notes}
+      </p>
+    </div>
   );
 }
 

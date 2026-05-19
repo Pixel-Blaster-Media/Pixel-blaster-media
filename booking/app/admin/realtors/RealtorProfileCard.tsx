@@ -15,6 +15,7 @@ export interface RealtorProfileView {
   website_url: string | null;
   instagram_url: string | null;
   delivery_cc_emails: string[];
+  internal_notes: string | null;
   created_at: string;
   bookingCount: number;
   activeBookingCount: number;
@@ -48,6 +49,11 @@ export default function RealtorProfileCard({
               {realtor.full_name || realtor.email}
             </h2>
             <p className="truncate text-sm text-realtor-muted">{realtor.email}</p>
+            {realtor.internal_notes ? (
+              <p className="mt-1 inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                Agent notes saved
+              </p>
+            ) : null}
             {realtor.brokerage ? (
               <p className="mt-1 truncate text-xs font-medium text-realtor-primary">
                 {realtor.brokerage}
@@ -183,6 +189,22 @@ export default function RealtorProfileCard({
                   placeholder="https://instagram.com/agent"
                 />
               </Field>
+              <div className="md:col-span-2">
+                <Field label="Agent notes">
+                  <textarea
+                    name="internal_notes"
+                    defaultValue={realtor.internal_notes ?? ""}
+                    rows={4}
+                    maxLength={2000}
+                    className="admin-input min-h-28 resize-y"
+                    placeholder="Example: Prefers branded tour first. Always CC the team lead. Likes YouTube links included in delivery."
+                  />
+                  <p className="mt-1 text-[11px] text-realtor-muted">
+                    Private admin reminder. This shows on their booking/delivery
+                    pages and never goes to the realtor.
+                  </p>
+                </Field>
+              </div>
               <div className="md:col-span-2">
                 <Field label="Delivery CC emails">
                   <textarea
