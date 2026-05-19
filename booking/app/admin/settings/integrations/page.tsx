@@ -20,6 +20,7 @@ import GoogleDisconnectButton from "./GoogleDisconnectButton";
 import GoogleCalendarTester from "./GoogleCalendarTester";
 import IGuideTester from "./IGuideTester";
 import ItemPicker from "./ItemPicker";
+import OpenAITester from "./OpenAITester";
 
 export const metadata: Metadata = { title: "Integrations" };
 export const dynamic = "force-dynamic";
@@ -86,6 +87,8 @@ export default async function IntegrationsPage({
   // show whether each field is set without ever leaking values.
   const [
     resendApiKeyStatus,
+    openAiApiKeyStatus,
+    openAiModelStatus,
     fotelloApiKeyStatus,
     iguideAppIdStatus,
     iguideAppTokenStatus,
@@ -95,6 +98,18 @@ export default async function IntegrationsPage({
       "resend",
       "api_key",
       "RESEND_API_KEY",
+      admin.organizationId,
+    ),
+    getCredentialSource(
+      "openai",
+      "api_key",
+      "OPENAI_API_KEY",
+      admin.organizationId,
+    ),
+    getCredentialSource(
+      "openai",
+      "model",
+      "OPENAI_ASSISTANT_MODEL",
       admin.organizationId,
     ),
     getCredentialSource(
@@ -119,6 +134,7 @@ export default async function IntegrationsPage({
   ]);
 
   const resendConfigured = resendApiKeyStatus.source !== "none";
+  const openAiConfigured = openAiApiKeyStatus.source !== "none";
   const fotelloConfigured = fotelloApiKeyStatus.source !== "none";
   const iguideConfigured =
     iguideAppIdStatus.source !== "none" &&
@@ -260,6 +276,66 @@ export default async function IntegrationsPage({
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="realtor-elevated-panel rounded-2xl p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-realtor-text">
+              AI Assistant
+            </h2>
+            <p className="mt-1 text-sm text-realtor-muted">
+              Powers the floating admin assistant and realtor-facing copy tools.
+              You can use the platform key or save this company&apos;s own
+              OpenAI API key. Saved keys are never shown again.
+            </p>
+          </div>
+          {openAiConfigured ? (
+            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+              Configured
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+              Not configured
+            </span>
+          )}
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
+          <p className="text-sm font-semibold text-realtor-text">
+            How this works
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-realtor-muted">
+            If a company saves its own key, its assistant calls OpenAI with
+            that key. If not, the app falls back to the platform
+            <code className="mx-1">OPENAI_API_KEY</code>. Anything that changes
+            bookings still asks for confirmation first.
+          </p>
+        </div>
+
+        <CredentialsForm
+          provider="openai"
+          fields={[
+            {
+              name: "api_key",
+              label: "OpenAI API key",
+              helper:
+                "Starts with sk-. Create it in the OpenAI dashboard. We store it server-side only.",
+            },
+            {
+              name: "model",
+              label: "Model override",
+              helper:
+                "Optional. Leave blank to use the platform default model.",
+              type: "text",
+            },
+          ]}
+          statuses={{
+            api_key: openAiApiKeyStatus,
+            model: openAiModelStatus,
+          }}
+        />
+        <OpenAITester />
       </section>
 
       {/* iGUIDE — Portal API + webhook secret. Used by /admin/bookings to

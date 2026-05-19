@@ -9,6 +9,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import {
   clearCredentialFields,
   getCredential,
+  getCredentialSource,
   type Provider,
   saveCredentials,
 } from "@/lib/integrations/credentials";
@@ -174,11 +175,17 @@ export async function sendTestEmail(
 const ALLOWED_FIELDS: Record<Provider, string[]> = {
   fotello: ["api_key"],
   iguide: ["app_id", "app_token", "webhook_secret"],
+  openai: ["api_key", "model"],
   resend: ["api_key"],
 };
 
 function isProvider(value: string): value is Provider {
-  return value === "fotello" || value === "iguide" || value === "resend";
+  return (
+    value === "fotello" ||
+    value === "iguide" ||
+    value === "openai" ||
+    value === "resend"
+  );
 }
 
 export async function saveIntegrationCredentials(
@@ -260,6 +267,82 @@ export async function testIGuideCredentials(): Promise<{
     ok: true,
     appIdLast4: result.data.appId.slice(-4),
   };
+}
+
+export async function testOpenAICredentials(): Promise<{
+  ok: boolean;
+  error?: string;
+  model?: string;
+  source: "company" | "platform" | "none";
+}> {
+  const admin = await requireAdmin();
+  const apiKey = await getCredential(
+    "openai",
+    "api_key",
+    "OPENAI_API_KEY",
+    admin.organizationId,
+  );
+  const model =
+    (await getCredential(
+      "openai",
+      "model",
+      "OPENAI_ASSISTANT_MODEL",
+      admin.organizationId,
+    )) ||
+    process.env.OPENAI_MODEL ||
+    "gpt-5.4-mini";
+
+  if (!apiKey) {
+    return {
+      ok: false,
+      error: "No OpenAI API key is saved for this company and no platform fallback is configured.",
+      source: "none",
+    };
+  }
+
+  const source =
+    (await getCredentialSource(
+      "openai",
+      "api_key",
+      "OPENAI_API_KEY",
+      admin.organizationId,
+    )).source === "db"
+      ? "company"
+      : "platform";
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        input: "Reply with exactly: ok",
+        max_output_tokens: 20,
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      return {
+        ok: false,
+        error: `OpenAI rejected the test (${res.status}). ${body.slice(0, 220)}`,
+        model,
+        source,
+      };
+    }
+
+    return { ok: true, model, source };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "OpenAI test failed.",
+      model,
+      source,
+    };
+  }
 }
 
 function normalizeIGuideWebhookSecret(value: string): string {

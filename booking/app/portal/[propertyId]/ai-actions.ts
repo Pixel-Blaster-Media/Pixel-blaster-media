@@ -2,6 +2,7 @@
 
 import { requireUser } from "@/lib/auth/require-user";
 import { labelForAddOn, labelForService } from "@/lib/booking/services";
+import { getCredential } from "@/lib/integrations/credentials";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type {
   BookingStatus,
@@ -52,16 +53,31 @@ export async function generateListingCopy(
   propertyId: string,
   kind: CopyKind,
 ): Promise<GenerateListingCopyResult> {
-  await requireUser(`/portal/${propertyId}`);
+  const user = await requireUser(`/portal/${propertyId}`);
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = await getCredential(
+    "openai",
+    "api_key",
+    "OPENAI_API_KEY",
+    user.organizationId,
+  );
   if (!apiKey) {
     return {
       ok: false,
       error:
-        "AI copy is not configured yet. Add OPENAI_API_KEY in Vercel/local env, then redeploy.",
+        "AI copy is not configured yet. Ask the admin to add an OpenAI API key in Settings → Integrations.",
     };
   }
+  const model =
+    (await getCredential(
+      "openai",
+      "model",
+      "OPENAI_MODEL",
+      user.organizationId,
+    )) ||
+    process.env.OPENAI_ASSISTANT_MODEL ||
+    process.env.OPENAI_MODEL ||
+    "gpt-5.4-mini";
 
   const supabase = await getServerSupabase();
   const { data: property, error: propertyError } = await supabase
@@ -93,7 +109,7 @@ export async function generateListingCopy(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: process.env.OPENAI_MODEL ?? "gpt-5.4-mini",
+        model,
         input: [
           {
             role: "system",

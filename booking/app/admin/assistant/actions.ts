@@ -14,13 +14,12 @@ import {
   type CatalogItemRow,
 } from "@/lib/booking/catalog";
 import { labelForAddOn, labelForService } from "@/lib/booking/services";
+import { getCredential } from "@/lib/integrations/credentials";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { BookingStatus } from "@/lib/supabase/database.types";
 
-const MODEL =
-  process.env.OPENAI_ASSISTANT_MODEL ??
-  process.env.OPENAI_MODEL ??
-  "gpt-5.4-mini";
+const DEFAULT_MODEL =
+  process.env.OPENAI_ASSISTANT_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-5.4-mini";
 const BUSINESS_TZ = "America/Toronto";
 
 export interface AdminAssistantAction {
@@ -146,18 +145,20 @@ export async function askAdminAssistant(
     };
   }
 
-  if (!process.env.OPENAI_API_KEY) {
+  const aiConfig = await getAssistantAIConfig(admin.organizationId);
+  if (!aiConfig.apiKey) {
     return {
       ok: false,
       kind: "unsupported",
       message:
-        "The AI assistant needs OPENAI_API_KEY configured before it can answer.",
+        "The AI assistant needs an OpenAI API key. Add one in Settings → Integrations → AI Assistant.",
       actions: [],
     };
   }
+  const openAiConfig = { apiKey: aiConfig.apiKey, model: aiConfig.model };
 
   const context = await loadAssistantContext(admin.organizationId);
-  const modelPlan = await planWithOpenAI(request, context);
+  const modelPlan = await planWithOpenAI(request, context, openAiConfig);
   return normalizePlan(modelPlan, context);
 }
 
@@ -407,15 +408,16 @@ async function planWithOpenAI(
     knownAddresses: string[];
     catalogLines: string[];
   },
+  aiConfig: { apiKey: string; model: string },
 ): Promise<ModelPlan> {
   const res = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      Authorization: `Bearer ${aiConfig.apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model: aiConfig.model,
       max_output_tokens: 900,
       input: [
         {
@@ -472,6 +474,19 @@ async function planWithOpenAI(
   if (!text) throw new Error("OpenAI returned no assistant plan.");
 
   return JSON.parse(text) as ModelPlan;
+}
+
+async function getAssistantAIConfig(
+  organizationId: string,
+): Promise<{ apiKey: string | null; model: string }> {
+  const [apiKey, model] = await Promise.all([
+    getCredential("openai", "api_key", "OPENAI_API_KEY", organizationId),
+    getCredential("openai", "model", "OPENAI_ASSISTANT_MODEL", organizationId),
+  ]);
+  return {
+    apiKey,
+    model: model || DEFAULT_MODEL,
+  };
 }
 
 function normalizePlan(

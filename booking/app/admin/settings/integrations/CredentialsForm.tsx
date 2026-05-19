@@ -21,7 +21,7 @@ export interface CredentialFieldStatus {
 }
 
 export interface CredentialsFormProps {
-  provider: "fotello" | "iguide" | "resend";
+  provider: "fotello" | "iguide" | "openai" | "resend";
   fields: CredentialFieldDef[];
   /** One status entry per field, keyed by field.name. */
   statuses: Record<string, CredentialFieldStatus>;

@@ -26,7 +26,7 @@ import { getServiceSupabase } from "@/lib/supabase/server";
  * against.
  */
 
-export type Provider = "fotello" | "iguide" | "resend";
+export type Provider = "fotello" | "iguide" | "openai" | "resend";
 
 interface CredentialsRow {
   organization_id: string;
