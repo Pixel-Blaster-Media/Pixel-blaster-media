@@ -2,9 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 
+import {
+  sendDeliveryReadyEmail,
+  updateBookingStatus,
+} from "@/app/admin/bookings/[id]/actions";
 import { createAdminShoot } from "@/app/admin/calendar/actions";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { isCancellable } from "@/lib/booking/booking-status";
+import {
+  isCancellable,
+  nextBookingStatuses,
+} from "@/lib/booking/booking-status";
 import { cancelBooking } from "@/lib/booking/cancel";
 import {
   computeCartTotals,
@@ -23,13 +30,20 @@ const DEFAULT_MODEL =
 const BUSINESS_TZ = "America/Toronto";
 
 export interface AdminAssistantAction {
-  type: "cancel_booking" | "create_booking" | "open_booking" | "draft_booking";
+  type:
+    | "cancel_booking"
+    | "create_booking"
+    | "open_booking"
+    | "draft_booking"
+    | "update_booking_status"
+    | "send_delivery_email";
   bookingId: string;
   label: string;
   details: string;
   href: string;
   destructive: boolean;
   requiresConfirmation: boolean;
+  nextStatus?: BookingStatus;
   draft?: AdminAssistantBookingDraft;
 }
 
@@ -79,6 +93,8 @@ interface BookingContextRow {
     email: string;
     phone: string | null;
     brokerage: string | null;
+    internal_notes: string | null;
+    delivery_cc_emails: string[] | null;
   } | null;
 }
 
@@ -94,6 +110,15 @@ interface ProfileContextRow {
   email: string;
   phone: string | null;
   brokerage: string | null;
+  internal_notes: string | null;
+  delivery_cc_emails: string[] | null;
+}
+
+interface DeliverableContextRow {
+  booking_id: string;
+  type: string;
+  source: string;
+  ready_at: string | null;
 }
 
 interface ModelPlan {
@@ -105,10 +130,13 @@ interface ModelPlan {
       | "create_booking"
       | "open_booking"
       | "draft_booking"
+      | "update_booking_status"
+      | "send_delivery_email"
       | "none";
     bookingId: string;
     label: string;
     details: string;
+    nextStatus: string;
     draft: {
       sourceBookingId: string;
       scheduledLocal: string;
@@ -171,12 +199,77 @@ export async function confirmAdminAssistantAction(
     return createBookingFromAssistant(action);
   }
 
+  if (action.type === "send_delivery_email") {
+    const result = await sendDeliveryReadyEmail(action.bookingId);
+    if (!result.ok) {
+      return {
+        ok: false,
+        kind: "needs_clarification",
+        message: result.error ?? "I couldn't send that delivery email.",
+        actions: [],
+      };
+    }
+    return {
+      ok: true,
+      kind: "answer",
+      message: `Done. I ${result.resent ? "resent" : "sent"} the delivery email to ${result.recipientCount ?? 1} recipient${(result.recipientCount ?? 1) === 1 ? "" : "s"}.`,
+      actions: [
+        {
+          type: "open_booking",
+          bookingId: action.bookingId,
+          label: "Open booking",
+          details: "Review the delivered media and email recipients.",
+          href: `/admin/bookings/${action.bookingId}?tab=delivery`,
+          destructive: false,
+          requiresConfirmation: false,
+        },
+      ],
+    };
+  }
+
+  if (action.type === "update_booking_status") {
+    if (!action.nextStatus) {
+      return {
+        ok: false,
+        kind: "needs_clarification",
+        message: "I need the next status before I can update that booking.",
+        actions: [],
+      };
+    }
+    const result = await updateBookingStatus(action.bookingId, action.nextStatus);
+    if (!result.ok) {
+      return {
+        ok: false,
+        kind: "needs_clarification",
+        message: result.error ?? "I couldn't update that booking status.",
+        actions: [],
+      };
+    }
+    revalidatePath("/admin/today");
+    revalidatePath("/admin/calendar");
+    return {
+      ok: true,
+      kind: "answer",
+      message: `Done. I moved the booking to ${action.nextStatus}.`,
+      actions: [
+        {
+          type: "open_booking",
+          bookingId: action.bookingId,
+          label: "Open booking",
+          details: "Review the updated booking.",
+          href: `/admin/bookings/${action.bookingId}`,
+          destructive: false,
+          requiresConfirmation: false,
+        },
+      ],
+    };
+  }
+
   if (action.type !== "cancel_booking") {
     return {
       ok: false,
       kind: "unsupported",
-      message:
-        "This action is not executable yet. I can help prepare it, but not run it.",
+      message: "This action is not executable yet.",
       actions: [],
     };
   }
@@ -261,7 +354,7 @@ async function loadAssistantContext(organizationId: string): Promise<{
     supabase
       .from("bookings")
       .select(
-        "id, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, unit_number, client_notes, properties(street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage)",
+        "id, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, unit_number, client_notes, properties(street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage, internal_notes, delivery_cc_emails)",
       )
       .eq("organization_id", organizationId)
       .gte("scheduled_at", oneYearAgo.toISOString())
@@ -271,7 +364,7 @@ async function loadAssistantContext(organizationId: string): Promise<{
       .returns<BookingContextRow[]>(),
     supabase
       .from("profiles")
-      .select("id, full_name, email, phone, brokerage")
+      .select("id, full_name, email, phone, brokerage, internal_notes, delivery_cc_emails")
       .eq("organization_id", organizationId)
       .eq("role", "realtor")
       .order("full_name", { ascending: true, nullsFirst: false })
@@ -305,6 +398,26 @@ async function loadAssistantContext(organizationId: string): Promise<{
       const list = lineItemIdsByBookingId.get(line.booking_id) ?? [];
       list.push(line.catalog_item_id);
       lineItemIdsByBookingId.set(line.booking_id, list);
+    }
+  }
+
+  const deliverablesByBookingId = new Map<string, DeliverableContextRow[]>();
+  if (bookingIds.length > 0) {
+    const { data: deliverables, error: deliverableError } = await supabase
+      .from("deliverables")
+      .select("booking_id, type, source, ready_at")
+      .in("booking_id", bookingIds)
+      .returns<DeliverableContextRow[]>();
+    if (deliverableError) {
+      throw new Error(
+        `Could not load deliverables for assistant: ${deliverableError.message}`,
+      );
+    }
+    for (const deliverable of deliverables ?? []) {
+      deliverablesByBookingId.set(deliverable.booking_id, [
+        ...(deliverablesByBookingId.get(deliverable.booking_id) ?? []),
+        deliverable,
+      ]);
     }
   }
 
@@ -345,6 +458,15 @@ async function loadAssistantContext(organizationId: string): Promise<{
       ...booking.services.map(labelForService),
       ...booking.add_ons.map(labelForAddOn),
     ].join(", ");
+    const deliverables = deliverablesByBookingId.get(booking.id) ?? [];
+    const readyDeliverables = deliverables
+      .filter((deliverable) => deliverable.ready_at)
+      .map((deliverable) => `${deliverable.source}:${deliverable.type}`)
+      .join(",");
+    const pendingDeliverables = deliverables
+      .filter((deliverable) => !deliverable.ready_at)
+      .map((deliverable) => `${deliverable.source}:${deliverable.type}`)
+      .join(",");
     return [
       `id=${booking.id}`,
       `status=${booking.status}`,
@@ -357,7 +479,11 @@ async function loadAssistantContext(organizationId: string): Promise<{
       `catalogItemIds=${(lineItemIdsByBookingId.get(booking.id) ?? []).join(",")}`,
       `legacyServiceIds=${booking.services.join(",")}`,
       `legacyAddOnIds=${booking.add_ons.join(",")}`,
+      `readyDeliverables=${readyDeliverables || "none"}`,
+      `pendingDeliverables=${pendingDeliverables || "none"}`,
       `notes=${booking.client_notes ?? ""}`,
+      `agentMemory=${booking.profiles?.internal_notes ?? ""}`,
+      `deliveryCCs=${(booking.profiles?.delivery_cc_emails ?? []).join(",")}`,
     ].join(" | ");
   });
   const knownAddresses = unique(
@@ -382,6 +508,8 @@ async function loadAssistantContext(organizationId: string): Promise<{
       `email=${realtor.email}`,
       `phone=${realtor.phone ?? ""}`,
       `brokerage=${realtor.brokerage ?? ""}`,
+      `agentMemory=${realtor.internal_notes ?? ""}`,
+      `deliveryCCs=${(realtor.delivery_cc_emails ?? []).join(",")}`,
     ].join(" | "),
   );
 
@@ -427,6 +555,8 @@ async function planWithOpenAI(
             "Use only the provided booking and realtor context. The business timezone is America/Toronto. " +
             "Never claim you changed data. For any change, propose an action for confirmation. " +
             "Only propose cancel_booking when exactly one cancellable booking is clearly identified. " +
+            "Only propose send_delivery_email when one booking is clearly identified and the user asks to send, resend, or deliver media. " +
+            "Only propose update_booking_status when one booking and the exact next status are clearly identified; use requested, confirmed, shot, editing, delivered, or cancelled only. For cancellation requests, prefer cancel_booking. " +
             "For booking requests, propose create_booking when realtor, exact date/time, street address, and services/catalog item ids are known. " +
             "Street address means street number + street name; city, province, and postal code are helpful but optional. Do not ask for postal code before creating a booking. " +
             "If the user gives a partial street address, use it as streetAddress. If it clearly matches one known address, use the highest-likelihood known address and mention that assumption in details. " +
@@ -444,6 +574,8 @@ async function planWithOpenAI(
               "open_booking",
               "cancel_booking_requires_confirmation",
               "create_booking_requires_confirmation",
+              "send_delivery_email_requires_confirmation",
+              "update_booking_status_requires_confirmation",
               "draft_booking_needs_more_info",
             ],
             bookings: context.bookings,
@@ -538,6 +670,57 @@ function normalizePlan(
           },
         ],
       };
+    }
+
+    if (raw.type === "update_booking_status") {
+      const nextStatus = parseBookingStatus(raw.nextStatus);
+      if (!nextStatus) {
+        missing.push("next booking status");
+        continue;
+      }
+      const allowed = nextBookingStatuses(booking.status);
+      if (!allowed.includes(nextStatus)) {
+        return {
+          ok: false,
+          kind: "unsupported",
+          message: `I found the booking, but it can't move from ${booking.status} to ${nextStatus}.`,
+          actions: [
+            {
+              type: "open_booking",
+              bookingId: booking.id,
+              label: "Open booking",
+              details: bookingLabel(booking),
+              href: `/admin/bookings/${booking.id}`,
+              destructive: false,
+              requiresConfirmation: false,
+            },
+          ],
+        };
+      }
+      actions.push({
+        type: "update_booking_status",
+        bookingId: booking.id,
+        label: raw.label || `Move to ${nextStatus}`,
+        details: raw.details || bookingLabel(booking),
+        href: `/admin/bookings/${booking.id}`,
+        destructive: false,
+        requiresConfirmation: true,
+        nextStatus,
+      });
+      continue;
+    }
+
+    if (raw.type === "send_delivery_email") {
+      actions.push({
+        type: "send_delivery_email",
+        bookingId: booking.id,
+        label: raw.label || "Send delivery email",
+        details: raw.details || bookingLabel(booking),
+        href: `/admin/bookings/${booking.id}?tab=delivery`,
+        destructive: false,
+        requiresConfirmation: true,
+      });
+      continue;
     }
 
     actions.push({
@@ -775,7 +958,7 @@ const PLAN_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["type", "bookingId", "label", "details", "draft"],
+        required: ["type", "bookingId", "label", "details", "nextStatus", "draft"],
         properties: {
           type: {
             type: "string",
@@ -784,12 +967,26 @@ const PLAN_SCHEMA = {
               "create_booking",
               "open_booking",
               "draft_booking",
+              "update_booking_status",
+              "send_delivery_email",
               "none",
             ],
           },
           bookingId: { type: "string" },
           label: { type: "string" },
           details: { type: "string" },
+          nextStatus: {
+            type: "string",
+            enum: [
+              "",
+              "requested",
+              "confirmed",
+              "shot",
+              "editing",
+              "delivered",
+              "cancelled",
+            ],
+          },
           draft: {
             type: "object",
             additionalProperties: false,
@@ -893,6 +1090,20 @@ function parseOptionalInt(value: string): number | null {
   if (!value) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : null;
+}
+
+function parseBookingStatus(value: string): BookingStatus | null {
+  if (
+    value === "requested" ||
+    value === "confirmed" ||
+    value === "shot" ||
+    value === "editing" ||
+    value === "delivered" ||
+    value === "cancelled"
+  ) {
+    return value;
+  }
+  return null;
 }
 
 function isRequiredMissingField(value: string): boolean {

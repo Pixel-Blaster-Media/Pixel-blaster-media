@@ -51,7 +51,7 @@ export default function RealtorProfileCard({
             <p className="truncate text-sm text-realtor-muted">{realtor.email}</p>
             {realtor.internal_notes ? (
               <p className="mt-1 inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                Agent notes saved
+                Memory saved
               </p>
             ) : null}
             {realtor.brokerage ? (
@@ -190,7 +190,7 @@ export default function RealtorProfileCard({
                 />
               </Field>
               <div className="md:col-span-2">
-                <Field label="Agent notes">
+                <Field label="Agent memory">
                   <textarea
                     name="internal_notes"
                     defaultValue={realtor.internal_notes ?? ""}
@@ -200,8 +200,9 @@ export default function RealtorProfileCard({
                     placeholder="Example: Prefers branded tour first. Always CC the team lead. Likes YouTube links included in delivery."
                   />
                   <p className="mt-1 text-[11px] text-realtor-muted">
-                    Private admin reminder. This shows on their booking/delivery
-                    pages and never goes to the realtor.
+                    Private admin memory. This shows on booking/delivery pages,
+                    and Pixel Assistant can use it when planning bookings or
+                    delivery. Realtors never see it.
                   </p>
                 </Field>
               </div>

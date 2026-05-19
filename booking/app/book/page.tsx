@@ -72,6 +72,7 @@ export default async function BookStep1Page({
         bundles={bundles}
         aLaCarte={aLaCarte}
         addons={addons}
+        organizationSlug={organization.slug}
       />
 
       <PackageAccordion

@@ -1,30 +1,34 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import type { CatalogItemDTO } from "@/app/_components/CartPicker";
+import {
+  recommendBookingPackage,
+  type BookingRecommendation,
+} from "@/app/book/recommendation-actions";
 
 interface Props {
   bundles: CatalogItemDTO[];
   aLaCarte: CatalogItemDTO[];
   addons: CatalogItemDTO[];
+  organizationSlug: string;
 }
 
-interface Recommendation {
-  services: string[];
-  addOns: string[];
-  title: string;
-  confidence: "strong" | "good" | "light";
-  reasoning: string;
-  notes: string[];
-}
-
-export default function AIPackageRecommender({ bundles, aLaCarte, addons }: Props) {
+export default function AIPackageRecommender({
+  bundles,
+  aLaCarte,
+  addons,
+  organizationSlug,
+}: Props) {
   const router = useRouter();
   const params = useSearchParams();
   const [description, setDescription] = useState("");
-  const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
+  const [recommendation, setRecommendation] =
+    useState<BookingRecommendation | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
   const bySlug = useMemo(() => {
     const m = new Map<string, CatalogItemDTO>();
@@ -33,8 +37,27 @@ export default function AIPackageRecommender({ bundles, aLaCarte, addons }: Prop
   }, [bundles, aLaCarte, addons]);
 
   function recommend() {
-    const next = buildRecommendation(description, bySlug);
-    setRecommendation(next);
+    setError(null);
+    setRecommendation(null);
+    startTransition(async () => {
+      try {
+        const result = await recommendBookingPackage({
+          description,
+          organizationSlug,
+        });
+        if (result.ok) {
+          setRecommendation(result.recommendation);
+        } else {
+          setError(result.error);
+        }
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Could not make a recommendation right now.",
+        );
+      }
+    });
   }
 
   function applyRecommendation(next = recommendation) {
@@ -47,6 +70,12 @@ export default function AIPackageRecommender({ bundles, aLaCarte, addons }: Prop
     out.delete("slot");
     router.replace(`?${out.toString()}`, { scroll: false });
   }
+
+  const selectedNames = recommendation
+    ? [...recommendation.services, ...recommendation.addOns]
+        .map((slug) => bySlug.get(slug)?.name)
+        .filter(Boolean)
+    : [];
 
   return (
     <section className="realtor-green-panel rounded-2xl p-5">
@@ -64,7 +93,7 @@ export default function AIPackageRecommender({ bundles, aLaCarte, addons }: Prop
           </p>
         </div>
         <span className="rounded-full border border-realtor-primary/30 bg-realtor-primary/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-realtor-primary">
-          Beta
+          AI beta
         </span>
       </div>
 
@@ -73,6 +102,7 @@ export default function AIPackageRecommender({ bundles, aLaCarte, addons }: Prop
           value={description}
           onChange={(e) => setDescription(e.currentTarget.value)}
           rows={4}
+          maxLength={1600}
           placeholder="Example: 2,200 sqft detached home in Hamilton, occupied, basement included, realtor wants photos, iGUIDE, drone, and maybe a reel for Instagram."
           className="realtor-field w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-light/60"
         />
@@ -80,16 +110,22 @@ export default function AIPackageRecommender({ bundles, aLaCarte, addons }: Prop
           <button
             type="button"
             onClick={recommend}
-            disabled={description.trim().length < 8}
+            disabled={pending || description.trim().length < 8}
             className="rounded-md bg-realtor-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-realtor-primary-light disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Recommend my package
+            {pending ? "Thinking..." : "Recommend my package"}
           </button>
           <p className="text-xs text-realtor-muted">
             You can still edit the selection manually after applying it.
           </p>
         </div>
       </div>
+
+      {error ? (
+        <p className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {error}
+        </p>
+      ) : null}
 
       {recommendation ? (
         <div className="realtor-elevated-panel mt-4 rounded-xl p-4">
@@ -101,6 +137,11 @@ export default function AIPackageRecommender({ bundles, aLaCarte, addons }: Prop
               <h4 className="mt-1 text-base font-semibold text-realtor-text">
                 {recommendation.title}
               </h4>
+              {selectedNames.length > 0 ? (
+                <p className="mt-1 text-xs font-semibold text-realtor-primary">
+                  {selectedNames.join(" + ")}
+                </p>
+              ) : null}
               <p className="mt-1 text-sm text-realtor-muted">
                 {recommendation.reasoning}
               </p>
@@ -130,127 +171,11 @@ export default function AIPackageRecommender({ bundles, aLaCarte, addons }: Prop
               Apply this package
             </button>
             <p className="text-xs text-realtor-muted">
-              This will select the package below and keep you on this page.
+              This selects the package below and keeps you on this page.
             </p>
           </div>
         </div>
       ) : null}
     </section>
   );
-}
-
-function buildRecommendation(
-  raw: string,
-  bySlug: Map<string, CatalogItemDTO>,
-): Recommendation {
-  const text = raw.toLowerCase();
-  const sqft = extractSquareFootage(text);
-  const mentionsVideo = hasAny(text, ["video", "reel", "instagram", "social", "walkthrough", "walk through", "tiktok"]);
-  const mentionsDrone = hasAny(text, ["drone", "aerial", "acreage", "waterfront", "farm", "large lot", "pool", "view", "estate"]);
-  const luxury = hasAny(text, ["luxury", "estate", "custom", "waterfront", "million", "$1", "$2", "high end", "high-end"]);
-  const condo = hasAny(text, ["condo", "apartment", "unit"]);
-  const detached = hasAny(text, ["detached", "house", "home", "townhouse", "bungalow", "semi"]);
-  const vacant = hasAny(text, ["vacant", "empty", "unstaged"]);
-  const occupied = hasAny(text, ["occupied", "tenant", "tenanted", "lived in", "seller lives"]);
-
-  const addOns: string[] = [];
-  if (hasAny(text, ["on camera", "agent on camera", "intro", "outro", "walk-and-talk", "walk and talk"]) && bySlug.has("on_camera")) {
-    addOns.push("on_camera");
-  }
-
-  let slug = "blue_print";
-  let confidence: Recommendation["confidence"] = "good";
-  const notes: string[] = [];
-
-  if (luxury || (mentionsVideo && mentionsDrone && sqft && sqft >= 3000)) {
-    slug = bySlug.has("ultimate") ? "ultimate" : "social_media_plus";
-    confidence = "strong";
-    notes.push("Luxury or large listings benefit from both full video and social-ready assets.");
-  } else if (mentionsVideo && (mentionsDrone || sqft == null || sqft >= 1800 || detached)) {
-    slug = bySlug.has("social_media_plus") ? "social_media_plus" : "social_media_special";
-    confidence = "strong";
-    notes.push("Video plus drone gives the listing more reach on social and stronger perceived value.");
-  } else if (mentionsVideo) {
-    slug = bySlug.has("social_media_special") ? "social_media_special" : "video_tour";
-    confidence = "good";
-    notes.push("A reel-style package should cover the social marketing need without overbuilding it.");
-  } else if (condo && sqft && sqft <= 1200) {
-    slug = bySlug.has("blue_print") ? "blue_print" : "residential_photography";
-    confidence = "good";
-    notes.push("For a smaller condo, photos plus floor plan/tour usually covers MLS needs cleanly.");
-  } else if (mentionsDrone && bySlug.has("aerial_photography")) {
-    slug = bySlug.has("blue_print") ? "blue_print" : "residential_photography";
-    notes.push("Drone was mentioned, so consider adding aerial photography if it is not included in the selected package.");
-  }
-
-  if (sqft && sqft > 2500) {
-    notes.push("Over 2,500 sqft may need extra measuring/video time depending on final package.");
-  }
-  if (occupied) {
-    notes.push("Occupied listing: send prep notes for decluttering, pets, access, and seller readiness.");
-  } else if (vacant) {
-    notes.push("Vacant listing: faster access, but make sure utilities/lights are on before arrival.");
-  }
-  if (mentionsDrone && !["social_media_special", "social_media_plus", "ultimate"].includes(slug)) {
-    notes.push("Drone/aerial could be a smart add-on for exterior appeal or larger lots.");
-  }
-
-  const item = bySlug.get(slug) ?? firstAvailable(bySlug, ["blue_print", "residential_photography"]);
-  const services = item ? [item.slug] : [];
-  const serviceName = item?.name ?? "a custom package";
-
-  return {
-    services,
-    addOns,
-    title: serviceName,
-    confidence,
-    reasoning: describeFit(serviceName, { condo, detached, luxury, mentionsVideo, mentionsDrone, sqft }),
-    notes,
-  };
-}
-
-function describeFit(
-  serviceName: string,
-  ctx: {
-    condo: boolean;
-    detached: boolean;
-    luxury: boolean;
-    mentionsVideo: boolean;
-    mentionsDrone: boolean;
-    sqft: number | null;
-  },
-): string {
-  const details: string[] = [];
-  if (ctx.sqft) details.push(`around ${ctx.sqft.toLocaleString()} sqft`);
-  if (ctx.condo) details.push("condo-style listing");
-  else if (ctx.detached) details.push("house-style listing");
-  if (ctx.luxury) details.push("higher-end marketing need");
-  if (ctx.mentionsVideo) details.push("video/social content requested");
-  if (ctx.mentionsDrone) details.push("exterior/drone opportunity");
-
-  return details.length
-    ? `${serviceName} is the best fit based on: ${details.join(", ")}.`
-    : `${serviceName} is a safe starting point based on the description. You can fine-tune it below.`;
-}
-
-function extractSquareFootage(text: string): number | null {
-  const match = text.match(/(\d[\d,\.]{2,})\s*(sq\s*ft|sqft|square feet|sf)/i);
-  if (!match) return null;
-  const n = Number(match[1].replace(/[,\.]/g, ""));
-  return Number.isFinite(n) ? n : null;
-}
-
-function hasAny(text: string, needles: string[]): boolean {
-  return needles.some((needle) => text.includes(needle));
-}
-
-function firstAvailable(
-  bySlug: Map<string, CatalogItemDTO>,
-  slugs: string[],
-): CatalogItemDTO | null {
-  for (const slug of slugs) {
-    const item = bySlug.get(slug);
-    if (item) return item;
-  }
-  return null;
 }

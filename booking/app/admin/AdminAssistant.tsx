@@ -293,7 +293,11 @@ function AssistantResult({
                       ? "Running..."
                       : action.type === "create_booking"
                         ? "Confirm booking"
-                        : "Confirm"}
+                        : action.type === "send_delivery_email"
+                          ? "Send email"
+                          : action.type === "update_booking_status"
+                            ? "Update status"
+                            : "Confirm"}
                   </button>
                 ) : null}
               </div>

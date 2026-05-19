@@ -41,6 +41,8 @@ interface BookingRow {
     email: string;
     phone: string | null;
     brokerage: string | null;
+    internal_notes: string | null;
+    delivery_cc_emails: string[] | null;
   } | null;
 }
 
@@ -66,7 +68,7 @@ export default async function AdminTodayPage() {
   const { data: bookings, error } = await supabase
     .from("bookings")
     .select(
-      "id, status, scheduled_at, scheduled_ends_at, services, add_ons, client_notes, internal_notes, unit_number, iguide_id, iguide_portal_id, properties(street_address, city, province, postal_code), profiles(full_name, email, phone, brokerage)",
+      "id, status, scheduled_at, scheduled_ends_at, services, add_ons, client_notes, internal_notes, unit_number, iguide_id, iguide_portal_id, properties(street_address, city, province, postal_code), profiles(full_name, email, phone, brokerage, internal_notes, delivery_cc_emails)",
     )
     .eq("organization_id", admin.organizationId)
     .not("scheduled_at", "is", null)
@@ -102,6 +104,8 @@ export default async function AdminTodayPage() {
     ]);
   }
 
+  const summary = buildDailySummary(bookings ?? [], deliverablesByBooking);
+
   return (
     <div className="space-y-6">
       <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
@@ -124,6 +128,12 @@ export default async function AdminTodayPage() {
         </div>
       </header>
 
+      <DailyCommandCenter
+        bookings={bookings ?? []}
+        deliverablesByBooking={deliverablesByBooking}
+        summary={summary}
+      />
+
       {bookings && bookings.length > 0 ? (
         <ol className="space-y-4">
           {bookings.map((booking) => (
@@ -139,6 +149,135 @@ export default async function AdminTodayPage() {
           No shoots scheduled today.
         </p>
       )}
+    </div>
+  );
+}
+
+function DailyCommandCenter({
+  bookings,
+  deliverablesByBooking,
+  summary,
+}: {
+  bookings: BookingRow[];
+  deliverablesByBooking: Map<string, DeliverableRow[]>;
+  summary: DailySummary;
+}) {
+  const nextShoot = bookings.find(
+    (booking) =>
+      booking.scheduled_at && new Date(booking.scheduled_at).getTime() >= Date.now(),
+  );
+  const attention = bookings
+    .map((booking) => ({
+      booking,
+      tasks: taskStates(booking, deliverablesByBooking.get(booking.id) ?? []).filter(
+        (task) => task.state !== "done",
+      ),
+    }))
+    .filter((item) => item.tasks.length > 0)
+    .slice(0, 5);
+  const memoryRows = bookings
+    .filter((booking) => booking.internal_notes || booking.profiles?.internal_notes)
+    .slice(0, 4);
+
+  return (
+    <section className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+            Command center
+          </p>
+          <h2 className="mt-1 text-xl font-semibold text-white">
+            Today at a glance
+          </h2>
+        </div>
+        {nextShoot ? (
+          <Link
+            href={`/admin/bookings/${nextShoot.id}`}
+            className="rounded-full border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand-light transition hover:bg-brand/20"
+          >
+            Next: {nextShoot.scheduled_at ? formatTime(nextShoot.scheduled_at) : ""}
+          </Link>
+        ) : null}
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <SummaryTile label="Shoots" value={String(summary.total)} />
+        <SummaryTile label="Ready media" value={String(summary.withReadyMedia)} />
+        <SummaryTile label="Need attention" value={String(summary.needingAttention)} />
+        <SummaryTile label="Memory notes" value={String(summary.withMemory)} />
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <div className="rounded-2xl border border-white/10 bg-ink/45 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+            Needs attention
+          </p>
+          {attention.length > 0 ? (
+            <div className="mt-2 space-y-2">
+              {attention.map(({ booking, tasks }) => (
+                <Link
+                  key={booking.id}
+                  href={`/admin/bookings/${booking.id}`}
+                  className="block rounded-xl border border-white/10 bg-white/[0.03] p-3 transition hover:border-brand-light/50"
+                >
+                  <span className="block text-sm font-semibold text-white">
+                    {booking.scheduled_at ? `${formatTime(booking.scheduled_at)} · ` : ""}
+                    {booking.properties?.street_address ?? "Unknown address"}
+                  </span>
+                  <span className="mt-1 block text-xs text-ink-muted">
+                    {tasks.map((task) => task.label).join(" · ")}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-ink-muted">
+              Nothing urgent flagged from today&apos;s media checklist.
+            </p>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-ink/45 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+            Agent memory
+          </p>
+          {memoryRows.length > 0 ? (
+            <div className="mt-2 space-y-2">
+              {memoryRows.map((booking) => (
+                <Link
+                  key={booking.id}
+                  href={`/admin/bookings/${booking.id}`}
+                  className="block rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 transition hover:border-amber-300/45"
+                >
+                  <span className="block text-sm font-semibold text-white">
+                    {booking.profiles?.full_name ??
+                      booking.profiles?.email ??
+                      "Realtor"}
+                  </span>
+                  <span className="mt-1 line-clamp-2 block text-xs text-amber-100/80">
+                    {booking.internal_notes ?? booking.profiles?.internal_notes}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-ink-muted">
+              No agent memory notes attached to today&apos;s shoots.
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SummaryTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-ink/45 p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+        {label}
+      </p>
+      <p className="mt-1 text-2xl font-bold text-white">{value}</p>
     </div>
   );
 }
@@ -317,7 +456,7 @@ function NoteBlock({ title, body }: { title: string; body: string }) {
 function taskStates(
   booking: BookingRow,
   deliverables: DeliverableRow[],
-): Array<{ label: string; className: string }> {
+): Array<{ label: string; className: string; state: "done" | "pending" | "todo" }> {
   const hasPhotosReady = deliverables.some(
     (d) => d.source !== "fotello" && d.type === "photo_gallery" && d.ready_at,
   );
@@ -367,7 +506,37 @@ function chip(label: string, state: "done" | "pending" | "todo") {
       : state === "pending"
         ? "border-amber-400/40 bg-amber-400/10 text-amber-200"
         : "border-white/10 bg-white/[0.03] text-ink-muted";
-  return { label, className };
+  return { label, className, state };
+}
+
+interface DailySummary {
+  total: number;
+  withReadyMedia: number;
+  needingAttention: number;
+  withMemory: number;
+}
+
+function buildDailySummary(
+  bookings: BookingRow[],
+  deliverablesByBooking: Map<string, DeliverableRow[]>,
+): DailySummary {
+  return {
+    total: bookings.length,
+    withReadyMedia: bookings.filter((booking) =>
+      (deliverablesByBooking.get(booking.id) ?? []).some(
+        (deliverable) =>
+          deliverable.source !== "fotello" && Boolean(deliverable.ready_at),
+      ),
+    ).length,
+    needingAttention: bookings.filter((booking) =>
+      taskStates(booking, deliverablesByBooking.get(booking.id) ?? []).some(
+        (task) => task.state !== "done",
+      ),
+    ).length,
+    withMemory: bookings.filter(
+      (booking) => booking.internal_notes || booking.profiles?.internal_notes,
+    ).length,
+  };
 }
 
 function localDateKey(date: Date): string {

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { BOOKING_STATUSES } from "@/lib/booking/booking-status";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type { BookingStatus, UserRole } from "@/lib/supabase/database.types";
 
@@ -53,6 +54,7 @@ export default async function RealtorsPage({
 }) {
   const params = await searchParams;
   const q = (params.q ?? "").trim().toLowerCase();
+  const admin = await requireAdmin();
   const supabase = await getServerSupabase();
 
   const { data: profiles, error } = await supabase
@@ -60,6 +62,7 @@ export default async function RealtorsPage({
     .select(
       "id, email, full_name, phone, brokerage, profile_photo_url, brokerage_logo_url, website_url, instagram_url, delivery_cc_emails, internal_notes, role, created_at",
     )
+    .eq("organization_id", admin.organizationId)
     .eq("role", "realtor")
     .order("full_name", { ascending: true, nullsFirst: false })
     .order("email", { ascending: true })
@@ -94,6 +97,7 @@ export default async function RealtorsPage({
           .select(
             "id, owner_id, status, scheduled_at, created_at, properties(street_address, city)",
           )
+          .eq("organization_id", admin.organizationId)
           .in("owner_id", profileIds)
           .order("created_at", { ascending: false })
           .limit(1000)
@@ -125,7 +129,8 @@ export default async function RealtorsPage({
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-realtor-muted">
               Keep agent names, contact details, headshots, logos, and web
-              links cleaned up for the portal and future listing page defaults.
+              links cleaned up for the portal, delivery emails, assistant
+              memory, and future listing page defaults.
             </p>
           </div>
           <form className="flex w-full gap-2 sm:w-auto">
