@@ -28,7 +28,8 @@ export default function BusinessSettingsForm({
 
   const primaryColor = organization.primary_color ?? "#3f7f5f";
   const accentColor = organization.accent_color ?? "#c9a35b";
-  const [logoUrl, setLogoUrl] = useState(organization.logo_url ?? "");
+  const [previewLogoUrl, setPreviewLogoUrl] = useState(organization.logo_url ?? "");
+  const [clearLogo, setClearLogo] = useState(false);
 
   return (
     <form action={action} className="space-y-5">
@@ -73,14 +74,14 @@ export default function BusinessSettingsForm({
 
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
-                Logo URL
+                Logo
               </span>
-              <span className="mt-1 flex items-center gap-3">
+              <span className="mt-1 flex flex-col gap-3 rounded-2xl border border-realtor-primary/15 bg-realtor-surface/70 p-3 sm:flex-row sm:items-center">
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-realtor-primary/15 bg-realtor-primary/10 text-xs font-bold text-realtor-primary">
-                  {logoUrl ? (
+                  {previewLogoUrl && !clearLogo ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={logoUrl}
+                      src={previewLogoUrl}
                       alt=""
                       className="h-full w-full object-cover"
                     />
@@ -88,18 +89,37 @@ export default function BusinessSettingsForm({
                     "Logo"
                   )}
                 </span>
-                <input
-                  name="logo_url"
-                  type="url"
-                  value={logoUrl}
-                  onChange={(event) => setLogoUrl(event.currentTarget.value)}
-                  placeholder="https://example.com/logo.png"
-                  className="box-border min-w-0 flex-1 rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text outline-none placeholder:text-realtor-muted/60 focus:border-realtor-primary/45"
-                />
+                <span className="grid min-w-0 flex-1 gap-2">
+                  <input
+                    name="logo_file"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      if (file) {
+                        setPreviewLogoUrl(URL.createObjectURL(file));
+                        setClearLogo(false);
+                      }
+                    }}
+                    className="block w-full text-sm text-realtor-muted file:mr-3 file:rounded-full file:border-0 file:bg-realtor-primary file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-realtor-primary/90"
+                  />
+                  {organization.logo_url ? (
+                    <label className="inline-flex items-center gap-2 text-xs text-realtor-muted">
+                      <input
+                        type="checkbox"
+                        name="clear_logo"
+                        checked={clearLogo}
+                        onChange={(event) => setClearLogo(event.currentTarget.checked)}
+                        className="h-4 w-4 accent-realtor-primary"
+                      />
+                      Remove current logo
+                    </label>
+                  ) : null}
+                </span>
               </span>
               <span className="mt-1 block text-xs leading-5 text-realtor-muted">
-                This appears at the top of the public booking flow. Uploads can
-                come later; a logo image link works for now.
+                This appears at the top of the public booking flow. JPG, PNG,
+                WebP, GIF, or SVG works best.
               </span>
             </label>
           </div>
