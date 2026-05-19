@@ -168,6 +168,7 @@ export default async function BookingDetailPage({
         .from("iguide_jobs")
         .select("status, work_order_id, default_view_id, match_source")
         .eq("booking_id", id)
+        .eq("organization_id", admin.organizationId)
         .maybeSingle<IGuideJobRow>(),
       supabase
         .from("booking_notifications")
@@ -196,7 +197,9 @@ export default async function BookingDetailPage({
     (deliverable) => deliverable.source !== "fotello",
   );
   const readyDeliverables = visibleDeliverables.filter((d) => d.ready_at);
-  const portalApiConfigured = await hasPortalCredentials();
+  const portalApiConfigured = await hasPortalCredentials({
+    organizationId: admin.organizationId,
+  });
   const iguidePhotoDownloads = findIGuidePhotoDownloads(visibleDeliverables);
   const deliveryLinks = buildDeliveryLinks(
     readyDeliverables.map((deliverable) => ({

@@ -1,12 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { getCredential } from "@/lib/integrations/credentials";
 import { iguideViewerUrl } from "@/lib/integrations/iguide/parse-id";
 import type { IGuideReadyEvent } from "@/lib/integrations/iguide/portal-client";
 import { syncIGuideFromWebhook } from "@/lib/integrations/iguide/sync";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
+import { getServiceSupabase } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+interface IGuideCredentialRow {
+  organization_id: string;
+  credentials: Record<string, string> | null;
+}
 
 /**
  * iGuide webhook receiver.
@@ -31,21 +37,12 @@ export const dynamic = "force-dynamic";
  *   - 500 only for transient DB/network failures our side
  */
 export async function POST(request: NextRequest) {
-  const expected = await getCredential(
-    "iguide",
-    "webhook_secret",
-    "IGUIDE_WEBHOOK_SECRET",
-  );
-  if (!expected) {
-    console.error(
-      "[iguide.webhook] webhook secret is not configured — refusing to process event.",
-    );
-    return NextResponse.json({ ok: false, error: "not_configured" }, { status: 503 });
-  }
-
   const provided = request.nextUrl.searchParams.get("secret");
-  const expectedSecret = normalizeWebhookSecret(expected);
-  if (!provided || !timingSafeEqual(provided, expectedSecret)) {
+  const organizationId = provided
+    ? await resolveWebhookOrganizationId(provided)
+    : null;
+
+  if (!provided || !organizationId) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
@@ -65,7 +62,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, skipped: "unsupported_event" });
   }
 
-  const result = await syncIGuideFromWebhook(body);
+  const result = await syncIGuideFromWebhook(body, { organizationId });
 
   if (!result.ok) {
     const untagged = result.error?.startsWith("No booking is tagged");
@@ -91,6 +88,35 @@ export async function POST(request: NextRequest) {
     upserts: result.upserts,
     address: result.address,
   });
+}
+
+async function resolveWebhookOrganizationId(
+  provided: string,
+): Promise<string | null> {
+  const envSecret = process.env.IGUIDE_WEBHOOK_SECRET?.trim();
+  if (envSecret && timingSafeEqual(provided, normalizeWebhookSecret(envSecret))) {
+    return DEFAULT_ORGANIZATION_ID;
+  }
+
+  const { data, error } = await getServiceSupabase()
+    .from("integration_credentials")
+    .select("organization_id, credentials")
+    .eq("provider", "iguide")
+    .returns<IGuideCredentialRow[]>();
+
+  if (error) {
+    console.warn("[iguide.webhook] failed to resolve webhook organization", error);
+    return null;
+  }
+
+  for (const row of data ?? []) {
+    const secret = row.credentials?.webhook_secret?.trim();
+    if (secret && timingSafeEqual(provided, normalizeWebhookSecret(secret))) {
+      return row.organization_id;
+    }
+  }
+
+  return null;
 }
 
 /** Constant-time string compare so an attacker can't bisect the secret. */

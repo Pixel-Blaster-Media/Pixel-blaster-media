@@ -277,6 +277,7 @@ interface IntegrationCredentialsTable {
 interface IGuideJobsTable {
   Row: {
     id: string;
+    organization_id: string;
     booking_id: string;
     property_id: string;
     iguide_id: string;
@@ -293,6 +294,7 @@ interface IGuideJobsTable {
   };
   Insert: {
     id?: string;
+    organization_id?: string;
     booking_id: string;
     property_id: string;
     iguide_id: string;
@@ -312,6 +314,7 @@ interface IGuideJobsTable {
 interface IGuideWebhookEventsTable {
   Row: {
     id: string;
+    organization_id: string;
     event_type: string;
     iguide_id: string;
     work_order_id: string | null;
@@ -327,6 +330,7 @@ interface IGuideWebhookEventsTable {
   };
   Insert: {
     id?: string;
+    organization_id?: string;
     event_type: string;
     iguide_id: string;
     work_order_id?: string | null;

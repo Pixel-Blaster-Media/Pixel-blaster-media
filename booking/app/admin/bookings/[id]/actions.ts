@@ -65,6 +65,7 @@ interface BookingFotelloRow {
 
 interface BookingWithIGuideRow {
   id: string;
+  organization_id: string;
   property_id: string;
   iguide_id: string | null;
   iguide_portal_id: string | null;
@@ -81,6 +82,7 @@ interface ExistingIGuideBookingRow {
 
 interface BookingForIGuideCreateRow {
   id: string;
+  organization_id: string;
   property_id: string;
   unit_number: string | null;
   iguide_id: string | null;
@@ -766,7 +768,7 @@ export async function syncIGuide(
   const service = getServiceSupabase();
   const { data: booking, error } = await service
     .from("bookings")
-    .select("id, property_id, iguide_id, iguide_portal_id")
+    .select("id, organization_id, property_id, iguide_id, iguide_portal_id")
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
     .single<BookingWithIGuideRow>();
@@ -779,7 +781,9 @@ export async function syncIGuide(
     };
   }
 
-  const result = await syncIGuideForBooking(booking);
+  const result = await syncIGuideForBooking(booking, {
+    organizationId: admin.organizationId,
+  });
   if (!result.ok) return { ok: false, error: result.error };
 
   revalidatePath(`/admin/bookings/${bookingId}`);
@@ -901,7 +905,7 @@ export async function createIGuideForBooking(
   const { data: booking, error } = await service
     .from("bookings")
     .select(
-      "id, property_id, unit_number, iguide_id, iguide_portal_id, properties(street_address, city, province, postal_code)",
+      "id, organization_id, property_id, unit_number, iguide_id, iguide_portal_id, properties(street_address, city, province, postal_code)",
     )
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
@@ -971,6 +975,7 @@ export async function createIGuideForBooking(
   if (updateErr) return { ok: false, error: updateErr.message };
 
   const recorded = await recordIGuideCreateJob({
+    organizationId: admin.organizationId,
     bookingId: booking.id,
     propertyId: booking.property_id,
     iguideId: result.data.id,

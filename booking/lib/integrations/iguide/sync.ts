@@ -1,5 +1,6 @@
 import "server-only";
 
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { Database, Json } from "@/lib/supabase/database.types";
 
@@ -47,6 +48,7 @@ export interface SyncIGuideResult {
 
 interface BookingTarget {
   id: string;
+  organization_id?: string | null;
   property_id: string;
   iguide_id: string | null;
   iguide_portal_id: string | null;
@@ -66,6 +68,10 @@ interface WebhookRecord {
   id: string;
 }
 
+interface IGuideOrganizationScope {
+  organizationId?: string;
+}
+
 /**
  * Sync iGuide-derived deliverables onto a booking.
  *
@@ -81,7 +87,9 @@ interface WebhookRecord {
  */
 export async function syncIGuideForBooking(
   booking: BookingTarget,
+  scope?: { organizationId?: string },
 ): Promise<SyncIGuideResult> {
+  const organizationId = resolveOrganizationId(booking, scope);
   const alias = booking.iguide_id?.trim() || null;
   const portalId = booking.iguide_portal_id?.trim() || null;
 
@@ -94,11 +102,12 @@ export async function syncIGuideForBooking(
   }
 
   // Prefer the Portal API when we have the portal id + credentials.
-  if (portalId && (await hasPortalCredentials())) {
-    const res = await getAssetUrls(portalId);
+  if (portalId && (await hasPortalCredentials({ organizationId }))) {
+    const res = await getAssetUrls(portalId, { organizationId });
     if (res.ok && res.data) {
       return persistFromAssetUrls({
         booking,
+        organizationId,
         portalId,
         fallbackAlias: alias ?? portalId,
         data: res.data,
@@ -149,8 +158,10 @@ export async function syncIGuideFromReadyEvent(
   booking: BookingTarget,
   event: IGuideReadyEvent,
   matchSource = "manual",
+  scope?: { organizationId?: string },
 ): Promise<SyncIGuideResult> {
   const supabase = getServiceSupabase();
+  const organizationId = resolveOrganizationId(booking, scope);
 
   const portalId = event.iguideId;
   const alias = event.iguideAlias ?? booking.iguide_id ?? portalId;
@@ -167,7 +178,8 @@ export async function syncIGuideFromReadyEvent(
     const { error } = await supabase
       .from("bookings")
       .update(updates)
-      .eq("id", booking.id);
+      .eq("id", booking.id)
+      .eq("organization_id", organizationId);
     if (error) {
       console.warn(
         `[iguide.sync] Failed to backfill ids on booking ${booking.id}: ${error.message}`,
@@ -179,21 +191,25 @@ export async function syncIGuideFromReadyEvent(
   const { upserts, error } = await upsertDeliverables(rows);
   if (error) return { ok: false, upserts, error, portalId };
 
-  await upsertIGuideJobFromReadyEvent(booking, event, matchSource);
+  await upsertIGuideJobFromReadyEvent(booking, event, matchSource, {
+    organizationId,
+  });
 
   // The ready webhook can be thinner than the authenticated asset-urls
   // response for photo ZIPs. Once we know the immutable Portal ID, do one
   // immediate Portal API refresh so the delivery page gets MLS/high-res photo
   // downloads without relying on a second manual sync.
-  if (portalId && (await hasPortalCredentials())) {
-    const assetRes = await getAssetUrls(portalId);
+  if (portalId && (await hasPortalCredentials({ organizationId }))) {
+    const assetRes = await getAssetUrls(portalId, { organizationId });
     if (assetRes.ok && assetRes.data) {
       const enriched = await persistFromAssetUrls({
         booking: {
           ...booking,
+          organization_id: organizationId,
           iguide_id: alias,
           iguide_portal_id: portalId,
         },
+        organizationId,
         portalId,
         fallbackAlias: alias,
         data: assetRes.data,
@@ -230,11 +246,13 @@ export async function syncIGuideFromReadyEvent(
 
 async function persistFromAssetUrls({
   booking,
+  organizationId,
   portalId,
   fallbackAlias,
   data,
 }: {
   booking: BookingTarget;
+  organizationId: string;
   portalId: string;
   fallbackAlias: string;
   data: { languages?: Record<string, IGuideMediaUrls | undefined> };
@@ -245,7 +263,8 @@ async function persistFromAssetUrls({
     const { error } = await getServiceSupabase()
       .from("bookings")
       .update({ iguide_id: alias })
-      .eq("id", booking.id);
+      .eq("id", booking.id)
+      .eq("organization_id", organizationId);
     if (error) {
       console.warn(
         `[iguide.sync] Failed to backfill alias on booking ${booking.id}: ${error.message}`,
@@ -691,8 +710,9 @@ async function upsertDeliverables(
  */
 export async function syncIGuideFromWebhook(
   event: IGuideReadyEvent,
+  scope?: IGuideOrganizationScope,
 ): Promise<SyncIGuideResult & { bookingId?: string }> {
-  const supabase = getServiceSupabase();
+  const organizationId = scope?.organizationId ?? DEFAULT_ORGANIZATION_ID;
 
   const portalId = event.iguideId?.trim();
   const alias = event.iguideAlias?.trim();
@@ -705,16 +725,20 @@ export async function syncIGuideFromWebhook(
     };
   }
 
-  const webhookRecord = await saveWebhookEvent(event);
-  const matched = await findBookingForReadyEvent(event);
+  const webhookRecord = await saveWebhookEvent(event, { organizationId });
+  const matched = await findBookingForReadyEvent(event, { organizationId });
   const booking = matched.booking;
 
   if (!booking) {
     if (webhookRecord) {
-      await updateWebhookEvent(webhookRecord.id, {
-        match_status: "unmatched",
-        last_error: `No booking matched iGuide ${portalId ?? alias}.`,
-      });
+      await updateWebhookEvent(
+        webhookRecord.id,
+        {
+          match_status: "unmatched",
+          last_error: `No booking matched iGuide ${portalId ?? alias}.`,
+        },
+        { organizationId },
+      );
     }
     return {
       ok: false,
@@ -723,30 +747,39 @@ export async function syncIGuideFromWebhook(
     };
   }
 
-  const result = await syncIGuideFromReadyEvent(booking, event, matched.source);
+  const result = await syncIGuideFromReadyEvent(booking, event, matched.source, {
+    organizationId,
+  });
   if (webhookRecord) {
-    await updateWebhookEvent(webhookRecord.id, {
-      match_status: result.ok ? "processed" : "failed",
-      matched_booking_id: booking.id,
-      match_source: matched.source,
-      processed_at: result.ok ? new Date().toISOString() : null,
-      last_error: result.ok ? null : result.error ?? "Sync failed.",
-    });
+    await updateWebhookEvent(
+      webhookRecord.id,
+      {
+        match_status: result.ok ? "processed" : "failed",
+        matched_booking_id: booking.id,
+        match_source: matched.source,
+        processed_at: result.ok ? new Date().toISOString() : null,
+        last_error: result.ok ? null : result.error ?? "Sync failed.",
+      },
+      { organizationId },
+    );
   }
   return { ...result, bookingId: booking.id };
 }
 
 async function saveWebhookEvent(
   event: IGuideReadyEvent,
+  scope: Required<IGuideOrganizationScope>,
 ): Promise<WebhookRecord | null> {
   const supabase = getServiceSupabase();
   const eventType = event.type ?? "ready";
   const portalId = event.iguideId;
   const workOrderId = event.workOrderId ?? null;
+  const { organizationId } = scope;
 
   const existingQuery = supabase
     .from("iguide_webhook_events")
     .select("id")
+    .eq("organization_id", organizationId)
     .eq("event_type", eventType)
     .eq("iguide_id", portalId);
 
@@ -755,6 +788,7 @@ async function saveWebhookEvent(
     : await existingQuery.is("work_order_id", null).maybeSingle<WebhookRecord>();
 
   const payload: IGuideWebhookEventInsert = {
+    organization_id: organizationId,
     event_type: eventType,
     iguide_id: portalId,
     work_order_id: workOrderId,
@@ -767,7 +801,8 @@ async function saveWebhookEvent(
     const { error } = await supabase
       .from("iguide_webhook_events")
       .update(payload)
-      .eq("id", existing.id);
+      .eq("id", existing.id)
+      .eq("organization_id", organizationId);
     if (error) {
       console.warn("[iguide.webhook] failed to update event inbox", error);
       return null;
@@ -790,25 +825,35 @@ async function saveWebhookEvent(
 async function updateWebhookEvent(
   id: string,
   updates: Database["public"]["Tables"]["iguide_webhook_events"]["Update"],
+  scope?: IGuideOrganizationScope,
 ) {
-  const { error } = await getServiceSupabase()
+  let query = getServiceSupabase()
     .from("iguide_webhook_events")
     .update(updates)
     .eq("id", id);
+  if (scope?.organizationId) {
+    query = query.eq("organization_id", scope.organizationId);
+  }
+  const { error } = await query;
   if (error) console.warn("[iguide.webhook] failed to update event status", error);
 }
 
 async function findBookingForReadyEvent(
   event: IGuideReadyEvent,
+  scope: Required<IGuideOrganizationScope>,
 ): Promise<{ booking: BookingTarget | null; source: string }> {
   const supabase = getServiceSupabase();
   const portalId = event.iguideId?.trim();
   const alias = event.iguideAlias?.trim();
+  const { organizationId } = scope;
 
   if (portalId) {
     const { data: job } = await supabase
       .from("iguide_jobs")
-      .select("booking_id, bookings(id, property_id, iguide_id, iguide_portal_id)")
+      .select(
+        "booking_id, bookings(id, organization_id, property_id, iguide_id, iguide_portal_id)",
+      )
+      .eq("organization_id", organizationId)
       .eq("iguide_id", portalId)
       .maybeSingle<{
         booking_id: string;
@@ -818,7 +863,8 @@ async function findBookingForReadyEvent(
 
     const { data } = await supabase
       .from("bookings")
-      .select("id, property_id, iguide_id, iguide_portal_id")
+      .select("id, organization_id, property_id, iguide_id, iguide_portal_id")
+      .eq("organization_id", organizationId)
       .eq("iguide_portal_id", portalId)
       .maybeSingle<BookingTarget>();
     if (data) return { booking: data, source: "booking_portal_id" };
@@ -827,13 +873,16 @@ async function findBookingForReadyEvent(
   if (alias) {
     const { data } = await supabase
       .from("bookings")
-      .select("id, property_id, iguide_id, iguide_portal_id")
+      .select("id, organization_id, property_id, iguide_id, iguide_portal_id")
+      .eq("organization_id", organizationId)
       .eq("iguide_id", alias)
       .maybeSingle<BookingTarget>();
     if (data) return { booking: data, source: "booking_alias" };
   }
 
-  const addressMatch = await findSingleBookingByAddress(event.property);
+  const addressMatch = await findSingleBookingByAddress(event.property, {
+    organizationId,
+  });
   if (addressMatch) return { booking: addressMatch, source: "exact_address" };
 
   return { booking: null, source: "unmatched" };
@@ -841,6 +890,7 @@ async function findBookingForReadyEvent(
 
 async function findSingleBookingByAddress(
   property: IGuideReadyEvent["property"],
+  scope: Required<IGuideOrganizationScope>,
 ): Promise<BookingTarget | null> {
   const target = normalizeAddress(
     [
@@ -859,8 +909,9 @@ async function findSingleBookingByAddress(
   const { data, error } = await getServiceSupabase()
     .from("bookings")
     .select(
-      "id, property_id, iguide_id, iguide_portal_id, scheduled_at, status, properties(street_address, city, postal_code)",
+      "id, organization_id, property_id, iguide_id, iguide_portal_id, scheduled_at, status, properties(street_address, city, postal_code)",
     )
+    .eq("organization_id", scope.organizationId)
     .in("status", ["requested", "confirmed", "shot", "editing", "delivered"])
     .returns<PropertyMatchBooking[]>();
 
@@ -888,6 +939,7 @@ async function findSingleBookingByAddress(
   const match = matches[0];
   return {
     id: match.id,
+    organization_id: match.organization_id,
     property_id: match.property_id,
     iguide_id: match.iguide_id,
     iguide_portal_id: match.iguide_portal_id,
@@ -898,9 +950,12 @@ async function upsertIGuideJobFromReadyEvent(
   booking: BookingTarget,
   event: IGuideReadyEvent,
   matchSource: string,
+  scope?: IGuideOrganizationScope,
 ) {
   const supabase = getServiceSupabase();
+  const organizationId = resolveOrganizationId(booking, scope);
   const row: IGuideJobInsert = {
+    organization_id: organizationId,
     booking_id: booking.id,
     property_id: booking.property_id,
     iguide_id: event.iguideId,
@@ -913,11 +968,12 @@ async function upsertIGuideJobFromReadyEvent(
   };
   const { error } = await supabase
     .from("iguide_jobs")
-    .upsert(row, { onConflict: "iguide_id" });
+    .upsert(row, { onConflict: "organization_id,iguide_id" });
   if (error) console.warn("[iguide.sync] failed to upsert job", error);
 }
 
 export async function recordIGuideCreateJob(input: {
+  organizationId?: string;
   bookingId: string;
   propertyId: string;
   iguideId: string;
@@ -926,7 +982,9 @@ export async function recordIGuideCreateJob(input: {
   defaultViewId?: string | null;
   rawCreateResponse: unknown;
 }): Promise<{ ok: boolean; error?: string }> {
+  const organizationId = input.organizationId ?? DEFAULT_ORGANIZATION_ID;
   const row: IGuideJobInsert = {
+    organization_id: organizationId,
     booking_id: input.bookingId,
     property_id: input.propertyId,
     iguide_id: input.iguideId,
@@ -939,7 +997,7 @@ export async function recordIGuideCreateJob(input: {
   };
   const { error } = await getServiceSupabase()
     .from("iguide_jobs")
-    .upsert(row, { onConflict: "iguide_id" });
+    .upsert(row, { onConflict: "organization_id,iguide_id" });
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
@@ -947,12 +1005,28 @@ export async function recordIGuideCreateJob(input: {
 export async function updateIGuideJobStatus(
   iguideId: string,
   updates: IGuideJobUpdate,
+  scope?: IGuideOrganizationScope,
 ) {
-  const { error } = await getServiceSupabase()
+  let query = getServiceSupabase()
     .from("iguide_jobs")
     .update(updates)
     .eq("iguide_id", iguideId);
+  if (scope?.organizationId) {
+    query = query.eq("organization_id", scope.organizationId);
+  }
+  const { error } = await query;
   if (error) console.warn("[iguide.sync] failed to update job status", error);
+}
+
+function resolveOrganizationId(
+  booking?: Pick<BookingTarget, "organization_id"> | null,
+  scope?: IGuideOrganizationScope,
+): string {
+  return (
+    scope?.organizationId ??
+    booking?.organization_id ??
+    DEFAULT_ORGANIZATION_ID
+  );
 }
 
 function redactReadyEvent(event: IGuideReadyEvent): Json {

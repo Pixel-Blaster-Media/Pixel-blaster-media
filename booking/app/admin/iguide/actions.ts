@@ -22,6 +22,7 @@ interface EventRow {
 
 interface BookingRow {
   id: string;
+  organization_id: string;
   property_id: string;
   iguide_id: string | null;
   iguide_portal_id: string | null;
@@ -44,10 +45,11 @@ export async function linkIGuideWebhookEvent(
       .from("iguide_webhook_events")
       .select("id, payload_json")
       .eq("id", eventId)
+      .eq("organization_id", admin.organizationId)
       .single<EventRow>(),
     supabase
       .from("bookings")
-      .select("id, property_id, iguide_id, iguide_portal_id")
+      .select("id, organization_id, property_id, iguide_id, iguide_portal_id")
       .eq("id", bookingId)
       .eq("organization_id", admin.organizationId)
       .single<BookingRow>(),
@@ -64,6 +66,7 @@ export async function linkIGuideWebhookEvent(
     booking,
     readyEvent,
     "admin_review",
+    { organizationId: admin.organizationId },
   );
   if (!result.ok) {
     await supabase
@@ -74,7 +77,8 @@ export async function linkIGuideWebhookEvent(
         match_source: "admin_review",
         last_error: result.error ?? "Sync failed.",
       })
-      .eq("id", event.id);
+      .eq("id", event.id)
+      .eq("organization_id", admin.organizationId);
     return { ok: false, error: result.error ?? "Sync failed." };
   }
 
@@ -87,7 +91,8 @@ export async function linkIGuideWebhookEvent(
       processed_at: new Date().toISOString(),
       last_error: null,
     })
-    .eq("id", event.id);
+    .eq("id", event.id)
+    .eq("organization_id", admin.organizationId);
 
   revalidatePath("/admin/iguide");
   revalidatePath(`/admin/bookings/${booking.id}`);
@@ -97,7 +102,7 @@ export async function linkIGuideWebhookEvent(
 export async function ignoreIGuideWebhookEvent(
   formData: FormData,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const eventId = String(formData.get("event_id") ?? "");
   if (!eventId) return { ok: false, error: "Missing iGUIDE event." };
@@ -110,7 +115,8 @@ export async function ignoreIGuideWebhookEvent(
       last_error: null,
       processed_at: new Date().toISOString(),
     })
-    .eq("id", eventId);
+    .eq("id", eventId)
+    .eq("organization_id", admin.organizationId);
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin/iguide");
@@ -120,7 +126,7 @@ export async function ignoreIGuideWebhookEvent(
 export async function ignoreIGuideWebhookEvents(
   formData: FormData,
 ): Promise<void> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const eventIds = formData
     .getAll("event_id")
@@ -137,7 +143,8 @@ export async function ignoreIGuideWebhookEvents(
       last_error: null,
       processed_at: new Date().toISOString(),
     })
-    .in("id", eventIds);
+    .in("id", eventIds)
+    .eq("organization_id", admin.organizationId);
 
   revalidatePath("/admin/iguide");
 }
@@ -155,7 +162,7 @@ export async function linkIGuidePortalTour(
   const supabase = getServiceSupabase();
   const { data: booking } = await supabase
     .from("bookings")
-    .select("id, property_id, iguide_id, iguide_portal_id")
+    .select("id, organization_id, property_id, iguide_id, iguide_portal_id")
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
     .single<BookingRow>();
@@ -172,11 +179,14 @@ export async function linkIGuidePortalTour(
     .eq("organization_id", admin.organizationId);
 
   if (!error) {
-    await syncIGuideForBooking({
-      ...booking,
-      iguide_portal_id: portalId,
-      iguide_id: alias ?? booking.iguide_id,
-    });
+    await syncIGuideForBooking(
+      {
+        ...booking,
+        iguide_portal_id: portalId,
+        iguide_id: alias ?? booking.iguide_id,
+      },
+      { organizationId: admin.organizationId },
+    );
   }
 
   revalidatePath("/admin/iguide");
@@ -199,7 +209,7 @@ export async function linkManualIGuideToBooking(
   const supabase = getServiceSupabase();
   const { data: booking } = await supabase
     .from("bookings")
-    .select("id, property_id, iguide_id, iguide_portal_id")
+    .select("id, organization_id, property_id, iguide_id, iguide_portal_id")
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
     .single<BookingRow>();
@@ -222,7 +232,7 @@ export async function linkManualIGuideToBooking(
     .eq("organization_id", admin.organizationId);
 
   if (!error) {
-    await syncIGuideForBooking(next);
+    await syncIGuideForBooking(next, { organizationId: admin.organizationId });
   }
 
   revalidatePath("/admin/iguide");

@@ -55,8 +55,8 @@ async function getCredentials(
 }
 
 /** Is the Portal API configured? Useful to gate admin UI. */
-export async function hasPortalCredentials(): Promise<boolean> {
-  return (await getCredentials()) !== null;
+export async function hasPortalCredentials(scope?: PortalScope): Promise<boolean> {
+  return (await getCredentials(scope)) !== null;
 }
 
 export interface PortalResult<T> {
@@ -351,11 +351,14 @@ export async function createIGuide(
 export async function getWorkOrder(
   iguideId: string,
   workOrderId: string,
+  scope?: PortalScope,
 ): Promise<PortalResult<IGuideWorkOrderResponse>> {
   return portalFetch<IGuideWorkOrderResponse>(
     `/iguides/${encodeURIComponent(iguideId)}/workOrders/${encodeURIComponent(
       workOrderId,
     )}`,
+    {},
+    scope,
   );
 }
 
@@ -370,10 +373,13 @@ export async function getWorkOrder(
 export async function getReadyEventObject(
   iguideId: string,
   taskId: string,
+  scope?: PortalScope,
 ): Promise<PortalResult<IGuideReadyEvent>> {
   const qs = new URLSearchParams({ taskId }).toString();
   return portalFetch<IGuideReadyEvent>(
     `/iguides/${encodeURIComponent(iguideId)}/events/ready/object?${qs}`,
+    {},
+    scope,
   );
 }
 
@@ -386,11 +392,13 @@ export async function getReadyEventObject(
 export async function dispatchReadyEvent(
   iguideId: string,
   taskId: string,
+  scope?: PortalScope,
 ): Promise<PortalResult<void>> {
   const qs = new URLSearchParams({ taskId }).toString();
   return portalFetch<void>(
     `/iguides/${encodeURIComponent(iguideId)}/events/ready/dispatch?${qs}`,
     { method: "POST", body: JSON.stringify({}) },
+    scope,
   );
 }
 
@@ -403,9 +411,12 @@ export async function dispatchReadyEvent(
  */
 export async function getAssetUrls(
   iguideId: string,
+  scope?: PortalScope,
 ): Promise<PortalResult<IGuideAssetUrlsResponse>> {
   return portalFetch<IGuideAssetUrlsResponse>(
     `/iguides/${encodeURIComponent(iguideId)}/asset-urls`,
+    {},
+    scope,
   );
 }
 
@@ -417,8 +428,10 @@ export async function getAssetUrls(
  * Keep the normalizer below for the future roadmap item, but do not wire this
  * into product UI until iGUIDE announces the endpoint is available.
  */
-export async function listIGuides(): Promise<PortalResult<IGuideListItem[]>> {
-  const result = await portalFetch<unknown>("/iguides");
+export async function listIGuides(
+  scope?: PortalScope,
+): Promise<PortalResult<IGuideListItem[]>> {
+  const result = await portalFetch<unknown>("/iguides", {}, scope);
   if (!result.ok) {
     return {
       ok: false,
