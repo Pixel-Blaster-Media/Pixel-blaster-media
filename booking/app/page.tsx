@@ -49,26 +49,6 @@ export default function Home() {
           body="Ask the assistant to find bookings, prepare shoots, send delivery, or help plan the day."
         />
       </section>
-
-      <section className="rounded-3xl border border-realtor-primary/15 bg-white/60 p-5 text-center shadow-sm md:p-6">
-        <p className="text-sm text-realtor-muted">
-          Looking for Pixel Blaster Media?
-        </p>
-        <div className="mt-3 flex flex-col justify-center gap-2 sm:flex-row">
-          <Link
-            href="/book"
-            className="rounded-full border border-realtor-primary/25 bg-white px-5 py-2.5 text-center text-sm font-semibold text-realtor-primary transition hover:border-realtor-primary/45 hover:bg-realtor-primary/5"
-          >
-            Book a shoot
-          </Link>
-          <Link
-            href="/portal"
-            className="rounded-full border border-realtor-primary/25 bg-white px-5 py-2.5 text-center text-sm font-semibold text-realtor-primary transition hover:border-realtor-primary/45 hover:bg-realtor-primary/5"
-          >
-            Open client portal
-          </Link>
-        </div>
-      </section>
     </div>
   );
 }
