@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { realtorAIMemoryToJson, type RealtorAIMemory } from "@/lib/realtors/memory";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -103,6 +104,7 @@ export async function updateRealtorProfile(
     instagram_url: instagramUrl.value,
     delivery_cc_emails: deliveryCcEmails.emails,
     internal_notes: cleanText(formData.get("internal_notes")) || null,
+    ai_memory: realtorAIMemoryToJson(parseMemoryForm(formData)),
   };
 
   const { data: updatedProfile, error } = await service
@@ -151,6 +153,43 @@ function parseEmailList(
     return { ok: false, error: "Use 20 delivery CC emails or fewer." };
   }
   return { ok: true, emails };
+}
+
+function parseMemoryForm(formData: FormData): RealtorAIMemory {
+  return {
+    preferredServices: parseList(cleanText(formData.get("memory_preferred_services"))),
+    preferredAddOns: parseList(cleanText(formData.get("memory_preferred_addons"))),
+    preferredCities: parseList(cleanText(formData.get("memory_preferred_cities"))),
+    typicalSquareFootage: parsePositiveInt(
+      cleanText(formData.get("memory_typical_sqft")),
+    ),
+    deliveryPreferences: parseList(
+      cleanText(formData.get("memory_delivery_preferences")),
+    ),
+    communicationStyle:
+      cleanText(formData.get("memory_communication_style")) || null,
+    accessNotes: parseList(cleanText(formData.get("memory_access_notes"))),
+    invoicePreferences:
+      cleanText(formData.get("memory_invoice_preferences")) || null,
+    avoidReminders: parseList(cleanText(formData.get("memory_avoid_reminders"))),
+  };
+}
+
+function parseList(value: string): string[] {
+  return Array.from(
+    new Set(
+      value
+        .split(/\n|;/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  ).slice(0, 12);
+}
+
+function parsePositiveInt(value: string): number | null {
+  if (!value) return null;
+  const n = Number(value.replace(/,/g, ""));
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
 }
 
 function parseOptionalUrl(

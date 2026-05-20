@@ -1,6 +1,9 @@
 import SettingsHub from "./SettingsHub";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { isPlatformAdmin } from "@/lib/auth/require-platform-admin";
+import { getCredentialSource } from "@/lib/integrations/credentials";
+import { getServiceSupabase } from "@/lib/supabase/server";
+import CopyBookingLinkButton from "./business/CopyBookingLinkButton";
 
 const SETTINGS_SECTIONS = [
   {
@@ -12,6 +15,17 @@ const SETTINGS_SECTIONS = [
       "Keep business identity separate per company.",
       "Reserve a clean booking handle for future branded links.",
       "Set the base colors future themes can use.",
+    ],
+  },
+  {
+    href: "/admin/settings/availability",
+    title: "Availability",
+    description:
+      "Set working days, daily hours, and the windows realtors can book.",
+    details: [
+      "Control the public booking calendar.",
+      "Keep schedule rules separate per company.",
+      "Use calendar blocks for one-off time away.",
     ],
   },
   {
@@ -41,6 +55,7 @@ export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const admin = await requireAdmin();
+  const readiness = await loadLaunchReadiness(admin.organizationId);
   const sections = isPlatformAdmin(admin)
     ? [
         ...SETTINGS_SECTIONS,
@@ -73,7 +88,227 @@ export default async function SettingsPage() {
         </p>
       </header>
 
+      <LaunchReadinessCard readiness={readiness} />
+
       <SettingsHub sections={sections} />
     </div>
+  );
+}
+
+interface LaunchReadiness {
+  bookingUrl: string;
+  organizationName: string;
+  completed: number;
+  total: number;
+  items: Array<{
+    title: string;
+    body: string;
+    done: boolean;
+    href: string;
+    external?: boolean;
+  }>;
+}
+
+async function loadLaunchReadiness(
+  organizationId: string,
+): Promise<LaunchReadiness> {
+  const service = getServiceSupabase();
+  const [
+    { data: organization },
+    { count: activeCatalogCount },
+    { data: hours },
+    { data: calendarConnection },
+    openAiStatus,
+  ] = await Promise.all([
+    service
+      .from("organizations")
+      .select(
+        "name, slug, primary_color, logo_url, email_from_name, reply_to_email, admin_notification_email",
+      )
+      .eq("id", organizationId)
+      .maybeSingle<{
+        name: string;
+        slug: string;
+        primary_color: string | null;
+        logo_url: string | null;
+        email_from_name: string | null;
+        reply_to_email: string | null;
+        admin_notification_email: string | null;
+      }>(),
+    service
+      .from("catalog_items")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .eq("active", true),
+    service
+      .from("business_hours")
+      .select("day_of_week")
+      .eq("organization_id", organizationId)
+      .eq("enabled", true),
+    service
+      .from("google_calendar_connection")
+      .select("id")
+      .eq("organization_id", organizationId)
+      .maybeSingle<{ id: number }>(),
+    getCredentialSource(
+      "openai",
+      "api_key",
+      "OPENAI_API_KEY",
+      organizationId,
+    ),
+  ]);
+
+  const bookingPath = `/book?org=${organization?.slug ?? ""}`;
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
+  const bookingUrl = appUrl ? `${appUrl}${bookingPath}` : bookingPath;
+  const emailReady = Boolean(
+    organization?.email_from_name ||
+      organization?.reply_to_email ||
+      organization?.admin_notification_email ||
+      process.env.EMAIL_FROM,
+  );
+  const items = [
+    {
+      title: "Business profile",
+      body: "Name, booking handle, brand colors, and logo.",
+      done: Boolean(organization?.name && organization?.slug && organization?.primary_color),
+      href: "/admin/settings/business",
+    },
+    {
+      title: "Public booking link",
+      body: "The link realtors will use to book.",
+      done: Boolean(organization?.slug),
+      href: bookingUrl,
+      external: true,
+    },
+    {
+      title: "Pricing",
+      body: "At least one active package or service.",
+      done: (activeCatalogCount ?? 0) > 0,
+      href: "/admin/settings/pricing",
+    },
+    {
+      title: "Availability",
+      body: "Working days are enabled for public booking.",
+      done: (hours ?? []).length > 0,
+      href: "/admin/settings/availability",
+    },
+    {
+      title: "Calendar sync",
+      body: "Bookings can land on the photographer's calendar.",
+      done: Boolean(calendarConnection),
+      href: "/admin/settings/integrations",
+    },
+    {
+      title: "Email identity",
+      body: "Delivery and booking emails have a sender/reply path.",
+      done: emailReady,
+      href: "/admin/settings/business",
+    },
+    {
+      title: "AI assistant",
+      body: "Optional, but important for the beta wow-factor.",
+      done: openAiStatus.source !== "none",
+      href: "/admin/settings/integrations",
+    },
+  ];
+
+  return {
+    bookingUrl,
+    organizationName: organization?.name ?? "This company",
+    completed: items.filter((item) => item.done).length,
+    total: items.length,
+    items,
+  };
+}
+
+function LaunchReadinessCard({ readiness }: { readiness: LaunchReadiness }) {
+  const ready = readiness.completed === readiness.total;
+  return (
+    <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-5 shadow-lg shadow-realtor-text/10">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-realtor-primary/80">
+            Beta readiness
+          </p>
+          <h2 className="mt-2 text-xl font-semibold text-realtor-text">
+            {readiness.completed}/{readiness.total} ready for{" "}
+            {readiness.organizationName}
+          </h2>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-realtor-muted">
+            Use this before sharing the booking link with realtors. The app can
+            still run with missing optional items, but this shows what deserves
+            attention before beta users start testing.
+          </p>
+        </div>
+        <span
+          className={
+            "rounded-full border px-3 py-1 text-xs font-semibold " +
+            (ready
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-amber-200 bg-amber-50 text-amber-700")
+          }
+        >
+          {ready ? "Ready to share" : "Setup needed"}
+        </span>
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-realtor-primary/10 bg-realtor-surface-muted/60 p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
+              Booking link
+            </p>
+            <code className="mt-2 block overflow-x-auto rounded-xl border border-realtor-primary/15 bg-white px-3 py-2 text-sm text-realtor-text">
+              {readiness.bookingUrl}
+            </code>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <CopyBookingLinkButton value={readiness.bookingUrl} />
+            <a
+              href={readiness.bookingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full border border-realtor-primary/20 bg-white px-4 py-2 text-sm font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+            >
+              Preview booking
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+        {readiness.items.map((item) => (
+          <a
+            key={item.title}
+            href={item.href}
+            target={item.external ? "_blank" : undefined}
+            rel={item.external ? "noopener noreferrer" : undefined}
+            className="rounded-2xl border border-realtor-primary/12 bg-white/65 p-3 transition hover:border-realtor-primary/35 hover:bg-white"
+          >
+            <span className="flex items-start gap-2">
+              <span
+                className={
+                  "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold " +
+                  (item.done
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-amber-200 bg-amber-50 text-amber-700")
+                }
+              >
+                {item.done ? "✓" : "!"}
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-realtor-text">
+                  {item.title}
+                </span>
+                <span className="mt-1 block text-xs leading-5 text-realtor-muted">
+                  {item.body}
+                </span>
+              </span>
+            </span>
+          </a>
+        ))}
+      </div>
+    </section>
   );
 }

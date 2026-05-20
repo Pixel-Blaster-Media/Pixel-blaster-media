@@ -23,6 +23,10 @@ import {
 } from "@/lib/booking/catalog";
 import { labelForAddOn, labelForService } from "@/lib/booking/services";
 import { getCredential } from "@/lib/integrations/credentials";
+import {
+  parseRealtorAIMemory,
+  summarizeRealtorAIMemory,
+} from "@/lib/realtors/memory";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { BookingStatus, Json } from "@/lib/supabase/database.types";
 
@@ -75,7 +79,18 @@ export interface AdminAssistantLog {
   resultStatus: "success" | "failed";
   resultMessage: string;
   createdAt: string;
+  canUndo: boolean;
+  undoneAt: string | null;
+  undoResultMessage: string | null;
 }
+
+type AssistantExecutionResult = AdminAssistantResult & {
+  audit?: {
+    targetBookingId?: string | null;
+    targetRealtorId?: string | null;
+    undoPayload?: Json | null;
+  };
+};
 
 export interface AdminAssistantBookingDraft {
   sourceBookingId: string;
@@ -151,6 +166,7 @@ interface BookingContextRow {
     brokerage: string | null;
     internal_notes: string | null;
     delivery_cc_emails: string[] | null;
+    ai_memory: Json | null;
   } | null;
 }
 
@@ -168,6 +184,7 @@ interface ProfileContextRow {
   brokerage: string | null;
   internal_notes: string | null;
   delivery_cc_emails: string[] | null;
+  ai_memory: Json | null;
 }
 
 interface DeliverableContextRow {
@@ -289,7 +306,7 @@ export async function getAssistantActionLogs(): Promise<AdminAssistantLog[]> {
   const { data, error } = await getServiceSupabase()
     .from("assistant_action_logs")
     .select(
-      "id, action_type, label, details, result_status, result_message, created_at",
+      "id, action_type, label, details, result_status, result_message, created_at, undo_payload, undone_at, undo_result_message",
     )
     .eq("organization_id", admin.organizationId)
     .order("created_at", { ascending: false })
@@ -303,6 +320,9 @@ export async function getAssistantActionLogs(): Promise<AdminAssistantLog[]> {
         result_status: "success" | "failed";
         result_message: string;
         created_at: string;
+        undo_payload: Json | null;
+        undone_at: string | null;
+        undo_result_message: string | null;
       }>
     >();
   if (error) {
@@ -317,13 +337,24 @@ export async function getAssistantActionLogs(): Promise<AdminAssistantLog[]> {
     resultStatus: row.result_status,
     resultMessage: row.result_message,
     createdAt: row.created_at,
+    canUndo: Boolean(row.undo_payload) && !row.undone_at && row.result_status === "success",
+    undoneAt: row.undone_at,
+    undoResultMessage: row.undo_result_message,
   }));
+}
+
+export async function undoAssistantActionLog(
+  logId: string,
+): Promise<AdminAssistantResult> {
+  const admin = await requireAdmin();
+  const result = await applyAssistantUndo(admin, logId);
+  return result;
 }
 
 async function executeConfirmedAssistantAction(
   admin: AdminContext,
   action: AdminAssistantAction,
-): Promise<AdminAssistantResult> {
+): Promise<AssistantExecutionResult> {
   if (action.type === "create_booking") {
     return createBookingFromAssistant(action);
   }
@@ -421,6 +452,7 @@ async function executeConfirmedAssistantAction(
       ok: true,
       kind: "answer",
       message: `Done. I updated ${result.updatedCount} catalog price${result.updatedCount === 1 ? "" : "s"}.`,
+      audit: { undoPayload: result.undoPayload },
       actions: [
         {
           type: "open_booking",
@@ -452,6 +484,7 @@ async function executeConfirmedAssistantAction(
       ok: true,
       kind: "answer",
       message: "Done. I blocked that time so it will not show as bookable.",
+      audit: { undoPayload: result.undoPayload },
       actions: [
         {
           type: "open_booking",
@@ -487,6 +520,10 @@ async function executeConfirmedAssistantAction(
       ok: true,
       kind: "answer",
       message: "Done. I updated the realtor memory notes.",
+      audit: {
+        targetRealtorId: action.realtorId ?? null,
+        undoPayload: result.undoPayload,
+      },
       actions: [
         {
           type: "open_booking",
@@ -521,6 +558,10 @@ async function executeConfirmedAssistantAction(
       ok: true,
       kind: "answer",
       message: `Done. I ${result.mode === "remove" ? "removed" : "saved"} ${result.count} delivery CC email${result.count === 1 ? "" : "s"}.`,
+      audit: {
+        targetRealtorId: action.realtorId ?? null,
+        undoPayload: result.undoPayload,
+      },
       actions: [
         {
           type: "open_booking",
@@ -556,6 +597,10 @@ async function executeConfirmedAssistantAction(
       ok: true,
       kind: "answer",
       message: "Done. I updated the booking internal note.",
+      audit: {
+        targetBookingId: action.bookingId,
+        undoPayload: result.undoPayload,
+      },
       actions: [
         {
           type: "open_booking",
@@ -587,6 +632,7 @@ async function executeConfirmedAssistantAction(
       ok: true,
       kind: "answer",
       message: "Done. I updated those working hours.",
+      audit: { undoPayload: result.undoPayload },
       actions: [
         {
           type: "open_booking",
@@ -669,12 +715,84 @@ async function executeConfirmedAssistantAction(
   };
 }
 
+async function applyAssistantUndo(
+  admin: AdminContext,
+  logId: string,
+): Promise<AdminAssistantResult> {
+  const supabase = getServiceSupabase();
+  const { data: log, error } = await supabase
+    .from("assistant_action_logs")
+    .select("id, organization_id, action_type, undo_payload, undone_at")
+    .eq("organization_id", admin.organizationId)
+    .eq("id", logId)
+    .maybeSingle<{
+      id: string;
+      organization_id: string;
+      action_type: string;
+      undo_payload: Json | null;
+      undone_at: string | null;
+    }>();
+
+  if (error) {
+    return {
+      ok: false,
+      kind: "needs_clarification",
+      message: error.message,
+      actions: [],
+    };
+  }
+  if (!log?.undo_payload) {
+    return {
+      ok: false,
+      kind: "unsupported",
+      message: "That assistant action cannot be undone.",
+      actions: [],
+    };
+  }
+  if (log.undone_at) {
+    return {
+      ok: false,
+      kind: "unsupported",
+      message: "That assistant action was already undone.",
+      actions: [],
+    };
+  }
+
+  const undoResult = await applyUndoPayload(admin.organizationId, log.undo_payload);
+  if (!undoResult.ok) {
+    await markAssistantUndo(log.id, admin.userId, `Undo failed: ${undoResult.error}`);
+    return {
+      ok: false,
+      kind: "needs_clarification",
+      message: undoResult.error,
+      actions: [],
+    };
+  }
+
+  await markAssistantUndo(log.id, admin.userId, undoResult.message);
+  revalidatePath("/admin/calendar");
+  revalidatePath("/admin/settings/availability");
+  revalidatePath("/admin/settings/pricing");
+  revalidatePath("/admin/realtors");
+  revalidatePath("/admin/bookings");
+  revalidatePath("/admin/today");
+  revalidatePath("/book");
+
+  return {
+    ok: true,
+    kind: "answer",
+    message: undoResult.message,
+    actions: [],
+  };
+}
+
 async function recordAssistantAction(
   admin: AdminContext,
   action: AdminAssistantAction,
-  result: AdminAssistantResult,
+  result: AssistantExecutionResult,
 ): Promise<void> {
   const targetBookingId =
+    result.audit?.targetBookingId ||
     action.bookingId ||
     result.actions.find((nextAction) => nextAction.bookingId)?.bookingId ||
     null;
@@ -703,10 +821,11 @@ async function recordAssistantAction(
       actor_profile_id: admin.userId,
       action_type: action.type,
       target_booking_id: targetBookingId || null,
-      target_realtor_id: action.realtorId ?? null,
+      target_realtor_id: result.audit?.targetRealtorId ?? action.realtorId ?? null,
       label: action.label,
       details: action.details,
       payload: payloadJson,
+      undo_payload: result.audit?.undoPayload ?? null,
       result_status: result.ok ? "success" : "failed",
       result_message: result.message,
     });
@@ -738,7 +857,7 @@ async function loadAssistantContext(organizationId: string): Promise<{
     supabase
       .from("bookings")
       .select(
-        "id, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, unit_number, client_notes, properties(street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage, internal_notes, delivery_cc_emails)",
+        "id, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, unit_number, client_notes, properties(street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage, internal_notes, delivery_cc_emails, ai_memory)",
       )
       .eq("organization_id", organizationId)
       .gte("scheduled_at", oneYearAgo.toISOString())
@@ -748,7 +867,7 @@ async function loadAssistantContext(organizationId: string): Promise<{
       .returns<BookingContextRow[]>(),
     supabase
       .from("profiles")
-      .select("id, full_name, email, phone, brokerage, internal_notes, delivery_cc_emails")
+      .select("id, full_name, email, phone, brokerage, internal_notes, delivery_cc_emails, ai_memory")
       .eq("organization_id", organizationId)
       .eq("role", "realtor")
       .order("full_name", { ascending: true, nullsFirst: false })
@@ -867,6 +986,7 @@ async function loadAssistantContext(organizationId: string): Promise<{
       `pendingDeliverables=${pendingDeliverables || "none"}`,
       `notes=${booking.client_notes ?? ""}`,
       `agentMemory=${booking.profiles?.internal_notes ?? ""}`,
+      `structuredMemory=${summarizeRealtorAIMemory(parseRealtorAIMemory(booking.profiles?.ai_memory)).join("; ")}`,
       `deliveryCCs=${(booking.profiles?.delivery_cc_emails ?? []).join(",")}`,
     ].join(" | ");
   });
@@ -923,6 +1043,7 @@ async function loadAssistantContext(organizationId: string): Promise<{
       `phone=${realtor.phone ?? ""}`,
       `brokerage=${realtor.brokerage ?? ""}`,
       `agentMemory=${realtor.internal_notes ?? ""}`,
+      `structuredMemory=${summarizeRealtorAIMemory(parseRealtorAIMemory(realtor.ai_memory)).join("; ")}`,
       `deliveryCCs=${(realtor.delivery_cc_emails ?? []).join(",")}`,
       `commonServices=${commonServices.join(",")}`,
       `commonAddOns=${commonAddOns.join(",")}`,
@@ -1619,7 +1740,10 @@ function buildBookingNoteAction(
 async function applyBulkPriceChange(
   organizationId: string,
   priceChange: AdminAssistantPriceChange,
-): Promise<{ ok: true; updatedCount: number } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; updatedCount: number; undoPayload: Json }
+  | { ok: false; error: string }
+> {
   const catalog = await getActiveCatalog({ organizationId });
   const candidates = catalogItemsForPriceScope(catalog, priceChange.scope);
   const updates = candidates
@@ -1652,13 +1776,23 @@ async function applyBulkPriceChange(
     }
   }
 
-  return { ok: true, updatedCount: updates.length };
+  return {
+    ok: true,
+    updatedCount: updates.length,
+    undoPayload: {
+      kind: "catalog_prices",
+      items: updates.map((update) => ({
+        id: update.id,
+        price_cents: update.oldPriceCents,
+      })),
+    },
+  };
 }
 
 async function applyCalendarBlock(
   organizationId: string,
   action: AdminAssistantAction,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; undoPayload: Json } | { ok: false; error: string }> {
   const block = action.calendarBlock;
   if (!block) return { ok: false, error: "Missing blocked time details." };
   const starts = businessDateTimeLocalToUtc(block.startsLocal);
@@ -1667,20 +1801,30 @@ async function applyCalendarBlock(
     return { ok: false, error: "That blocked time range is not valid." };
   }
   const supabase = getServiceSupabase();
-  const { error } = await supabase.from("calendar_blocks").insert({
-    organization_id: organizationId,
-    starts_at: starts.toISOString(),
-    ends_at: ends.toISOString(),
-    label: block.label || null,
-  });
+  const { data, error } = await supabase
+    .from("calendar_blocks")
+    .insert({
+      organization_id: organizationId,
+      starts_at: starts.toISOString(),
+      ends_at: ends.toISOString(),
+      label: block.label || null,
+    })
+    .select("id")
+    .single<{ id: string }>();
   if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  return {
+    ok: true,
+    undoPayload: {
+      kind: "calendar_block",
+      id: data.id,
+    },
+  };
 }
 
 async function applyBusinessHourUpdate(
   organizationId: string,
   action: AdminAssistantAction,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; undoPayload: Json } | { ok: false; error: string }> {
   const businessHour = action.businessHour;
   if (!businessHour) return { ok: false, error: "Missing working hours." };
   const startTime = normalizeTime(businessHour.startTime);
@@ -1696,7 +1840,21 @@ async function applyBusinessHourUpdate(
     return { ok: false, error: "Those working hours are not valid." };
   }
 
-  const { error } = await getServiceSupabase()
+  const supabase = getServiceSupabase();
+  const { data: previous, error: readError } = await supabase
+    .from("business_hours")
+    .select("day_of_week, start_time, end_time, enabled")
+    .eq("organization_id", organizationId)
+    .eq("day_of_week", businessHour.dayOfWeek)
+    .maybeSingle<{
+      day_of_week: number;
+      start_time: string;
+      end_time: string;
+      enabled: boolean;
+    }>();
+  if (readError) return { ok: false, error: readError.message };
+
+  const { error } = await supabase
     .from("business_hours")
     .upsert(
       {
@@ -1709,14 +1867,21 @@ async function applyBusinessHourUpdate(
       { onConflict: "organization_id,day_of_week" },
     );
   if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  return {
+    ok: true,
+    undoPayload: {
+      kind: "business_hour",
+      day_of_week: businessHour.dayOfWeek,
+      previous,
+    },
+  };
 }
 
 async function applyRealtorMemoryUpdate(
   organizationId: string,
   realtorId: string | undefined,
   textUpdate: AdminAssistantTextUpdate | undefined,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; undoPayload: Json } | { ok: false; error: string }> {
   if (!realtorId) return { ok: false, error: "Missing realtor profile." };
   if (!textUpdate) return { ok: false, error: "Missing memory update." };
 
@@ -1745,7 +1910,14 @@ async function applyRealtorMemoryUpdate(
     .eq("role", "realtor")
     .eq("id", realtorId);
   if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  return {
+    ok: true,
+    undoPayload: {
+      kind: "realtor_memory",
+      realtor_id: realtorId,
+      internal_notes: realtor.internal_notes,
+    },
+  };
 }
 
 async function applyDeliveryCcUpdate(
@@ -1753,7 +1925,8 @@ async function applyDeliveryCcUpdate(
   realtorId: string | undefined,
   textUpdate: AdminAssistantTextUpdate | undefined,
 ): Promise<
-  { ok: true; count: number; mode: "add" | "remove" } | { ok: false; error: string }
+  | { ok: true; count: number; mode: "add" | "remove"; undoPayload: Json }
+  | { ok: false; error: string }
 > {
   if (!realtorId) return { ok: false, error: "Missing realtor profile." };
   if (!textUpdate) return { ok: false, error: "Missing delivery recipients." };
@@ -1793,14 +1966,23 @@ async function applyDeliveryCcUpdate(
     .eq("role", "realtor")
     .eq("id", realtorId);
   if (error) return { ok: false, error: error.message };
-  return { ok: true, count: emails.length, mode };
+  return {
+    ok: true,
+    count: emails.length,
+    mode,
+    undoPayload: {
+      kind: "delivery_cc",
+      realtor_id: realtorId,
+      delivery_cc_emails: realtor.delivery_cc_emails ?? [],
+    },
+  };
 }
 
 async function applyBookingNoteUpdate(
   organizationId: string,
   bookingId: string,
   textUpdate: AdminAssistantTextUpdate | undefined,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; undoPayload: Json } | { ok: false; error: string }> {
   if (!bookingId) return { ok: false, error: "Missing booking." };
   if (!textUpdate) return { ok: false, error: "Missing note update." };
 
@@ -1827,7 +2009,165 @@ async function applyBookingNoteUpdate(
     .eq("organization_id", organizationId)
     .eq("id", bookingId);
   if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  return {
+    ok: true,
+    undoPayload: {
+      kind: "booking_note",
+      booking_id: bookingId,
+      internal_notes: booking.internal_notes,
+    },
+  };
+}
+
+async function applyUndoPayload(
+  organizationId: string,
+  payload: Json,
+): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return { ok: false, error: "Undo data is not valid." };
+  }
+  const undo = payload as Record<string, Json | undefined>;
+  const kind = undo.kind;
+  if (kind === "catalog_prices") {
+    const items = Array.isArray(undo.items) ? undo.items : [];
+    const supabase = getServiceSupabase();
+    let restored = 0;
+    for (const rawItem of items) {
+      if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) continue;
+      const item = rawItem as Record<string, Json | undefined>;
+      const id = typeof item.id === "string" ? item.id : "";
+      const priceCents =
+        typeof item.price_cents === "number" ? item.price_cents : null;
+      if (!id || priceCents === null) continue;
+      const { error } = await supabase
+        .from("catalog_items")
+        .update({ price_cents: priceCents })
+        .eq("organization_id", organizationId)
+        .eq("id", id);
+      if (error) return { ok: false, error: error.message };
+      restored += 1;
+    }
+    return {
+      ok: true,
+      message: `Undone. I restored ${restored} catalog price${restored === 1 ? "" : "s"}.`,
+    };
+  }
+
+  if (kind === "calendar_block") {
+    const id = typeof undo.id === "string" ? undo.id : "";
+    if (!id) return { ok: false, error: "Missing calendar block to undo." };
+    const { error } = await getServiceSupabase()
+      .from("calendar_blocks")
+      .delete()
+      .eq("organization_id", organizationId)
+      .eq("id", id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, message: "Undone. I removed that blocked time." };
+  }
+
+  if (kind === "business_hour") {
+    const dayOfWeek =
+      typeof undo.day_of_week === "number" ? undo.day_of_week : null;
+    if (dayOfWeek === null) return { ok: false, error: "Missing day to undo." };
+    const previous = undo.previous;
+    const supabase = getServiceSupabase();
+    if (!previous) {
+      const { error } = await supabase
+        .from("business_hours")
+        .delete()
+        .eq("organization_id", organizationId)
+        .eq("day_of_week", dayOfWeek);
+      if (error) return { ok: false, error: error.message };
+      return { ok: true, message: "Undone. I removed that working-hours row." };
+    }
+    if (typeof previous !== "object" || Array.isArray(previous)) {
+      return { ok: false, error: "Working-hours undo data is not valid." };
+    }
+    const row = previous as Record<string, Json | undefined>;
+    const startTime = typeof row.start_time === "string" ? row.start_time : null;
+    const endTime = typeof row.end_time === "string" ? row.end_time : null;
+    const enabled = typeof row.enabled === "boolean" ? row.enabled : null;
+    if (!startTime || !endTime || enabled === null) {
+      return { ok: false, error: "Working-hours undo data is incomplete." };
+    }
+    const { error } = await supabase.from("business_hours").upsert(
+      {
+        organization_id: organizationId,
+        day_of_week: dayOfWeek,
+        start_time: startTime,
+        end_time: endTime,
+        enabled,
+      },
+      { onConflict: "organization_id,day_of_week" },
+    );
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, message: "Undone. I restored those working hours." };
+  }
+
+  if (kind === "realtor_memory") {
+    const realtorId = typeof undo.realtor_id === "string" ? undo.realtor_id : "";
+    const notes =
+      typeof undo.internal_notes === "string" ? undo.internal_notes : null;
+    if (!realtorId) return { ok: false, error: "Missing realtor to undo." };
+    const { error } = await getServiceSupabase()
+      .from("profiles")
+      .update({ internal_notes: notes })
+      .eq("organization_id", organizationId)
+      .eq("role", "realtor")
+      .eq("id", realtorId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, message: "Undone. I restored the realtor memory note." };
+  }
+
+  if (kind === "delivery_cc") {
+    const realtorId = typeof undo.realtor_id === "string" ? undo.realtor_id : "";
+    const emails = Array.isArray(undo.delivery_cc_emails)
+      ? undo.delivery_cc_emails.filter((email): email is string => typeof email === "string")
+      : [];
+    if (!realtorId) return { ok: false, error: "Missing realtor to undo." };
+    const { error } = await getServiceSupabase()
+      .from("profiles")
+      .update({ delivery_cc_emails: emails })
+      .eq("organization_id", organizationId)
+      .eq("role", "realtor")
+      .eq("id", realtorId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, message: "Undone. I restored the delivery CC list." };
+  }
+
+  if (kind === "booking_note") {
+    const bookingId = typeof undo.booking_id === "string" ? undo.booking_id : "";
+    const notes =
+      typeof undo.internal_notes === "string" ? undo.internal_notes : null;
+    if (!bookingId) return { ok: false, error: "Missing booking to undo." };
+    const { error } = await getServiceSupabase()
+      .from("bookings")
+      .update({ internal_notes: notes })
+      .eq("organization_id", organizationId)
+      .eq("id", bookingId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, message: "Undone. I restored the booking note." };
+  }
+
+  return { ok: false, error: "That assistant action does not support undo yet." };
+}
+
+async function markAssistantUndo(
+  logId: string,
+  userId: string,
+  message: string,
+): Promise<void> {
+  const { error } = await getServiceSupabase()
+    .from("assistant_action_logs")
+    .update({
+      undone_at: new Date().toISOString(),
+      undone_by: userId,
+      undo_result_message: message,
+    })
+    .eq("id", logId);
+  if (error) {
+    console.warn("[admin-assistant] undo log update failed", error.message);
+  }
 }
 
 function catalogItemsForPriceScope(

@@ -67,6 +67,7 @@ interface ProfilesTable {
     instagram_url: string | null;
     delivery_cc_emails: string[];
     internal_notes: string | null;
+    ai_memory: Json;
     role: UserRole;
     created_at: string;
     updated_at: string;
@@ -84,6 +85,7 @@ interface ProfilesTable {
     instagram_url?: string | null;
     delivery_cc_emails?: string[];
     internal_notes?: string | null;
+    ai_memory?: Json;
     role?: UserRole;
   };
   Update: Partial<ProfilesTable["Insert"]>;
@@ -627,8 +629,12 @@ interface AssistantActionLogsTable {
     label: string;
     details: string;
     payload: Json;
+    undo_payload: Json | null;
     result_status: "success" | "failed";
     result_message: string;
+    undone_at: string | null;
+    undone_by: string | null;
+    undo_result_message: string | null;
     created_at: string;
   };
   Insert: {
@@ -641,8 +647,12 @@ interface AssistantActionLogsTable {
     label?: string;
     details?: string;
     payload?: Json;
+    undo_payload?: Json | null;
     result_status: "success" | "failed";
     result_message?: string;
+    undone_at?: string | null;
+    undone_by?: string | null;
+    undo_result_message?: string | null;
   };
   Update: Partial<AssistantActionLogsTable["Insert"]>;
   Relationships: [];

@@ -13,6 +13,7 @@ import {
   askAdminAssistant,
   confirmAdminAssistantAction,
   getAssistantActionLogs,
+  undoAssistantActionLog,
   type AdminAssistantAction,
   type AdminAssistantLog,
   type AdminAssistantResult,
@@ -42,6 +43,7 @@ export default function AdminAssistant() {
   });
   const [pending, startTransition] = useTransition();
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [undoing, setUndoing] = useState<string | null>(null);
   const dragRef = useRef<{
     startX: number;
     startY: number;
@@ -108,6 +110,26 @@ export default function AdminAssistant() {
         });
       } finally {
         setConfirming(null);
+      }
+    });
+  }
+
+  function undoLog(logId: string) {
+    setUndoing(logId);
+    startTransition(async () => {
+      try {
+        const nextResult = await undoAssistantActionLog(logId);
+        setResult(nextResult);
+        setLogs(await getAssistantActionLogs());
+      } catch (err) {
+        setResult({
+          ok: false,
+          kind: "unsupported",
+          message: err instanceof Error ? err.message : "Undo failed.",
+          actions: [],
+        });
+      } finally {
+        setUndoing(null);
       }
     });
   }
@@ -278,6 +300,20 @@ export default function AdminAssistant() {
                 <p className="mt-0.5 line-clamp-2 text-[11px] text-realtor-muted">
                   {item.resultMessage || item.details}
                 </p>
+                {item.undoneAt ? (
+                  <p className="mt-1 text-[11px] font-semibold text-realtor-muted">
+                    Undone · {item.undoResultMessage ?? "Reversed"}
+                  </p>
+                ) : item.canUndo ? (
+                  <button
+                    type="button"
+                    disabled={Boolean(undoing)}
+                    onClick={() => undoLog(item.id)}
+                    className="mt-2 rounded-full border border-red-500/25 bg-red-50 px-3 py-1 text-[11px] font-semibold text-red-700 transition hover:border-red-500 disabled:opacity-60"
+                  >
+                    {undoing === item.id ? "Undoing..." : "Undo"}
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>

@@ -8,12 +8,24 @@ import {
 } from "@/lib/booking/availability";
 import { labelForAddOn, labelForService } from "@/lib/booking/services";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import {
+  parseRealtorAIMemory,
+  summarizeRealtorAIMemory,
+} from "@/lib/realtors/memory";
 import { getServerSupabase } from "@/lib/supabase/server";
+import { getCredential } from "@/lib/integrations/credentials";
 import type {
   BookingStatus,
   DeliverableSource,
   DeliverableType,
+  Json,
 } from "@/lib/supabase/database.types";
+import {
+  loadTodayCommandPreferences,
+  saveTodayCommandPreferences,
+} from "./actions";
+import DailyAIBriefPanel from "./DailyAIBriefPanel";
+import type { TodayCommandPreferences } from "./preferences";
 
 export const metadata: Metadata = { title: "Today" };
 export const dynamic = "force-dynamic";
@@ -44,6 +56,7 @@ interface BookingRow {
     brokerage: string | null;
     internal_notes: string | null;
     delivery_cc_emails: string[] | null;
+    ai_memory: Json | null;
   } | null;
 }
 
@@ -69,7 +82,7 @@ export default async function AdminTodayPage() {
   const { data: bookings, error } = await supabase
     .from("bookings")
     .select(
-      "id, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, client_notes, internal_notes, unit_number, iguide_id, iguide_portal_id, properties(street_address, city, province, postal_code), profiles(full_name, email, phone, brokerage, internal_notes, delivery_cc_emails)",
+      "id, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, client_notes, internal_notes, unit_number, iguide_id, iguide_portal_id, properties(street_address, city, province, postal_code), profiles(full_name, email, phone, brokerage, internal_notes, delivery_cc_emails, ai_memory)",
     )
     .eq("organization_id", admin.organizationId)
     .not("scheduled_at", "is", null)
@@ -105,7 +118,15 @@ export default async function AdminTodayPage() {
     ]);
   }
 
-  const summary = buildDailySummary(bookings ?? [], deliverablesByBooking);
+  const preferences = await loadTodayCommandPreferences(admin.organizationId);
+  const routePlan = preferences.showRouteWarnings
+    ? await buildRoutePlan(bookings ?? [], admin.organizationId)
+    : emptyRoutePlan("v1");
+  const summary = buildDailySummary(
+    bookings ?? [],
+    deliverablesByBooking,
+    preferences,
+  );
 
   return (
     <div className="space-y-6">
@@ -133,6 +154,8 @@ export default async function AdminTodayPage() {
         bookings={bookings ?? []}
         deliverablesByBooking={deliverablesByBooking}
         summary={summary}
+        preferences={preferences}
+        routePlan={routePlan}
       />
 
       {bookings && bookings.length > 0 ? (
@@ -141,7 +164,9 @@ export default async function AdminTodayPage() {
             <ShootCard
               key={booking.id}
               booking={booking}
+              nextRoute={routePlan.nextRoutes.get(booking.id) ?? null}
               deliverables={deliverablesByBooking.get(booking.id) ?? []}
+              preferences={preferences}
             />
           ))}
         </ol>
@@ -158,28 +183,40 @@ function DailyCommandCenter({
   bookings,
   deliverablesByBooking,
   summary,
+  preferences,
+  routePlan,
 }: {
   bookings: BookingRow[];
   deliverablesByBooking: Map<string, DeliverableRow[]>;
   summary: DailySummary;
+  preferences: TodayCommandPreferences;
+  routePlan: RoutePlan;
 }) {
   const nextShoot = bookings.find(
     (booking) =>
       booking.scheduled_at && new Date(booking.scheduled_at).getTime() >= Date.now(),
   );
-  const attention = bookings
-    .map((booking) => ({
-      booking,
-      tasks: taskStates(booking, deliverablesByBooking.get(booking.id) ?? []).filter(
-        (task) => task.state !== "done",
-      ),
-    }))
-    .filter((item) => item.tasks.length > 0)
-    .slice(0, 5);
-  const memoryRows = bookings
-    .filter((booking) => booking.internal_notes || booking.profiles?.internal_notes)
-    .slice(0, 4);
-  const routeInsights = buildRouteInsights(bookings);
+  const attention = preferences.showDeliverables
+    ? bookings
+        .map((booking) => ({
+          booking,
+          tasks: taskStates(
+            booking,
+            deliverablesByBooking.get(booking.id) ?? [],
+          ).filter((task) => task.state !== "done"),
+        }))
+        .filter((item) => item.tasks.length > 0)
+        .slice(0, 5)
+    : [];
+  const memoryRows = preferences.showAgentMemory
+    ? bookings
+        .filter(
+          (booking) => booking.internal_notes || booking.profiles?.internal_notes,
+        )
+        .slice(0, 4)
+    : [];
+  const routeInsights = routePlan.insights;
+  const routeSummary = buildRouteSummary(routeInsights);
 
   return (
     <section className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
@@ -204,12 +241,26 @@ function DailyCommandCenter({
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryTile label="Shoots" value={String(summary.total)} />
-        <SummaryTile label="Ready media" value={String(summary.withReadyMedia)} />
-        <SummaryTile label="Need attention" value={String(summary.needingAttention)} />
-        <SummaryTile label="Memory notes" value={String(summary.withMemory)} />
+        {preferences.showDeliverables ? (
+          <>
+            <SummaryTile label="Ready media" value={String(summary.withReadyMedia)} />
+            <SummaryTile label="Need attention" value={String(summary.needingAttention)} />
+          </>
+        ) : null}
+        {preferences.showAgentMemory ? (
+          <SummaryTile label="Memory notes" value={String(summary.withMemory)} />
+        ) : null}
+        {preferences.showRouteWarnings ? (
+          <SummaryTile label="Route alerts" value={String(routeSummary.alerts)} />
+        ) : null}
       </div>
 
+      <CommandCenterPreferencesForm preferences={preferences} />
+
+      {preferences.showShootBrief ? <DailyAIBriefPanel /> : null}
+
       <div className="mt-4 grid gap-3 lg:grid-cols-3">
+        {preferences.showDeliverables ? (
         <div className="rounded-2xl border border-white/10 bg-ink/45 p-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
             Needs attention
@@ -238,7 +289,9 @@ function DailyCommandCenter({
             </p>
           )}
         </div>
+        ) : null}
 
+        {preferences.showAgentMemory ? (
         <div className="rounded-2xl border border-white/10 bg-ink/45 p-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
             Agent memory
@@ -268,10 +321,20 @@ function DailyCommandCenter({
             </p>
           )}
         </div>
+        ) : null}
 
+        {preferences.showRouteWarnings ? (
         <div className="rounded-2xl border border-white/10 bg-ink/45 p-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
             Route + travel
+          </p>
+          <p className="mt-1 text-xs text-ink-muted">
+            {routeSummary.label}{" "}
+            <span className="text-ink-muted/70">
+              {routePlan.mode === "v2"
+                ? "Using Google drive-time."
+                : "Using V1 schedule checks."}
+            </span>
           </p>
           {routeInsights.length > 0 ? (
             <div className="mt-2 space-y-2">
@@ -279,7 +342,9 @@ function DailyCommandCenter({
                 <div
                   key={insight.key}
                   className={`rounded-xl border p-3 ${
-                    insight.level === "warning"
+                    insight.level === "danger"
+                      ? "border-red-300/30 bg-red-400/10"
+                      : insight.level === "warning"
                       ? "border-amber-300/25 bg-amber-300/10"
                       : "border-white/10 bg-white/[0.03]"
                   }`}
@@ -288,6 +353,16 @@ function DailyCommandCenter({
                     {insight.title}
                   </p>
                   <p className="mt-1 text-xs text-ink-muted">{insight.body}</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {insight.badges.map((badge) => (
+                      <span
+                        key={badge}
+                        className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold text-ink-muted"
+                      >
+                        {badge}
+                      </span>
+                    ))}
+                  </div>
                   {insight.href ? (
                     <a
                       href={insight.href}
@@ -303,12 +378,96 @@ function DailyCommandCenter({
             </div>
           ) : (
             <p className="mt-2 text-sm text-ink-muted">
-              Add at least two timed shoots to check route spacing.
+              No route warnings for the current schedule.
             </p>
           )}
         </div>
+        ) : null}
       </div>
     </section>
+  );
+}
+
+function CommandCenterPreferencesForm({
+  preferences,
+}: {
+  preferences: TodayCommandPreferences;
+}) {
+  return (
+    <details className="mt-4 rounded-2xl border border-white/10 bg-ink/35 p-3">
+      <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-ink-muted">
+        Customize reminders
+      </summary>
+      <form action={saveTodayCommandPreferences} className="mt-3 space-y-3">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <PreferenceToggle
+            name="show_deliverables"
+            label="Deliverable reminders"
+            description="Photos, iGUIDE, floor plans, video, and media checklist."
+            checked={preferences.showDeliverables}
+          />
+          <PreferenceToggle
+            name="show_agent_memory"
+            label="Agent memory"
+            description="Saved realtor preferences and delivery CC reminders."
+            checked={preferences.showAgentMemory}
+          />
+          <PreferenceToggle
+            name="show_route_warnings"
+            label="Route spacing"
+            description="Tight gaps and city changes between shoots."
+            checked={preferences.showRouteWarnings}
+          />
+          <PreferenceToggle
+            name="show_booking_notes"
+            label="Booking notes"
+            description="Client and internal notes on each shoot card."
+            checked={preferences.showBookingNotes}
+          />
+          <PreferenceToggle
+            name="show_shoot_brief"
+            label="AI shoot brief"
+            description="Short practical notes for each shoot."
+            checked={preferences.showShootBrief}
+          />
+        </div>
+        <button
+          type="submit"
+          className="rounded-full bg-brand px-4 py-2 text-xs font-semibold text-white transition hover:bg-brand-light"
+        >
+          Save reminders
+        </button>
+      </form>
+    </details>
+  );
+}
+
+function PreferenceToggle({
+  name,
+  label,
+  description,
+  checked,
+}: {
+  name: string;
+  label: string;
+  description: string;
+  checked: boolean;
+}) {
+  return (
+    <label className="flex gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+      <input
+        type="checkbox"
+        name={name}
+        defaultChecked={checked}
+        className="mt-1 h-4 w-4 rounded border-white/20 bg-ink text-brand"
+      />
+      <span>
+        <span className="block text-sm font-semibold text-white">{label}</span>
+        <span className="mt-0.5 block text-xs leading-5 text-ink-muted">
+          {description}
+        </span>
+      </span>
+    </label>
   );
 }
 
@@ -325,10 +484,14 @@ function SummaryTile({ label, value }: { label: string; value: string }) {
 
 function ShootCard({
   booking,
+  nextRoute,
   deliverables,
+  preferences,
 }: {
   booking: BookingRow;
+  nextRoute: NextRoute | null;
   deliverables: DeliverableRow[];
+  preferences: TodayCommandPreferences;
 }) {
   const property = booking.properties;
   const profile = booking.profiles;
@@ -352,7 +515,7 @@ function ShootCard({
     ...booking.add_ons.map(labelForAddOn),
   ];
   const taskState = taskStates(booking, deliverables);
-  const briefItems = shootBriefItems(booking, taskState);
+  const briefItems = shootBriefItems(booking, taskState, preferences);
 
   return (
     <li className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
@@ -439,7 +602,7 @@ function ShootCard({
         </div>
       </div>
 
-      {booking.client_notes || booking.internal_notes ? (
+      {preferences.showBookingNotes && (booking.client_notes || booking.internal_notes) ? (
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           {booking.client_notes ? (
             <NoteBlock title="Realtor notes" body={booking.client_notes} />
@@ -450,6 +613,7 @@ function ShootCard({
         </div>
       ) : null}
 
+      {preferences.showShootBrief ? (
       <div className="mt-3 rounded-2xl border border-brand-light/20 bg-brand/10 p-3">
         <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
           AI shoot brief
@@ -463,7 +627,38 @@ function ShootCard({
           ))}
         </ul>
       </div>
+      ) : null}
 
+      {nextRoute ? (
+        <div
+          className={`mt-3 rounded-2xl border p-3 ${
+            nextRoute.level === "danger"
+              ? "border-red-300/30 bg-red-400/10"
+              : nextRoute.level === "warning"
+                ? "border-amber-300/25 bg-amber-300/10"
+                : "border-white/10 bg-ink/45"
+          }`}
+        >
+          <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+            Route to next shoot
+          </p>
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-white">{nextRoute.label}</p>
+            {nextRoute.href ? (
+              <a
+                href={nextRoute.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-brand-light"
+              >
+                Open route
+              </a>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {preferences.showDeliverables ? (
       <div className="mt-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
           Delivery checklist
@@ -479,6 +674,7 @@ function ShootCard({
           ))}
         </div>
       </div>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
         <Link
@@ -574,92 +770,451 @@ interface DailySummary {
 
 interface RouteInsight {
   key: string;
-  level: "info" | "warning";
+  level: "info" | "warning" | "danger";
   title: string;
   body: string;
+  badges: string[];
   href?: string;
+}
+
+interface NextRoute {
+  level: "info" | "warning" | "danger";
+  label: string;
+  href?: string;
+}
+
+interface RoutePlan {
+  mode: "v1" | "v2";
+  insights: RouteInsight[];
+  nextRoutes: Map<string, NextRoute>;
 }
 
 function buildDailySummary(
   bookings: BookingRow[],
   deliverablesByBooking: Map<string, DeliverableRow[]>,
+  preferences: TodayCommandPreferences,
 ): DailySummary {
   return {
     total: bookings.length,
-    withReadyMedia: bookings.filter((booking) =>
-      (deliverablesByBooking.get(booking.id) ?? []).some(
-        (deliverable) =>
-          deliverable.source !== "fotello" && Boolean(deliverable.ready_at),
-      ),
-    ).length,
-    needingAttention: bookings.filter((booking) =>
-      taskStates(booking, deliverablesByBooking.get(booking.id) ?? []).some(
-        (task) => task.state !== "done",
-      ),
-    ).length,
-    withMemory: bookings.filter(
-      (booking) => booking.internal_notes || booking.profiles?.internal_notes,
-    ).length,
+    withReadyMedia: preferences.showDeliverables
+      ? bookings.filter((booking) =>
+          (deliverablesByBooking.get(booking.id) ?? []).some(
+            (deliverable) =>
+              deliverable.source !== "fotello" && Boolean(deliverable.ready_at),
+          ),
+        ).length
+      : 0,
+    needingAttention: preferences.showDeliverables
+      ? bookings.filter((booking) =>
+          taskStates(booking, deliverablesByBooking.get(booking.id) ?? []).some(
+            (task) => task.state !== "done",
+          ),
+        ).length
+      : 0,
+    withMemory: preferences.showAgentMemory
+      ? bookings.filter(
+          (booking) => booking.internal_notes || booking.profiles?.internal_notes,
+        ).length
+      : 0,
   };
 }
 
-function buildRouteInsights(bookings: BookingRow[]): RouteInsight[] {
-  const timed = bookings
+async function buildRoutePlan(
+  bookings: BookingRow[],
+  organizationId: string,
+): Promise<RoutePlan> {
+  const apiKey =
+    (await getCredential(
+      "google_maps",
+      "api_key",
+      "GOOGLE_MAPS_SERVER_API_KEY",
+      organizationId,
+    )) ??
+    process.env.GOOGLE_ROUTES_API_KEY?.trim() ??
+    null;
+  if (!apiKey) return buildV1RoutePlan(bookings);
+
+  const timed = timedBookings(bookings);
+  const insights: RouteInsight[] = [];
+  const nextRoutes = new Map<string, NextRoute>();
+
+  for (let i = 0; i < timed.length - 1; i += 1) {
+    const current = timed[i];
+    const next = timed[i + 1];
+    const estimate = await computeGoogleRouteEstimate({
+      apiKey,
+      from: current,
+      to: next,
+    });
+
+    if (!estimate) {
+      const fallback = buildV1PairRoute(current, next);
+      if (fallback.insight) insights.push(fallback.insight);
+      nextRoutes.set(current.id, fallback.nextRoute);
+      continue;
+    }
+
+    const pair = buildV2PairRoute(current, next, estimate);
+    if (pair.insight) insights.push(pair.insight);
+    nextRoutes.set(current.id, pair.nextRoute);
+  }
+
+  if (timed.length === 1) {
+    const only = timed[0];
+    insights.push(singleShootInsight(only));
+  }
+
+  return {
+    mode: "v2",
+    insights: insights.slice(0, 5),
+    nextRoutes,
+  };
+}
+
+function buildV1RoutePlan(bookings: BookingRow[]): RoutePlan {
+  const timed = timedBookings(bookings);
+  const insights: RouteInsight[] = [];
+  const nextRoutes = new Map<string, NextRoute>();
+
+  for (let i = 0; i < timed.length - 1; i += 1) {
+    const current = timed[i];
+    const next = timed[i + 1];
+    const pair = buildV1PairRoute(current, next);
+    if (pair.insight) insights.push(pair.insight);
+    nextRoutes.set(current.id, pair.nextRoute);
+  }
+
+  if (timed.length === 1) insights.push(singleShootInsight(timed[0]));
+
+  return {
+    mode: "v1",
+    insights: insights.slice(0, 5),
+    nextRoutes,
+  };
+}
+
+function emptyRoutePlan(mode: "v1" | "v2"): RoutePlan {
+  return { mode, insights: [], nextRoutes: new Map() };
+}
+
+function timedBookings(bookings: BookingRow[]): BookingRow[] {
+  return bookings
     .filter((booking) => booking.scheduled_at)
     .sort(
       (a, b) =>
         new Date(a.scheduled_at ?? "").getTime() -
         new Date(b.scheduled_at ?? "").getTime(),
     );
-  const insights: RouteInsight[] = [];
+}
 
-  for (let i = 0; i < timed.length - 1; i += 1) {
-    const current = timed[i];
-    const next = timed[i + 1];
-    const currentEnd = current.scheduled_ends_at ?? current.scheduled_at;
-    const gapMinutes = Math.round(
-      (new Date(next.scheduled_at ?? "").getTime() -
-        new Date(currentEnd ?? "").getTime()) /
-        60000,
-    );
-    const cityChanged =
-      normalize(current.properties?.city) !== normalize(next.properties?.city);
-    const routeHref = googleRouteHref(current, next);
+function buildV1PairRoute(
+  current: BookingRow,
+  next: BookingRow,
+): { insight: RouteInsight | null; nextRoute: NextRoute } {
+  const currentEnd = current.scheduled_ends_at ?? current.scheduled_at;
+  const nextStart = next.scheduled_at ?? "";
+  const gapMinutes = Math.round(
+    (new Date(nextStart).getTime() - new Date(currentEnd ?? "").getTime()) /
+      60000,
+  );
+  const cityChanged =
+    normalize(current.properties?.city) !== normalize(next.properties?.city);
+  const routeHref = googleRouteHref(current, next);
+  const fromLabel = current.properties?.street_address ?? "current shoot";
+  const toLabel = next.properties?.street_address ?? "next shoot";
+  const leaveBy = currentEnd ? formatTime(currentEnd) : null;
+  const cityBadge = cityChanged
+    ? `${current.properties?.city ?? "First city"} → ${
+        next.properties?.city ?? "next city"
+      }`
+    : current.properties?.city || next.properties?.city || "Same area";
+  const badges = [
+    `${Math.max(gapMinutes, 0)} min between`,
+    leaveBy ? `Leave by ${leaveBy}` : null,
+    cityBadge,
+  ].filter((badge): badge is string => Boolean(badge));
 
-    if (gapMinutes < 45) {
-      insights.push({
-        key: `gap-${current.id}-${next.id}`,
-        level: "warning",
-        title: `${gapMinutes} min gap after ${formatTime(currentEnd ?? "")}`,
-        body:
-          "This may be tight once packing, driving, parking, and lockbox/access time are included.",
-        href: routeHref,
-      });
+    if (gapMinutes < 0) {
+      return {
+        insight: {
+          key: `overlap-${current.id}-${next.id}`,
+          level: "danger",
+          title: `Schedule overlap before ${formatTime(nextStart)}`,
+          body: `${toLabel} starts before ${fromLabel} is scheduled to end. Adjust the calendar before the day gets away from you.`,
+          badges,
+          href: routeHref,
+        },
+        nextRoute: {
+          level: "danger",
+          label: `${toLabel} overlaps this booking. Calendar needs attention.`,
+          href: routeHref,
+        },
+      };
+    } else if (gapMinutes < 30) {
+      return {
+        insight: {
+          key: `tight-${current.id}-${next.id}`,
+          level: "danger",
+          title: `${gapMinutes} min gap before ${formatTime(nextStart)}`,
+          body:
+            "This is very tight once packing, driving, parking, and access time are included.",
+          badges,
+          href: routeHref,
+        },
+        nextRoute: {
+          level: "danger",
+          label: `Next: ${toLabel}. Leave by ${leaveBy}; ${gapMinutes} min scheduled gap.`,
+          href: routeHref,
+        },
+      };
+    } else if (gapMinutes < 60) {
+      return {
+        insight: {
+          key: `gap-${current.id}-${next.id}`,
+          level: "warning",
+          title: `${gapMinutes} min gap before ${formatTime(nextStart)}`,
+          body:
+            "This should work if the first shoot ends cleanly, but check the route before leaving.",
+          badges,
+          href: routeHref,
+        },
+        nextRoute: {
+          level: "warning",
+          label: `Next: ${toLabel}. Leave by ${leaveBy}; ${gapMinutes} min scheduled gap.`,
+          href: routeHref,
+        },
+      };
     } else if (cityChanged) {
-      insights.push({
-        key: `city-${current.id}-${next.id}`,
-        level: "info",
-        title: "City change between shoots",
-        body: `${current.properties?.city ?? "First city"} to ${
-          next.properties?.city ?? "next city"
-        }. Check drive time and whether a travel fee applies.`,
-        href: routeHref,
-      });
+      return {
+        insight: {
+          key: `city-${current.id}-${next.id}`,
+          level: "info",
+          title: "City change between shoots",
+          body: `${fromLabel} to ${toLabel}. Open the route before leaving so there are no surprises.`,
+          badges,
+          href: routeHref,
+        },
+        nextRoute: {
+          level: "info",
+          label: `Next: ${toLabel}. Leave by ${leaveBy}; ${gapMinutes} min scheduled gap.`,
+          href: routeHref,
+        },
+      };
     }
-  }
 
-  if (timed.length === 1) {
-    const only = timed[0];
-    insights.push({
-      key: `single-${only.id}`,
+  return {
+    insight: null,
+    nextRoute: {
       level: "info",
-      title: "One shoot today",
-      body: "Open the map before leaving and check parking/access notes.",
-      href: googleMapHref(only),
-    });
+      label: `Next: ${toLabel}. Leave by ${leaveBy}; ${gapMinutes} min scheduled gap.`,
+      href: routeHref,
+    },
+  };
+}
+
+function singleShootInsight(only: BookingRow): RouteInsight {
+  return {
+    key: `single-${only.id}`,
+    level: "info",
+    title: "One shoot today",
+    body: "Open the map before leaving and check parking/access notes.",
+    badges: [
+      only.scheduled_at ? `Starts ${formatTime(only.scheduled_at)}` : "Timed shoot",
+      only.properties?.city ?? "Address ready",
+    ],
+    href: googleMapHref(only),
+  };
+}
+
+interface GoogleRouteEstimate {
+  travelMinutes: number;
+  distanceKm: number;
+}
+
+async function computeGoogleRouteEstimate({
+  apiKey,
+  from,
+  to,
+}: {
+  apiKey: string;
+  from: BookingRow;
+  to: BookingRow;
+}): Promise<GoogleRouteEstimate | null> {
+  const origin = fullAddress(from);
+  const destination = fullAddress(to);
+  if (!origin || !destination) return null;
+
+  const departureTime =
+    from.scheduled_ends_at && new Date(from.scheduled_ends_at).getTime() > Date.now()
+      ? from.scheduled_ends_at
+      : undefined;
+
+  try {
+    const res = await fetch(
+      "https://routes.googleapis.com/directions/v2:computeRoutes",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": apiKey,
+          "X-Goog-FieldMask": "routes.duration,routes.distanceMeters",
+        },
+        body: JSON.stringify({
+          origin: { address: origin },
+          destination: { address: destination },
+          travelMode: "DRIVE",
+          routingPreference: "TRAFFIC_AWARE",
+          ...(departureTime ? { departureTime } : {}),
+        }),
+      },
+    );
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      routes?: Array<{ duration?: string; distanceMeters?: number }>;
+    };
+    const route = json.routes?.[0];
+    const seconds = parseGoogleDurationSeconds(route?.duration);
+    if (!seconds) return null;
+    return {
+      travelMinutes: Math.max(1, Math.round(seconds / 60)),
+      distanceKm:
+        typeof route?.distanceMeters === "number"
+          ? Math.round((route.distanceMeters / 1000) * 10) / 10
+          : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildV2PairRoute(
+  current: BookingRow,
+  next: BookingRow,
+  estimate: GoogleRouteEstimate,
+): { insight: RouteInsight | null; nextRoute: NextRoute } {
+  const currentEnd = current.scheduled_ends_at ?? current.scheduled_at;
+  const nextStart = next.scheduled_at ?? "";
+  const scheduledGap = Math.round(
+    (new Date(nextStart).getTime() - new Date(currentEnd ?? "").getTime()) /
+      60000,
+  );
+  const bufferMinutes = scheduledGap - estimate.travelMinutes;
+  const routeHref = googleRouteHref(current, next);
+  const fromLabel = current.properties?.street_address ?? "current shoot";
+  const toLabel = next.properties?.street_address ?? "next shoot";
+  const leaveBy = currentEnd ? formatTime(currentEnd) : null;
+  const badges = [
+    `${estimate.travelMinutes} min drive`,
+    estimate.distanceKm ? `${estimate.distanceKm} km` : null,
+    `${bufferMinutes} min buffer`,
+    leaveBy ? `Leave by ${leaveBy}` : null,
+    estimate.distanceKm >= 45 ? "Travel fee check" : null,
+  ].filter((badge): badge is string => Boolean(badge));
+
+  const nextRoute: NextRoute = {
+    level:
+      bufferMinutes < 15 || scheduledGap < 0
+        ? "danger"
+        : bufferMinutes < 30
+          ? "warning"
+          : "info",
+    label: `Next: ${toLabel}. ${estimate.travelMinutes} min drive; ${bufferMinutes} min buffer.`,
+    href: routeHref,
+  };
+
+  if (scheduledGap < 0) {
+    return {
+      insight: {
+        key: `v2-overlap-${current.id}-${next.id}`,
+        level: "danger",
+        title: `Schedule overlap before ${formatTime(nextStart)}`,
+        body: `${toLabel} starts before ${fromLabel} is scheduled to end.`,
+        badges,
+        href: routeHref,
+      },
+      nextRoute,
+    };
+  }
+  if (bufferMinutes < 15) {
+    return {
+      insight: {
+        key: `v2-tight-${current.id}-${next.id}`,
+        level: "danger",
+        title: `${bufferMinutes} min route buffer before ${formatTime(nextStart)}`,
+        body:
+          "Google drive-time leaves almost no room for packing, parking, access, or traffic weirdness.",
+        badges,
+        href: routeHref,
+      },
+      nextRoute,
+    };
+  }
+  if (bufferMinutes < 30) {
+    return {
+      insight: {
+        key: `v2-warning-${current.id}-${next.id}`,
+        level: "warning",
+        title: `${bufferMinutes} min route buffer before ${formatTime(nextStart)}`,
+        body:
+          "This can work, but it is worth opening the route before leaving.",
+        badges,
+        href: routeHref,
+      },
+      nextRoute,
+    };
+  }
+  if (estimate.distanceKm >= 45) {
+    return {
+      insight: {
+        key: `v2-distance-${current.id}-${next.id}`,
+        level: "info",
+        title: "Longer drive between shoots",
+        body: `${fromLabel} to ${toLabel}. Consider whether this should carry a travel fee or extra buffer.`,
+        badges,
+        href: routeHref,
+      },
+      nextRoute,
+    };
   }
 
-  return insights.slice(0, 5);
+  return { insight: null, nextRoute };
+}
+
+function parseGoogleDurationSeconds(value: string | undefined): number | null {
+  const match = /^(\d+(?:\.\d+)?)s$/.exec(value ?? "");
+  if (!match) return null;
+  const seconds = Number(match[1]);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+}
+
+function buildRouteSummary(insights: RouteInsight[]): {
+  alerts: number;
+  label: string;
+} {
+  const danger = insights.filter((insight) => insight.level === "danger").length;
+  const warning = insights.filter((insight) => insight.level === "warning").length;
+  if (danger > 0) {
+    return {
+      alerts: danger + warning,
+      label: `${danger} urgent route issue${danger === 1 ? "" : "s"} to check.`,
+    };
+  }
+  if (warning > 0) {
+    return {
+      alerts: warning,
+      label: `${warning} tight schedule gap${warning === 1 ? "" : "s"} today.`,
+    };
+  }
+  if (insights.length > 0) {
+    return {
+      alerts: 0,
+      label: "Routes look reasonable. Open maps before heading out.",
+    };
+  }
+  return {
+    alerts: 0,
+    label: "Add timed shoots to get route guidance.",
+  };
 }
 
 function googleRouteHref(from: BookingRow, to: BookingRow): string | undefined {
@@ -698,16 +1253,26 @@ function fullAddress(booking: BookingRow): string {
 function shootBriefItems(
   booking: BookingRow,
   tasks: Array<{ label: string; state: "done" | "pending" | "todo" }>,
+  preferences: TodayCommandPreferences,
 ): string[] {
   const items: string[] = [];
   const serviceText = [...booking.services, ...booking.add_ons]
     .join(" ")
     .toLowerCase();
 
-  if (booking.profiles?.internal_notes) {
+  if (preferences.showAgentMemory && booking.profiles?.internal_notes) {
     items.push(`Client preference: ${booking.profiles.internal_notes}`);
   }
-  if (booking.client_notes) items.push(`Realtor note: ${booking.client_notes}`);
+  if (preferences.showAgentMemory && booking.profiles?.ai_memory) {
+    for (const memory of summarizeRealtorAIMemory(
+      parseRealtorAIMemory(booking.profiles.ai_memory),
+    ).slice(0, 2)) {
+      items.push(memory);
+    }
+  }
+  if (preferences.showBookingNotes && booking.client_notes) {
+    items.push(`Realtor note: ${booking.client_notes}`);
+  }
   if (booking.square_footage && booking.square_footage >= 3000) {
     items.push("Larger property: watch timing, exterior coverage, and iGUIDE/floor-plan expectations.");
   }
@@ -717,10 +1282,16 @@ function shootBriefItems(
   if (serviceText.includes("video") || serviceText.includes("reel")) {
     items.push("Video/social: grab vertical hero clips, exterior movement, and one clean intro/outro option.");
   }
-  if (tasks.some((task) => task.state === "todo")) {
+  if (
+    preferences.showDeliverables &&
+    tasks.some((task) => task.state === "todo")
+  ) {
     items.push("Delivery prep: media links are not complete yet, so double-check upload/sync after the shoot.");
   }
-  if (booking.profiles?.delivery_cc_emails?.length) {
+  if (
+    preferences.showAgentMemory &&
+    booking.profiles?.delivery_cc_emails?.length
+  ) {
     items.push(`${booking.profiles.delivery_cc_emails.length} saved CC email${booking.profiles.delivery_cc_emails.length === 1 ? "" : "s"} will be included on delivery.`);
   }
 

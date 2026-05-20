@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 
+import type { RealtorAIMemory } from "@/lib/realtors/memory";
+
 import { updateRealtorProfile } from "./actions";
 
 export interface RealtorProfileView {
@@ -16,6 +18,7 @@ export interface RealtorProfileView {
   instagram_url: string | null;
   delivery_cc_emails: string[];
   internal_notes: string | null;
+  ai_memory: RealtorAIMemory;
   created_at: string;
   bookingCount: number;
   activeBookingCount: number;
@@ -52,6 +55,11 @@ export default function RealtorProfileCard({
             {realtor.internal_notes ? (
               <p className="mt-1 inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
                 Memory saved
+              </p>
+            ) : null}
+            {hasStructuredMemory(realtor.ai_memory) ? (
+              <p className="mt-1 ml-1 inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                Smart memory
               </p>
             ) : null}
             {realtor.brokerage ? (
@@ -207,6 +215,9 @@ export default function RealtorProfileCard({
                 </Field>
               </div>
               <div className="md:col-span-2">
+                <StructuredMemoryFields memory={realtor.ai_memory} />
+              </div>
+              <div className="md:col-span-2">
                 <Field label="Delivery CC emails">
                   <textarea
                     name="delivery_cc_emails"
@@ -223,47 +234,47 @@ export default function RealtorProfileCard({
               </div>
             </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <MediaField
-              title="Profile photo / headshot"
-              currentUrl={realtor.profile_photo_url}
-              fileName="profile_photo_file"
-              clearName="clear_profile_photo"
-            />
-            <MediaField
-              title="Brokerage logo"
-              currentUrl={realtor.brokerage_logo_url}
-              fileName="brokerage_logo_file"
-              clearName="clear_brokerage_logo"
-            />
-          </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <MediaField
+                title="Profile photo / headshot"
+                currentUrl={realtor.profile_photo_url}
+                fileName="profile_photo_file"
+                clearName="clear_profile_photo"
+              />
+              <MediaField
+                title="Brokerage logo"
+                currentUrl={realtor.brokerage_logo_url}
+                fileName="brokerage_logo_file"
+                clearName="clear_brokerage_logo"
+              />
+            </div>
 
-          {message ? (
-            <p
-              className={
-                "rounded-2xl border px-3 py-2 text-sm " +
-                (message.kind === "ok"
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                  : "border-red-200 bg-red-50 text-red-800")
-              }
-            >
-              {message.text}
-            </p>
-          ) : null}
+            {message ? (
+              <p
+                className={
+                  "rounded-2xl border px-3 py-2 text-sm " +
+                  (message.kind === "ok"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-red-200 bg-red-50 text-red-800")
+                }
+              >
+                {message.text}
+              </p>
+            ) : null}
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="submit"
-              disabled={isPending}
-              className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-realtor-primary/90 disabled:opacity-60"
-            >
-              {isPending ? "Saving..." : "Save profile"}
-            </button>
-            <p className="text-xs text-realtor-muted">
-              Changes show in the realtor portal and future listing page
-              defaults.
-            </p>
-          </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="submit"
+                disabled={isPending}
+                className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-realtor-primary/90 disabled:opacity-60"
+              >
+                {isPending ? "Saving..." : "Save profile"}
+              </button>
+              <p className="text-xs text-realtor-muted">
+                Changes show in the realtor portal and future listing page
+                defaults.
+              </p>
+            </div>
           </form>
         </div>
       ) : null}
@@ -302,6 +313,111 @@ function Field({
       </span>
       <div className="mt-1">{children}</div>
     </label>
+  );
+}
+
+function StructuredMemoryFields({ memory }: { memory: RealtorAIMemory }) {
+  return (
+    <section className="rounded-2xl border border-realtor-primary/15 bg-white/70 p-3">
+      <div>
+        <p className="text-sm font-semibold text-realtor-text">
+          Smart memory
+        </p>
+        <p className="mt-1 text-xs text-realtor-muted">
+          Structured preferences for booking recommendations, daily briefs, and
+          Pixel Assistant. Realtors do not see this.
+        </p>
+      </div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <MemoryTextArea
+          label="Usually books"
+          name="memory_preferred_services"
+          value={memory.preferredServices}
+          placeholder={"Photos + iGUIDE\nSocial reels"}
+        />
+        <MemoryTextArea
+          label="Common add-ons"
+          name="memory_preferred_addons"
+          value={memory.preferredAddOns}
+          placeholder={"Drone\nTwilight"}
+        />
+        <MemoryTextArea
+          label="Common cities / areas"
+          name="memory_preferred_cities"
+          value={memory.preferredCities}
+          placeholder={"Burlington\nHamilton"}
+        />
+        <Field label="Typical square footage">
+          <input
+            name="memory_typical_sqft"
+            defaultValue={memory.typicalSquareFootage ?? ""}
+            inputMode="numeric"
+            className="admin-input"
+            placeholder="2200"
+          />
+        </Field>
+        <MemoryTextArea
+          label="Delivery preferences"
+          name="memory_delivery_preferences"
+          value={memory.deliveryPreferences}
+          placeholder={"Send branded and unbranded tour\nAlways include video link"}
+        />
+        <Field label="Communication style">
+          <input
+            name="memory_communication_style"
+            defaultValue={memory.communicationStyle ?? ""}
+            className="admin-input"
+            placeholder="Short texts, no long emails"
+          />
+        </Field>
+        <MemoryTextArea
+          label="Access notes"
+          name="memory_access_notes"
+          value={memory.accessNotes}
+          placeholder={"Often uses lockbox\nPrefers morning shoots"}
+        />
+        <Field label="Invoice preferences">
+          <input
+            name="memory_invoice_preferences"
+            defaultValue={memory.invoicePreferences ?? ""}
+            className="admin-input"
+            placeholder="Invoice brokerage, not agent"
+          />
+        </Field>
+        <div className="md:col-span-2">
+          <MemoryTextArea
+            label="Do not remind about"
+            name="memory_avoid_reminders"
+            value={memory.avoidReminders}
+            placeholder={"Upsells\nDelivery follow-ups"}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MemoryTextArea({
+  label,
+  name,
+  value,
+  placeholder,
+}: {
+  label: string;
+  name: string;
+  value: string[];
+  placeholder: string;
+}) {
+  return (
+    <Field label={label}>
+      <textarea
+        name={name}
+        defaultValue={value.join("\n")}
+        rows={3}
+        className="admin-input min-h-20 resize-y"
+        placeholder={placeholder}
+      />
+    </Field>
   );
 }
 
@@ -352,6 +468,20 @@ function MediaField({
         </label>
       </div>
     </div>
+  );
+}
+
+function hasStructuredMemory(memory: RealtorAIMemory): boolean {
+  return Boolean(
+    memory.preferredServices.length ||
+      memory.preferredAddOns.length ||
+      memory.preferredCities.length ||
+      memory.typicalSquareFootage ||
+      memory.deliveryPreferences.length ||
+      memory.communicationStyle ||
+      memory.accessNotes.length ||
+      memory.invoicePreferences ||
+      memory.avoidReminders.length,
   );
 }
 

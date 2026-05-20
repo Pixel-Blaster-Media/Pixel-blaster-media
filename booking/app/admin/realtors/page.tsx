@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { BOOKING_STATUSES } from "@/lib/booking/booking-status";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getServerSupabase } from "@/lib/supabase/server";
-import type { BookingStatus, UserRole } from "@/lib/supabase/database.types";
+import type { BookingStatus, Json, UserRole } from "@/lib/supabase/database.types";
+import { parseRealtorAIMemory } from "@/lib/realtors/memory";
 
 import RealtorProfileCard, {
   type RealtorProfileView,
@@ -24,6 +25,7 @@ interface ProfileRow {
   instagram_url: string | null;
   delivery_cc_emails: string[];
   internal_notes: string | null;
+  ai_memory: Json;
   role: UserRole;
   created_at: string;
 }
@@ -60,7 +62,7 @@ export default async function RealtorsPage({
   const { data: profiles, error } = await supabase
     .from("profiles")
     .select(
-      "id, email, full_name, phone, brokerage, profile_photo_url, brokerage_logo_url, website_url, instagram_url, delivery_cc_emails, internal_notes, role, created_at",
+      "id, email, full_name, phone, brokerage, profile_photo_url, brokerage_logo_url, website_url, instagram_url, delivery_cc_emails, internal_notes, ai_memory, role, created_at",
     )
     .eq("organization_id", admin.organizationId)
     .eq("role", "realtor")
@@ -188,6 +190,7 @@ function buildRealtorView(
     instagram_url: profile.instagram_url,
     delivery_cc_emails: profile.delivery_cc_emails,
     internal_notes: profile.internal_notes,
+    ai_memory: parseRealtorAIMemory(profile.ai_memory),
     created_at: profile.created_at,
     bookingCount: bookings.length,
     activeBookingCount: bookings.filter((booking) =>

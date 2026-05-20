@@ -2502,3 +2502,119 @@ comment on column public.iguide_webhook_events.organization_id is
 -- ============================================================================
 -- End supabase/migrations/0029_iguide_tenant_isolation.sql
 -- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/0030_assistant_action_logs.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Pixel Assistant action audit log
+-- ----------------------------------------------------------------------------
+-- Confirmed assistant actions can now change bookings, pricing, availability,
+-- and realtor memory. Keep a tenant-scoped record of what an admin approved.
+-- ============================================================================
+
+create table if not exists public.assistant_action_logs (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null
+    references public.organizations(id) on delete cascade,
+  actor_profile_id uuid
+    references public.profiles(id) on delete set null,
+  action_type text not null,
+  target_booking_id uuid
+    references public.bookings(id) on delete set null,
+  target_realtor_id uuid
+    references public.profiles(id) on delete set null,
+  label text not null default '',
+  details text not null default '',
+  payload jsonb not null default '{}'::jsonb,
+  result_status text not null
+    check (result_status in ('success', 'failed')),
+  result_message text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists assistant_action_logs_org_created_idx
+  on public.assistant_action_logs(organization_id, created_at desc);
+
+create index if not exists assistant_action_logs_actor_idx
+  on public.assistant_action_logs(actor_profile_id, created_at desc);
+
+create index if not exists assistant_action_logs_booking_idx
+  on public.assistant_action_logs(target_booking_id, created_at desc);
+
+alter table public.assistant_action_logs enable row level security;
+
+drop policy if exists "assistant_action_logs: org admin read"
+  on public.assistant_action_logs;
+drop policy if exists "assistant_action_logs: org admin insert"
+  on public.assistant_action_logs;
+
+create policy "assistant_action_logs: org admin read"
+  on public.assistant_action_logs for select
+  using (public.is_organization_admin(organization_id));
+
+create policy "assistant_action_logs: org admin insert"
+  on public.assistant_action_logs for insert
+  with check (public.is_organization_admin(organization_id));
+
+comment on table public.assistant_action_logs is
+  'Tenant-scoped audit history of confirmed Pixel Assistant actions.';
+
+-- ============================================================================
+-- End supabase/migrations/0030_assistant_action_logs.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/0031_assistant_action_undo.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Pixel Assistant undo support
+-- ----------------------------------------------------------------------------
+-- Store enough before-state for confirmed assistant actions to be reversed.
+-- Existing log rows remain valid; only new reversible actions get undo payloads.
+-- ============================================================================
+
+alter table public.assistant_action_logs
+  add column if not exists undo_payload jsonb,
+  add column if not exists undone_at timestamptz,
+  add column if not exists undone_by uuid
+    references public.profiles(id) on delete set null,
+  add column if not exists undo_result_message text;
+
+create index if not exists assistant_action_logs_undone_idx
+  on public.assistant_action_logs(organization_id, undone_at)
+  where undo_payload is not null;
+
+comment on column public.assistant_action_logs.undo_payload is
+  'Reversible before-state for assistant actions that support undo.';
+
+comment on column public.assistant_action_logs.undone_at is
+  'Timestamp when this assistant action was reversed, if applicable.';
+
+-- ============================================================================
+-- End supabase/migrations/0031_assistant_action_undo.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/0032_realtor_ai_memory.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Structured realtor memory
+-- ----------------------------------------------------------------------------
+-- Keep admin-controlled client preferences in a structured JSON object so the
+-- booking concierge, daily brief, and Pixel Assistant can use them safely.
+-- The column lives on profiles, so existing tenant-scoped profile RLS applies.
+-- ============================================================================
+
+alter table public.profiles
+  add column if not exists ai_memory jsonb not null default '{}'::jsonb;
+
+comment on column public.profiles.ai_memory is
+  'Admin-managed structured realtor preferences used by AI booking and workflow assistants.';
+
+-- ============================================================================
+-- End supabase/migrations/0032_realtor_ai_memory.sql
+-- ============================================================================

@@ -173,7 +173,9 @@ export async function sendTestEmail(
 // ---------------------------------------------------------------------------
 
 const ALLOWED_FIELDS: Record<Provider, string[]> = {
+  admin_settings: ["today_command_preferences"],
   fotello: ["api_key"],
+  google_maps: ["api_key"],
   iguide: ["app_id", "app_token", "webhook_secret"],
   openai: ["api_key", "model"],
   resend: ["api_key"],
@@ -181,7 +183,9 @@ const ALLOWED_FIELDS: Record<Provider, string[]> = {
 
 function isProvider(value: string): value is Provider {
   return (
+    value === "admin_settings" ||
     value === "fotello" ||
+    value === "google_maps" ||
     value === "iguide" ||
     value === "openai" ||
     value === "resend"

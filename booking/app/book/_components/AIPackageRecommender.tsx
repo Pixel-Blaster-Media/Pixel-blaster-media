@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { CatalogItemDTO } from "@/app/_components/CartPicker";
 import {
   recommendBookingPackage,
+  type BookingRecommendationContext,
   type BookingRecommendation,
 } from "@/app/book/recommendation-actions";
 
@@ -24,6 +25,7 @@ export default function AIPackageRecommender({
 }: Props) {
   const router = useRouter();
   const params = useSearchParams();
+  const paramsString = params.toString();
   const [description, setDescription] = useState("");
   const [recommendation, setRecommendation] =
     useState<BookingRecommendation | null>(null);
@@ -35,6 +37,14 @@ export default function AIPackageRecommender({
     for (const item of [...bundles, ...aLaCarte, ...addons]) m.set(item.slug, item);
     return m;
   }, [bundles, aLaCarte, addons]);
+  const currentContext = useMemo(
+    () => readContextFromParams(new URLSearchParams(paramsString)),
+    [paramsString],
+  );
+  const knownDetails = useMemo(
+    () => contextSummary(currentContext, bySlug),
+    [currentContext, bySlug],
+  );
 
   function recommend() {
     setError(null);
@@ -44,6 +54,7 @@ export default function AIPackageRecommender({
         const result = await recommendBookingPackage({
           description,
           organizationSlug,
+          context: currentContext,
         });
         if (result.ok) {
           setRecommendation(result.recommendation);
@@ -129,23 +140,42 @@ export default function AIPackageRecommender({
     : [];
 
   return (
-    <section className="realtor-green-panel rounded-2xl p-5">
+    <section className="realtor-green-panel rounded-3xl p-4 md:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-realtor-primary">
-            AI package guide
+            AI booking concierge
           </p>
           <h3 className="mt-1 text-lg font-semibold text-realtor-text">
-            Not sure what to book?
+            Tell us about the listing.
           </h3>
           <p className="mt-1 max-w-2xl text-sm text-realtor-muted">
-            Describe the listing in plain English. We&apos;ll recommend the package,
-            prefill any details we can, and flag what still needs an answer.
+            We&apos;ll pick the cleanest package, explain the choice, fill in
+            anything obvious, and show what still needs an answer.
           </p>
         </div>
         <span className="rounded-full border border-realtor-primary/30 bg-realtor-primary/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-realtor-primary">
           AI beta
         </span>
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        {PROMPT_STARTERS.map((starter) => (
+          <button
+            key={starter.label}
+            type="button"
+            onClick={() => {
+              setDescription((current) =>
+                current.trim()
+                  ? `${current.trim()}\n${starter.text}`
+                  : starter.text,
+              );
+            }}
+            className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/70 px-3 py-2 text-left text-xs font-semibold text-realtor-text transition hover:border-realtor-primary/35 hover:bg-realtor-primary/10"
+          >
+            {starter.label}
+          </button>
+        ))}
       </div>
 
       <div className="mt-4 space-y-3">
@@ -154,9 +184,26 @@ export default function AIPackageRecommender({
           onChange={(e) => setDescription(e.currentTarget.value)}
           rows={4}
           maxLength={1600}
-          placeholder="Example: 2,200 sqft detached home at 1480 Barker Ave in Burlington, occupied, basement included. They want strong MLS photos, iGUIDE, drone if it makes sense, and maybe a reel for Instagram."
-          className="realtor-field w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+          placeholder="Example: 2,200 sqft detached home in Burlington, occupied, finished basement included. They need MLS photos and floor plans, and they asked whether drone or a short reel makes sense."
+          className="realtor-field min-h-32 w-full rounded-2xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-light/60"
         />
+        {knownDetails.length > 0 ? (
+          <div className="rounded-2xl border border-realtor-primary/10 bg-realtor-surface/60 px-3 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">
+              Already in the booking
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {knownDetails.map((detail) => (
+                <span
+                  key={detail}
+                  className="rounded-full border border-realtor-primary/15 bg-white/70 px-2.5 py-1 text-xs text-realtor-muted"
+                >
+                  {detail}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
@@ -164,10 +211,10 @@ export default function AIPackageRecommender({
             disabled={pending || description.trim().length < 8}
             className="rounded-md bg-realtor-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-realtor-primary-light disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {pending ? "Thinking..." : "Recommend my package"}
+            {pending ? "Thinking..." : "Build my booking plan"}
           </button>
           <p className="text-xs text-realtor-muted">
-            You can still edit the selection manually after applying it.
+            The final choice stays editable. Nothing is booked until checkout.
           </p>
         </div>
       </div>
@@ -179,11 +226,11 @@ export default function AIPackageRecommender({
       ) : null}
 
       {recommendation ? (
-        <div className="realtor-elevated-panel mt-4 rounded-xl p-4">
+        <div className="realtor-elevated-panel mt-4 rounded-3xl p-4 md:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-wider text-realtor-muted">
-                Recommended
+                Recommended booking plan
               </p>
               <h4 className="mt-1 text-base font-semibold text-realtor-text">
                 {recommendation.title}
@@ -193,7 +240,7 @@ export default function AIPackageRecommender({
                   {selectedNames.join(" + ")}
                 </p>
               ) : null}
-              <p className="mt-1 text-sm text-realtor-muted">
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-realtor-muted">
                 {recommendation.reasoning}
               </p>
             </div>
@@ -203,10 +250,12 @@ export default function AIPackageRecommender({
           </div>
 
           {recommendation.notes.length > 0 ? (
-            <ul className="mt-3 grid gap-1 text-xs text-realtor-muted md:grid-cols-2">
+            <ul className="mt-4 grid gap-2 text-sm text-realtor-muted md:grid-cols-2">
               {recommendation.notes.map((note) => (
-                <li key={note} className="flex gap-2">
-                  <span className="text-realtor-primary">•</span>
+                <li
+                  key={note}
+                  className="rounded-2xl border border-realtor-primary/10 bg-realtor-surface/60 px-3 py-2"
+                >
                   <span>{note}</span>
                 </li>
               ))}
@@ -215,12 +264,12 @@ export default function AIPackageRecommender({
 
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <InfoList
-              title="Details I can prefill"
+              title="We can prefill"
               empty="No property details found yet."
               items={prefillDetails(recommendation)}
             />
             <InfoList
-              title="Still need to know"
+              title="Ask before checkout"
               empty="Nothing obvious missing."
               items={recommendation.missingInfo}
             />
@@ -229,7 +278,7 @@ export default function AIPackageRecommender({
           {recommendation.memoryUsed.length > 0 ? (
             <div className="mt-3 rounded-2xl border border-emerald-700/15 bg-emerald-700/5 px-3 py-2">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
-                Used realtor memory
+                Realtor memory helped
               </p>
               <ul className="mt-1 grid gap-1 text-xs text-realtor-muted md:grid-cols-2">
                 {recommendation.memoryUsed.map((memory) => (
@@ -248,14 +297,14 @@ export default function AIPackageRecommender({
               onClick={() => applyRecommendation()}
               className="rounded-md bg-realtor-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-realtor-primary-light"
             >
-              Apply here
+              Use this plan
             </button>
             <button
               type="button"
               onClick={applyAndContinue}
               className="rounded-md border border-realtor-primary/25 bg-white px-4 py-2 text-sm font-semibold text-realtor-primary transition hover:bg-realtor-primary/5"
             >
-              Apply + continue
+              Use plan + enter property
             </button>
             <p className="text-xs text-realtor-muted">
               You can still edit everything before confirming.
@@ -266,6 +315,25 @@ export default function AIPackageRecommender({
     </section>
   );
 }
+
+const PROMPT_STARTERS = [
+  {
+    label: "Standard MLS listing",
+    text: "This is a regular MLS listing. They need clean photos and the basics done well.",
+  },
+  {
+    label: "Big or premium home",
+    text: "This is a larger or higher-end property. They want it to feel polished and premium.",
+  },
+  {
+    label: "Needs floor plans",
+    text: "They need measurements, floor plans, or an iGUIDE-style tour.",
+  },
+  {
+    label: "Social/video matters",
+    text: "They care about social media or video, but I want the recommendation to stay practical.",
+  },
+];
 
 function InfoList({
   title,
@@ -294,6 +362,43 @@ function InfoList({
   );
 }
 
+function readContextFromParams(params: URLSearchParams): BookingRecommendationContext {
+  return {
+    selectedServices: csv(params.get("services")),
+    selectedAddOns: csv(params.get("add_ons")),
+    streetAddress: clean(params.get("address")),
+    city: clean(params.get("city")),
+    postalCode: clean(params.get("postal")),
+    squareFootage: intOrNull(params.get("sqft")),
+    isVacant: vacancy(params.get("vacant")),
+    includeBasement: boolOrNull(params.get("basement")),
+    shootNotes: clean(params.get("shoot_notes")),
+    shotRequests: csv(params.get("shots")),
+  };
+}
+
+function contextSummary(
+  context: BookingRecommendationContext,
+  bySlug: Map<string, CatalogItemDTO>,
+): string[] {
+  return [
+    context.streetAddress,
+    context.city,
+    context.squareFootage
+      ? `${context.squareFootage.toLocaleString()} sqft`
+      : null,
+    context.isVacant ? formatVacancy(context.isVacant) : null,
+    context.includeBasement != null
+      ? context.includeBasement
+        ? "Basement included"
+        : "No basement"
+      : null,
+    ...context.selectedServices
+      .map((slug) => bySlug.get(slug)?.name)
+      .filter((name): name is string => Boolean(name)),
+  ].filter((item): item is string => Boolean(item));
+}
+
 function prefillDetails(recommendation: BookingRecommendation): string[] {
   const p = recommendation.property;
   return [
@@ -308,6 +413,36 @@ function prefillDetails(recommendation: BookingRecommendation): string[] {
     p.shootNotes ? "Shoot notes drafted" : null,
     p.shotRequests.length ? `${p.shotRequests.length} shot request tags` : null,
   ].filter((item): item is string => Boolean(item));
+}
+
+function csv(value: string | null): string[] {
+  return (value ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function clean(value: string | null): string | null {
+  const trimmed = value?.trim();
+  return trimmed || null;
+}
+
+function intOrNull(value: string | null): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
+}
+
+function boolOrNull(value: string | null): boolean | null {
+  if (value === "1" || value === "true") return true;
+  if (value === "0" || value === "false") return false;
+  return null;
+}
+
+function vacancy(value: string | null): "vacant" | "occupied" | "partial" | null {
+  if (value === "vacant" || value === "occupied" || value === "partial") {
+    return value;
+  }
+  return null;
 }
 
 function formatVacancy(value: "vacant" | "occupied" | "partial") {

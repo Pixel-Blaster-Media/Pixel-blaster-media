@@ -3,7 +3,13 @@
 import { getActiveCatalog, type CatalogItemRow } from "@/lib/booking/catalog";
 import { getCredential } from "@/lib/integrations/credentials";
 import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
+import {
+  parseRealtorAIMemory,
+  summarizeRealtorAIMemory,
+  type RealtorAIMemory,
+} from "@/lib/realtors/memory";
 import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
+import type { Json } from "@/lib/supabase/database.types";
 
 const DEFAULT_MODEL =
   process.env.OPENAI_ASSISTANT_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-5.4-mini";
@@ -27,6 +33,19 @@ export interface BookingRecommendation {
     shotRequests: string[];
   };
   memoryUsed: string[];
+}
+
+export interface BookingRecommendationContext {
+  selectedServices: string[];
+  selectedAddOns: string[];
+  streetAddress: string | null;
+  city: string | null;
+  postalCode: string | null;
+  squareFootage: number | null;
+  isVacant: "vacant" | "occupied" | "partial" | null;
+  includeBasement: boolean | null;
+  shootNotes: string | null;
+  shotRequests: string[];
 }
 
 interface ModelRecommendation {
@@ -70,6 +89,7 @@ interface MemoryProfileRow {
   full_name: string | null;
   internal_notes: string | null;
   delivery_cc_emails: string[] | null;
+  ai_memory: Json;
 }
 
 interface RealtorMemory {
@@ -82,16 +102,19 @@ interface RealtorMemory {
   commonCities: string[];
   typicalSquareFootage: number | null;
   lastBooking: string | null;
+  structuredMemory: string[];
 }
 
 export async function recommendBookingPackage(input: {
   description: string;
   organizationSlug?: string | null;
+  context?: Partial<BookingRecommendationContext> | null;
 }): Promise<{ ok: true; recommendation: BookingRecommendation } | { ok: false; error: string }> {
   const description = input.description.trim().slice(0, 1600);
   if (description.length < 8) {
     return { ok: false, error: "Add a little more detail first." };
   }
+  const context = sanitizeRecommendationContext(input.context);
 
   const organization = await resolvePublicBookingOrganization(input.organizationSlug);
   if (!organization) return { ok: false, error: "Could not find that booking company." };
@@ -120,6 +143,7 @@ export async function recommendBookingPackage(input: {
     apiKey,
     model: model || DEFAULT_MODEL,
     description,
+    context,
     catalogItems: allItems,
     realtorMemory: currentProfileId
       ? await loadRealtorMemory({
@@ -171,6 +195,7 @@ async function askOpenAIForRecommendation(args: {
   apiKey: string;
   model: string;
   description: string;
+  context: BookingRecommendationContext;
   catalogItems: CatalogItemRow[];
   realtorMemory: RealtorMemory | null;
 }): Promise<ModelRecommendation> {
@@ -190,7 +215,7 @@ async function askOpenAIForRecommendation(args: {
             "You recommend real estate photography booking packages. Use only the provided catalog slugs. " +
             "Act like a booking concierge, not a generic chatbot. Pick the smallest package that confidently fits the listing, then add useful add-ons only when the user's description or realtor memory clearly supports them. " +
             "Consider square footage, whether the basement is included, property type, vacant/occupied state, luxury cues, video/social needs, drone/exterior value, and iGUIDE/floor-plan needs. " +
-            "Extract any property details the realtor gave so the booking form can be prefilled. If a detail is missing, list it in missingInfo instead of pretending to know it. " +
+            "Use knownBookingDetails as facts already supplied in the booking form; do not ask for them again. Extract any new property details the realtor gave so the booking form can be prefilled. If a detail is missing, list it in missingInfo instead of pretending to know it. " +
             "Use realtorMemory only as a preference signal; do not expose private admin notes verbatim. " +
             "Do not invent packages, prices, addresses, postal codes, or slugs. Keep realtor-facing wording plain and helpful.",
         },
@@ -198,6 +223,7 @@ async function askOpenAIForRecommendation(args: {
           role: "user",
           content: JSON.stringify({
             listingDescription: args.description,
+            knownBookingDetails: args.context,
             realtorMemory: args.realtorMemory,
             catalog: args.catalogItems.map((item) => ({
               slug: item.slug,
@@ -344,7 +370,7 @@ async function loadRealtorMemory({
   const [{ data: profile }, { data: bookings }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("id, email, full_name, internal_notes, delivery_cc_emails")
+      .select("id, email, full_name, internal_notes, delivery_cc_emails, ai_memory")
       .eq("id", profileId)
       .eq("organization_id", organizationId)
       .eq("role", "realtor")
@@ -375,6 +401,7 @@ async function loadRealtorMemory({
     .map((booking) => booking.square_footage)
     .filter((value): value is number => typeof value === "number" && value > 0);
   const last = rows[0];
+  const aiMemory = parseRealtorAIMemory(profile.ai_memory);
 
   return {
     profileName: profile.full_name ?? profile.email,
@@ -407,7 +434,49 @@ async function loadRealtorMemory({
           .filter(Boolean)
           .join(" | ")
       : null,
+    structuredMemory: mergeMemorySummaries(
+      summarizeRealtorAIMemory(aiMemory),
+      inferredMemorySummary({ rows, aiMemory, catalogBySlug }),
+    ),
   };
+}
+
+function inferredMemorySummary({
+  rows,
+  aiMemory,
+  catalogBySlug,
+}: {
+  rows: MemoryBookingRow[];
+  aiMemory: RealtorAIMemory;
+  catalogBySlug: Map<string, string>;
+}): string[] {
+  const items: string[] = [];
+  const serviceCounts = countValues(rows.flatMap((booking) => booking.services));
+  const addonCounts = countValues(rows.flatMap((booking) => booking.add_ons));
+  const cityCounts = countValues(
+    rows.map((booking) => booking.properties?.city ?? "").filter(Boolean),
+  );
+  if (!aiMemory.preferredServices.length) {
+    const services = topValues(serviceCounts, 3).map(
+      (slug) => catalogBySlug.get(slug) ?? slug,
+    );
+    if (services.length) items.push(`Usually books: ${services.join(", ")}`);
+  }
+  if (!aiMemory.preferredAddOns.length) {
+    const addons = topValues(addonCounts, 3).map(
+      (slug) => catalogBySlug.get(slug) ?? slug,
+    );
+    if (addons.length) items.push(`Common add-ons: ${addons.join(", ")}`);
+  }
+  if (!aiMemory.preferredCities.length) {
+    const cities = topValues(cityCounts, 3);
+    if (cities.length) items.push(`Common areas: ${cities.join(", ")}`);
+  }
+  return items;
+}
+
+function mergeMemorySummaries(primary: string[], fallback: string[]): string[] {
+  return unique([...primary, ...fallback]).slice(0, 10);
 }
 
 function splitMemoryNotes(value: string | null): string[] {
@@ -453,6 +522,38 @@ function sanitizePropertyRecommendation(
     includeBasement: property.includeBasement,
     shootNotes: cleanNullable(property.shootNotes, 500),
     shotRequests: unique(property.shotRequests)
+      .map((shot) => shot.toLowerCase().replace(/[^a-z0-9_-]+/g, "_"))
+      .filter(Boolean)
+      .slice(0, 8),
+  };
+}
+
+function sanitizeRecommendationContext(
+  value: Partial<BookingRecommendationContext> | null | undefined,
+): BookingRecommendationContext {
+  const squareFootage =
+    typeof value?.squareFootage === "number" &&
+    Number.isFinite(value.squareFootage) &&
+    value.squareFootage > 0
+      ? Math.trunc(value.squareFootage)
+      : null;
+  return {
+    selectedServices: unique(value?.selectedServices ?? []).slice(0, 20),
+    selectedAddOns: unique(value?.selectedAddOns ?? []).slice(0, 20),
+    streetAddress: cleanNullable(value?.streetAddress ?? null, 120),
+    city: cleanNullable(value?.city ?? null, 80),
+    postalCode: cleanNullable(value?.postalCode ?? null, 20),
+    squareFootage,
+    isVacant:
+      value?.isVacant === "vacant" ||
+      value?.isVacant === "occupied" ||
+      value?.isVacant === "partial"
+        ? value.isVacant
+        : null,
+    includeBasement:
+      typeof value?.includeBasement === "boolean" ? value.includeBasement : null,
+    shootNotes: cleanNullable(value?.shootNotes ?? null, 500),
+    shotRequests: unique(value?.shotRequests ?? [])
       .map((shot) => shot.toLowerCase().replace(/[^a-z0-9_-]+/g, "_"))
       .filter(Boolean)
       .slice(0, 8),

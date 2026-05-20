@@ -89,6 +89,7 @@ export default async function IntegrationsPage({
     resendApiKeyStatus,
     openAiApiKeyStatus,
     openAiModelStatus,
+    googleMapsApiKeyStatus,
     iguideAppIdStatus,
     iguideAppTokenStatus,
     iguideWebhookStatus,
@@ -111,6 +112,12 @@ export default async function IntegrationsPage({
       "OPENAI_ASSISTANT_MODEL",
       admin.organizationId,
     ),
+    getCredentialSource(
+      "google_maps",
+      "api_key",
+      "GOOGLE_MAPS_SERVER_API_KEY",
+      admin.organizationId,
+    ),
     getCredentialSource("iguide", "app_id", "IGUIDE_APP_ID", admin.organizationId),
     getCredentialSource(
       "iguide",
@@ -128,6 +135,7 @@ export default async function IntegrationsPage({
 
   const resendConfigured = resendApiKeyStatus.source !== "none";
   const openAiConfigured = openAiApiKeyStatus.source !== "none";
+  const googleMapsConfigured = googleMapsApiKeyStatus.source !== "none";
   const iguideConfigured =
     iguideAppIdStatus.source !== "none" &&
     iguideAppTokenStatus.source !== "none";
@@ -328,6 +336,55 @@ export default async function IntegrationsPage({
           }}
         />
         <OpenAITester />
+      </section>
+
+      <section className="realtor-elevated-panel rounded-2xl p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-realtor-text">
+              Google Maps Routes
+            </h2>
+            <p className="mt-1 text-sm text-realtor-muted">
+              Optional. If this is configured, the Today page uses Google
+              Routes for drive-time and distance warnings. If it is not
+              configured, the app still falls back to simple schedule and city
+              checks.
+            </p>
+          </div>
+          {googleMapsConfigured ? (
+            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+              V2 enabled
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full border border-realtor-primary/15 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
+              V1 fallback
+            </span>
+          )}
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
+          <p className="text-sm font-semibold text-realtor-text">
+            Cost-safe fallback
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-realtor-muted">
+            Use a server-side Google Maps key with the Routes API enabled.
+            Keep your browser Places key separate. The app only calls this
+            from server code and only requests route duration and distance.
+          </p>
+        </div>
+
+        <CredentialsForm
+          provider="google_maps"
+          fields={[
+            {
+              name: "api_key",
+              label: "Google Maps server API key",
+              helper:
+                "Enable Routes API. For Vercel env fallback use GOOGLE_MAPS_SERVER_API_KEY.",
+            },
+          ]}
+          statuses={{ api_key: googleMapsApiKeyStatus }}
+        />
       </section>
 
       {/* iGUIDE — Portal API + webhook secret. Used by /admin/bookings to
