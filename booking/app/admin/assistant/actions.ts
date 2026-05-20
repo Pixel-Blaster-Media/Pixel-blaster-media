@@ -12,6 +12,7 @@ import {
   isCancellable,
   nextBookingStatuses,
 } from "@/lib/booking/booking-status";
+import { businessDateTimeLocalToUtc } from "@/lib/booking/availability";
 import { cancelBooking } from "@/lib/booking/cancel";
 import {
   computeCartTotals,
@@ -37,8 +38,13 @@ export interface AdminAssistantAction {
     | "draft_booking"
     | "update_booking_status"
     | "send_delivery_email"
-    | "bulk_update_prices";
+    | "bulk_update_prices"
+    | "add_calendar_block"
+    | "update_realtor_memory"
+    | "update_delivery_cc"
+    | "update_booking_note";
   bookingId: string;
+  realtorId?: string;
   label: string;
   details: string;
   href: string;
@@ -47,6 +53,8 @@ export interface AdminAssistantAction {
   nextStatus?: BookingStatus;
   draft?: AdminAssistantBookingDraft;
   priceChange?: AdminAssistantPriceChange;
+  calendarBlock?: AdminAssistantCalendarBlock;
+  textUpdate?: AdminAssistantTextUpdate;
 }
 
 export interface AdminAssistantResult {
@@ -87,6 +95,18 @@ export interface AdminAssistantPriceChange {
     newPriceCents: number;
   }>;
   affectedCount: number;
+}
+
+export interface AdminAssistantCalendarBlock {
+  startsLocal: string;
+  endsLocal: string;
+  label: string;
+}
+
+export interface AdminAssistantTextUpdate {
+  text: string;
+  mode: "append" | "replace" | "clear" | "add" | "remove";
+  emails: string[];
 }
 
 interface BookingContextRow {
@@ -150,8 +170,13 @@ interface ModelPlan {
       | "update_booking_status"
       | "send_delivery_email"
       | "bulk_update_prices"
+      | "add_calendar_block"
+      | "update_realtor_memory"
+      | "update_delivery_cc"
+      | "update_booking_note"
       | "none";
     bookingId: string;
+    realtorId: string;
     label: string;
     details: string;
     nextStatus: string;
@@ -177,6 +202,16 @@ interface ModelPlan {
       value: number;
       scope: "active" | "all" | "bundles" | "a_la_carte" | "addons" | "";
       rounding: "nearest_dollar" | "nearest_five" | "none" | "";
+    };
+    calendarBlock: {
+      startsLocal: string;
+      endsLocal: string;
+      label: string;
+    };
+    textUpdate: {
+      text: string;
+      mode: "append" | "replace" | "clear" | "add" | "remove" | "";
+      emails: string[];
     };
   }>;
   missing: string[];
@@ -330,6 +365,141 @@ export async function confirmAdminAssistantAction(
     };
   }
 
+  if (action.type === "add_calendar_block") {
+    const result = await applyCalendarBlock(admin.organizationId, action);
+    if (!result.ok) {
+      return {
+        ok: false,
+        kind: "needs_clarification",
+        message: result.error,
+        actions: [],
+      };
+    }
+    revalidatePath("/admin/calendar");
+    revalidatePath("/admin/settings/availability");
+    revalidatePath("/book");
+    return {
+      ok: true,
+      kind: "answer",
+      message: "Done. I blocked that time so it will not show as bookable.",
+      actions: [
+        {
+          type: "open_booking",
+          bookingId: "",
+          label: "Open calendar",
+          details: "Review the blocked time.",
+          href: "/admin/calendar",
+          destructive: false,
+          requiresConfirmation: false,
+        },
+      ],
+    };
+  }
+
+  if (action.type === "update_realtor_memory") {
+    const result = await applyRealtorMemoryUpdate(
+      admin.organizationId,
+      action.realtorId,
+      action.textUpdate,
+    );
+    if (!result.ok) {
+      return {
+        ok: false,
+        kind: "needs_clarification",
+        message: result.error,
+        actions: [],
+      };
+    }
+    revalidatePath("/admin/realtors");
+    revalidatePath("/admin/bookings");
+    revalidatePath("/admin/today");
+    return {
+      ok: true,
+      kind: "answer",
+      message: "Done. I updated the realtor memory notes.",
+      actions: [
+        {
+          type: "open_booking",
+          bookingId: "",
+          label: "Open realtor profile",
+          details: "Review the saved memory.",
+          href: `/admin/realtors?selected=${action.realtorId ?? ""}`,
+          destructive: false,
+          requiresConfirmation: false,
+        },
+      ],
+    };
+  }
+
+  if (action.type === "update_delivery_cc") {
+    const result = await applyDeliveryCcUpdate(
+      admin.organizationId,
+      action.realtorId,
+      action.textUpdate,
+    );
+    if (!result.ok) {
+      return {
+        ok: false,
+        kind: "needs_clarification",
+        message: result.error,
+        actions: [],
+      };
+    }
+    revalidatePath("/admin/realtors");
+    revalidatePath("/admin/bookings");
+    return {
+      ok: true,
+      kind: "answer",
+      message: `Done. I ${result.mode === "remove" ? "removed" : "saved"} ${result.count} delivery CC email${result.count === 1 ? "" : "s"}.`,
+      actions: [
+        {
+          type: "open_booking",
+          bookingId: "",
+          label: "Open realtor profile",
+          details: "Review delivery recipients.",
+          href: `/admin/realtors?selected=${action.realtorId ?? ""}`,
+          destructive: false,
+          requiresConfirmation: false,
+        },
+      ],
+    };
+  }
+
+  if (action.type === "update_booking_note") {
+    const result = await applyBookingNoteUpdate(
+      admin.organizationId,
+      action.bookingId,
+      action.textUpdate,
+    );
+    if (!result.ok) {
+      return {
+        ok: false,
+        kind: "needs_clarification",
+        message: result.error,
+        actions: [],
+      };
+    }
+    revalidatePath(`/admin/bookings/${action.bookingId}`);
+    revalidatePath("/admin/bookings");
+    revalidatePath("/admin/today");
+    return {
+      ok: true,
+      kind: "answer",
+      message: "Done. I updated the booking internal note.",
+      actions: [
+        {
+          type: "open_booking",
+          bookingId: action.bookingId,
+          label: "Open booking",
+          details: "Review the saved note.",
+          href: `/admin/bookings/${action.bookingId}`,
+          destructive: false,
+          requiresConfirmation: false,
+        },
+      ],
+    };
+  }
+
   if (action.type !== "cancel_booking") {
     return {
       ok: false,
@@ -404,6 +574,7 @@ async function loadAssistantContext(organizationId: string): Promise<{
   realtors: string[];
   knownAddresses: string[];
   bookingsById: Map<string, BookingContextRow>;
+  realtorsById: Map<string, ProfileContextRow>;
   lineItemIdsByBookingId: Map<string, string[]>;
   catalog: Catalog;
   catalogItemsById: Map<string, CatalogItemRow>;
@@ -566,7 +737,11 @@ async function loadAssistantContext(organizationId: string): Promise<{
       .filter(Boolean),
   ).slice(0, 80);
 
-  const realtors = (realtorRes.data ?? []).map((realtor) => {
+  const realtorRows = realtorRes.data ?? [];
+  const realtorsById = new Map<string, ProfileContextRow>(
+    realtorRows.map((realtor) => [realtor.id, realtor]),
+  );
+  const realtors = realtorRows.map((realtor) => {
     const history = bookingRows.filter(
       (booking) => booking.profiles?.id === realtor.id,
     );
@@ -614,6 +789,7 @@ async function loadAssistantContext(organizationId: string): Promise<{
     realtors,
     knownAddresses,
     bookingsById,
+    realtorsById,
     lineItemIdsByBookingId,
     catalog,
     catalogItemsById,
@@ -653,6 +829,10 @@ async function planWithOpenAI(
             "Only propose send_delivery_email when one booking is clearly identified and the user asks to send, resend, or deliver media. " +
             "Only propose update_booking_status when one booking and the exact next status are clearly identified; use requested, confirmed, shot, editing, delivered, or cancelled only. For cancellation requests, prefer cancel_booking. " +
             "For pricing requests like raising/lowering prices, propose bulk_update_prices only when the amount is clear. Use percent for percentage changes and fixed for dollar changes. Scope defaults to active catalog items unless the user clearly says all, bundles, a la carte, or add-ons. Rounding defaults to nearest_dollar unless the user asks for clean $5 increments. " +
+            "For availability requests like vacation, lunch, personal appointments, days off, or blocking time, propose add_calendar_block only when the start and end time are clear. " +
+            "For realtor preference/memory requests, propose update_realtor_memory when exactly one realtor is clear; append notes unless the user explicitly says replace or clear. " +
+            "For delivery recipient requests, propose update_delivery_cc when exactly one realtor is clear and valid email addresses are provided; use add unless the user asks to remove. " +
+            "For booking note requests, propose update_booking_note when exactly one booking is clear; append the note unless the user explicitly says replace or clear. " +
             "For booking requests, propose create_booking when realtor, exact date/time, street address, and services/catalog item ids are known. " +
             "Street address means street number + street name; city, province, and postal code are helpful but optional. Do not ask for postal code before creating a booking. " +
             "If the user gives a partial street address, use it as streetAddress. If it clearly matches one known address, use the highest-likelihood known address and mention that assumption in details. " +
@@ -673,6 +853,10 @@ async function planWithOpenAI(
               "send_delivery_email_requires_confirmation",
               "update_booking_status_requires_confirmation",
               "bulk_update_prices_requires_confirmation",
+              "add_calendar_block_requires_confirmation",
+              "update_realtor_memory_requires_confirmation",
+              "update_delivery_cc_requires_confirmation",
+              "update_booking_note_requires_confirmation",
               "draft_booking_needs_more_info",
             ],
             bookings: context.bookings,
@@ -722,6 +906,7 @@ function normalizePlan(
   plan: ModelPlan,
   context: {
     bookingsById: Map<string, BookingContextRow>;
+    realtorsById: Map<string, ProfileContextRow>;
     lineItemIdsByBookingId: Map<string, string[]>;
     catalog: Catalog;
     catalogItemsById: Map<string, CatalogItemRow>;
@@ -758,7 +943,40 @@ function normalizePlan(
       continue;
     }
 
+    if (raw.type === "add_calendar_block") {
+      const built = buildCalendarBlockAction(raw);
+      if ("action" in built) {
+        actions.push(built.action);
+      } else {
+        missing.push(...built.missing);
+      }
+      continue;
+    }
+
+    if (
+      raw.type === "update_realtor_memory" ||
+      raw.type === "update_delivery_cc"
+    ) {
+      const built = buildRealtorAction(raw, context, booking);
+      if ("action" in built) {
+        actions.push(built.action);
+      } else {
+        missing.push(...built.missing);
+      }
+      continue;
+    }
+
     if (!booking) continue;
+
+    if (raw.type === "update_booking_note") {
+      const built = buildBookingNoteAction(raw, booking);
+      if ("action" in built) {
+        actions.push(built.action);
+      } else {
+        missing.push(...built.missing);
+      }
+      continue;
+    }
 
     if (raw.type === "cancel_booking" && !isCancellable(booking.status)) {
       return {
@@ -1049,6 +1267,144 @@ function buildBulkPriceAction(
   return { action };
 }
 
+function buildCalendarBlockAction(
+  raw: ModelPlan["actions"][number],
+):
+  | { action: AdminAssistantAction }
+  | { missing: string[] } {
+  const block = raw.calendarBlock;
+  const startsLocal = block.startsLocal.trim();
+  const endsLocal = block.endsLocal.trim();
+  const label = block.label.trim() || "Blocked time";
+  const missing: string[] = [];
+
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(startsLocal)) {
+    missing.push("block start date and time");
+  }
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(endsLocal)) {
+    missing.push("block end date and time");
+  }
+  const starts = businessDateTimeLocalToUtc(startsLocal);
+  const ends = businessDateTimeLocalToUtc(endsLocal);
+  if (!starts || !ends || ends <= starts) {
+    missing.push("valid block time range");
+  }
+  if (missing.length > 0) return { missing };
+
+  return {
+    action: {
+      type: "add_calendar_block",
+      bookingId: "",
+      label: raw.label || `Block ${formatLocal(starts!.toISOString())}`,
+      details:
+        raw.details ||
+        `${label} · ${formatLocal(starts!.toISOString())} to ${formatLocal(ends!.toISOString())}`,
+      href: "/admin/calendar",
+      destructive: false,
+      requiresConfirmation: true,
+      calendarBlock: { startsLocal, endsLocal, label },
+    },
+  };
+}
+
+function buildRealtorAction(
+  raw: ModelPlan["actions"][number],
+  context: {
+    realtorsById: Map<string, ProfileContextRow>;
+  },
+  booking?: BookingContextRow,
+):
+  | { action: AdminAssistantAction }
+  | { missing: string[] } {
+  const realtorId = raw.realtorId || booking?.profiles?.id || "";
+  const realtor = context.realtorsById.get(realtorId);
+  if (!realtor) return { missing: ["one clear realtor"] };
+
+  if (raw.type === "update_delivery_cc") {
+    const emails = parseEmailList([
+      ...raw.textUpdate.emails,
+      raw.textUpdate.text,
+    ]);
+    if (emails.length === 0) return { missing: ["valid delivery CC email"] };
+    const mode = raw.textUpdate.mode === "remove" ? "remove" : "add";
+    return {
+      action: {
+        type: "update_delivery_cc",
+        bookingId: "",
+        realtorId: realtor.id,
+        label:
+          raw.label ||
+          `${mode === "remove" ? "Remove" : "Add"} delivery CC for ${realtor.full_name ?? realtor.email}`,
+        details:
+          raw.details ||
+          `${emails.join(", ")} will be ${mode === "remove" ? "removed from" : "saved on"} this realtor profile.`,
+        href: `/admin/realtors?selected=${realtor.id}`,
+        destructive: mode === "remove",
+        requiresConfirmation: true,
+        textUpdate: { text: "", mode, emails },
+      },
+    };
+  }
+
+  const mode =
+    raw.textUpdate.mode === "replace" || raw.textUpdate.mode === "clear"
+      ? raw.textUpdate.mode
+      : "append";
+  const text = raw.textUpdate.text.trim();
+  if (mode !== "clear" && !text) return { missing: ["memory note"] };
+
+  return {
+    action: {
+      type: "update_realtor_memory",
+      bookingId: "",
+      realtorId: realtor.id,
+      label:
+        raw.label ||
+        `${mode === "clear" ? "Clear" : mode === "replace" ? "Replace" : "Add"} realtor memory`,
+      details:
+        raw.details ||
+        `${realtor.full_name ?? realtor.email}: ${
+          mode === "clear" ? "clear saved notes" : text
+        }`,
+      href: `/admin/realtors?selected=${realtor.id}`,
+      destructive: mode === "clear" || mode === "replace",
+      requiresConfirmation: true,
+      textUpdate: { text, mode, emails: [] },
+    },
+  };
+}
+
+function buildBookingNoteAction(
+  raw: ModelPlan["actions"][number],
+  booking: BookingContextRow,
+):
+  | { action: AdminAssistantAction }
+  | { missing: string[] } {
+  const mode =
+    raw.textUpdate.mode === "replace" || raw.textUpdate.mode === "clear"
+      ? raw.textUpdate.mode
+      : "append";
+  const text = raw.textUpdate.text.trim();
+  if (mode !== "clear" && !text) return { missing: ["booking note"] };
+
+  return {
+    action: {
+      type: "update_booking_note",
+      bookingId: booking.id,
+      label:
+        raw.label ||
+        `${mode === "clear" ? "Clear" : mode === "replace" ? "Replace" : "Add"} booking note`,
+      details:
+        raw.details ||
+        `${bookingLabel(booking)} · ${mode === "clear" ? "clear internal note" : text}`,
+      href: `/admin/bookings/${booking.id}`,
+      destructive: mode === "clear" || mode === "replace",
+      requiresConfirmation: true,
+      textUpdate: { text, mode, emails: [] },
+    },
+  };
+}
+
 async function applyBulkPriceChange(
   organizationId: string,
   priceChange: AdminAssistantPriceChange,
@@ -1086,6 +1442,146 @@ async function applyBulkPriceChange(
   }
 
   return { ok: true, updatedCount: updates.length };
+}
+
+async function applyCalendarBlock(
+  organizationId: string,
+  action: AdminAssistantAction,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const block = action.calendarBlock;
+  if (!block) return { ok: false, error: "Missing blocked time details." };
+  const starts = businessDateTimeLocalToUtc(block.startsLocal);
+  const ends = businessDateTimeLocalToUtc(block.endsLocal);
+  if (!starts || !ends || ends <= starts) {
+    return { ok: false, error: "That blocked time range is not valid." };
+  }
+  const supabase = getServiceSupabase();
+  const { error } = await supabase.from("calendar_blocks").insert({
+    organization_id: organizationId,
+    starts_at: starts.toISOString(),
+    ends_at: ends.toISOString(),
+    label: block.label || null,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+async function applyRealtorMemoryUpdate(
+  organizationId: string,
+  realtorId: string | undefined,
+  textUpdate: AdminAssistantTextUpdate | undefined,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!realtorId) return { ok: false, error: "Missing realtor profile." };
+  if (!textUpdate) return { ok: false, error: "Missing memory update." };
+
+  const supabase = getServiceSupabase();
+  const { data: realtor, error: readError } = await supabase
+    .from("profiles")
+    .select("id, internal_notes")
+    .eq("organization_id", organizationId)
+    .eq("role", "realtor")
+    .eq("id", realtorId)
+    .maybeSingle<{ id: string; internal_notes: string | null }>();
+  if (readError) return { ok: false, error: readError.message };
+  if (!realtor) return { ok: false, error: "Realtor profile was not found." };
+
+  const nextNotes =
+    textUpdate.mode === "clear"
+      ? null
+      : textUpdate.mode === "replace"
+        ? textUpdate.text.trim() || null
+        : appendNote(realtor.internal_notes, textUpdate.text);
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ internal_notes: nextNotes })
+    .eq("organization_id", organizationId)
+    .eq("role", "realtor")
+    .eq("id", realtorId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+async function applyDeliveryCcUpdate(
+  organizationId: string,
+  realtorId: string | undefined,
+  textUpdate: AdminAssistantTextUpdate | undefined,
+): Promise<
+  { ok: true; count: number; mode: "add" | "remove" } | { ok: false; error: string }
+> {
+  if (!realtorId) return { ok: false, error: "Missing realtor profile." };
+  if (!textUpdate) return { ok: false, error: "Missing delivery recipients." };
+  const emails = parseEmailList(textUpdate.emails);
+  if (emails.length === 0) {
+    return { ok: false, error: "Add at least one valid email address." };
+  }
+  const mode = textUpdate.mode === "remove" ? "remove" : "add";
+
+  const supabase = getServiceSupabase();
+  const { data: realtor, error: readError } = await supabase
+    .from("profiles")
+    .select("id, delivery_cc_emails")
+    .eq("organization_id", organizationId)
+    .eq("role", "realtor")
+    .eq("id", realtorId)
+    .maybeSingle<{ id: string; delivery_cc_emails: string[] | null }>();
+  if (readError) return { ok: false, error: readError.message };
+  if (!realtor) return { ok: false, error: "Realtor profile was not found." };
+
+  const current = new Set((realtor.delivery_cc_emails ?? []).map(normalizeEmail));
+  if (mode === "remove") {
+    for (const email of emails) current.delete(email);
+  } else {
+    for (const email of emails) current.add(email);
+  }
+
+  const nextEmails = Array.from(current).sort();
+  if (nextEmails.length > 20) {
+    return { ok: false, error: "A realtor can have up to 20 delivery CC emails." };
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ delivery_cc_emails: nextEmails })
+    .eq("organization_id", organizationId)
+    .eq("role", "realtor")
+    .eq("id", realtorId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, count: emails.length, mode };
+}
+
+async function applyBookingNoteUpdate(
+  organizationId: string,
+  bookingId: string,
+  textUpdate: AdminAssistantTextUpdate | undefined,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!bookingId) return { ok: false, error: "Missing booking." };
+  if (!textUpdate) return { ok: false, error: "Missing note update." };
+
+  const supabase = getServiceSupabase();
+  const { data: booking, error: readError } = await supabase
+    .from("bookings")
+    .select("id, internal_notes")
+    .eq("organization_id", organizationId)
+    .eq("id", bookingId)
+    .maybeSingle<{ id: string; internal_notes: string | null }>();
+  if (readError) return { ok: false, error: readError.message };
+  if (!booking) return { ok: false, error: "Booking was not found." };
+
+  const nextNotes =
+    textUpdate.mode === "clear"
+      ? null
+      : textUpdate.mode === "replace"
+        ? textUpdate.text.trim() || null
+        : appendNote(booking.internal_notes, textUpdate.text);
+
+  const { error } = await supabase
+    .from("bookings")
+    .update({ internal_notes: nextNotes })
+    .eq("organization_id", organizationId)
+    .eq("id", bookingId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 function catalogItemsForPriceScope(
@@ -1128,6 +1624,24 @@ function scopeLabel(scope: AdminAssistantPriceChange["scope"]): string {
   if (scope === "addons") return "add-on";
   if (scope === "all") return "all";
   return "active";
+}
+
+function appendNote(current: string | null, addition: string): string | null {
+  const next = addition.trim();
+  if (!next) return current;
+  return [current?.trim(), next].filter(Boolean).join("\n");
+}
+
+function parseEmailList(input: readonly string[]): string[] {
+  const emails = input
+    .flatMap((value) => value.split(/[\s,;]+/))
+    .map(normalizeEmail)
+    .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+  return Array.from(new Set(emails));
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
 }
 
 async function createBookingFromAssistant(
@@ -1222,11 +1736,14 @@ const PLAN_SCHEMA = {
         required: [
           "type",
           "bookingId",
+          "realtorId",
           "label",
           "details",
           "nextStatus",
           "draft",
           "priceChange",
+          "calendarBlock",
+          "textUpdate",
         ],
         properties: {
           type: {
@@ -1239,10 +1756,15 @@ const PLAN_SCHEMA = {
               "update_booking_status",
               "send_delivery_email",
               "bulk_update_prices",
+              "add_calendar_block",
+              "update_realtor_memory",
+              "update_delivery_cc",
+              "update_booking_note",
               "none",
             ],
           },
           bookingId: { type: "string" },
+          realtorId: { type: "string" },
           label: { type: "string" },
           details: { type: "string" },
           nextStatus: {
@@ -1315,6 +1837,32 @@ const PLAN_SCHEMA = {
               rounding: {
                 type: "string",
                 enum: ["", "nearest_dollar", "nearest_five", "none"],
+              },
+            },
+          },
+          calendarBlock: {
+            type: "object",
+            additionalProperties: false,
+            required: ["startsLocal", "endsLocal", "label"],
+            properties: {
+              startsLocal: { type: "string" },
+              endsLocal: { type: "string" },
+              label: { type: "string" },
+            },
+          },
+          textUpdate: {
+            type: "object",
+            additionalProperties: false,
+            required: ["text", "mode", "emails"],
+            properties: {
+              text: { type: "string" },
+              mode: {
+                type: "string",
+                enum: ["", "append", "replace", "clear", "add", "remove"],
+              },
+              emails: {
+                type: "array",
+                items: { type: "string" },
               },
             },
           },

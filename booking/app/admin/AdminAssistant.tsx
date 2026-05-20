@@ -18,8 +18,10 @@ import {
 const EXAMPLES = [
   "What shoots do I have tomorrow?",
   "Cancel Bob's booking today at 3:30",
+  "Block Friday 1-4 for a personal appointment",
+  "Remember Sarah likes twilight photos",
+  "CC admin@brokerage.com on Lisa's deliveries",
   "Raise my active prices by 10%",
-  "Find Sarah's last booking",
 ];
 
 export default function AdminAssistant() {
@@ -393,6 +395,14 @@ function AssistantResult({
                             ? "Update status"
                             : action.type === "bulk_update_prices"
                               ? "Update prices"
+                              : action.type === "add_calendar_block"
+                                ? "Block time"
+                                : action.type === "update_realtor_memory"
+                                  ? "Save memory"
+                                  : action.type === "update_delivery_cc"
+                                    ? "Update CCs"
+                                    : action.type === "update_booking_note"
+                                      ? "Save note"
                             : "Confirm"}
                   </button>
                 ) : null}
@@ -406,7 +416,16 @@ function AssistantResult({
 }
 
 function actionKey(action: AdminAssistantAction): string {
-  return `${action.type}:${action.bookingId}:${action.nextStatus ?? ""}:${action.priceChange?.value ?? ""}`;
+  return [
+    action.type,
+    action.bookingId,
+    action.realtorId ?? "",
+    action.nextStatus ?? "",
+    action.priceChange?.value ?? "",
+    action.calendarBlock?.startsLocal ?? "",
+    action.textUpdate?.text ?? "",
+    action.textUpdate?.emails.join(",") ?? "",
+  ].join(":");
 }
 
 function activityLabel(action: AdminAssistantAction): string {
@@ -417,6 +436,10 @@ function activityLabel(action: AdminAssistantAction): string {
     return `Updated status${action.nextStatus ? ` to ${action.nextStatus}` : ""}`;
   }
   if (action.type === "bulk_update_prices") return "Updated pricing";
+  if (action.type === "add_calendar_block") return "Blocked calendar time";
+  if (action.type === "update_realtor_memory") return "Updated realtor memory";
+  if (action.type === "update_delivery_cc") return "Updated delivery CCs";
+  if (action.type === "update_booking_note") return "Updated booking note";
   return action.label;
 }
 
