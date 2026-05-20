@@ -25,6 +25,7 @@ interface BookingRow {
   scheduled_ends_at: string | null;
   services: string[];
   add_ons: string[];
+  square_footage: number | null;
   client_notes: string | null;
   internal_notes: string | null;
   unit_number: string | null;
@@ -68,7 +69,7 @@ export default async function AdminTodayPage() {
   const { data: bookings, error } = await supabase
     .from("bookings")
     .select(
-      "id, status, scheduled_at, scheduled_ends_at, services, add_ons, client_notes, internal_notes, unit_number, iguide_id, iguide_portal_id, properties(street_address, city, province, postal_code), profiles(full_name, email, phone, brokerage, internal_notes, delivery_cc_emails)",
+      "id, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, client_notes, internal_notes, unit_number, iguide_id, iguide_portal_id, properties(street_address, city, province, postal_code), profiles(full_name, email, phone, brokerage, internal_notes, delivery_cc_emails)",
     )
     .eq("organization_id", admin.organizationId)
     .not("scheduled_at", "is", null)
@@ -178,6 +179,7 @@ function DailyCommandCenter({
   const memoryRows = bookings
     .filter((booking) => booking.internal_notes || booking.profiles?.internal_notes)
     .slice(0, 4);
+  const routeInsights = buildRouteInsights(bookings);
 
   return (
     <section className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
@@ -207,7 +209,7 @@ function DailyCommandCenter({
         <SummaryTile label="Memory notes" value={String(summary.withMemory)} />
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+      <div className="mt-4 grid gap-3 lg:grid-cols-3">
         <div className="rounded-2xl border border-white/10 bg-ink/45 p-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
             Needs attention
@@ -266,6 +268,45 @@ function DailyCommandCenter({
             </p>
           )}
         </div>
+
+        <div className="rounded-2xl border border-white/10 bg-ink/45 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+            Route + travel
+          </p>
+          {routeInsights.length > 0 ? (
+            <div className="mt-2 space-y-2">
+              {routeInsights.map((insight) => (
+                <div
+                  key={insight.key}
+                  className={`rounded-xl border p-3 ${
+                    insight.level === "warning"
+                      ? "border-amber-300/25 bg-amber-300/10"
+                      : "border-white/10 bg-white/[0.03]"
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-white">
+                    {insight.title}
+                  </p>
+                  <p className="mt-1 text-xs text-ink-muted">{insight.body}</p>
+                  {insight.href ? (
+                    <a
+                      href={insight.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-flex rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:border-brand-light"
+                    >
+                      Open route
+                    </a>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-ink-muted">
+              Add at least two timed shoots to check route spacing.
+            </p>
+          )}
+        </div>
       </div>
     </section>
   );
@@ -311,6 +352,7 @@ function ShootCard({
     ...booking.add_ons.map(labelForAddOn),
   ];
   const taskState = taskStates(booking, deliverables);
+  const briefItems = shootBriefItems(booking, taskState);
 
   return (
     <li className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
@@ -407,6 +449,20 @@ function ShootCard({
           ) : null}
         </div>
       ) : null}
+
+      <div className="mt-3 rounded-2xl border border-brand-light/20 bg-brand/10 p-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
+          AI shoot brief
+        </p>
+        <ul className="mt-2 grid gap-2 text-sm text-ink-muted md:grid-cols-2">
+          {briefItems.map((item) => (
+            <li key={item} className="flex gap-2">
+              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-light" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
 
       <div className="mt-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
@@ -516,6 +572,14 @@ interface DailySummary {
   withMemory: number;
 }
 
+interface RouteInsight {
+  key: string;
+  level: "info" | "warning";
+  title: string;
+  body: string;
+  href?: string;
+}
+
 function buildDailySummary(
   bookings: BookingRow[],
   deliverablesByBooking: Map<string, DeliverableRow[]>,
@@ -537,6 +601,136 @@ function buildDailySummary(
       (booking) => booking.internal_notes || booking.profiles?.internal_notes,
     ).length,
   };
+}
+
+function buildRouteInsights(bookings: BookingRow[]): RouteInsight[] {
+  const timed = bookings
+    .filter((booking) => booking.scheduled_at)
+    .sort(
+      (a, b) =>
+        new Date(a.scheduled_at ?? "").getTime() -
+        new Date(b.scheduled_at ?? "").getTime(),
+    );
+  const insights: RouteInsight[] = [];
+
+  for (let i = 0; i < timed.length - 1; i += 1) {
+    const current = timed[i];
+    const next = timed[i + 1];
+    const currentEnd = current.scheduled_ends_at ?? current.scheduled_at;
+    const gapMinutes = Math.round(
+      (new Date(next.scheduled_at ?? "").getTime() -
+        new Date(currentEnd ?? "").getTime()) /
+        60000,
+    );
+    const cityChanged =
+      normalize(current.properties?.city) !== normalize(next.properties?.city);
+    const routeHref = googleRouteHref(current, next);
+
+    if (gapMinutes < 45) {
+      insights.push({
+        key: `gap-${current.id}-${next.id}`,
+        level: "warning",
+        title: `${gapMinutes} min gap after ${formatTime(currentEnd ?? "")}`,
+        body:
+          "This may be tight once packing, driving, parking, and lockbox/access time are included.",
+        href: routeHref,
+      });
+    } else if (cityChanged) {
+      insights.push({
+        key: `city-${current.id}-${next.id}`,
+        level: "info",
+        title: "City change between shoots",
+        body: `${current.properties?.city ?? "First city"} to ${
+          next.properties?.city ?? "next city"
+        }. Check drive time and whether a travel fee applies.`,
+        href: routeHref,
+      });
+    }
+  }
+
+  if (timed.length === 1) {
+    const only = timed[0];
+    insights.push({
+      key: `single-${only.id}`,
+      level: "info",
+      title: "One shoot today",
+      body: "Open the map before leaving and check parking/access notes.",
+      href: googleMapHref(only),
+    });
+  }
+
+  return insights.slice(0, 5);
+}
+
+function googleRouteHref(from: BookingRow, to: BookingRow): string | undefined {
+  const origin = fullAddress(from);
+  const destination = fullAddress(to);
+  if (!origin || !destination) return undefined;
+  const qs = new URLSearchParams({
+    api: "1",
+    origin,
+    destination,
+    travelmode: "driving",
+  });
+  return `https://www.google.com/maps/dir/?${qs.toString()}`;
+}
+
+function googleMapHref(booking: BookingRow): string | undefined {
+  const query = fullAddress(booking);
+  if (!query) return undefined;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    query,
+  )}`;
+}
+
+function fullAddress(booking: BookingRow): string {
+  return [
+    booking.properties?.street_address,
+    booking.unit_number ? `Unit ${booking.unit_number}` : null,
+    booking.properties?.city,
+    booking.properties?.province,
+    booking.properties?.postal_code,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function shootBriefItems(
+  booking: BookingRow,
+  tasks: Array<{ label: string; state: "done" | "pending" | "todo" }>,
+): string[] {
+  const items: string[] = [];
+  const serviceText = [...booking.services, ...booking.add_ons]
+    .join(" ")
+    .toLowerCase();
+
+  if (booking.profiles?.internal_notes) {
+    items.push(`Client preference: ${booking.profiles.internal_notes}`);
+  }
+  if (booking.client_notes) items.push(`Realtor note: ${booking.client_notes}`);
+  if (booking.square_footage && booking.square_footage >= 3000) {
+    items.push("Larger property: watch timing, exterior coverage, and iGUIDE/floor-plan expectations.");
+  }
+  if (serviceText.includes("iguide") || booking.iguide_id || booking.iguide_portal_id) {
+    items.push("iGUIDE job: confirm basement scope and measurement access before leaving.");
+  }
+  if (serviceText.includes("video") || serviceText.includes("reel")) {
+    items.push("Video/social: grab vertical hero clips, exterior movement, and one clean intro/outro option.");
+  }
+  if (tasks.some((task) => task.state === "todo")) {
+    items.push("Delivery prep: media links are not complete yet, so double-check upload/sync after the shoot.");
+  }
+  if (booking.profiles?.delivery_cc_emails?.length) {
+    items.push(`${booking.profiles.delivery_cc_emails.length} saved CC email${booking.profiles.delivery_cc_emails.length === 1 ? "" : "s"} will be included on delivery.`);
+  }
+
+  return items.slice(0, 6).length
+    ? items.slice(0, 6)
+    : ["No special warnings. Confirm access, lights, lockbox, and any must-have rooms on arrival."];
+}
+
+function normalize(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
 }
 
 function localDateKey(date: Date): string {

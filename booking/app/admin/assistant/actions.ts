@@ -501,8 +501,34 @@ async function loadAssistantContext(organizationId: string): Promise<{
       .filter(Boolean),
   ).slice(0, 80);
 
-  const realtors = (realtorRes.data ?? []).map((realtor) =>
-    [
+  const realtors = (realtorRes.data ?? []).map((realtor) => {
+    const history = bookingRows.filter(
+      (booking) => booking.profiles?.id === realtor.id,
+    );
+    const commonServices = topValues(
+      countValues(history.flatMap((booking) => booking.services)),
+      4,
+    ).map((slug) => labelForService(slug));
+    const commonAddOns = topValues(
+      countValues(history.flatMap((booking) => booking.add_ons)),
+      4,
+    ).map((slug) => labelForAddOn(slug));
+    const commonCities = topValues(
+      countValues(
+        history
+          .map((booking) => booking.properties?.city ?? "")
+          .filter(Boolean),
+      ),
+      4,
+    );
+    const lastBooking = history
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(b.scheduled_at ?? 0).getTime() -
+          new Date(a.scheduled_at ?? 0).getTime(),
+      )[0];
+    return [
       `id=${realtor.id}`,
       `name=${realtor.full_name ?? ""}`,
       `email=${realtor.email}`,
@@ -510,8 +536,12 @@ async function loadAssistantContext(organizationId: string): Promise<{
       `brokerage=${realtor.brokerage ?? ""}`,
       `agentMemory=${realtor.internal_notes ?? ""}`,
       `deliveryCCs=${(realtor.delivery_cc_emails ?? []).join(",")}`,
-    ].join(" | "),
-  );
+      `commonServices=${commonServices.join(",")}`,
+      `commonAddOns=${commonAddOns.join(",")}`,
+      `commonCities=${commonCities.join(",")}`,
+      `lastBooking=${lastBooking ? bookingLabel(lastBooking) : ""}`,
+    ].join(" | ");
+  });
 
   return {
     nowLocal: formatLocal(now.toISOString()),
@@ -1122,6 +1152,23 @@ function isRequiredMissingField(value: string): boolean {
 
 function unique(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean)));
+}
+
+function countValues(values: string[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const value of values) {
+    const key = value.trim();
+    if (!key) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function topValues(counts: Map<string, number>, limit: number): string[] {
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([value]) => value);
 }
 
 function formatLocal(iso: string): string {

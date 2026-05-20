@@ -66,9 +66,60 @@ export default function AIPackageRecommender({
     out.set("services", next.services.join(","));
     if (next.addOns.length) out.set("add_ons", next.addOns.join(","));
     else out.delete("add_ons");
+    if (next.property.streetAddress) out.set("address", next.property.streetAddress);
+    if (next.property.city) out.set("city", next.property.city);
+    if (next.property.postalCode) out.set("postal", next.property.postalCode);
+    if (next.property.squareFootage) {
+      out.set("sqft", String(next.property.squareFootage));
+    }
+    if (next.property.isVacant) out.set("vacant", next.property.isVacant);
+    if (next.property.includeBasement != null) {
+      out.set("basement", next.property.includeBasement ? "1" : "0");
+    }
+    if (next.property.shootNotes) {
+      out.set("shoot_notes", next.property.shootNotes);
+    }
+    if (next.property.shotRequests.length) {
+      out.set("shots", next.property.shotRequests.join(","));
+    }
     // If they already had a later-step choice, service changes can change duration.
     out.delete("slot");
     router.replace(`?${out.toString()}`, { scroll: false });
+  }
+
+  function applyAndContinue() {
+    if (!recommendation) return;
+    const out = new URLSearchParams(params.toString());
+    out.set("services", recommendation.services.join(","));
+    if (recommendation.addOns.length) {
+      out.set("add_ons", recommendation.addOns.join(","));
+    } else {
+      out.delete("add_ons");
+    }
+    if (recommendation.property.streetAddress) {
+      out.set("address", recommendation.property.streetAddress);
+    }
+    if (recommendation.property.city) out.set("city", recommendation.property.city);
+    if (recommendation.property.postalCode) {
+      out.set("postal", recommendation.property.postalCode);
+    }
+    if (recommendation.property.squareFootage) {
+      out.set("sqft", String(recommendation.property.squareFootage));
+    }
+    if (recommendation.property.isVacant) {
+      out.set("vacant", recommendation.property.isVacant);
+    }
+    if (recommendation.property.includeBasement != null) {
+      out.set("basement", recommendation.property.includeBasement ? "1" : "0");
+    }
+    if (recommendation.property.shootNotes) {
+      out.set("shoot_notes", recommendation.property.shootNotes);
+    }
+    if (recommendation.property.shotRequests.length) {
+      out.set("shots", recommendation.property.shotRequests.join(","));
+    }
+    out.delete("slot");
+    router.push(`/book/property?${out.toString()}`);
   }
 
   const selectedNames = recommendation
@@ -88,8 +139,8 @@ export default function AIPackageRecommender({
             Not sure what to book?
           </h3>
           <p className="mt-1 max-w-2xl text-sm text-realtor-muted">
-            Describe the listing in plain English and we&apos;ll recommend the best
-            package before you start clicking around.
+            Describe the listing in plain English. We&apos;ll recommend the package,
+            prefill any details we can, and flag what still needs an answer.
           </p>
         </div>
         <span className="rounded-full border border-realtor-primary/30 bg-realtor-primary/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-realtor-primary">
@@ -103,7 +154,7 @@ export default function AIPackageRecommender({
           onChange={(e) => setDescription(e.currentTarget.value)}
           rows={4}
           maxLength={1600}
-          placeholder="Example: 2,200 sqft detached home in Hamilton, occupied, basement included, realtor wants photos, iGUIDE, drone, and maybe a reel for Instagram."
+          placeholder="Example: 2,200 sqft detached home at 1480 Barker Ave in Burlington, occupied, basement included. They want strong MLS photos, iGUIDE, drone if it makes sense, and maybe a reel for Instagram."
           className="realtor-field w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-light/60"
         />
         <div className="flex flex-wrap items-center gap-3">
@@ -162,20 +213,105 @@ export default function AIPackageRecommender({
             </ul>
           ) : null}
 
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <InfoList
+              title="Details I can prefill"
+              empty="No property details found yet."
+              items={prefillDetails(recommendation)}
+            />
+            <InfoList
+              title="Still need to know"
+              empty="Nothing obvious missing."
+              items={recommendation.missingInfo}
+            />
+          </div>
+
+          {recommendation.memoryUsed.length > 0 ? (
+            <div className="mt-3 rounded-2xl border border-emerald-700/15 bg-emerald-700/5 px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+                Used realtor memory
+              </p>
+              <ul className="mt-1 grid gap-1 text-xs text-realtor-muted md:grid-cols-2">
+                {recommendation.memoryUsed.map((memory) => (
+                  <li key={memory} className="flex gap-2">
+                    <span className="text-emerald-700">•</span>
+                    <span>{memory}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={() => applyRecommendation()}
               className="rounded-md bg-realtor-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-realtor-primary-light"
             >
-              Apply this package
+              Apply here
+            </button>
+            <button
+              type="button"
+              onClick={applyAndContinue}
+              className="rounded-md border border-realtor-primary/25 bg-white px-4 py-2 text-sm font-semibold text-realtor-primary transition hover:bg-realtor-primary/5"
+            >
+              Apply + continue
             </button>
             <p className="text-xs text-realtor-muted">
-              This selects the package below and keeps you on this page.
+              You can still edit everything before confirming.
             </p>
           </div>
         </div>
       ) : null}
     </section>
   );
+}
+
+function InfoList({
+  title,
+  empty,
+  items,
+}: {
+  title: string;
+  empty: string;
+  items: string[];
+}) {
+  return (
+    <div className="rounded-2xl border border-realtor-primary/10 bg-realtor-surface/55 px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">
+        {title}
+      </p>
+      {items.length > 0 ? (
+        <ul className="mt-1 space-y-1 text-xs text-realtor-muted">
+          {items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1 text-xs text-realtor-muted">{empty}</p>
+      )}
+    </div>
+  );
+}
+
+function prefillDetails(recommendation: BookingRecommendation): string[] {
+  const p = recommendation.property;
+  return [
+    p.streetAddress ? `Address: ${p.streetAddress}` : null,
+    p.city ? `City: ${p.city}` : null,
+    p.postalCode ? `Postal: ${p.postalCode}` : null,
+    p.squareFootage ? `Square footage: ${p.squareFootage.toLocaleString()}` : null,
+    p.isVacant ? `Occupancy: ${formatVacancy(p.isVacant)}` : null,
+    p.includeBasement != null
+      ? `Basement: ${p.includeBasement ? "include it" : "skip it"}`
+      : null,
+    p.shootNotes ? "Shoot notes drafted" : null,
+    p.shotRequests.length ? `${p.shotRequests.length} shot request tags` : null,
+  ].filter((item): item is string => Boolean(item));
+}
+
+function formatVacancy(value: "vacant" | "occupied" | "partial") {
+  if (value === "vacant") return "vacant";
+  if (value === "partial") return "partially occupied";
+  return "occupied";
 }
