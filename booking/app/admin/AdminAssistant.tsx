@@ -18,6 +18,7 @@ import {
 const EXAMPLES = [
   "What shoots do I have tomorrow?",
   "Cancel Bob's booking today at 3:30",
+  "Raise my active prices by 10%",
   "Find Sarah's last booking",
 ];
 
@@ -340,6 +341,28 @@ function AssistantResult({
                     confirmation button.
                   </p>
                 ) : null}
+                {action.priceChange ? (
+                  <div className="mt-2 rounded-xl border border-realtor-primary/10 bg-white/65 p-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-realtor-muted">
+                      Price preview · {action.priceChange.affectedCount} item
+                      {action.priceChange.affectedCount === 1 ? "" : "s"}
+                    </p>
+                    <div className="mt-1 space-y-1">
+                      {action.priceChange.preview.slice(0, 6).map((row) => (
+                        <p
+                          key={row.id}
+                          className="flex justify-between gap-3 text-[11px] text-realtor-muted"
+                        >
+                          <span className="truncate">{row.name}</span>
+                          <span className="shrink-0 font-semibold text-realtor-text">
+                            {formatMoney(row.oldPriceCents)} →{" "}
+                            {formatMoney(row.newPriceCents)}
+                          </span>
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
               <div className="flex flex-wrap gap-2">
                 <Link
@@ -368,6 +391,8 @@ function AssistantResult({
                           ? "Send email"
                           : action.type === "update_booking_status"
                             ? "Update status"
+                            : action.type === "bulk_update_prices"
+                              ? "Update prices"
                             : "Confirm"}
                   </button>
                 ) : null}
@@ -381,7 +406,7 @@ function AssistantResult({
 }
 
 function actionKey(action: AdminAssistantAction): string {
-  return `${action.type}:${action.bookingId}:${action.nextStatus ?? ""}`;
+  return `${action.type}:${action.bookingId}:${action.nextStatus ?? ""}:${action.priceChange?.value ?? ""}`;
 }
 
 function activityLabel(action: AdminAssistantAction): string {
@@ -391,5 +416,10 @@ function activityLabel(action: AdminAssistantAction): string {
   if (action.type === "update_booking_status") {
     return `Updated status${action.nextStatus ? ` to ${action.nextStatus}` : ""}`;
   }
+  if (action.type === "bulk_update_prices") return "Updated pricing";
   return action.label;
+}
+
+function formatMoney(cents: number): string {
+  return `$${(cents / 100).toFixed(0)}`;
 }

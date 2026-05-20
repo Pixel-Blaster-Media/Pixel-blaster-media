@@ -36,7 +36,8 @@ export interface AdminAssistantAction {
     | "open_booking"
     | "draft_booking"
     | "update_booking_status"
-    | "send_delivery_email";
+    | "send_delivery_email"
+    | "bulk_update_prices";
   bookingId: string;
   label: string;
   details: string;
@@ -45,6 +46,7 @@ export interface AdminAssistantAction {
   requiresConfirmation: boolean;
   nextStatus?: BookingStatus;
   draft?: AdminAssistantBookingDraft;
+  priceChange?: AdminAssistantPriceChange;
 }
 
 export interface AdminAssistantResult {
@@ -70,6 +72,21 @@ export interface AdminAssistantBookingDraft {
   squareFootage: string;
   notes: string;
   catalogItemIds: string[];
+}
+
+export interface AdminAssistantPriceChange {
+  mode: "percent" | "fixed";
+  value: number;
+  scope: "active" | "all" | "bundles" | "a_la_carte" | "addons";
+  rounding: "nearest_dollar" | "nearest_five" | "none";
+  preview: Array<{
+    id: string;
+    name: string;
+    kind: string;
+    oldPriceCents: number;
+    newPriceCents: number;
+  }>;
+  affectedCount: number;
 }
 
 interface BookingContextRow {
@@ -132,6 +149,7 @@ interface ModelPlan {
       | "draft_booking"
       | "update_booking_status"
       | "send_delivery_email"
+      | "bulk_update_prices"
       | "none";
     bookingId: string;
     label: string;
@@ -153,6 +171,12 @@ interface ModelPlan {
       notes: string;
       catalogItemIds: string[];
       useSourceProperty: boolean;
+    };
+    priceChange: {
+      mode: "percent" | "fixed" | "";
+      value: number;
+      scope: "active" | "all" | "bundles" | "a_la_carte" | "addons" | "";
+      rounding: "nearest_dollar" | "nearest_five" | "none" | "";
     };
   }>;
   missing: string[];
@@ -258,6 +282,47 @@ export async function confirmAdminAssistantAction(
           label: "Open booking",
           details: "Review the updated booking.",
           href: `/admin/bookings/${action.bookingId}`,
+          destructive: false,
+          requiresConfirmation: false,
+        },
+      ],
+    };
+  }
+
+  if (action.type === "bulk_update_prices") {
+    if (!action.priceChange) {
+      return {
+        ok: false,
+        kind: "needs_clarification",
+        message: "I need a valid price change before I can update pricing.",
+        actions: [],
+      };
+    }
+    const result = await applyBulkPriceChange(
+      admin.organizationId,
+      action.priceChange,
+    );
+    if (!result.ok) {
+      return {
+        ok: false,
+        kind: "needs_clarification",
+        message: result.error ?? "I couldn't update pricing.",
+        actions: [],
+      };
+    }
+    revalidatePath("/admin/settings/pricing");
+    revalidatePath("/book");
+    return {
+      ok: true,
+      kind: "answer",
+      message: `Done. I updated ${result.updatedCount} catalog price${result.updatedCount === 1 ? "" : "s"}.`,
+      actions: [
+        {
+          type: "open_booking",
+          bookingId: "",
+          label: "Open pricing",
+          details: "Review the updated catalog prices.",
+          href: "/admin/settings/pricing",
           destructive: false,
           requiresConfirmation: false,
         },
@@ -587,6 +652,7 @@ async function planWithOpenAI(
             "Only propose cancel_booking when exactly one cancellable booking is clearly identified. " +
             "Only propose send_delivery_email when one booking is clearly identified and the user asks to send, resend, or deliver media. " +
             "Only propose update_booking_status when one booking and the exact next status are clearly identified; use requested, confirmed, shot, editing, delivered, or cancelled only. For cancellation requests, prefer cancel_booking. " +
+            "For pricing requests like raising/lowering prices, propose bulk_update_prices only when the amount is clear. Use percent for percentage changes and fixed for dollar changes. Scope defaults to active catalog items unless the user clearly says all, bundles, a la carte, or add-ons. Rounding defaults to nearest_dollar unless the user asks for clean $5 increments. " +
             "For booking requests, propose create_booking when realtor, exact date/time, street address, and services/catalog item ids are known. " +
             "Street address means street number + street name; city, province, and postal code are helpful but optional. Do not ask for postal code before creating a booking. " +
             "If the user gives a partial street address, use it as streetAddress. If it clearly matches one known address, use the highest-likelihood known address and mention that assumption in details. " +
@@ -606,6 +672,7 @@ async function planWithOpenAI(
               "create_booking_requires_confirmation",
               "send_delivery_email_requires_confirmation",
               "update_booking_status_requires_confirmation",
+              "bulk_update_prices_requires_confirmation",
               "draft_booking_needs_more_info",
             ],
             bookings: context.bookings,
@@ -673,6 +740,16 @@ function normalizePlan(
 
     if (raw.type === "create_booking") {
       const built = buildCreateBookingAction(raw, context);
+      if ("action" in built) {
+        actions.push(built.action);
+      } else {
+        missing.push(...built.missing);
+      }
+      continue;
+    }
+
+    if (raw.type === "bulk_update_prices") {
+      const built = buildBulkPriceAction(raw, context);
       if ("action" in built) {
         actions.push(built.action);
       } else {
@@ -899,6 +976,160 @@ function buildCreateBookingAction(
   };
 }
 
+function buildBulkPriceAction(
+  raw: ModelPlan["actions"][number],
+  context: {
+    catalog: Catalog;
+  },
+):
+  | { action: AdminAssistantAction }
+  | { missing: string[] } {
+  const requested = raw.priceChange;
+  const mode = requested.mode;
+  const value = Number(requested.value);
+  const scope = requested.scope || "active";
+  const rounding = requested.rounding || "nearest_dollar";
+
+  if ((mode !== "percent" && mode !== "fixed") || !Number.isFinite(value)) {
+    return { missing: ["price change amount"] };
+  }
+  if (value === 0) return { missing: ["non-zero price change"] };
+  if (mode === "percent" && (value <= -90 || value > 100)) {
+    return { missing: ["reasonable percentage change"] };
+  }
+  if (mode === "fixed" && Math.abs(value) > 500) {
+    return { missing: ["reasonable dollar change"] };
+  }
+
+  const candidates = catalogItemsForPriceScope(context.catalog, scope);
+  if (candidates.length === 0) return { missing: ["catalog items to update"] };
+
+  const preview = candidates
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      kind: item.kind,
+      oldPriceCents: item.price_cents,
+      newPriceCents: nextPriceCents(item.price_cents, mode, value, rounding),
+    }))
+    .filter((row) => row.newPriceCents !== row.oldPriceCents);
+
+  if (preview.length === 0) {
+    return { missing: ["price change that affects at least one item"] };
+  }
+
+  const sample = preview
+    .slice(0, 5)
+    .map(
+      (row) =>
+        `${row.name}: ${formatMoney(row.oldPriceCents)} → ${formatMoney(row.newPriceCents)}`,
+    )
+    .join(" · ");
+  const action: AdminAssistantAction = {
+    type: "bulk_update_prices",
+    bookingId: "",
+    label:
+      raw.label ||
+      `${value > 0 ? "Raise" : "Lower"} ${scopeLabel(scope)} prices`,
+    details:
+      raw.details ||
+      `${preview.length} price${preview.length === 1 ? "" : "s"} will change. ${sample}${preview.length > 5 ? " · ..." : ""}`,
+    href: "/admin/settings/pricing",
+    destructive: value < 0,
+    requiresConfirmation: true,
+    priceChange: {
+      mode,
+      value,
+      scope,
+      rounding,
+      preview: preview.slice(0, 20),
+      affectedCount: preview.length,
+    },
+  };
+  return { action };
+}
+
+async function applyBulkPriceChange(
+  organizationId: string,
+  priceChange: AdminAssistantPriceChange,
+): Promise<{ ok: true; updatedCount: number } | { ok: false; error: string }> {
+  const catalog = await getActiveCatalog({ organizationId });
+  const candidates = catalogItemsForPriceScope(catalog, priceChange.scope);
+  const updates = candidates
+    .map((item) => ({
+      id: item.id,
+      oldPriceCents: item.price_cents,
+      newPriceCents: nextPriceCents(
+        item.price_cents,
+        priceChange.mode,
+        priceChange.value,
+        priceChange.rounding,
+      ),
+    }))
+    .filter((item) => item.newPriceCents !== item.oldPriceCents);
+
+  if (updates.length === 0) {
+    return { ok: false, error: "No prices would change." };
+  }
+
+  const supabase = getServiceSupabase();
+  for (const update of updates) {
+    const { error } = await supabase
+      .from("catalog_items")
+      .update({ price_cents: update.newPriceCents })
+      .eq("organization_id", organizationId)
+      .eq("id", update.id)
+      .eq("price_cents", update.oldPriceCents);
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+  }
+
+  return { ok: true, updatedCount: updates.length };
+}
+
+function catalogItemsForPriceScope(
+  catalog: Catalog,
+  scope: AdminAssistantPriceChange["scope"],
+): CatalogItemRow[] {
+  const all = [...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons];
+  if (scope === "bundles") return catalog.bundles;
+  if (scope === "a_la_carte") return catalog.aLaCarte;
+  if (scope === "addons") return catalog.addons;
+  return all;
+}
+
+function nextPriceCents(
+  currentCents: number,
+  mode: AdminAssistantPriceChange["mode"],
+  value: number,
+  rounding: AdminAssistantPriceChange["rounding"],
+): number {
+  const raw =
+    mode === "percent"
+      ? currentCents * (1 + value / 100)
+      : currentCents + value * 100;
+  const rounded =
+    rounding === "nearest_five"
+      ? Math.round(raw / 500) * 500
+      : rounding === "nearest_dollar"
+        ? Math.round(raw / 100) * 100
+        : Math.round(raw);
+  return Math.max(0, rounded);
+}
+
+function formatMoney(cents: number): string {
+  return `$${(cents / 100).toFixed(0)}`;
+}
+
+function scopeLabel(scope: AdminAssistantPriceChange["scope"]): string {
+  if (scope === "bundles") return "bundle";
+  if (scope === "a_la_carte") return "à la carte";
+  if (scope === "addons") return "add-on";
+  if (scope === "all") return "all";
+  return "active";
+}
+
 async function createBookingFromAssistant(
   action: AdminAssistantAction,
 ): Promise<AdminAssistantResult> {
@@ -988,7 +1219,15 @@ const PLAN_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["type", "bookingId", "label", "details", "nextStatus", "draft"],
+        required: [
+          "type",
+          "bookingId",
+          "label",
+          "details",
+          "nextStatus",
+          "draft",
+          "priceChange",
+        ],
         properties: {
           type: {
             type: "string",
@@ -999,6 +1238,7 @@ const PLAN_SCHEMA = {
               "draft_booking",
               "update_booking_status",
               "send_delivery_email",
+              "bulk_update_prices",
               "none",
             ],
           },
@@ -1056,6 +1296,26 @@ const PLAN_SCHEMA = {
                 items: { type: "string" },
               },
               useSourceProperty: { type: "boolean" },
+            },
+          },
+          priceChange: {
+            type: "object",
+            additionalProperties: false,
+            required: ["mode", "value", "scope", "rounding"],
+            properties: {
+              mode: {
+                type: "string",
+                enum: ["", "percent", "fixed"],
+              },
+              value: { type: "number" },
+              scope: {
+                type: "string",
+                enum: ["", "active", "all", "bundles", "a_la_carte", "addons"],
+              },
+              rounding: {
+                type: "string",
+                enum: ["", "nearest_dollar", "nearest_five", "none"],
+              },
             },
           },
         },
