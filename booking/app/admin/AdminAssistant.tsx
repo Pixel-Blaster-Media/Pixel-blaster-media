@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   type PointerEvent,
+  useEffect,
   useRef,
   useState,
   useTransition,
@@ -11,7 +12,9 @@ import {
 import {
   askAdminAssistant,
   confirmAdminAssistantAction,
+  getAssistantActionLogs,
   type AdminAssistantAction,
+  type AdminAssistantLog,
   type AdminAssistantResult,
 } from "./assistant/actions";
 
@@ -19,6 +22,7 @@ const EXAMPLES = [
   "What shoots do I have tomorrow?",
   "Cancel Bob's booking today at 3:30",
   "Block Friday 1-4 for a personal appointment",
+  "Close bookings this Sunday",
   "Remember Sarah likes twilight photos",
   "CC admin@brokerage.com on Lisa's deliveries",
   "Raise my active prices by 10%",
@@ -28,6 +32,7 @@ export default function AdminAssistant() {
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState<AdminAssistantResult | null>(null);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [logs, setLogs] = useState<AdminAssistantLog[]>([]);
   const [activity, setActivity] = useState<
     Array<{ id: string; label: string; detail: string }>
   >([]);
@@ -45,6 +50,17 @@ export default function AdminAssistant() {
     moved: boolean;
   } | null>(null);
   const ignoreClickRef = useRef(false);
+
+  useEffect(() => {
+    if (!assistantOpen) return;
+    let cancelled = false;
+    getAssistantActionLogs().then((items) => {
+      if (!cancelled) setLogs(items);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [assistantOpen]);
 
   function ask(input = prompt) {
     const value = input.trim();
@@ -71,6 +87,7 @@ export default function AdminAssistant() {
         const nextResult = await confirmAdminAssistantAction(action);
         setResult(nextResult);
         if (nextResult.ok) {
+          getAssistantActionLogs().then(setLogs);
           setActivity((current) =>
             [
               {
@@ -225,6 +242,41 @@ export default function AdminAssistant() {
                 </p>
                 <p className="mt-0.5 line-clamp-2 text-[11px] text-realtor-muted">
                   {item.detail}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {logs.length > 0 ? (
+        <div className="mt-4 rounded-2xl border border-realtor-primary/10 bg-white/55 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-realtor-muted">
+            Approved action history
+          </p>
+          <div className="mt-2 space-y-2">
+            {logs.map((item) => (
+              <div
+                key={item.id}
+                className="rounded-xl border border-realtor-primary/10 bg-realtor-surface/70 px-3 py-2"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-xs font-semibold text-realtor-text">
+                    {item.label || labelForActionType(item.actionType)}
+                  </p>
+                  <span
+                    className={
+                      "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider " +
+                      (item.resultStatus === "success"
+                        ? "border-realtor-primary/20 bg-realtor-primary/10 text-realtor-primary"
+                        : "border-red-300 bg-red-50 text-red-700")
+                    }
+                  >
+                    {item.resultStatus}
+                  </span>
+                </div>
+                <p className="mt-0.5 line-clamp-2 text-[11px] text-realtor-muted">
+                  {item.resultMessage || item.details}
                 </p>
               </div>
             ))}
@@ -403,6 +455,8 @@ function AssistantResult({
                                     ? "Update CCs"
                                     : action.type === "update_booking_note"
                                       ? "Save note"
+                                      : action.type === "update_business_hours"
+                                        ? "Update hours"
                             : "Confirm"}
                   </button>
                 ) : null}
@@ -423,6 +477,7 @@ function actionKey(action: AdminAssistantAction): string {
     action.nextStatus ?? "",
     action.priceChange?.value ?? "",
     action.calendarBlock?.startsLocal ?? "",
+    action.businessHour?.dayOfWeek ?? "",
     action.textUpdate?.text ?? "",
     action.textUpdate?.emails.join(",") ?? "",
   ].join(":");
@@ -440,9 +495,17 @@ function activityLabel(action: AdminAssistantAction): string {
   if (action.type === "update_realtor_memory") return "Updated realtor memory";
   if (action.type === "update_delivery_cc") return "Updated delivery CCs";
   if (action.type === "update_booking_note") return "Updated booking note";
+  if (action.type === "update_business_hours") return "Updated working hours";
   return action.label;
 }
 
 function formatMoney(cents: number): string {
   return `$${(cents / 100).toFixed(0)}`;
+}
+
+function labelForActionType(actionType: string): string {
+  return actionType
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }

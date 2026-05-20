@@ -7,7 +7,7 @@ import {
   updateBookingStatus,
 } from "@/app/admin/bookings/[id]/actions";
 import { createAdminShoot } from "@/app/admin/calendar/actions";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, type AdminContext } from "@/lib/auth/require-admin";
 import {
   isCancellable,
   nextBookingStatuses,
@@ -24,7 +24,7 @@ import {
 import { labelForAddOn, labelForService } from "@/lib/booking/services";
 import { getCredential } from "@/lib/integrations/credentials";
 import { getServiceSupabase } from "@/lib/supabase/server";
-import type { BookingStatus } from "@/lib/supabase/database.types";
+import type { BookingStatus, Json } from "@/lib/supabase/database.types";
 
 const DEFAULT_MODEL =
   process.env.OPENAI_ASSISTANT_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-5.4-mini";
@@ -42,7 +42,8 @@ export interface AdminAssistantAction {
     | "add_calendar_block"
     | "update_realtor_memory"
     | "update_delivery_cc"
-    | "update_booking_note";
+    | "update_booking_note"
+    | "update_business_hours";
   bookingId: string;
   realtorId?: string;
   label: string;
@@ -54,6 +55,7 @@ export interface AdminAssistantAction {
   draft?: AdminAssistantBookingDraft;
   priceChange?: AdminAssistantPriceChange;
   calendarBlock?: AdminAssistantCalendarBlock;
+  businessHour?: AdminAssistantBusinessHour;
   textUpdate?: AdminAssistantTextUpdate;
 }
 
@@ -63,6 +65,16 @@ export interface AdminAssistantResult {
   kind: "answer" | "needs_confirmation" | "needs_clarification" | "unsupported";
   actions: AdminAssistantAction[];
   error?: string;
+}
+
+export interface AdminAssistantLog {
+  id: string;
+  actionType: string;
+  label: string;
+  details: string;
+  resultStatus: "success" | "failed";
+  resultMessage: string;
+  createdAt: string;
 }
 
 export interface AdminAssistantBookingDraft {
@@ -107,6 +119,13 @@ export interface AdminAssistantTextUpdate {
   text: string;
   mode: "append" | "replace" | "clear" | "add" | "remove";
   emails: string[];
+}
+
+export interface AdminAssistantBusinessHour {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  enabled: boolean;
 }
 
 interface BookingContextRow {
@@ -174,6 +193,7 @@ interface ModelPlan {
       | "update_realtor_memory"
       | "update_delivery_cc"
       | "update_booking_note"
+      | "update_business_hours"
       | "none";
     bookingId: string;
     realtorId: string;
@@ -207,6 +227,12 @@ interface ModelPlan {
       startsLocal: string;
       endsLocal: string;
       label: string;
+    };
+    businessHour: {
+      dayOfWeek: number;
+      startTime: string;
+      endTime: string;
+      enabled: boolean;
     };
     textUpdate: {
       text: string;
@@ -253,7 +279,51 @@ export async function confirmAdminAssistantAction(
   action: AdminAssistantAction,
 ): Promise<AdminAssistantResult> {
   const admin = await requireAdmin();
+  const result = await executeConfirmedAssistantAction(admin, action);
+  await recordAssistantAction(admin, action, result);
+  return result;
+}
 
+export async function getAssistantActionLogs(): Promise<AdminAssistantLog[]> {
+  const admin = await requireAdmin();
+  const { data, error } = await getServiceSupabase()
+    .from("assistant_action_logs")
+    .select(
+      "id, action_type, label, details, result_status, result_message, created_at",
+    )
+    .eq("organization_id", admin.organizationId)
+    .order("created_at", { ascending: false })
+    .limit(8)
+    .returns<
+      Array<{
+        id: string;
+        action_type: string;
+        label: string;
+        details: string;
+        result_status: "success" | "failed";
+        result_message: string;
+        created_at: string;
+      }>
+    >();
+  if (error) {
+    console.warn("[admin-assistant] could not load audit log", error.message);
+    return [];
+  }
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    actionType: row.action_type,
+    label: row.label,
+    details: row.details,
+    resultStatus: row.result_status,
+    resultMessage: row.result_message,
+    createdAt: row.created_at,
+  }));
+}
+
+async function executeConfirmedAssistantAction(
+  admin: AdminContext,
+  action: AdminAssistantAction,
+): Promise<AdminAssistantResult> {
   if (action.type === "create_booking") {
     return createBookingFromAssistant(action);
   }
@@ -500,6 +570,37 @@ export async function confirmAdminAssistantAction(
     };
   }
 
+  if (action.type === "update_business_hours") {
+    const result = await applyBusinessHourUpdate(admin.organizationId, action);
+    if (!result.ok) {
+      return {
+        ok: false,
+        kind: "needs_clarification",
+        message: result.error,
+        actions: [],
+      };
+    }
+    revalidatePath("/admin/settings/availability");
+    revalidatePath("/admin/calendar");
+    revalidatePath("/book");
+    return {
+      ok: true,
+      kind: "answer",
+      message: "Done. I updated those working hours.",
+      actions: [
+        {
+          type: "open_booking",
+          bookingId: "",
+          label: "Open availability",
+          details: "Review your working hours.",
+          href: "/admin/settings/availability",
+          destructive: false,
+          requiresConfirmation: false,
+        },
+      ],
+    };
+  }
+
   if (action.type !== "cancel_booking") {
     return {
       ok: false,
@@ -566,6 +667,53 @@ export async function confirmAdminAssistantAction(
       },
     ],
   };
+}
+
+async function recordAssistantAction(
+  admin: AdminContext,
+  action: AdminAssistantAction,
+  result: AdminAssistantResult,
+): Promise<void> {
+  const targetBookingId =
+    action.bookingId ||
+    result.actions.find((nextAction) => nextAction.bookingId)?.bookingId ||
+    null;
+  const payload = {
+    actionType: action.type,
+    nextStatus: action.nextStatus ?? null,
+    priceChange: action.priceChange ?? null,
+    calendarBlock: action.calendarBlock ?? null,
+    businessHour: action.businessHour ?? null,
+    textUpdate: action.textUpdate
+      ? {
+          ...action.textUpdate,
+          text:
+            action.textUpdate.text.length > 1000
+              ? `${action.textUpdate.text.slice(0, 1000)}...`
+              : action.textUpdate.text,
+        }
+      : null,
+  };
+  const payloadJson = JSON.parse(JSON.stringify(payload)) as Json;
+
+  const { error } = await getServiceSupabase()
+    .from("assistant_action_logs")
+    .insert({
+      organization_id: admin.organizationId,
+      actor_profile_id: admin.userId,
+      action_type: action.type,
+      target_booking_id: targetBookingId || null,
+      target_realtor_id: action.realtorId ?? null,
+      label: action.label,
+      details: action.details,
+      payload: payloadJson,
+      result_status: result.ok ? "success" : "failed",
+      result_message: result.message,
+    });
+
+  if (error) {
+    console.warn("[admin-assistant] audit log failed", error.message);
+  }
 }
 
 async function loadAssistantContext(organizationId: string): Promise<{
@@ -830,6 +978,7 @@ async function planWithOpenAI(
             "Only propose update_booking_status when one booking and the exact next status are clearly identified; use requested, confirmed, shot, editing, delivered, or cancelled only. For cancellation requests, prefer cancel_booking. " +
             "For pricing requests like raising/lowering prices, propose bulk_update_prices only when the amount is clear. Use percent for percentage changes and fixed for dollar changes. Scope defaults to active catalog items unless the user clearly says all, bundles, a la carte, or add-ons. Rounding defaults to nearest_dollar unless the user asks for clean $5 increments. " +
             "For availability requests like vacation, lunch, personal appointments, days off, or blocking time, propose add_calendar_block only when the start and end time are clear. " +
+            "For recurring working-hour requests like make Mondays 9-5 or close Sundays, propose update_business_hours with dayOfWeek 0=Sunday through 6=Saturday. Use HH:MM 24-hour times. If closing a day, enabled=false and keep start/end as 09:00/17:00 unless provided. " +
             "For realtor preference/memory requests, propose update_realtor_memory when exactly one realtor is clear; append notes unless the user explicitly says replace or clear. " +
             "For delivery recipient requests, propose update_delivery_cc when exactly one realtor is clear and valid email addresses are provided; use add unless the user asks to remove. " +
             "For booking note requests, propose update_booking_note when exactly one booking is clear; append the note unless the user explicitly says replace or clear. " +
@@ -857,6 +1006,7 @@ async function planWithOpenAI(
               "update_realtor_memory_requires_confirmation",
               "update_delivery_cc_requires_confirmation",
               "update_booking_note_requires_confirmation",
+              "update_business_hours_requires_confirmation",
               "draft_booking_needs_more_info",
             ],
             bookings: context.bookings,
@@ -945,6 +1095,16 @@ function normalizePlan(
 
     if (raw.type === "add_calendar_block") {
       const built = buildCalendarBlockAction(raw);
+      if ("action" in built) {
+        actions.push(built.action);
+      } else {
+        missing.push(...built.missing);
+      }
+      continue;
+    }
+
+    if (raw.type === "update_business_hours") {
+      const built = buildBusinessHourAction(raw);
       if ("action" in built) {
         actions.push(built.action);
       } else {
@@ -1307,6 +1467,57 @@ function buildCalendarBlockAction(
   };
 }
 
+function buildBusinessHourAction(
+  raw: ModelPlan["actions"][number],
+):
+  | { action: AdminAssistantAction }
+  | { missing: string[] } {
+  const businessHour = raw.businessHour;
+  const dayOfWeek = Number(businessHour.dayOfWeek);
+  const startTime = normalizeTime(businessHour.startTime || "09:00");
+  const endTime = normalizeTime(businessHour.endTime || "17:00");
+  const missing: string[] = [];
+
+  if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
+    missing.push("day of week");
+  }
+  if (!startTime || !endTime) {
+    missing.push("valid working hours");
+  }
+  if (startTime && endTime && startTime >= endTime) {
+    missing.push("end time after start time");
+  }
+  if (missing.length > 0) return { missing };
+
+  const enabled = Boolean(businessHour.enabled);
+  const day = dayName(dayOfWeek);
+  return {
+    action: {
+      type: "update_business_hours",
+      bookingId: "",
+      label:
+        raw.label ||
+        (enabled
+          ? `Set ${day} hours`
+          : `Close ${day}`),
+      details:
+        raw.details ||
+        (enabled
+          ? `${day} will be open ${startTime} to ${endTime}.`
+          : `${day} will be closed for online booking.`),
+      href: "/admin/settings/availability",
+      destructive: !enabled,
+      requiresConfirmation: true,
+      businessHour: {
+        dayOfWeek,
+        startTime: startTime!,
+        endTime: endTime!,
+        enabled,
+      },
+    },
+  };
+}
+
 function buildRealtorAction(
   raw: ModelPlan["actions"][number],
   context: {
@@ -1462,6 +1673,41 @@ async function applyCalendarBlock(
     ends_at: ends.toISOString(),
     label: block.label || null,
   });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+async function applyBusinessHourUpdate(
+  organizationId: string,
+  action: AdminAssistantAction,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const businessHour = action.businessHour;
+  if (!businessHour) return { ok: false, error: "Missing working hours." };
+  const startTime = normalizeTime(businessHour.startTime);
+  const endTime = normalizeTime(businessHour.endTime);
+  if (
+    !Number.isInteger(businessHour.dayOfWeek) ||
+    businessHour.dayOfWeek < 0 ||
+    businessHour.dayOfWeek > 6 ||
+    !startTime ||
+    !endTime ||
+    startTime >= endTime
+  ) {
+    return { ok: false, error: "Those working hours are not valid." };
+  }
+
+  const { error } = await getServiceSupabase()
+    .from("business_hours")
+    .upsert(
+      {
+        organization_id: organizationId,
+        day_of_week: businessHour.dayOfWeek,
+        start_time: startTime,
+        end_time: endTime,
+        enabled: businessHour.enabled,
+      },
+      { onConflict: "organization_id,day_of_week" },
+    );
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
@@ -1644,6 +1890,28 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function normalizeTime(value: string): string | null {
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function dayName(dayOfWeek: number): string {
+  return [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+  ][dayOfWeek] ?? "That day";
+}
+
 async function createBookingFromAssistant(
   action: AdminAssistantAction,
 ): Promise<AdminAssistantResult> {
@@ -1743,6 +2011,7 @@ const PLAN_SCHEMA = {
           "draft",
           "priceChange",
           "calendarBlock",
+          "businessHour",
           "textUpdate",
         ],
         properties: {
@@ -1760,6 +2029,7 @@ const PLAN_SCHEMA = {
               "update_realtor_memory",
               "update_delivery_cc",
               "update_booking_note",
+              "update_business_hours",
               "none",
             ],
           },
@@ -1848,6 +2118,17 @@ const PLAN_SCHEMA = {
               startsLocal: { type: "string" },
               endsLocal: { type: "string" },
               label: { type: "string" },
+            },
+          },
+          businessHour: {
+            type: "object",
+            additionalProperties: false,
+            required: ["dayOfWeek", "startTime", "endTime", "enabled"],
+            properties: {
+              dayOfWeek: { type: "number" },
+              startTime: { type: "string" },
+              endTime: { type: "string" },
+              enabled: { type: "boolean" },
             },
           },
           textUpdate: {

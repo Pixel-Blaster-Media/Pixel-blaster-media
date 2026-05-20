@@ -616,6 +616,38 @@ interface BookingNotificationsTable {
   Relationships: [];
 }
 
+interface AssistantActionLogsTable {
+  Row: {
+    id: string;
+    organization_id: string;
+    actor_profile_id: string | null;
+    action_type: string;
+    target_booking_id: string | null;
+    target_realtor_id: string | null;
+    label: string;
+    details: string;
+    payload: Json;
+    result_status: "success" | "failed";
+    result_message: string;
+    created_at: string;
+  };
+  Insert: {
+    id?: string;
+    organization_id: string;
+    actor_profile_id?: string | null;
+    action_type: string;
+    target_booking_id?: string | null;
+    target_realtor_id?: string | null;
+    label?: string;
+    details?: string;
+    payload?: Json;
+    result_status: "success" | "failed";
+    result_message?: string;
+  };
+  Update: Partial<AssistantActionLogsTable["Insert"]>;
+  Relationships: [];
+}
+
 interface ListingWebsitesTable {
   Row: {
     id: string;
@@ -684,6 +716,7 @@ export interface Database {
       catalog_items: CatalogItemsTable;
       booking_line_items: BookingLineItemsTable;
       booking_notifications: BookingNotificationsTable;
+      assistant_action_logs: AssistantActionLogsTable;
       listing_websites: ListingWebsitesTable;
       google_calendar_connection: GoogleCalendarConnectionTable;
       integration_credentials: IntegrationCredentialsTable;
