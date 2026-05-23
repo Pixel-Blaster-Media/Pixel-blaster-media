@@ -31,6 +31,9 @@ export default function BusinessSettingsForm({
 
   const primaryColor = organization.primary_color ?? "#3f7f5f";
   const accentColor = organization.accent_color ?? "#c9a35b";
+  const [businessName, setBusinessName] = useState(organization.name);
+  const [bookingHandle, setBookingHandle] = useState(organization.slug);
+  const [handleEdited, setHandleEdited] = useState(false);
   const [previewLogoUrl, setPreviewLogoUrl] = useState(organization.logo_url ?? "");
   const [clearLogo, setClearLogo] = useState(false);
 
@@ -48,7 +51,12 @@ export default function BusinessSettingsForm({
               </span>
               <input
                 name="name"
-                defaultValue={organization.name}
+                value={businessName}
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  setBusinessName(value);
+                  if (!handleEdited) setBookingHandle(slugify(value));
+                }}
                 required
                 maxLength={80}
                 className="mt-1 box-border w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text outline-none placeholder:text-realtor-muted/60 focus:border-realtor-primary/45"
@@ -61,7 +69,11 @@ export default function BusinessSettingsForm({
               </span>
               <input
                 name="slug"
-                defaultValue={organization.slug}
+                value={bookingHandle}
+                onChange={(event) => {
+                  setHandleEdited(true);
+                  setBookingHandle(slugify(event.currentTarget.value));
+                }}
                 required
                 maxLength={60}
                 pattern="[a-z0-9]+(-[a-z0-9]+)*"
@@ -70,8 +82,9 @@ export default function BusinessSettingsForm({
               <span className="mt-1 block text-xs leading-5 text-realtor-muted">
                 Public booking link:{" "}
                 <code className="rounded-md bg-realtor-surface-muted px-1.5 py-0.5 text-realtor-text">
-                  /book?org={organization.slug}
+                  /book?org={bookingHandle || "your-company"}
                 </code>
+                . Spaces automatically become hyphens.
               </span>
             </label>
 
@@ -229,6 +242,16 @@ export default function BusinessSettingsForm({
       </section>
     </form>
   );
+}
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
 }
 
 function ColorField({

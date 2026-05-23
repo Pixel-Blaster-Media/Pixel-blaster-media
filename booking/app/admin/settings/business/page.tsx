@@ -217,9 +217,10 @@ function SetupChecklist({
           body={
             calendarEmail
               ? `Connected to ${calendarEmail}.`
-              : "Connect this so bookings write to the photographer's calendar."
+              : "Connect this so bookings write to the photographer's calendar. Opens in a new tab so this setup page stays put."
           }
           href="/admin/settings/integrations"
+          external
         />
         <ChecklistItem
           done={status.testBookingLink}
@@ -250,6 +251,7 @@ function ChecklistItem({
     <Link
       href={href}
       target={external ? "_blank" : undefined}
+      rel={external ? "noopener noreferrer" : undefined}
       className="group rounded-2xl border border-realtor-primary/15 bg-white/65 p-4 transition hover:border-realtor-primary/35 hover:bg-white"
     >
       <div className="flex items-start gap-3">

@@ -41,39 +41,71 @@ export default function StartCompanyForm() {
             Create your company
           </p>
           <h2 className="mt-2 text-2xl font-semibold text-realtor-text">
-            Set the basics now.
+            Create your login, then set the brand basics.
           </h2>
           <p className="mt-2 text-sm leading-6 text-realtor-muted">
-            Your private workspace starts with these details. You can change
-            the logo, pricing, calendar, and integrations once you are inside.
+            Start with the owner account. Then choose the public booking name,
+            link, and colors realtors will see.
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-[1fr_0.8fr]">
+        <div className="grid gap-4 md:grid-cols-2">
           <Field
-            label="Business name"
-            name="company_name"
+            label="Your name"
+            name="admin_name"
             required
-            placeholder="Forest House Media"
-            value={companyName}
-            onChange={(value) => {
-              setCompanyName(value);
-              if (!slugEdited) setCompanySlug(slugify(value));
-            }}
-            helper="This appears on your booking page and outgoing emails."
+            placeholder="Alex Morgan"
           />
           <Field
-            label="Booking handle"
-            name="company_slug"
+            label="Email"
+            name="admin_email"
+            type="email"
             required
-            placeholder="forest-house-media"
-            value={companySlug}
-            onChange={(value) => {
-              setSlugEdited(true);
-              setCompanySlug(slugify(value));
-            }}
-            helper={previewUrl}
+            placeholder="alex@example.com"
           />
+          <div className="md:col-span-2">
+            <Field
+              label="Password"
+              name="admin_password"
+              type="password"
+              required
+              minLength={10}
+              placeholder="At least 10 characters"
+              helper="You will use this to sign into your company dashboard."
+            />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-realtor-primary/10 bg-realtor-surface-muted/45 p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-realtor-primary/80">
+            Booking brand
+          </p>
+          <div className="mt-4 grid gap-4 md:grid-cols-[1fr_0.8fr]">
+            <Field
+              label="Business name"
+              name="company_name"
+              required
+              placeholder="Forest House Media"
+              value={companyName}
+              onChange={(value) => {
+                setCompanyName(value);
+                if (!slugEdited) setCompanySlug(slugify(value));
+              }}
+              helper="This appears on your booking page and outgoing emails."
+            />
+            <Field
+              label="Booking handle"
+              name="company_slug"
+              required
+              placeholder="forest-house-media"
+              value={companySlug}
+              onChange={(value) => {
+                setSlugEdited(true);
+                setCompanySlug(slugify(value));
+              }}
+              helper={`${previewUrl} — spaces automatically become hyphens.`}
+            />
+          </div>
         </div>
 
         <div className="grid gap-4 rounded-2xl border border-realtor-primary/10 bg-realtor-surface-muted/45 p-4 md:grid-cols-[1fr_1fr_1.1fr]">
@@ -115,33 +147,6 @@ export default function StartCompanyForm() {
             <span className="mt-3 inline-flex rounded-full bg-[var(--preview-primary)] px-4 py-2 text-xs font-semibold text-white">
               Continue booking
             </span>
-          </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field
-            label="Your name"
-            name="admin_name"
-            required
-            placeholder="Alex Morgan"
-          />
-          <Field
-            label="Email"
-            name="admin_email"
-            type="email"
-            required
-            placeholder="alex@example.com"
-          />
-          <div className="md:col-span-2">
-            <Field
-              label="Password"
-              name="admin_password"
-              type="password"
-              required
-              minLength={10}
-              placeholder="At least 10 characters"
-              helper="You will use this to sign into your company dashboard."
-            />
           </div>
         </div>
       </section>

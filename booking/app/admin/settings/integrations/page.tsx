@@ -4,6 +4,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getGoogleCalendarConnection } from "@/lib/integrations/google-calendar/client";
 import { getCredentialSource } from "@/lib/integrations/credentials";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getQBClient, QBOError } from "@/lib/integrations/quickbooks/client";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
@@ -50,6 +51,7 @@ export default async function IntegrationsPage({
   }>;
 }) {
   const admin = await requireAdmin();
+  const isDefaultOrganization = admin.organizationId === DEFAULT_ORGANIZATION_ID;
   const params = await searchParams;
   const supabase = await getServerSupabase();
   const { data: connection } = await supabase
@@ -94,12 +96,14 @@ export default async function IntegrationsPage({
     iguideAppTokenStatus,
     iguideWebhookStatus,
   ]: CredentialFieldStatus[] = await Promise.all([
-    getCredentialSource(
-      "resend",
-      "api_key",
-      "RESEND_API_KEY",
-      admin.organizationId,
-    ),
+    isDefaultOrganization
+      ? getCredentialSource(
+          "resend",
+          "api_key",
+          "RESEND_API_KEY",
+          admin.organizationId,
+        )
+      : Promise.resolve({ source: "none" as const }),
     getCredentialSource(
       "openai",
       "api_key",
@@ -140,8 +144,10 @@ export default async function IntegrationsPage({
     iguideAppIdStatus.source !== "none" &&
     iguideAppTokenStatus.source !== "none";
 
-  const emailFrom = process.env.EMAIL_FROM ?? null;
-  const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL ?? "";
+  const emailFrom = isDefaultOrganization ? process.env.EMAIL_FROM ?? null : null;
+  const adminEmail = isDefaultOrganization
+    ? process.env.ADMIN_NOTIFICATION_EMAIL ?? ""
+    : "";
   const googleConfigured = Boolean(
     process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET,
   );
@@ -204,6 +210,7 @@ export default async function IntegrationsPage({
         </p>
       ) : null}
 
+      {isDefaultOrganization ? (
       <section className="realtor-elevated-panel rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -277,6 +284,33 @@ export default async function IntegrationsPage({
           </div>
         </div>
       </section>
+      ) : (
+        <section className="realtor-elevated-panel rounded-2xl p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-realtor-text">
+                Email delivery
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-realtor-muted">
+                Email sending is handled by the platform for beta companies, so
+                new businesses do not need their own Resend account or API key.
+                Set the sender name, reply-to email, and admin alert inbox in
+                Business profile.
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+              Platform managed
+            </span>
+          </div>
+
+          <Link
+            href="/admin/settings/business"
+            className="mt-4 inline-flex rounded-full border border-realtor-primary/20 bg-white px-4 py-2 text-sm font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+          >
+            Edit email identity
+          </Link>
+        </section>
+      )}
 
       <section className="realtor-elevated-panel rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4">
@@ -567,6 +601,15 @@ export default async function IntegrationsPage({
           </div>
         ) : googleConfigured ? (
           <div className="mt-5 space-y-3">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <p className="font-semibold">Seeing &quot;Access blocked&quot;?</p>
+              <p className="mt-1 text-xs leading-5">
+                The Google OAuth app is probably still in testing mode. Add
+                this photographer&apos;s Google account as a test user in Google
+                Cloud&apos;s OAuth consent screen, or publish and verify the app
+                before inviting outside companies.
+              </p>
+            </div>
             <p className="text-sm text-realtor-muted">
               Click Connect, approve the access request on Google, and you&apos;ll
               land back here. You can disconnect anytime — revokes access on
