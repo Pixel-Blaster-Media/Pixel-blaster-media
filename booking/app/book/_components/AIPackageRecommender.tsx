@@ -30,6 +30,7 @@ export default function AIPackageRecommender({
   const [recommendation, setRecommendation] =
     useState<BookingRecommendation | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const bySlug = useMemo(() => {
@@ -139,7 +140,7 @@ export default function AIPackageRecommender({
         .filter(Boolean)
     : [];
 
-  return (
+  const panel = (
     <section className="realtor-green-panel rounded-3xl p-4 md:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -313,6 +314,48 @@ export default function AIPackageRecommender({
         </div>
       ) : null}
     </section>
+  );
+
+  return (
+    <>
+      {assistantOpen ? (
+        <section
+          className="fixed inset-x-3 z-[80] max-h-[78vh] overflow-y-auto rounded-3xl border border-realtor-primary/20 bg-[#fffdf8] p-3 shadow-2xl shadow-realtor-text/25 md:inset-x-auto md:right-6 md:w-[520px]"
+          style={{
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.75rem)",
+          }}
+        >
+          <div className="mb-2 flex items-center justify-between gap-3 px-1">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-realtor-primary">
+              Optional helper
+            </p>
+            <button
+              type="button"
+              onClick={() => setAssistantOpen(false)}
+              className="rounded-full border border-realtor-primary/15 px-3 py-1 text-xs font-semibold text-realtor-muted transition hover:text-realtor-primary"
+            >
+              Close
+            </button>
+          </div>
+          {panel}
+        </section>
+      ) : null}
+
+      {!assistantOpen ? (
+        <button
+          type="button"
+          onClick={() => setAssistantOpen(true)}
+          className="fixed z-[80] flex h-14 w-14 items-center justify-center rounded-full border border-realtor-primary/20 bg-realtor-primary text-sm font-bold text-white shadow-2xl shadow-realtor-text/30 transition hover:scale-105 hover:bg-realtor-primary-light"
+          style={{
+            right: "calc(env(safe-area-inset-right, 0px) + 1rem)",
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)",
+          }}
+          aria-label="Open AI booking concierge"
+        >
+          AI
+        </button>
+      ) : null}
+    </>
   );
 }
 
