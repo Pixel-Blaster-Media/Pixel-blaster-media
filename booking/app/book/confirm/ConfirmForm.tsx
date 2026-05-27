@@ -157,7 +157,7 @@ export default function ConfirmForm({
             </p>
             <p className="mt-1 text-xs text-realtor-muted">
               {returningName
-                ? "We found your profile and filled in the details we already have."
+                ? "We found your profile and filled in the details we already have. You can confirm this booking without signing into the portal."
                 : "Start with your phone number. If you have booked with us before, we will fill in the rest."}
             </p>
           </div>
@@ -208,56 +208,70 @@ export default function ConfirmForm({
               onBlur={handleEmailBlur}
               error={formState?.errors?.contact_email}
             />
-            <div className="md:col-span-2">
-              <label className="block">
-                <span className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-realtor-muted">
-                  <span>
-                    {mode === "existing" ? "Password" : "Create a password"}
-                    <span className="text-brand-light"> *</span>
-                  </span>
-                  {mode === "existing" ? (
-                    <Link
-                      href="/auth/reset"
-                      className="text-[11px] normal-case tracking-normal text-brand-light hover:underline"
-                    >
-                      Forgot password?
-                    </Link>
-                  ) : null}
-                </span>
-                <input
-                  name="password"
-                  type="password"
-                  required
-                  autoComplete={
-                    mode === "existing" ? "current-password" : "new-password"
-                  }
-                  minLength={8}
-                  className={
-                    "realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
-                    (formState?.errors?.password
-                      ? "border-red-400/60"
-                      : "border-realtor-primary/15")
-                  }
-                />
-                <span className="mt-1 block text-[11px] text-realtor-muted">
-                  {mode === "existing"
-                    ? "We found your account. Enter your password to finish this booking."
-                    : mode === "new"
-                      ? "Save this password. You'll use it to return for photos, tours, invoices, and future bookings."
-                      : "8+ characters. If this email is new, we'll create your portal account. If it exists, we'll sign you in."}
-                </span>
-                {formState?.errors?.password ? (
-                  <span className="mt-1 block text-xs text-red-300">
-                    {formState.errors.password}
-                  </span>
-                ) : null}
-              </label>
-              <div className="mt-3 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/10 p-3 text-xs text-realtor-muted">
-                After you confirm, you can always come back through{" "}
-                <span className="font-semibold text-realtor-text">Sign in</span> using
-                this email and password. No magic link required.
+            {returningName ? (
+              <div className="md:col-span-2 rounded-2xl border border-brand-light/25 bg-brand-light/10 p-3 text-xs text-realtor-muted">
+                <p className="font-semibold text-realtor-text">
+                  Fast booking enabled
+                </p>
+                <p className="mt-1">
+                  No password needed right now. We will attach this booking to
+                  your existing profile, email the confirmation, and you can sign
+                  into the portal later only when you need media, invoices, or
+                  booking history.
+                </p>
               </div>
-            </div>
+            ) : (
+              <div className="md:col-span-2">
+                <label className="block">
+                  <span className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-realtor-muted">
+                    <span>
+                      {mode === "existing" ? "Password" : "Create a password"}
+                      <span className="text-brand-light"> *</span>
+                    </span>
+                    {mode === "existing" ? (
+                      <Link
+                        href="/auth/reset"
+                        className="text-[11px] normal-case tracking-normal text-brand-light hover:underline"
+                      >
+                        Forgot password?
+                      </Link>
+                    ) : null}
+                  </span>
+                  <input
+                    name="password"
+                    type="password"
+                    required
+                    autoComplete={
+                      mode === "existing" ? "current-password" : "new-password"
+                    }
+                    minLength={8}
+                    className={
+                      "realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
+                      (formState?.errors?.password
+                        ? "border-red-400/60"
+                        : "border-realtor-primary/15")
+                    }
+                  />
+                  <span className="mt-1 block text-[11px] text-realtor-muted">
+                    {mode === "existing"
+                      ? "We found your account. Enter your password to finish this booking."
+                      : mode === "new"
+                        ? "Save this password. You'll use it to return for photos, tours, invoices, and future bookings."
+                        : "8+ characters. If this email is new, we'll create your portal account. If it exists, we'll sign you in."}
+                  </span>
+                  {formState?.errors?.password ? (
+                    <span className="mt-1 block text-xs text-red-300">
+                      {formState.errors.password}
+                    </span>
+                  ) : null}
+                </label>
+                <div className="mt-3 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/10 p-3 text-xs text-realtor-muted">
+                  After you confirm, you can always come back through{" "}
+                  <span className="font-semibold text-realtor-text">Sign in</span>{" "}
+                  using this email and password. No magic link required.
+                </div>
+              </div>
+            )}
           </div>
         </fieldset>
       )}

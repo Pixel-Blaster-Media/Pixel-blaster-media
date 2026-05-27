@@ -39,6 +39,15 @@ export interface RealtorLookupResult {
   brokerage?: string | null;
 }
 
+interface RealtorPhoneMatch {
+  id: string;
+  email: string;
+  full_name: string | null;
+  phone: string | null;
+  brokerage: string | null;
+  organization_id: string | null;
+}
+
 /**
  * Server action exposed to the client form for email-existence checks.
  * Returns true if an account already exists for this email.
@@ -70,30 +79,10 @@ export async function lookupRealtorByPhoneAction(
   );
   if (!organization) return { found: false };
 
-  const supabase = getServiceSupabase();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("email, full_name, phone, brokerage")
-    .eq("organization_id", organization.id)
-    .eq("role", "realtor")
-    .not("phone", "is", null)
-    .limit(500)
-    .returns<
-      {
-        email: string;
-        full_name: string | null;
-        phone: string | null;
-        brokerage: string | null;
-      }[]
-    >();
-
-  if (error) {
-    console.warn("[book] realtor phone lookup failed", error.message);
-    return { found: false };
-  }
-
-  const match = (data ?? []).find(
-    (profile) => normalizePhone(profile.phone ?? "") === phoneDigits,
+  const match = await findRealtorByPhone(
+    getServiceSupabase(),
+    organization.id,
+    phoneDigits,
   );
   if (!match) return { found: false };
 
@@ -109,11 +98,13 @@ export async function lookupRealtorByPhoneAction(
 /**
  * Instant booking — replaces the old "request booking" flow.
  *
- * Three auth paths, chosen based on session state:
+ * Four auth paths, chosen based on session state:
  *
  *   1. Already signed in → use session.user directly.
- *   2. Not signed in, email has an account → sign in with password.
- *   3. Not signed in, email is new → create the auth user (pre-confirmed
+ *   2. Returning realtor phone match → attach booking to that profile without
+ *      forcing portal sign-in.
+ *   3. Not signed in, email has an account → sign in with password.
+ *   4. Not signed in, email is new → create the auth user (pre-confirmed
  *      via admin API so there's no verification email click-through),
  *      sign them in, move on.
  *
@@ -123,7 +114,8 @@ export async function lookupRealtorByPhoneAction(
  *   - Upsert property, insert booking (status=confirmed)
  *   - Push Google Calendar event (best-effort)
  *   - Send client confirmation + admin notification emails (best-effort)
- *   - Redirect to /portal with a success flash
+ *   - Redirect signed-in clients to /portal, or passwordless returning clients
+ *     to a public success screen
  */
 export async function createPublicBooking(
   _prev: BookResult | null,
@@ -219,6 +211,7 @@ export async function createPublicBooking(
   const userEmail = authResult.email;
   const userDisplayName = authResult.fullName ?? authResult.email;
   const organizationId = authResult.organizationId;
+  const signedInToPortal = authResult.signedInToPortal;
 
   // -------- Re-validate catalog items --------
   const catalog = await getActiveCatalog({ organizationId });
@@ -444,14 +437,17 @@ export async function createPublicBooking(
           ${addonLabels ? `<strong>Add-ons:</strong> ${escapeHtml(addonLabels)}<br>` : ""}
         </p>
         <p>
-          You can view and manage this booking anytime at
+          ${
+            signedInToPortal
+              ? `You can view and manage this booking anytime at
           <a href="${appUrl}/portal">${appUrl || "your client portal"}</a>.
-          Sign in with ${escapeHtml(userEmail)} and the password you used when booking.
-        </p>
-        <p>
-          Keep that password handy — it is how you can return later to see
-          photos, iGUIDE tours, floor plans, video links, invoices, and future
-          bookings in one place.
+          Sign in with ${escapeHtml(userEmail)} and the password you used when booking.`
+              : `We recognized your realtor profile, so you did not need to sign into
+          the portal just to book. If you want to view media, invoices, or past
+          bookings later, go to
+          <a href="${appUrl}/portal">${appUrl || "your client portal"}</a>
+          and sign in with ${escapeHtml(userEmail)}.`
+          }
         </p>
         <p>— ${escapeHtml(organization.name)}</p>
       `,
@@ -473,6 +469,14 @@ export async function createPublicBooking(
     }),
   ]);
 
+  if (!signedInToPortal) {
+    const params = new URLSearchParams({
+      address: emailAddressLine,
+      when: whenLabel,
+    });
+    redirect(`/book/success?${params.toString()}`);
+  }
+
   redirect(`/portal/${propertyId}?booked=1`);
 }
 
@@ -484,6 +488,7 @@ interface ResolveUserOk {
   email: string;
   fullName: string | null;
   organizationId: string;
+  signedInToPortal: boolean;
 }
 interface ResolveUserErr {
   ok: false;
@@ -528,14 +533,42 @@ async function resolveUser(params: {
           email: profile.email,
           fullName: profile.full_name,
           organizationId: profile.organization_id ?? DEFAULT_ORGANIZATION_ID,
+          signedInToPortal: true,
         };
       }
     }
   }
 
-  // From here on, every path needs contact + password.
+  const service = getServiceSupabase();
+
+  // 2) Returning realtor phone match → allow a fast booking without portal sign-in.
+  const returningRealtor = await findRealtorByPhone(
+    service,
+    params.organizationId,
+    params.contactPhone,
+  );
+  if (returningRealtor) {
+    await maybeFillProfile(service, returningRealtor.id, {
+      organizationId: params.organizationId,
+      full_name: params.contactName,
+      phone: params.contactPhone,
+      brokerage: params.brokerage,
+    });
+    return {
+      ok: true,
+      userId: returningRealtor.id,
+      email: returningRealtor.email,
+      fullName: returningRealtor.full_name ?? params.contactName,
+      organizationId:
+        returningRealtor.organization_id ?? DEFAULT_ORGANIZATION_ID,
+      signedInToPortal: false,
+    };
+  }
+
+  // From here on, every anonymous path needs contact + password.
   const errors: Record<string, string> = {};
   if (!params.contactName) errors.contact_name = "Required.";
+  if (!params.contactPhone) errors.contact_phone = "Required.";
   if (!params.contactEmail) errors.contact_email = "Required.";
   else if (!params.contactEmail.includes("@")) {
     errors.contact_email = "Looks like that's not a valid email.";
@@ -620,11 +653,11 @@ async function resolveUser(params: {
       email: profile.email,
       fullName: profile.full_name ?? params.contactName,
       organizationId: profile.organization_id ?? DEFAULT_ORGANIZATION_ID,
+      signedInToPortal: true,
     };
   }
 
   // 3) New email → create user (pre-confirmed) and sign in.
-  const service = getServiceSupabase();
   const { data: created, error: createErr } = await service.auth.admin.createUser({
     email: params.contactEmail,
     password: params.password,
@@ -695,6 +728,7 @@ async function resolveUser(params: {
     email: params.contactEmail,
     fullName: params.contactName,
     organizationId: params.organizationId,
+    signedInToPortal: true,
   };
 }
 
@@ -755,6 +789,35 @@ async function maybeFillProfile(
     .update(updates)
     .eq("id", userId);
   if (error) console.warn("[book] profile top-up failed", error);
+}
+
+async function findRealtorByPhone(
+  supabase: ReturnType<typeof getServiceSupabase>,
+  organizationId: string,
+  rawPhone: string,
+): Promise<RealtorPhoneMatch | null> {
+  const phoneDigits = normalizePhone(rawPhone);
+  if (phoneDigits.length < 10) return null;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, email, full_name, phone, brokerage, organization_id")
+    .eq("organization_id", organizationId)
+    .eq("role", "realtor")
+    .not("phone", "is", null)
+    .limit(500)
+    .returns<RealtorPhoneMatch[]>();
+
+  if (error) {
+    console.warn("[book] realtor phone lookup failed", error.message);
+    return null;
+  }
+
+  return (
+    (data ?? []).find(
+      (profile) => normalizePhone(profile.phone ?? "") === phoneDigits,
+    ) ?? null
+  );
 }
 
 async function sendAdminNotification(args: {
