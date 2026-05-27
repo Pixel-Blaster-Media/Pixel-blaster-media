@@ -55,7 +55,7 @@ export default function BookingTotalBar({
     <div
       className={
         (sticky ? "sticky bottom-0 z-20 " : "") +
-        "-mx-4 mt-5 border-t border-realtor-primary/15 bg-realtor-surface/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:rounded-3xl md:border md:p-4 md:shadow-lg md:shadow-realtor-primary/5"
+        "mt-5 rounded-2xl border border-realtor-primary/15 bg-realtor-surface/95 px-3 py-3 shadow-lg shadow-realtor-primary/5 backdrop-blur md:static md:rounded-3xl md:p-4"
       }
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -87,7 +87,7 @@ export default function BookingTotalBar({
           <button
             type="submit"
             disabled={disabled}
-            className="rounded-full bg-realtor-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-realtor-primary/20 transition hover:bg-realtor-primary-light disabled:cursor-not-allowed disabled:opacity-60"
+            className="shrink-0 rounded-full bg-realtor-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-realtor-primary/20 transition hover:bg-realtor-primary-light disabled:cursor-not-allowed disabled:opacity-60 sm:px-5"
           >
             {ctaLabel}
           </button>
@@ -96,7 +96,7 @@ export default function BookingTotalBar({
             href={href}
             aria-disabled={disabled}
             className={
-              "rounded-full px-5 py-2.5 text-sm font-semibold shadow-sm shadow-realtor-primary/20 transition " +
+              "shrink-0 rounded-full px-4 py-2.5 text-sm font-semibold shadow-sm shadow-realtor-primary/20 transition sm:px-5 " +
               (disabled
                 ? "pointer-events-none bg-realtor-primary/35 text-white/80"
                 : "bg-realtor-primary text-white hover:bg-realtor-primary-light")
@@ -108,7 +108,7 @@ export default function BookingTotalBar({
           <button
             type="button"
             disabled
-            className="rounded-full bg-realtor-primary/35 px-5 py-2.5 text-sm font-semibold text-white/80 shadow-sm shadow-realtor-primary/10"
+            className="shrink-0 rounded-full bg-realtor-primary/35 px-4 py-2.5 text-sm font-semibold text-white/80 shadow-sm shadow-realtor-primary/10 sm:px-5"
           >
             {ctaLabel}
           </button>

@@ -345,10 +345,10 @@ export default function AIPackageRecommender({
         <button
           type="button"
           onClick={() => setAssistantOpen(true)}
-          className="fixed z-[80] flex h-14 w-14 items-center justify-center rounded-full border border-realtor-primary/20 bg-realtor-primary text-sm font-bold text-white shadow-2xl shadow-realtor-text/30 transition hover:scale-105 hover:bg-realtor-primary-light"
+          className="fixed z-[80] flex h-12 w-12 items-center justify-center rounded-full border border-realtor-primary/20 bg-realtor-primary text-xs font-bold text-white shadow-2xl shadow-realtor-text/30 transition hover:scale-105 hover:bg-realtor-primary-light sm:h-14 sm:w-14 sm:text-sm"
           style={{
-            right: "calc(env(safe-area-inset-right, 0px) + 1rem)",
-            bottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)",
+            right: "calc(env(safe-area-inset-right, 0px) + 0.75rem)",
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)",
           }}
           aria-label="Open AI booking concierge"
         >
