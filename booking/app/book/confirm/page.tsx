@@ -109,8 +109,8 @@ export default async function BookStep4Page({
           </p>
         ) : (
           <p className="mt-1 text-sm text-realtor-muted">
-            Enter your contact info and choose a password. That same password
-            gets you back into your private portal later.
+            Start with your phone number. If you have booked before, we will
+            fill in what we already know and get the request confirmed.
           </p>
         )}
       </section>

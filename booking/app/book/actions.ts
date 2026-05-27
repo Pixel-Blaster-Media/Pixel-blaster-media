@@ -31,6 +31,14 @@ export interface BookResult {
   errors?: Record<string, string>;
 }
 
+export interface RealtorLookupResult {
+  found: boolean;
+  email?: string;
+  fullName?: string | null;
+  phone?: string | null;
+  brokerage?: string | null;
+}
+
 /**
  * Server action exposed to the client form for email-existence checks.
  * Returns true if an account already exists for this email.
@@ -41,6 +49,61 @@ export interface BookResult {
  */
 export async function checkEmailAction(email: string): Promise<boolean> {
   return emailHasAccount(email);
+}
+
+/**
+ * Public booking helper: recognize a returning realtor by exact phone number.
+ *
+ * This intentionally returns only lightweight contact fields, scoped to the
+ * requested booking organization, so the form can feel personal without opening
+ * a broad profile-search surface.
+ */
+export async function lookupRealtorByPhoneAction(
+  organizationSlug: string | null,
+  rawPhone: string,
+): Promise<RealtorLookupResult> {
+  const phoneDigits = normalizePhone(rawPhone);
+  if (phoneDigits.length < 10) return { found: false };
+
+  const organization = await resolvePublicBookingOrganization(
+    organizationSlug ?? "",
+  );
+  if (!organization) return { found: false };
+
+  const supabase = getServiceSupabase();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("email, full_name, phone, brokerage")
+    .eq("organization_id", organization.id)
+    .eq("role", "realtor")
+    .not("phone", "is", null)
+    .limit(500)
+    .returns<
+      {
+        email: string;
+        full_name: string | null;
+        phone: string | null;
+        brokerage: string | null;
+      }[]
+    >();
+
+  if (error) {
+    console.warn("[book] realtor phone lookup failed", error.message);
+    return { found: false };
+  }
+
+  const match = (data ?? []).find(
+    (profile) => normalizePhone(profile.phone ?? "") === phoneDigits,
+  );
+  if (!match) return { found: false };
+
+  return {
+    found: true,
+    email: match.email,
+    fullName: match.full_name,
+    phone: match.phone,
+    brokerage: match.brokerage,
+  };
 }
 
 /**
@@ -743,6 +806,12 @@ function decodeUserId(token: string): string | null {
 
 function str(fd: FormData, key: string): string {
   return ((fd.get(key) as string | null) ?? "").trim();
+}
+
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
+  return digits;
 }
 
 function buildBookingNotes({

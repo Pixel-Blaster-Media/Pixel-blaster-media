@@ -4,7 +4,12 @@ import Link from "next/link";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 
-import { checkEmailAction, createPublicBooking, type BookResult } from "../actions";
+import {
+  checkEmailAction,
+  createPublicBooking,
+  lookupRealtorByPhoneAction,
+  type BookResult,
+} from "../actions";
 import {
   serializeWizardState,
   type WizardState,
@@ -39,9 +44,45 @@ export default function ConfirmForm({
 }) {
   const [formState, formAction] = useActionState(createPublicBooking, initial);
 
+  const [contactName, setContactName] = useState(profile?.fullName ?? "");
   const [email, setEmail] = useState(profile?.email ?? "");
+  const [phone, setPhone] = useState(profile?.phone ?? "");
+  const [brokerage, setBrokerage] = useState(profile?.brokerage ?? "");
+  const [returningName, setReturningName] = useState<string | null>(null);
   const [mode, setMode] = useState<"unknown" | "new" | "existing">("unknown");
   const [, startTransition] = useTransition();
+  const [lookupPending, startLookupTransition] = useTransition();
+
+  function handlePhoneChange(value: string) {
+    setPhone(value);
+    setReturningName(null);
+  }
+
+  async function handlePhoneBlur() {
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length < 10) return;
+
+    startLookupTransition(async () => {
+      try {
+        const match = await lookupRealtorByPhoneAction(
+          state.organizationSlug ?? null,
+          phone,
+        );
+        if (!match.found) return;
+
+        setReturningName(firstName(match.fullName ?? match.email ?? ""));
+        if (match.fullName) setContactName(match.fullName);
+        if (match.email) {
+          setEmail(match.email);
+          setMode("existing");
+        }
+        if (match.phone) setPhone(match.phone);
+        if (match.brokerage) setBrokerage(match.brokerage);
+      } catch {
+        // Keep the normal first-time form if recognition is unavailable.
+      }
+    });
+  }
 
   function handleEmailChange(value: string) {
     setEmail(value);
@@ -65,7 +106,11 @@ export default function ConfirmForm({
   }
 
   useEffect(() => {
-    if (profile) setEmail(profile.email);
+    if (!profile) return;
+    setContactName(profile.fullName ?? "");
+    setEmail(profile.email);
+    setPhone(profile.phone ?? "");
+    setBrokerage(profile.brokerage ?? "");
   }, [profile]);
 
   return (
@@ -108,19 +153,40 @@ export default function ConfirmForm({
           <legend className="sr-only">Your contact info</legend>
           <div className="mb-4">
             <p className="text-sm font-semibold text-realtor-text">
-              Your portal login
+              {returningName ? `Welcome back, ${returningName}` : "Your details"}
             </p>
             <p className="mt-1 text-xs text-realtor-muted">
-              We use this to confirm the booking and create your private media
-              portal. Use an email you can access later.
+              {returningName
+                ? "We found your profile and filled in the details we already have."
+                : "Start with your phone number. If you have booked with us before, we will fill in the rest."}
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
+            <Field
+              label="Phone"
+              name="contact_phone"
+              type="tel"
+              autoComplete="tel"
+              placeholder="(905) 555-0123"
+              value={phone}
+              onChange={(e) => handlePhoneChange(e.currentTarget.value)}
+              onBlur={handlePhoneBlur}
+              helper={
+                lookupPending
+                  ? "Checking for your profile..."
+                  : returningName
+                    ? "Profile matched by phone."
+                    : undefined
+              }
+              error={formState?.errors?.contact_phone}
+            />
             <Field
               label="Full name"
               name="contact_name"
               required
               autoComplete="name"
+              value={contactName}
+              onChange={(e) => setContactName(e.currentTarget.value)}
               error={formState?.errors?.contact_name}
             />
             <Field
@@ -128,6 +194,8 @@ export default function ConfirmForm({
               name="brokerage"
               placeholder="Royal LePage, Re/Max, etc."
               autoComplete="organization"
+              value={brokerage}
+              onChange={(e) => setBrokerage(e.currentTarget.value)}
             />
             <Field
               label="Email"
@@ -139,14 +207,6 @@ export default function ConfirmForm({
               onChange={(e) => handleEmailChange(e.currentTarget.value)}
               onBlur={handleEmailBlur}
               error={formState?.errors?.contact_email}
-            />
-            <Field
-              label="Phone"
-              name="contact_phone"
-              type="tel"
-              autoComplete="tel"
-              placeholder="(905) 555-0123"
-              error={formState?.errors?.contact_phone}
             />
             <div className="md:col-span-2">
               <label className="block">
@@ -276,6 +336,7 @@ function Field({
   value,
   onChange,
   onBlur,
+  helper,
   error,
 }: {
   label: string;
@@ -287,6 +348,7 @@ function Field({
   value?: string;
   onChange?: React.ChangeEventHandler<HTMLInputElement>;
   onBlur?: React.FocusEventHandler<HTMLInputElement>;
+  helper?: string;
   error?: string;
 }) {
   return (
@@ -309,11 +371,24 @@ function Field({
           (error ? "border-red-400/60" : "border-realtor-primary/15")
         }
       />
+      {helper ? (
+        <span className="mt-1 block text-[11px] text-realtor-muted">
+          {helper}
+        </span>
+      ) : null}
       {error ? (
         <span className="mt-1 block text-xs text-red-300">{error}</span>
       ) : null}
     </label>
   );
+}
+
+function firstName(nameOrEmail: string): string {
+  const local = nameOrEmail.includes("@")
+    ? nameOrEmail.split("@")[0]?.replace(/[._-]+/g, " ")
+    : nameOrEmail;
+  const first = local?.trim().split(/\s+/)[0];
+  return first || "there";
 }
 
 function buildQuery(state: WizardState): string {
