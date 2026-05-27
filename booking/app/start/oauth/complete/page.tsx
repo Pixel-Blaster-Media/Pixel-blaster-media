@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import {
   createCompanyWorkspaceForExistingUser,
@@ -10,6 +10,8 @@ import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
 const FRESH_PROFILE_WINDOW_MS = 15 * 60 * 1000;
 
 export default async function CompleteOAuthSignupPage() {
+  if (process.env.ENABLE_PUBLIC_SIGNUP !== "1") notFound();
+
   const supabase = await getServerSupabase();
   const {
     data: { user },

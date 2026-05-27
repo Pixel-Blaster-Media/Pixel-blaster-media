@@ -19,6 +19,13 @@ export async function startCompanySignup(
   _prev: StartCompanyResult | null,
   formData: FormData,
 ): Promise<StartCompanyResult> {
+  if (process.env.ENABLE_PUBLIC_SIGNUP !== "1") {
+    return {
+      ok: false,
+      error: "Company signup is currently closed.",
+    };
+  }
+
   if (cleanText(formData.get("website"))) {
     return { ok: false, error: "Could not create this account." };
   }

@@ -17,21 +17,21 @@ export default function Home() {
 
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
           <Link
-            href="/start"
+            href="/book"
             className="rounded-full bg-realtor-primary px-7 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-realtor-text/10 transition hover:bg-realtor-primary/90"
           >
-            Create account
+            Book a shoot
           </Link>
           <Link
             href="/auth/sign-in?next=/admin"
             className="rounded-full border border-realtor-primary/25 bg-realtor-surface px-7 py-3 text-center text-sm font-semibold text-realtor-primary transition hover:border-realtor-primary/45 hover:bg-realtor-primary/10"
           >
-            Sign in
+            Admin sign in
           </Link>
         </div>
 
         <p className="mt-4 text-xs leading-5 text-realtor-muted">
-          Beta access is open for testing. Subscriptions and billing come later.
+          Pixel Blaster Media booking and realtor delivery portal.
         </p>
       </section>
 

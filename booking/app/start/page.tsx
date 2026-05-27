@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
 import OAuthButtons from "@/app/auth/oauth/OAuthButtons";
 
@@ -13,6 +14,8 @@ export default async function StartPage({
 }: {
   searchParams: Promise<{ oauth_error?: string }>;
 }) {
+  if (process.env.ENABLE_PUBLIC_SIGNUP !== "1") notFound();
+
   const params = await searchParams;
   return (
     <div className="realtor-theme mx-auto grid max-w-5xl gap-8 lg:grid-cols-[0.9fr_1.1fr]">
