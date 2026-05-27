@@ -15,10 +15,6 @@ import type { Database } from "@/lib/supabase/database.types";
 type BookingRequestRow =
   Database["public"]["Tables"]["booking_requests"]["Row"];
 
-interface InsertedRow {
-  id: string;
-}
-
 export interface ActionResult {
   ok: boolean;
   error?: string;
@@ -66,19 +62,13 @@ export async function declineRequest(requestId: string): Promise<ActionResult> {
 /**
  * Promote a `booking_request` into a real booking.
  *
- * Steps (in order, each gated by the previous):
+ * Steps:
  *   1. Load the request, refuse if already accepted.
  *   2. Find or create the realtor's auth.users row (service-role).
- *      The DB trigger inserts a matching `profiles` row automatically;
- *      we then fill in name/phone/brokerage from the request.
- *   3. Insert a new `properties` row owned by the realtor.
- *   4. Insert a new `bookings` row, status=confirmed, scheduled_at as given.
- *   5. Update the original request: status=accepted, booking_id linked.
- *
- * NOTE: This is a multi-step write that's not strictly atomic — if step 4
- * fails after step 3 succeeds, you'll have an orphaned property. Acceptable
- * for now (low-volume, manual operation). A future improvement is to wrap
- * 3-5 in a Postgres function called via RPC.
+ *   3. Call `create_booking_from_request`, which performs the profile
+ *      backfill + property insert + booking insert + request linking in one
+ *      database transaction.
+ *   4. Run external side effects (Google Calendar + email) best-effort.
  */
 export async function acceptRequest(
   requestId: string,
@@ -132,85 +122,38 @@ export async function acceptRequest(
     return { ok: false, error: "Auth admin call failed." };
   }
 
-  // Backfill profile fields from the request. The trigger created an
-  // empty-ish profile row, so this is an UPDATE not an INSERT.
-  await supabase
-    .from("profiles")
-    .update({
-      organization_id: admin.organizationId,
-      full_name: req.contact_name,
-      phone: req.contact_phone,
-      brokerage: req.brokerage,
-    })
-    .eq("id", userId);
+  const scheduledEndsAt = scheduledAt
+    ? new Date(
+        new Date(scheduledAt).getTime() +
+          Math.max(totalDurationMinutes(req.services, req.add_ons), 60) *
+            60_000,
+      ).toISOString()
+    : null;
 
-  // 3. Property.
-  const { data: property, error: propErr } = await supabase
-    .from("properties")
-    .insert({
-      organization_id: admin.organizationId,
-      owner_id: userId,
-      street_address: req.street_address,
-      city: req.city,
-      postal_code: req.postal_code,
-    })
-    .select("id")
-    .single<InsertedRow>();
+  const { data: bookingId, error: acceptErr } = await supabase.rpc(
+    "create_booking_from_request",
+    {
+      p_organization_id: admin.organizationId,
+      p_request_id: requestId,
+      p_owner_id: userId,
+      p_scheduled_at: scheduledAt,
+      p_scheduled_ends_at: scheduledEndsAt,
+    },
+  );
 
-  if (propErr || !property) {
-    console.error("[accept] property insert failed", propErr);
-    return { ok: false, error: "Could not create property record." };
-  }
-
-  // 4. Booking.
-  const { data: booking, error: bookErr } = await supabase
-    .from("bookings")
-    .insert({
-      organization_id: admin.organizationId,
-      property_id: property.id,
-      owner_id: userId,
-      status: "confirmed",
-      scheduled_at: scheduledAt,
-      scheduled_ends_at: scheduledAt
-        ? new Date(
-            new Date(scheduledAt).getTime() +
-              Math.max(totalDurationMinutes(req.services, req.add_ons), 60) *
-                60_000,
-          ).toISOString()
-        : null,
-      services: req.services,
-      add_ons: req.add_ons,
-      square_footage: req.square_footage,
-      client_notes: req.notes,
-    })
-    .select("id")
-    .single<InsertedRow>();
-
-  if (bookErr || !booking) {
-    console.error("[accept] booking insert failed", bookErr);
-    if (bookErr?.code === "23P01") {
+  if (acceptErr || !bookingId) {
+    console.error("[accept] transactional accept failed", acceptErr);
+    if (acceptErr?.code === "23P01") {
       return {
         ok: false,
         error:
           "That time overlaps another active booking. Pick a different slot.",
       };
     }
-    return { ok: false, error: "Could not create booking record." };
+    return { ok: false, error: "Could not accept booking request." };
   }
 
-  // 5. Link the original request.
-  const { error: updErr } = await supabase
-    .from("booking_requests")
-    .update({ status: "accepted", booking_id: booking.id })
-    .eq("id", requestId)
-    .eq("organization_id", admin.organizationId);
-
-  if (updErr) {
-    console.warn("[accept] booking_request update failed", updErr);
-    // Booking still exists — just log; don't roll the whole thing back.
-  }
-
-  // 5b. Push to Google Calendar (best-effort). Skipped if no calendar is
+  // 3b. Push to Google Calendar (best-effort). Skipped if no calendar is
   // connected. If the scheduledAt is null (accepted without a date), we
   // skip here too — the admin will set the time later and we'll need a
   // reschedule affordance to push the event at that point.
@@ -250,7 +193,7 @@ export async function acceptRequest(
             google_calendar_event_id: event.id,
             google_calendar_event_url: event.htmlLink,
           })
-          .eq("id", booking.id)
+          .eq("id", bookingId)
           .eq("organization_id", admin.organizationId);
       }
     } catch (err) {
@@ -262,6 +205,7 @@ export async function acceptRequest(
   //    Fire-and-forget in the sense that any failure here is logged but
   //    doesn't fail the accept — the core records already exist.
   await sendShootConfirmedEmail({
+    bookingId,
     email: req.contact_email,
     organizationId: admin.organizationId,
     contactName: req.contact_name,
@@ -272,7 +216,7 @@ export async function acceptRequest(
 
   revalidatePath("/admin/inbox");
   revalidatePath("/admin/bookings");
-  redirect(`/admin/bookings/${booking.id}`);
+  redirect(`/admin/bookings/${bookingId}`);
 }
 
 /**
@@ -285,6 +229,7 @@ export async function acceptRequest(
  * provider or flaky `generateLink` call can't block the admin's accept.
  */
 async function sendShootConfirmedEmail(args: {
+  bookingId: string;
   email: string;
   organizationId: string;
   contactName: string;
@@ -297,6 +242,13 @@ async function sendShootConfirmedEmail(args: {
     console.warn(
       "[accept.email] NEXT_PUBLIC_APP_URL not set — skipping portal invite.",
     );
+    await logBookingNotification({
+      bookingId: args.bookingId,
+      kind: "shoot_confirmed",
+      recipientEmail: args.email,
+      status: "skipped",
+      error: "NEXT_PUBLIC_APP_URL not set",
+    });
     return;
   }
 
@@ -305,6 +257,7 @@ async function sendShootConfirmedEmail(args: {
 
   const supabase = getServiceSupabase();
   let portalLink: string;
+  let usedFallbackLink = false;
   try {
     const { data, error } = await supabase.auth.admin.generateLink({
       type: "magiclink",
@@ -319,6 +272,7 @@ async function sendShootConfirmedEmail(args: {
       const fallback = new URL("/auth/sign-in", appUrl);
       fallback.searchParams.set("next", "/portal");
       portalLink = fallback.toString();
+      usedFallbackLink = true;
     } else {
       portalLink = data.properties.action_link;
     }
@@ -327,6 +281,7 @@ async function sendShootConfirmedEmail(args: {
     const fallback = new URL("/auth/sign-in", appUrl);
     fallback.searchParams.set("next", "/portal");
     portalLink = fallback.toString();
+    usedFallbackLink = true;
   }
 
   const emailSettings = await getOrganizationEmailSettings(args.organizationId);
@@ -347,7 +302,49 @@ async function sendShootConfirmedEmail(args: {
     replyTo: emailSettings.replyToEmail ?? undefined,
   });
 
+  await logBookingNotification({
+    bookingId: args.bookingId,
+    kind: "shoot_confirmed",
+    recipientEmail: args.email,
+    status: result.ok ? (result.skipped ? "skipped" : "sent") : "failed",
+    providerMessageId: result.id,
+    error: result.ok ? undefined : result.error,
+    metadata: {
+      usedFallbackLink,
+      emailSkipped: Boolean(result.skipped),
+    },
+  });
+
   if (!result.ok) {
     console.warn("[accept.email] send failed", result.error);
+  }
+}
+
+async function logBookingNotification(args: {
+  bookingId: string;
+  kind: string;
+  recipientEmail: string;
+  status: "sent" | "skipped" | "failed";
+  providerMessageId?: string;
+  error?: string;
+  metadata?: Record<string, boolean | string | number | null>;
+}): Promise<void> {
+  const supabase = getServiceSupabase();
+  const { error } = await supabase.from("booking_notifications").upsert(
+    {
+      booking_id: args.bookingId,
+      kind: args.kind,
+      recipient_email: args.recipientEmail,
+      status: args.status,
+      provider_message_id: args.providerMessageId ?? null,
+      error: args.error ?? null,
+      metadata: args.metadata ?? {},
+      sent_at: new Date().toISOString(),
+    },
+    { onConflict: "booking_id,kind,recipient_email" },
+  );
+
+  if (error) {
+    console.warn("[accept.email] notification log failed", error);
   }
 }

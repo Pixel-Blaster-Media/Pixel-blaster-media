@@ -606,6 +606,10 @@ interface BookingNotificationsTable {
     kind: string;
     sent_at: string;
     recipient_email: string;
+    status: "sent" | "skipped" | "failed";
+    provider_message_id: string | null;
+    error: string | null;
+    metadata: Json;
   };
   Insert: {
     id?: string;
@@ -613,8 +617,47 @@ interface BookingNotificationsTable {
     kind: string;
     sent_at?: string;
     recipient_email: string;
+    status?: "sent" | "skipped" | "failed";
+    provider_message_id?: string | null;
+    error?: string | null;
+    metadata?: Json;
   };
   Update: Partial<BookingNotificationsTable["Insert"]>;
+  Relationships: [];
+}
+
+interface TelegramConnectionsTable {
+  Row: {
+    id: string;
+    organization_id: string;
+    profile_id: string;
+    telegram_chat_id: number | null;
+    telegram_user_id: number | null;
+    username: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    connect_token_hash: string | null;
+    token_expires_at: string | null;
+    connected_at: string | null;
+    revoked_at: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  Insert: {
+    id?: string;
+    organization_id: string;
+    profile_id: string;
+    telegram_chat_id?: number | null;
+    telegram_user_id?: number | null;
+    username?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    connect_token_hash?: string | null;
+    token_expires_at?: string | null;
+    connected_at?: string | null;
+    revoked_at?: string | null;
+  };
+  Update: Partial<TelegramConnectionsTable["Insert"]>;
   Relationships: [];
 }
 
@@ -726,6 +769,7 @@ export interface Database {
       catalog_items: CatalogItemsTable;
       booking_line_items: BookingLineItemsTable;
       booking_notifications: BookingNotificationsTable;
+      telegram_connections: TelegramConnectionsTable;
       assistant_action_logs: AssistantActionLogsTable;
       listing_websites: ListingWebsitesTable;
       google_calendar_connection: GoogleCalendarConnectionTable;
@@ -746,6 +790,16 @@ export interface Database {
       is_organization_admin: {
         Args: { target_org_id: string };
         Returns: boolean;
+      };
+      create_booking_from_request: {
+        Args: {
+          p_organization_id: string;
+          p_request_id: string;
+          p_owner_id: string;
+          p_scheduled_at: string | null;
+          p_scheduled_ends_at: string | null;
+        };
+        Returns: string;
       };
     };
     Enums: {
