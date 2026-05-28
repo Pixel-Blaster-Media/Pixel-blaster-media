@@ -10,6 +10,7 @@ export interface UserContext {
   organizationId: string;
   email: string;
   fullName: string | null;
+  phone: string | null;
   role: UserRole;
 }
 
@@ -18,6 +19,7 @@ interface ProfileRow {
   organization_id: string;
   email: string;
   full_name: string | null;
+  phone: string | null;
   role: UserRole;
 }
 
@@ -49,7 +51,7 @@ export async function requireUser(nextPath?: string): Promise<UserContext> {
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("id, organization_id, email, full_name, role")
+    .select("id, organization_id, email, full_name, phone, role")
     .eq("id", userId)
     .single<ProfileRow>();
 
@@ -63,6 +65,7 @@ export async function requireUser(nextPath?: string): Promise<UserContext> {
     organizationId: profile.organization_id,
     email: profile.email,
     fullName: profile.full_name,
+    phone: profile.phone,
     role: profile.role,
   };
 }

@@ -61,11 +61,11 @@ export default function BookingBrandHeader({
         </span>
       </div>
 
-      <div className="mt-5 max-w-2xl">
-        <h1 className="text-3xl font-bold text-realtor-text md:text-4xl">
+      <div className="mt-3 max-w-2xl md:mt-5">
+        <h1 className="text-2xl font-bold leading-tight text-realtor-text md:text-4xl">
           Book a shoot
         </h1>
-        <p className="mt-2 max-w-xl text-sm leading-6 text-realtor-muted">
+        <p className="mt-1 max-w-xl text-sm leading-5 text-realtor-muted md:mt-2 md:leading-6">
           Premium real estate media, scheduled without the back-and-forth.
         </p>
       </div>

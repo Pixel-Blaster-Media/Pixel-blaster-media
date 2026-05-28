@@ -56,6 +56,9 @@ export async function updateRealtorProfile(
   if (!deliveryCcEmails.ok) {
     return { ok: false, error: deliveryCcEmails.error };
   }
+  const alternatePhones = parsePhoneList(
+    cleanText(formData.get("alternate_phones")),
+  );
 
   const service = getServiceSupabase();
   const { data: currentProfile, error: currentProfileError } = await service
@@ -97,6 +100,7 @@ export async function updateRealtorProfile(
   const update: ProfileUpdate = {
     full_name: cleanText(formData.get("full_name")) || null,
     phone: cleanText(formData.get("phone")) || null,
+    alternate_phones: alternatePhones,
     brokerage: cleanText(formData.get("brokerage")) || null,
     profile_photo_url: profilePhoto.url,
     brokerage_logo_url: brokerageLogo.url,
@@ -130,6 +134,18 @@ export async function updateRealtorProfile(
 
 function cleanText(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function parsePhoneList(input: string): string[] {
+  if (!input) return [];
+  return Array.from(
+    new Set(
+      input
+        .split(/[\n,;]+/)
+        .map((phone) => phone.trim())
+        .filter(Boolean),
+    ),
+  ).slice(0, 10);
 }
 
 function parseEmailList(

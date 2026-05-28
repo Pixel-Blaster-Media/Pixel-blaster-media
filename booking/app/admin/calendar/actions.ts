@@ -400,14 +400,19 @@ async function createGoogleEventBestEffort(args: {
     const addressLine = [streetLine, args.city, args.postalCode]
       .filter(Boolean)
       .join(", ");
+    const serviceLabels = args.selectedItems.map((item) => item.name).join(", ");
     const event = await gcal.createEvent({
-      summary: `Shoot - ${streetLine}`,
+      summary: calendarShootTitle({
+        realtor: args.contactName,
+        services: serviceLabels,
+        address: streetLine,
+      }),
       location: addressLine,
       description:
         `Realtor: ${args.contactName}\nEmail: ${args.contactEmail}\n` +
         (args.contactPhone ? `Phone: ${args.contactPhone}\n` : "") +
         (args.brokerage ? `Brokerage: ${args.brokerage}\n` : "") +
-        `Services: ${args.selectedItems.map((item) => item.name).join(", ")}\n` +
+        `Services: ${serviceLabels}\n` +
         (args.notes ? `\nNotes:\n${args.notes}\n` : ""),
       startISO: args.scheduledAt.toISOString(),
       endISO: args.scheduledEndsAt,
@@ -425,6 +430,17 @@ async function createGoogleEventBestEffort(args: {
   } catch (err) {
     console.warn("[admin-calendar] google calendar event create failed", err);
   }
+}
+
+function calendarShootTitle(args: {
+  realtor: string;
+  services: string;
+  address: string;
+}): string {
+  return [args.realtor, args.services, args.address]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(" - ");
 }
 
 async function sendConfirmationBestEffort(args: {

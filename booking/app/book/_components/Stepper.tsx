@@ -27,7 +27,7 @@ export default function Stepper({
   const urlSuffix = buildQuerySuffix(state);
 
   return (
-    <ol className="mb-8 flex items-center gap-1 overflow-x-auto rounded-full border border-realtor-primary/10 bg-realtor-surface/55 p-1 shadow-sm shadow-realtor-primary/5 md:gap-2">
+    <ol className="mb-4 flex items-center gap-1 overflow-x-auto rounded-full border border-realtor-primary/10 bg-realtor-surface/55 p-1 shadow-sm shadow-realtor-primary/5 md:mb-8 md:gap-2">
       {WIZARD_STEPS.map((step, idx) => {
         const isCurrent = step.id === current;
         const isDone = isStepDone(step.id, completeness);

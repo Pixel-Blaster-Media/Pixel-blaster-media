@@ -11,6 +11,7 @@ export interface RealtorProfileView {
   email: string;
   full_name: string | null;
   phone: string | null;
+  alternate_phones: string[];
   brokerage: string | null;
   profile_photo_url: string | null;
   brokerage_logo_url: string | null;
@@ -172,6 +173,19 @@ export default function RealtorProfileCard({
                   className="admin-input"
                   placeholder="905-555-1234"
                 />
+              </Field>
+              <Field label="Alternate phones">
+                <textarea
+                  name="alternate_phones"
+                  defaultValue={(realtor.alternate_phones ?? []).join("\n")}
+                  rows={3}
+                  className="admin-input min-h-24 resize-y"
+                  placeholder={"905-555-1234\n647-555-9876"}
+                />
+                <p className="mt-1 text-[11px] text-realtor-muted">
+                  One per line. Any of these numbers can trigger welcome-back
+                  booking recognition.
+                </p>
               </Field>
               <Field label="Brokerage">
                 <input

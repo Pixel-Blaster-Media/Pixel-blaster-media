@@ -44,6 +44,7 @@ interface RealtorPhoneMatch {
   email: string;
   full_name: string | null;
   phone: string | null;
+  alternate_phones: string[] | null;
   brokerage: string | null;
   organization_id: string | null;
 }
@@ -379,10 +380,15 @@ export async function createPublicBooking(
               ? "Occupied"
               : null;
       const event = await gcal.createEvent({
-        summary: `Shoot — ${streetLine}`,
+        summary: calendarShootTitle({
+          realtor: userDisplayName,
+          services: serviceLabels,
+          address: streetLine,
+        }),
         location: addressLine,
         description:
           `Realtor: ${userDisplayName}\nEmail: ${userEmail}\n` +
+          (contactPhone ? `Phone: ${contactPhone}\n` : "") +
           `Services: ${serviceLabels}\n` +
           (addonLabels ? `Add-ons: ${addonLabels}\n` : "") +
           (squareFootage ? `Size: ~${squareFootage} sqft\n` : "") +
@@ -801,10 +807,11 @@ async function findRealtorByPhone(
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, email, full_name, phone, brokerage, organization_id")
+    .select(
+      "id, email, full_name, phone, alternate_phones, brokerage, organization_id",
+    )
     .eq("organization_id", organizationId)
     .eq("role", "realtor")
-    .not("phone", "is", null)
     .limit(500)
     .returns<RealtorPhoneMatch[]>();
 
@@ -815,9 +822,23 @@ async function findRealtorByPhone(
 
   return (
     (data ?? []).find(
-      (profile) => normalizePhone(profile.phone ?? "") === phoneDigits,
+      (profile) =>
+        [profile.phone, ...(profile.alternate_phones ?? [])].some(
+          (phone) => normalizePhone(phone ?? "") === phoneDigits,
+        ),
     ) ?? null
   );
+}
+
+function calendarShootTitle(args: {
+  realtor: string;
+  services: string;
+  address: string;
+}): string {
+  return [args.realtor, args.services, args.address]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(" - ");
 }
 
 async function sendAdminNotification(args: {

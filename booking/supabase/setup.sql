@@ -2668,6 +2668,13 @@ create table if not exists public.telegram_connections (
   updated_at timestamptz not null default now()
 );
 
+-- 0034_realtor_alternate_phones.sql
+alter table public.profiles
+  add column if not exists alternate_phones text[] not null default '{}';
+
+comment on column public.profiles.alternate_phones is
+  'Additional phone numbers that can identify this realtor during public booking lookup.';
+
 create unique index if not exists telegram_connections_active_profile_idx
   on public.telegram_connections(organization_id, profile_id)
   where revoked_at is null;

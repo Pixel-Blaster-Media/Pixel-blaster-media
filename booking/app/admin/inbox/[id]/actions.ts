@@ -172,14 +172,19 @@ export async function acceptRequest(
         const addressLine = [req.street_address, req.city, req.postal_code]
           .filter(Boolean)
           .join(", ");
+        const servicesLabel = req.services.join(", ");
         const event = await gcal.createEvent({
-          summary: `Shoot — ${req.street_address}`,
+          summary: calendarShootTitle({
+            realtor: req.contact_name,
+            services: servicesLabel,
+            address: req.street_address,
+          }),
           location: addressLine,
           description:
             `Realtor: ${req.contact_name}\nEmail: ${req.contact_email}\n` +
             (req.contact_phone ? `Phone: ${req.contact_phone}\n` : "") +
             (req.brokerage ? `Brokerage: ${req.brokerage}\n` : "") +
-            `Services: ${req.services.join(", ")}\n` +
+            `Services: ${servicesLabel}\n` +
             (req.add_ons.length ? `Add-ons: ${req.add_ons.join(", ")}\n` : "") +
             (req.notes ? `\nNotes:\n${req.notes}\n` : ""),
           startISO: startDate.toISOString(),
@@ -217,6 +222,17 @@ export async function acceptRequest(
   revalidatePath("/admin/inbox");
   revalidatePath("/admin/bookings");
   redirect(`/admin/bookings/${bookingId}`);
+}
+
+function calendarShootTitle(args: {
+  realtor: string;
+  services: string;
+  address: string;
+}): string {
+  return [args.realtor, args.services, args.address]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(" - ");
 }
 
 /**

@@ -60,6 +60,7 @@ interface ProfilesTable {
     email: string;
     full_name: string | null;
     phone: string | null;
+    alternate_phones: string[];
     brokerage: string | null;
     profile_photo_url: string | null;
     brokerage_logo_url: string | null;
@@ -78,6 +79,7 @@ interface ProfilesTable {
     email: string;
     full_name?: string | null;
     phone?: string | null;
+    alternate_phones?: string[];
     brokerage?: string | null;
     profile_photo_url?: string | null;
     brokerage_logo_url?: string | null;

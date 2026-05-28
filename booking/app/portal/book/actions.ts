@@ -229,10 +229,15 @@ export async function createSelfBooking(
         .filter(Boolean)
         .join(", ");
       const event = await gcal.createEvent({
-        summary: `Shoot — ${streetAddress}`,
+        summary: calendarShootTitle({
+          realtor,
+          services: serviceLabels,
+          address: streetAddress,
+        }),
         location: addressLine,
         description:
           `Realtor: ${realtor}\nEmail: ${user.email}\n` +
+          (user.phone ? `Phone: ${user.phone}\n` : "") +
           `Services: ${serviceLabels}\n` +
           (addonLabels ? `Add-ons: ${addonLabels}\n` : "") +
           (squareFootage ? `Size: ~${squareFootage} sqft\n` : "") +
@@ -288,6 +293,17 @@ export async function createSelfBooking(
   }
 
   redirect(`/portal/${propertyId}?booked=1`);
+}
+
+function calendarShootTitle(args: {
+  realtor: string;
+  services: string;
+  address: string;
+}): string {
+  return [args.realtor, args.services, args.address]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(" - ");
 }
 
 function escapeHtml(s: string): string {

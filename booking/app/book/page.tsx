@@ -54,20 +54,6 @@ export default async function BookStep1Page({
       <BookingBrandHeader organization={organization} />
       <Stepper current={1} state={scopedState} />
 
-      <section>
-        <h2 className="text-lg font-semibold text-realtor-text md:text-xl">
-          What do you need?
-        </h2>
-        <p className="mt-1 text-sm text-realtor-muted">
-          Pick a bundle or build it out à la carte. Video add-ons (like
-          &ldquo;put me on camera&rdquo;) appear automatically when your
-          selection includes video.
-        </p>
-        <p className="mt-2 text-xs font-semibold uppercase tracking-wider text-realtor-primary/80">
-          Booking with {organization.name}
-        </p>
-      </section>
-
       <AIPackageRecommender
         bundles={bundles}
         aLaCarte={aLaCarte}
