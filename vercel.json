@@ -1,4 +1,21 @@
 {
+  "redirects": [
+    {
+      "source": "/book/",
+      "destination": "/book",
+      "permanent": false
+    },
+    {
+      "source": "/portal/",
+      "destination": "/portal",
+      "permanent": false
+    },
+    {
+      "source": "/auth/",
+      "destination": "/auth",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/book",
