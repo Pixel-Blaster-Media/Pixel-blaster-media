@@ -30,7 +30,7 @@ export default function BookingBrandHeader({
     <header
       className="rounded-3xl border border-realtor-primary/15 bg-realtor-surface/80 p-4 shadow-lg shadow-realtor-text/10 md:p-5"
     >
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 md:flex md:items-center md:justify-between md:gap-4">
         <Link
           href={`/book?org=${organization.slug ?? ""}`}
           className="flex min-w-0 items-center gap-3 text-realtor-text"
@@ -56,17 +56,12 @@ export default function BookingBrandHeader({
             </span>
           </span>
         </Link>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Link
-            href="/auth/sign-in?next=/portal"
-            className="rounded-full border border-realtor-primary/20 bg-realtor-surface px-3 py-1.5 text-xs font-semibold text-realtor-primary shadow-sm transition hover:border-realtor-primary/35 hover:bg-realtor-primary/10"
-          >
-            Realtor login
-          </Link>
-          <span className="rounded-full border border-realtor-primary/15 bg-realtor-primary/5 px-3 py-1.5 text-xs font-semibold text-realtor-primary">
-            Secure booking
-          </span>
-        </div>
+        <Link
+          href="/auth/sign-in?next=/portal"
+          className="shrink-0 rounded-full border border-realtor-primary/20 bg-realtor-surface px-3 py-1.5 text-xs font-semibold text-realtor-primary shadow-sm transition hover:border-realtor-primary/35 hover:bg-realtor-primary/10"
+        >
+          Realtor login
+        </Link>
       </div>
 
       <div className="mt-3 max-w-2xl md:mt-5">
