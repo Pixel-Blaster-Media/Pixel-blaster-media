@@ -56,9 +56,17 @@ export default function BookingBrandHeader({
             </span>
           </span>
         </Link>
-        <span className="rounded-full border border-realtor-primary/15 bg-realtor-primary/5 px-3 py-1 text-xs font-semibold text-realtor-primary">
-          Secure booking
-        </span>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Link
+            href="/auth/sign-in?next=/portal"
+            className="rounded-full border border-realtor-primary/20 bg-realtor-surface px-3 py-1.5 text-xs font-semibold text-realtor-primary shadow-sm transition hover:border-realtor-primary/35 hover:bg-realtor-primary/10"
+          >
+            Realtor login
+          </Link>
+          <span className="rounded-full border border-realtor-primary/15 bg-realtor-primary/5 px-3 py-1.5 text-xs font-semibold text-realtor-primary">
+            Secure booking
+          </span>
+        </div>
       </div>
 
       <div className="mt-3 max-w-2xl md:mt-5">
@@ -67,6 +75,16 @@ export default function BookingBrandHeader({
         </h1>
         <p className="mt-1 max-w-xl text-sm leading-5 text-realtor-muted md:mt-2 md:leading-6">
           Premium real estate media, scheduled without the back-and-forth.
+        </p>
+        <p className="mt-3 text-xs text-realtor-muted">
+          Already have a profile?{" "}
+          <Link
+            href="/auth/sign-in?next=/portal"
+            className="font-semibold text-realtor-primary underline-offset-4 hover:underline"
+          >
+            Log in to view your media and bookings
+          </Link>
+          .
         </p>
       </div>
     </header>
