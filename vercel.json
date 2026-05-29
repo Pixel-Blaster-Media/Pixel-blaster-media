@@ -1,0 +1,20 @@
+{
+  "rewrites": [
+    {
+      "source": "/book",
+      "destination": "https://pixel-blaster-media.vercel.app/book"
+    },
+    {
+      "source": "/book/:path*",
+      "destination": "https://pixel-blaster-media.vercel.app/book/:path*"
+    },
+    {
+      "source": "/_next/:path*",
+      "destination": "https://pixel-blaster-media.vercel.app/_next/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://pixel-blaster-media.vercel.app/api/:path*"
+    }
+  ]
+}
