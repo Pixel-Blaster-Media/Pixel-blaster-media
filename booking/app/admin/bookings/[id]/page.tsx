@@ -22,6 +22,7 @@ import {
   parseRealtorAIMemory,
   summarizeRealtorAIMemory,
 } from "@/lib/realtors/memory";
+import { getActiveCatalog, type Catalog } from "@/lib/booking/catalog";
 import { labelForAddOn, labelForService } from "@/lib/booking/services";
 import {
   isIGuidePhotoZipUrl,
@@ -45,6 +46,10 @@ import BookingActions, {
 import BookingWorkspaceTabs, {
   type WorkspaceTabId,
 } from "./BookingWorkspaceTabs";
+import EditBookingForm, {
+  type EditableBookingInitial,
+  type EditCatalogItem,
+} from "./EditBookingForm";
 import IGuideSection from "./IGuideSection";
 import InvoiceSection from "./InvoiceSection";
 import ListingWebsiteSection from "./ListingWebsiteSection";
@@ -56,6 +61,7 @@ interface BookingDetail {
   id: string;
   status: BookingStatus;
   scheduled_at: string | null;
+  scheduled_ends_at: string | null;
   services: string[];
   add_ons: string[];
   square_footage: number | null;
@@ -77,6 +83,7 @@ interface BookingDetail {
     id: string;
     street_address: string;
     city: string | null;
+    province: string | null;
     postal_code: string | null;
   } | null;
   profiles: {
@@ -132,6 +139,10 @@ interface ListingWebsiteRow {
   cta_url: string | null;
 }
 
+interface BookingLineItemSelectionRow {
+  catalog_item_id: string;
+}
+
 export default async function BookingDetailPage({
   params,
   searchParams,
@@ -151,12 +162,14 @@ export default async function BookingDetailPage({
     { data: iguideJob },
     { data: deliveryNotification },
     { data: listingWebsite },
+    { data: bookingLineItems },
+    catalog,
   ] =
     await Promise.all([
       supabase
         .from("bookings")
         .select(
-          "id, status, scheduled_at, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, internal_notes, iguide_id, iguide_portal_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, postal_code), profiles(id, full_name, email, phone, brokerage, delivery_cc_emails, internal_notes, ai_memory)",
+          "id, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, internal_notes, iguide_id, iguide_portal_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, province, postal_code), profiles(id, full_name, email, phone, brokerage, delivery_cc_emails, internal_notes, ai_memory)",
         )
         .eq("id", id)
         .eq("organization_id", admin.organizationId)
@@ -190,12 +203,24 @@ export default async function BookingDetailPage({
         )
         .eq("booking_id", id)
         .maybeSingle<ListingWebsiteRow>(),
+      supabase
+        .from("booking_line_items")
+        .select("catalog_item_id")
+        .eq("booking_id", id)
+        .returns<BookingLineItemSelectionRow[]>(),
+      getActiveCatalog({ organizationId: admin.organizationId }),
     ]);
 
   if (bookErr || !booking) notFound();
 
   const property = booking.properties;
   const profile = booking.profiles;
+  const catalogItems = toEditCatalogItems(catalog);
+  const selectedCatalogItemIds = selectedCatalogIdsForBooking(
+    booking,
+    bookingLineItems ?? [],
+    catalog,
+  );
   const profileMemorySummary = summarizeRealtorAIMemory(
     parseRealtorAIMemory(profile?.ai_memory),
   );
@@ -443,6 +468,8 @@ export default async function BookingDetailPage({
             profile={profile}
             fullAddress={fullAddress}
             transitions={transitions}
+            catalogItems={catalogItems}
+            selectedCatalogItemIds={selectedCatalogItemIds}
           />
         }
       />
@@ -465,19 +492,49 @@ function DetailsTab({
   profile,
   fullAddress,
   transitions,
+  catalogItems,
+  selectedCatalogItemIds,
 }: {
   booking: BookingDetail;
   profile: BookingDetail["profiles"];
   fullAddress: string;
   transitions: BookingStatus[];
+  catalogItems: EditCatalogItem[];
+  selectedCatalogItemIds: string[];
 }) {
+  const editableInitial: EditableBookingInitial = {
+    scheduledAtLocal: booking.scheduled_at
+      ? formatDateTimeLocalInput(booking.scheduled_at)
+      : "",
+    streetAddress: booking.properties?.street_address ?? "",
+    unitNumber: booking.unit_number ?? "",
+    city: booking.properties?.city ?? "",
+    province: booking.properties?.province ?? "ON",
+    postalCode: booking.properties?.postal_code ?? "",
+    squareFootage: booking.square_footage ? String(booking.square_footage) : "",
+    contactName: profile?.full_name ?? profile?.email ?? "",
+    contactEmail: profile?.email ?? "",
+    contactPhone: profile?.phone ?? "",
+    brokerage: profile?.brokerage ?? "",
+    clientNotes: booking.client_notes ?? "",
+    internalNotes: booking.internal_notes ?? "",
+    selectedCatalogItemIds,
+  };
+
   return (
     <>
       <SectionIntro
         eyebrow="Details"
-        title="Reference info"
-        body="Status controls, realtor info, shoot choices, and notes live here when you need them."
+        title="Edit and reference"
+        body="Fix the schedule, address, selected services, realtor info, or notes without leaving this booking."
       />
+      <Panel title="Edit booking">
+        <EditBookingForm
+          bookingId={booking.id}
+          initial={editableInitial}
+          catalogItems={catalogItems}
+        />
+      </Panel>
       <BookingActions
         bookingId={booking.id}
         currentStatus={booking.status}
@@ -780,6 +837,55 @@ function formatDateTime(iso: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(iso));
+}
+
+function formatDateTimeLocalInput(iso: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Toronto",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(iso));
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get(
+    "minute",
+  )}`;
+}
+
+function toEditCatalogItems(catalog: Catalog): EditCatalogItem[] {
+  return [...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(
+    (item) => ({
+      id: item.id,
+      kind: item.kind,
+      name: item.name,
+      slug: item.slug,
+      durationMinutes: item.duration_minutes,
+      priceCents: item.price_cents,
+    }),
+  );
+}
+
+function selectedCatalogIdsForBooking(
+  booking: BookingDetail,
+  lineItems: BookingLineItemSelectionRow[],
+  catalog: Catalog,
+): string[] {
+  if (lineItems.length > 0) {
+    return lineItems.map((line) => line.catalog_item_id);
+  }
+  const bySlug = new Map(
+    [...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map((item) => [
+      item.slug,
+      item.id,
+    ]),
+  );
+  return [...booking.services, ...booking.add_ons]
+    .map((slug) => bySlug.get(slug))
+    .filter((id): id is string => Boolean(id));
 }
 
 function buildListingSlug(address: string, city: string): string {

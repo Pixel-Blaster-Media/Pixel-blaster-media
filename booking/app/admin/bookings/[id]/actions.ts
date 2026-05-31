@@ -6,8 +6,19 @@ import {
   requireAdmin,
   type AdminContext,
 } from "@/lib/auth/require-admin";
+import {
+  businessDateTimeLocalToUtc,
+} from "@/lib/booking/availability";
 import { nextBookingStatuses } from "@/lib/booking/booking-status";
 import { cancelBooking } from "@/lib/booking/cancel";
+import {
+  computeCartTotals,
+  getActiveCatalog,
+  getCatalogItemPrice,
+  validateCart,
+  type Catalog,
+  type CatalogItemRow,
+} from "@/lib/booking/catalog";
 import { buildDeliveryLinks } from "@/lib/booking/delivery-links";
 import { sendEmail } from "@/lib/email/resend";
 import { deliveryReadyEmail } from "@/lib/email/templates";
@@ -27,6 +38,7 @@ import {
   isIGuidePhotoZipUrl,
   type IGuidePhotoZipKind,
 } from "@/lib/integrations/iguide/photo-downloads";
+import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
 import { createIGuide as createIGuideInPortal } from "@/lib/integrations/iguide/portal-client";
 import {
   recordIGuideCreateJob,
@@ -93,6 +105,9 @@ interface BookingForIGuideCreateRow {
     province: string | null;
     postal_code: string | null;
   } | null;
+  profiles: {
+    email: string;
+  } | null;
 }
 
 interface BookingForInvoiceRow {
@@ -149,6 +164,23 @@ interface BookingForListingWebsiteRow {
     full_name: string | null;
     phone: string | null;
     brokerage: string | null;
+  } | null;
+}
+
+interface BookingForManualEditRow {
+  id: string;
+  organization_id: string;
+  property_id: string;
+  owner_id: string;
+  google_calendar_event_id: string | null;
+  properties: {
+    street_address: string;
+    city: string | null;
+    province: string | null;
+    postal_code: string | null;
+  } | null;
+  profiles: {
+    email: string;
   } | null;
 }
 
@@ -257,6 +289,234 @@ export async function cancelBookingAsAdmin(
   });
   if (!result.ok) return { ok: false, error: result.error };
   revalidatePath("/admin/bookings");
+  revalidatePath(`/admin/bookings/${bookingId}`);
+  return { ok: true };
+}
+
+/**
+ * Admin manual edit path for fixing booking data after creation.
+ *
+ * Address changes create/reuse a property row and repoint this booking, instead
+ * of renaming the old property record. That preserves history when the old
+ * address has previous shoots attached.
+ */
+export async function updateBookingDetails(
+  bookingId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
+
+  const streetAddress = str(formData, "street_address");
+  const city = str(formData, "city") || null;
+  const province = str(formData, "province") || "ON";
+  const postalCode = str(formData, "postal_code") || null;
+  const unitNumber = str(formData, "unit_number") || null;
+  const scheduledRaw = str(formData, "scheduled_at");
+  const squareFootage = parseOptionalInt(str(formData, "square_footage"));
+  const clientNotes = str(formData, "client_notes") || null;
+  const internalNotes = str(formData, "internal_notes") || null;
+  const contactName = str(formData, "contact_name");
+  const contactPhone = str(formData, "contact_phone") || null;
+  const brokerage = str(formData, "brokerage") || null;
+  const selectedCatalogIds = formData
+    .getAll("catalog_item_id")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+
+  if (!streetAddress) return { ok: false, error: "Address is required." };
+  if (!contactName) return { ok: false, error: "Realtor name is required." };
+
+  const scheduledAt = scheduledRaw
+    ? businessDateTimeLocalToUtc(scheduledRaw)
+    : null;
+  if (scheduledRaw && !scheduledAt) {
+    return { ok: false, error: "Pick a valid date and time." };
+  }
+
+  const service = getServiceSupabase();
+  const { data: booking, error: bookingError } = await service
+    .from("bookings")
+    .select(
+      "id, organization_id, property_id, owner_id, google_calendar_event_id, properties(street_address, city, province, postal_code), profiles(email)",
+    )
+    .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId)
+    .single<BookingForManualEditRow>();
+
+  if (bookingError || !booking) {
+    return { ok: false, error: "Booking not found." };
+  }
+
+  const catalog = await getActiveCatalog({ organizationId: admin.organizationId });
+  const catalogItems = catalogRows(catalog);
+  const byId = new Map(catalogItems.map((item) => [item.id, item]));
+  const cart = selectedCatalogIds
+    .map((catalogItemId) => ({ catalogItemId, quantity: 1 }))
+    .filter((line) => byId.has(line.catalogItemId));
+  const cartError = validateCart(cart, catalog);
+  if (cartError) return { ok: false, error: cartError };
+
+  const selectedItems = cart
+    .map((line) => byId.get(line.catalogItemId))
+    .filter((item): item is CatalogItemRow => Boolean(item));
+  const totals = computeCartTotals(cart, catalog, squareFootage);
+  const duration = Math.max(totals.totalDurationMinutes, 60);
+  const scheduledEndsAt = scheduledAt
+    ? new Date(scheduledAt.getTime() + duration * 60_000)
+    : null;
+
+  if (scheduledAt && scheduledEndsAt) {
+    const { data: conflicts, error: conflictError } = await service
+      .from("bookings")
+      .select("id")
+      .eq("organization_id", admin.organizationId)
+      .neq("id", bookingId)
+      .in("status", ["requested", "confirmed", "shot", "editing", "delivered"])
+      .not("scheduled_at", "is", null)
+      .lt("scheduled_at", scheduledEndsAt.toISOString())
+      .gt("scheduled_ends_at", scheduledAt.toISOString())
+      .limit(1);
+
+    if (conflictError) return { ok: false, error: conflictError.message };
+    if (conflicts && conflicts.length > 0) {
+      return {
+        ok: false,
+        error: "That time overlaps another active booking. Pick another slot.",
+      };
+    }
+  }
+
+  const propertyId = await findOrCreatePropertyForBooking({
+    organizationId: admin.organizationId,
+    ownerId: booking.owner_id,
+    streetAddress,
+    city,
+    province,
+    postalCode,
+  });
+  if (!propertyId) return { ok: false, error: "Could not save property." };
+
+  const legacyServices = selectedItems
+    .filter((item) => item.kind !== "addon")
+    .map((item) => item.slug);
+  const legacyAddons = selectedItems
+    .filter((item) => item.kind === "addon")
+    .map((item) => item.slug);
+
+  const { error: profileError } = await service
+    .from("profiles")
+    .update({
+      full_name: contactName,
+      phone: contactPhone,
+      brokerage,
+    })
+    .eq("id", booking.owner_id)
+    .eq("organization_id", admin.organizationId);
+  if (profileError) return { ok: false, error: profileError.message };
+
+  const { error: updateError } = await service
+    .from("bookings")
+    .update({
+      property_id: propertyId,
+      scheduled_at: scheduledAt ? scheduledAt.toISOString() : null,
+      scheduled_ends_at: scheduledEndsAt ? scheduledEndsAt.toISOString() : null,
+      services: legacyServices,
+      add_ons: legacyAddons,
+      square_footage: squareFootage,
+      unit_number: unitNumber,
+      client_notes: clientNotes,
+      internal_notes: internalNotes,
+    })
+    .eq("id", booking.id)
+    .eq("organization_id", admin.organizationId);
+
+  if (updateError) {
+    if (updateError.code === "23P01") {
+      return {
+        ok: false,
+        error: "That time overlaps another active booking. Pick another slot.",
+      };
+    }
+    return { ok: false, error: updateError.message };
+  }
+
+  const lineItems = selectedItems.map((item) => ({
+    booking_id: booking.id,
+    catalog_item_id: item.id,
+    quantity: 1,
+    unit_price_cents: getCatalogItemPrice(item, squareFootage).totalPriceCents,
+    unit_duration_minutes: item.duration_minutes,
+  }));
+
+  const { data: oldLineItems, error: oldLineItemsError } = await service
+    .from("booking_line_items")
+    .select("id")
+    .eq("booking_id", booking.id)
+    .returns<Array<{ id: string }>>();
+  if (oldLineItemsError) return { ok: false, error: oldLineItemsError.message };
+
+  const { error: lineItemError } = await service
+    .from("booking_line_items")
+    .insert(lineItems);
+  if (lineItemError) return { ok: false, error: lineItemError.message };
+
+  const oldLineItemIds = (oldLineItems ?? []).map((item) => item.id);
+  if (oldLineItemIds.length > 0) {
+    const { error: deleteLineItemsError } = await service
+      .from("booking_line_items")
+      .delete()
+      .in("id", oldLineItemIds);
+    if (deleteLineItemsError) {
+      return { ok: false, error: deleteLineItemsError.message };
+    }
+  }
+
+  await syncGoogleCalendarEventBestEffort({
+    organizationId: admin.organizationId,
+    bookingId: booking.id,
+    previousEventId: booking.google_calendar_event_id,
+    contactEmail: booking.profiles?.email ?? "",
+    contactName,
+    contactPhone: contactPhone ?? "",
+    brokerage: brokerage ?? "",
+    streetAddress,
+    unitNumber: unitNumber ?? "",
+    city: city ?? "",
+    postalCode: postalCode ?? "",
+    notes: clientNotes ?? "",
+    selectedItems,
+    scheduledAt,
+    scheduledEndsAt,
+  });
+
+  await service.from("assistant_action_logs").insert({
+    organization_id: admin.organizationId,
+    actor_profile_id: admin.userId,
+    action_type: "manual_booking_edit",
+    target_booking_id: booking.id,
+    target_realtor_id: booking.owner_id,
+    label: "Manual booking edit",
+    details: `Edited booking details for ${streetAddress}${city ? `, ${city}` : ""}.`,
+    payload: {
+      old_property_id: booking.property_id,
+      new_property_id: propertyId,
+      scheduled_at: scheduledAt?.toISOString() ?? null,
+      scheduled_ends_at: scheduledEndsAt?.toISOString() ?? null,
+      services: legacyServices,
+      add_ons: legacyAddons,
+    },
+    result_status: "success",
+    result_message: "Booking details updated from admin edit form.",
+    undo_payload: {
+      booking_id: booking.id,
+      old_property_id: booking.property_id,
+      new_property_id: propertyId,
+    },
+  });
+
+  revalidatePath("/admin/bookings");
+  revalidatePath("/admin/calendar");
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true };
 }
@@ -1472,4 +1732,156 @@ export async function untrackFotelloEnhance(
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true };
+}
+
+function str(formData: FormData, key: string): string {
+  return ((formData.get(key) as string | null) ?? "").trim();
+}
+
+function parseOptionalInt(value: string): number | null {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : null;
+}
+
+function catalogRows(catalog: Catalog): CatalogItemRow[] {
+  return [...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons];
+}
+
+async function findOrCreatePropertyForBooking(args: {
+  organizationId: string;
+  ownerId: string;
+  streetAddress: string;
+  city: string | null;
+  province: string;
+  postalCode: string | null;
+}): Promise<string | null> {
+  const service = getServiceSupabase();
+  const { data: existing, error: existingError } = await service
+    .from("properties")
+    .select("id")
+    .eq("organization_id", args.organizationId)
+    .eq("owner_id", args.ownerId)
+    .ilike("street_address", args.streetAddress)
+    .maybeSingle<{ id: string }>();
+
+  if (existingError) return null;
+  if (existing?.id) {
+    await service
+      .from("properties")
+      .update({
+        city: args.city,
+        province: args.province,
+        postal_code: args.postalCode,
+      })
+      .eq("id", existing.id)
+      .eq("organization_id", args.organizationId);
+    return existing.id;
+  }
+
+  const { data, error } = await service
+    .from("properties")
+    .insert({
+      organization_id: args.organizationId,
+      owner_id: args.ownerId,
+      street_address: args.streetAddress,
+      city: args.city,
+      province: args.province,
+      postal_code: args.postalCode,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error || !data) return null;
+  return data.id;
+}
+
+async function syncGoogleCalendarEventBestEffort(args: {
+  organizationId: string;
+  bookingId: string;
+  previousEventId: string | null;
+  contactEmail: string;
+  contactName: string;
+  contactPhone: string;
+  brokerage: string;
+  streetAddress: string;
+  unitNumber: string;
+  city: string;
+  postalCode: string;
+  notes: string;
+  selectedItems: CatalogItemRow[];
+  scheduledAt: Date | null;
+  scheduledEndsAt: Date | null;
+}) {
+  try {
+    const gcal = await getGoogleCalendarClient({
+      organizationId: args.organizationId,
+    });
+    if (!gcal) return;
+
+    if (args.previousEventId) {
+      await gcal.deleteEvent(args.previousEventId);
+    }
+
+    const service = getServiceSupabase();
+    if (!args.scheduledAt || !args.scheduledEndsAt) {
+      await service
+        .from("bookings")
+        .update({
+          google_calendar_event_id: null,
+          google_calendar_event_url: null,
+        })
+        .eq("organization_id", args.organizationId)
+        .eq("id", args.bookingId);
+      return;
+    }
+
+    const streetLine = args.unitNumber
+      ? `${args.streetAddress}, Unit ${args.unitNumber}`
+      : args.streetAddress;
+    const addressLine = [streetLine, args.city, args.postalCode]
+      .filter(Boolean)
+      .join(", ");
+    const serviceLabels = args.selectedItems.map((item) => item.name).join(", ");
+    const event = await gcal.createEvent({
+      summary: calendarShootTitle({
+        realtor: args.contactName,
+        services: serviceLabels,
+        address: streetLine,
+      }),
+      location: addressLine,
+      description:
+        `Realtor: ${args.contactName}\nEmail: ${args.contactEmail}\n` +
+        (args.contactPhone ? `Phone: ${args.contactPhone}\n` : "") +
+        (args.brokerage ? `Brokerage: ${args.brokerage}\n` : "") +
+        `Services: ${serviceLabels}\n` +
+        (args.notes ? `\nNotes:\n${args.notes}\n` : ""),
+      startISO: args.scheduledAt.toISOString(),
+      endISO: args.scheduledEndsAt.toISOString(),
+      attendeeEmail: args.contactEmail || undefined,
+      attendeeName: args.contactName,
+    });
+
+    await service
+      .from("bookings")
+      .update({
+        google_calendar_event_id: event.id,
+        google_calendar_event_url: event.htmlLink,
+      })
+      .eq("organization_id", args.organizationId)
+      .eq("id", args.bookingId);
+  } catch (err) {
+    console.warn("[booking-edit] google calendar sync failed", err);
+  }
+}
+
+function calendarShootTitle(args: {
+  realtor: string;
+  services: string;
+  address: string;
+}): string {
+  return [args.realtor, args.services, args.address]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(" - ");
 }
