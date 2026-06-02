@@ -42,6 +42,14 @@
       "destination": "https://pixel-blaster-media.vercel.app/auth/:path*"
     },
     {
+      "source": "/admin",
+      "destination": "https://pixel-blaster-media.vercel.app/admin"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "https://pixel-blaster-media.vercel.app/admin/:path*"
+    },
+    {
       "source": "/_next/:path*",
       "destination": "https://pixel-blaster-media.vercel.app/_next/:path*"
     },
