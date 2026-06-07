@@ -10,6 +10,7 @@ import { parseWizardState } from "@/lib/booking/wizard-state";
 import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
 
 import AIPackageRecommender from "./_components/AIPackageRecommender";
+import AwayNotice from "./_components/AwayNotice";
 import BookingBrandHeader, {
   BookingBrandFrame,
 } from "./_components/BookingBrandHeader";
@@ -53,6 +54,8 @@ export default async function BookStep1Page({
     <BookingBrandFrame organization={organization}>
       <BookingBrandHeader organization={organization} />
       <Stepper current={1} state={scopedState} />
+
+      <AwayNotice />
 
       <AIPackageRecommender
         bundles={bundles}

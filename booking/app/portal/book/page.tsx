@@ -11,6 +11,7 @@ import {
   formatSlotLabel,
   loadSlotsForNextDays,
 } from "@/lib/booking/slot-display";
+import AwayNotice from "@/app/book/_components/AwayNotice";
 
 import BookingConfirmForm from "./BookingConfirmForm";
 import ServicePicker from "./ServicePicker";
@@ -154,7 +155,8 @@ export default async function PortalBookPage({
           <h2 className="text-sm font-semibold uppercase tracking-wider text-realtor-primary">
             Pick a time
           </h2>
-          <div className="mt-4">
+          <div className="mt-4 space-y-4">
+            <AwayNotice />
             <SlotPicker
               selectedSlot={selectedSlot}
               daysOfSlots={daysOfSlots}
