@@ -11,6 +11,8 @@ export interface OrganizationBrand {
   primaryColor: string | null;
   accentColor: string | null;
   logoUrl: string | null;
+  bookingHeroImageUrl: string | null;
+  bookingHeroSecondaryImageUrl: string | null;
 }
 
 interface OrganizationBrandRow {
@@ -19,6 +21,8 @@ interface OrganizationBrandRow {
   primary_color: string | null;
   accent_color: string | null;
   logo_url: string | null;
+  booking_hero_image_url: string | null;
+  booking_hero_secondary_image_url: string | null;
 }
 
 type ThemeStyle = CSSProperties & Record<`--${string}`, string>;
@@ -32,7 +36,9 @@ export async function loadOrganizationBrand(
   const service = getServiceSupabase();
   const { data, error } = await service
     .from("organizations")
-    .select("name, slug, primary_color, accent_color, logo_url")
+    .select(
+      "name, slug, primary_color, accent_color, logo_url, booking_hero_image_url, booking_hero_secondary_image_url",
+    )
     .eq("id", organizationId)
     .maybeSingle<OrganizationBrandRow>();
 
@@ -44,6 +50,8 @@ export async function loadOrganizationBrand(
     primaryColor: data.primary_color,
     accentColor: data.accent_color,
     logoUrl: data.logo_url,
+    bookingHeroImageUrl: data.booking_hero_image_url,
+    bookingHeroSecondaryImageUrl: data.booking_hero_secondary_image_url,
   };
 }
 

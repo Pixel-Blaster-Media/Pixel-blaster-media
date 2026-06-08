@@ -338,7 +338,7 @@ a {
 .booking-hero-grid {
   display: grid;
   gap: 1rem;
-  padding: 0 1rem 1rem;
+  padding: 1rem;
 }
 
 .booking-hero-copy {
@@ -513,6 +513,56 @@ a {
   text-transform: uppercase;
 }
 
+.booking-media-tile-has-image {
+  background: #dfe7df;
+}
+
+.booking-media-tile-has-image::before {
+  z-index: 1;
+  background:
+    linear-gradient(180deg, transparent 34%, rgba(16, 25, 20, 0.42)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 42%);
+}
+
+.booking-media-tile-has-image::after {
+  content: none;
+}
+
+.booking-media-photo {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+}
+
+.booking-media-logo-tile {
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(var(--realtor-primary-rgb), 0.08), transparent 46%),
+    #ffffff;
+}
+
+.booking-media-logo-tile::before,
+.booking-media-logo-tile::after {
+  content: none;
+}
+
+.booking-media-logo {
+  position: relative;
+  z-index: 1;
+  max-height: 58%;
+  max-width: 70%;
+  object-fit: contain;
+}
+
+.booking-media-logo-tile span {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+}
+
 .booking-media-tile-large {
   grid-row: span 2;
   min-height: 13rem;
@@ -647,7 +697,7 @@ a {
 
   .booking-hero-grid {
     grid-template-columns: minmax(0, 1.1fr) minmax(20rem, 0.9fr);
-    padding: 0 1.25rem 1.25rem;
+    padding: 1.25rem;
   }
 
   .booking-package-grid {

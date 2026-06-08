@@ -8,7 +8,6 @@ const source = readFileSync(headerPath, "utf8");
 
 const requiredSnippets = [
   'href="/auth/sign-in?next=/portal"',
-  "Realtor login",
   "Already have a profile?",
   "Log in to view your media and bookings",
 ];
@@ -17,13 +16,13 @@ const missing = requiredSnippets.filter((snippet) => !source.includes(snippet));
 const portalLinkCount = source.match(/href="\/auth\/sign-in\?next=\/portal"/g)
   ?.length ?? 0;
 
-if (missing.length > 0 || portalLinkCount < 2) {
+if (missing.length > 0 || portalLinkCount < 1) {
   console.error(
     [
       "Booking page guard failed: the realtor portal login entry must stay visible on /book.",
       missing.length > 0 ? `Missing: ${missing.join(", ")}` : null,
-      portalLinkCount < 2
-        ? `Expected at least 2 portal login links, found ${portalLinkCount}.`
+      portalLinkCount < 1
+        ? `Expected at least 1 portal login link, found ${portalLinkCount}.`
         : null,
     ]
       .filter(Boolean)

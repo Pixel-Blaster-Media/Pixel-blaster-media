@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import {
-  initialsForOrganization,
   organizationThemeStyle,
   type OrganizationBrand,
 } from "@/lib/organizations/branding";
@@ -26,42 +25,14 @@ export default function BookingBrandHeader({
 }: {
   organization: OrganizationBrand;
 }) {
+  const mainImageUrl = organization.bookingHeroImageUrl;
+  const secondaryImageUrl =
+    organization.bookingHeroSecondaryImageUrl ?? organization.logoUrl;
+  const secondaryIsLogo =
+    Boolean(organization.logoUrl) && !organization.bookingHeroSecondaryImageUrl;
+
   return (
     <header className="booking-hero">
-      <nav className="booking-hero-nav">
-        <Link
-          href={`/book?org=${organization.slug ?? ""}`}
-          className="flex min-w-0 items-center gap-3 text-realtor-text"
-        >
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white text-sm font-bold text-realtor-primary ring-1 ring-realtor-primary/20">
-            {organization.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={organization.logoUrl}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              initialsForOrganization(organization.name)
-            )}
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold">
-              {organization.name}
-            </span>
-            <span className="mt-0.5 block text-[11px] font-medium uppercase tracking-[0.16em] text-realtor-muted">
-              Booking
-            </span>
-          </span>
-        </Link>
-        <Link
-          href="/auth/sign-in?next=/portal"
-          className="shrink-0 rounded-full border border-realtor-primary/20 bg-white px-4 py-2 text-xs font-semibold text-realtor-primary shadow-sm shadow-realtor-text/5 transition hover:border-realtor-primary/45 hover:bg-realtor-surface-muted/50"
-        >
-          Realtor login
-        </Link>
-      </nav>
-
       <div className="booking-hero-grid">
         <div className="booking-hero-copy">
           <span className="booking-hero-pill">Real estate media booking</span>
@@ -88,11 +59,37 @@ export default function BookingBrandHeader({
         </div>
 
         <div className="booking-hero-visual" aria-hidden="true">
-          <div className="booking-media-tile booking-media-tile-large">
-            <span>Photos</span>
+          <div
+            className={`booking-media-tile booking-media-tile-large ${
+              mainImageUrl ? "booking-media-tile-has-image" : ""
+            }`}
+          >
+            {mainImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={mainImageUrl}
+                alt=""
+                className="booking-media-photo"
+              />
+            ) : null}
+            <span>{mainImageUrl ? "Featured work" : "Photos"}</span>
           </div>
-          <div className="booking-media-tile booking-media-tile-small">
-            <span>iGUIDE</span>
+          <div
+            className={`booking-media-tile booking-media-tile-small ${
+              secondaryImageUrl ? "booking-media-tile-has-image" : ""
+            } ${secondaryIsLogo ? "booking-media-logo-tile" : ""}`}
+          >
+            {secondaryImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={secondaryImageUrl}
+                alt=""
+                className={
+                  secondaryIsLogo ? "booking-media-logo" : "booking-media-photo"
+                }
+              />
+            ) : null}
+            <span>{secondaryIsLogo ? "Logo" : "Media"}</span>
           </div>
           <div className="booking-media-panel">
             <div>

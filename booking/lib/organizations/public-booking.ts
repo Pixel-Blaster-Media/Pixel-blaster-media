@@ -14,6 +14,8 @@ export interface PublicBookingOrganization {
   primaryColor: string | null;
   accentColor: string | null;
   logoUrl: string | null;
+  bookingHeroImageUrl: string | null;
+  bookingHeroSecondaryImageUrl: string | null;
 }
 
 interface OrganizationRow {
@@ -23,6 +25,8 @@ interface OrganizationRow {
   primary_color: string | null;
   accent_color: string | null;
   logo_url: string | null;
+  booking_hero_image_url: string | null;
+  booking_hero_secondary_image_url: string | null;
 }
 
 /**
@@ -39,7 +43,9 @@ export async function resolvePublicBookingOrganization(
   const supabase = getServiceSupabase();
   const query = supabase
     .from("organizations")
-    .select("id, name, slug, primary_color, accent_color, logo_url");
+    .select(
+      "id, name, slug, primary_color, accent_color, logo_url, booking_hero_image_url, booking_hero_secondary_image_url",
+    );
 
   const { data, error } = slug
     ? await query.eq("slug", slug).maybeSingle<OrganizationRow>()
@@ -58,6 +64,8 @@ export async function resolvePublicBookingOrganization(
       primaryColor: null,
       accentColor: null,
       logoUrl: null,
+      bookingHeroImageUrl: null,
+      bookingHeroSecondaryImageUrl: null,
     };
   }
 
@@ -68,6 +76,8 @@ export async function resolvePublicBookingOrganization(
     primaryColor: data.primary_color,
     accentColor: data.accent_color,
     logoUrl: data.logo_url,
+    bookingHeroImageUrl: data.booking_hero_image_url,
+    bookingHeroSecondaryImageUrl: data.booking_hero_secondary_image_url,
   };
 }
 

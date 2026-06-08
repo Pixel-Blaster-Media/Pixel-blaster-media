@@ -225,6 +225,8 @@ interface OrganizationsTable {
     primary_color: string | null;
     accent_color: string | null;
     logo_url: string | null;
+    booking_hero_image_url: string | null;
+    booking_hero_secondary_image_url: string | null;
     email_from_name: string | null;
     reply_to_email: string | null;
     admin_notification_email: string | null;
@@ -238,6 +240,8 @@ interface OrganizationsTable {
     primary_color?: string | null;
     accent_color?: string | null;
     logo_url?: string | null;
+    booking_hero_image_url?: string | null;
+    booking_hero_secondary_image_url?: string | null;
     email_from_name?: string | null;
     reply_to_email?: string | null;
     admin_notification_email?: string | null;

@@ -15,6 +15,8 @@ interface BusinessSettingsFormProps {
     primary_color: string | null;
     accent_color: string | null;
     logo_url: string | null;
+    booking_hero_image_url: string | null;
+    booking_hero_secondary_image_url: string | null;
     email_from_name: string | null;
     reply_to_email: string | null;
     admin_notification_email: string | null;
@@ -36,6 +38,13 @@ export default function BusinessSettingsForm({
   const [handleEdited, setHandleEdited] = useState(false);
   const [previewLogoUrl, setPreviewLogoUrl] = useState(organization.logo_url ?? "");
   const [clearLogo, setClearLogo] = useState(false);
+  const [previewHeroImageUrl, setPreviewHeroImageUrl] = useState(
+    organization.booking_hero_image_url ?? "",
+  );
+  const [clearHeroImage, setClearHeroImage] = useState(false);
+  const [previewHeroSecondaryImageUrl, setPreviewHeroSecondaryImageUrl] =
+    useState(organization.booking_hero_secondary_image_url ?? "");
+  const [clearHeroSecondaryImage, setClearHeroSecondaryImage] = useState(false);
 
   return (
     <form action={action} className="space-y-5">
@@ -134,8 +143,8 @@ export default function BusinessSettingsForm({
                 </span>
               </span>
               <span className="mt-1 block text-xs leading-5 text-realtor-muted">
-                This appears at the top of the public booking flow. JPG, PNG,
-                WebP, GIF, or SVG works best.
+                This can appear in the public booking hero and account areas.
+                JPG, PNG, WebP, GIF, or SVG works best.
               </span>
             </label>
           </div>
@@ -159,6 +168,52 @@ export default function BusinessSettingsForm({
           </div>
         </section>
       </div>
+
+      <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/80 p-5 shadow-sm shadow-realtor-text/5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-realtor-primary/80">
+              Public booking page
+            </p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-realtor-muted">
+              These images fill the top of the booking page. Use a finished
+              exterior, twilight, interior detail, or brand image that feels
+              like the company.
+            </p>
+          </div>
+          <span className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-3 py-1 text-xs font-semibold text-realtor-primary">
+            Shows on /book
+          </span>
+        </div>
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
+          <BrandImageUpload
+            label="Main booking photo"
+            name="booking_hero_image_file"
+            clearName="clear_booking_hero_image"
+            currentUrl={organization.booking_hero_image_url}
+            previewUrl={previewHeroImageUrl}
+            clear={clearHeroImage}
+            previewClassName="aspect-[16/9]"
+            emptyLabel="Main photo"
+            help="This fills the large image block on the booking page."
+            onClearChange={setClearHeroImage}
+            onPreviewChange={setPreviewHeroImageUrl}
+          />
+          <BrandImageUpload
+            label="Secondary image"
+            name="booking_hero_secondary_image_file"
+            clearName="clear_booking_hero_secondary_image"
+            currentUrl={organization.booking_hero_secondary_image_url}
+            previewUrl={previewHeroSecondaryImageUrl || organization.logo_url || ""}
+            clear={clearHeroSecondaryImage}
+            previewClassName="aspect-[4/3]"
+            emptyLabel="Logo or image"
+            help="Optional. If this is empty, the booking page uses your logo here."
+            onClearChange={setClearHeroSecondaryImage}
+            onPreviewChange={setPreviewHeroSecondaryImageUrl}
+          />
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/80 p-5 shadow-sm shadow-realtor-text/5">
         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-realtor-primary/80">
@@ -252,6 +307,82 @@ function slugify(value: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
+}
+
+function BrandImageUpload({
+  label,
+  name,
+  clearName,
+  currentUrl,
+  previewUrl,
+  clear,
+  previewClassName,
+  emptyLabel,
+  help,
+  onClearChange,
+  onPreviewChange,
+}: {
+  label: string;
+  name: string;
+  clearName: string;
+  currentUrl: string | null;
+  previewUrl: string;
+  clear: boolean;
+  previewClassName: string;
+  emptyLabel: string;
+  help: string;
+  onClearChange: (value: boolean) => void;
+  onPreviewChange: (value: string) => void;
+}) {
+  const visiblePreview = previewUrl && !clear;
+
+  return (
+    <div className="block rounded-2xl border border-realtor-primary/15 bg-white p-3 shadow-sm shadow-realtor-text/5">
+      <span className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
+        {label}
+      </span>
+      <span
+        className={`mt-2 flex w-full items-center justify-center overflow-hidden rounded-2xl border border-realtor-primary/15 bg-realtor-surface-muted text-xs font-bold uppercase tracking-[0.16em] text-realtor-primary ${previewClassName}`}
+      >
+        {visiblePreview ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={previewUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          emptyLabel
+        )}
+      </span>
+      <span className="mt-3 grid gap-2">
+        <input
+          name={name}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            if (file) {
+              onPreviewChange(URL.createObjectURL(file));
+              onClearChange(false);
+            }
+          }}
+          className="block w-full text-sm text-realtor-muted file:mr-3 file:rounded-full file:border-0 file:bg-realtor-primary file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-realtor-primary/90"
+        />
+        {currentUrl ? (
+          <label className="inline-flex items-center gap-2 text-xs text-realtor-muted">
+            <input
+              type="checkbox"
+              name={clearName}
+              checked={clear}
+              onChange={(event) => onClearChange(event.currentTarget.checked)}
+              className="h-4 w-4 accent-realtor-primary"
+            />
+            Remove current image
+          </label>
+        ) : null}
+      </span>
+      <span className="mt-2 block text-xs leading-5 text-realtor-muted">
+        {help}
+      </span>
+    </div>
+  );
 }
 
 function ColorField({

@@ -17,6 +17,8 @@ interface OrganizationRow {
   primary_color: string | null;
   accent_color: string | null;
   logo_url: string | null;
+  booking_hero_image_url: string | null;
+  booking_hero_secondary_image_url: string | null;
   email_from_name: string | null;
   reply_to_email: string | null;
   admin_notification_email: string | null;
@@ -50,7 +52,7 @@ export default async function BusinessSettingsPage({
     service
       .from("organizations")
       .select(
-        "id, name, slug, primary_color, accent_color, logo_url, email_from_name, reply_to_email, admin_notification_email",
+        "id, name, slug, primary_color, accent_color, logo_url, booking_hero_image_url, booking_hero_secondary_image_url, email_from_name, reply_to_email, admin_notification_email",
       )
       .eq("id", admin.organizationId)
       .maybeSingle<OrganizationRow>(),

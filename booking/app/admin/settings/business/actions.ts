@@ -14,8 +14,8 @@ export interface BusinessSettingsResult {
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const BRAND_MEDIA_BUCKET = "profile-media";
-const MAX_LOGO_BYTES = 5 * 1024 * 1024;
-const ALLOWED_LOGO_TYPES = new Set([
+const MAX_BRAND_IMAGE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_BRAND_IMAGE_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
@@ -23,8 +23,10 @@ const ALLOWED_LOGO_TYPES = new Set([
   "image/svg+xml",
 ]);
 
-interface OrganizationLogoRow {
+interface OrganizationMediaRow {
   logo_url: string | null;
+  booking_hero_image_url: string | null;
+  booking_hero_secondary_image_url: string | null;
 }
 
 export async function saveBusinessSettings(
@@ -82,9 +84,9 @@ export async function saveBusinessSettings(
         .maybeSingle<{ id: string }>(),
       service
         .from("organizations")
-        .select("logo_url")
+        .select("logo_url, booking_hero_image_url, booking_hero_secondary_image_url")
         .eq("id", admin.organizationId)
-        .maybeSingle<OrganizationLogoRow>(),
+        .maybeSingle<OrganizationMediaRow>(),
     ]);
   if (slugError) return { ok: false, error: slugError.message };
   if (currentError) return { ok: false, error: currentError.message };
@@ -96,13 +98,35 @@ export async function saveBusinessSettings(
     };
   }
 
-  const logo = await resolveLogoField({
+  const logo = await resolveBrandImageField({
     organizationId: admin.organizationId,
     currentUrl: currentOrg.logo_url,
     fileEntry: formData.get("logo_file"),
     clear: formData.get("clear_logo") === "on",
+    label: "Logo",
+    pathPrefix: "logo",
   });
   if (!logo.ok) return { ok: false, error: logo.error };
+  const heroImage = await resolveBrandImageField({
+    organizationId: admin.organizationId,
+    currentUrl: currentOrg.booking_hero_image_url,
+    fileEntry: formData.get("booking_hero_image_file"),
+    clear: formData.get("clear_booking_hero_image") === "on",
+    label: "Booking page image",
+    pathPrefix: "booking-hero",
+  });
+  if (!heroImage.ok) return { ok: false, error: heroImage.error };
+  const heroSecondaryImage = await resolveBrandImageField({
+    organizationId: admin.organizationId,
+    currentUrl: currentOrg.booking_hero_secondary_image_url,
+    fileEntry: formData.get("booking_hero_secondary_image_file"),
+    clear: formData.get("clear_booking_hero_secondary_image") === "on",
+    label: "Secondary booking page image",
+    pathPrefix: "booking-hero-secondary",
+  });
+  if (!heroSecondaryImage.ok) {
+    return { ok: false, error: heroSecondaryImage.error };
+  }
 
   const { error } = await service
     .from("organizations")
@@ -112,6 +136,8 @@ export async function saveBusinessSettings(
       primary_color: primaryColor,
       accent_color: accentColor,
       logo_url: logo.url,
+      booking_hero_image_url: heroImage.url,
+      booking_hero_secondary_image_url: heroSecondaryImage.url,
       email_from_name: emailFromName,
       reply_to_email: replyToEmail,
       admin_notification_email: adminNotificationEmail,
@@ -123,6 +149,7 @@ export async function saveBusinessSettings(
   revalidatePath("/admin");
   revalidatePath("/admin/settings");
   revalidatePath("/admin/settings/business");
+  revalidatePath("/book");
   return { ok: true };
 }
 
@@ -143,43 +170,62 @@ function isEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-async function resolveLogoField({
+async function resolveBrandImageField({
   organizationId,
   currentUrl,
   fileEntry,
   clear,
+  label,
+  pathPrefix,
 }: {
   organizationId: string;
   currentUrl: string | null;
   fileEntry: FormDataEntryValue | null;
   clear: boolean;
+  label: string;
+  pathPrefix: string;
 }): Promise<{ ok: true; url: string | null } | { ok: false; error: string }> {
   if (clear) return { ok: true, url: null };
 
-  const uploaded = await uploadLogoIfPresent(organizationId, fileEntry);
+  const uploaded = await uploadBrandImageIfPresent({
+    organizationId,
+    entry: fileEntry,
+    label,
+    pathPrefix,
+  });
   if (!uploaded.ok) return uploaded;
   if (uploaded.url) return uploaded;
 
   return { ok: true, url: currentUrl };
 }
 
-async function uploadLogoIfPresent(
-  organizationId: string,
-  entry: FormDataEntryValue | null,
-): Promise<{ ok: true; url: string | null } | { ok: false; error: string }> {
+async function uploadBrandImageIfPresent({
+  organizationId,
+  entry,
+  label,
+  pathPrefix,
+}: {
+  organizationId: string;
+  entry: FormDataEntryValue | null;
+  label: string;
+  pathPrefix: string;
+}): Promise<{ ok: true; url: string | null } | { ok: false; error: string }> {
   if (!(entry instanceof File) || entry.size === 0) {
     return { ok: true, url: null };
   }
-  if (entry.size > MAX_LOGO_BYTES) {
-    return { ok: false, error: "Logo files must be 5 MB or smaller." };
+  if (entry.size > MAX_BRAND_IMAGE_BYTES) {
+    return { ok: false, error: `${label} files must be 5 MB or smaller.` };
   }
-  if (!ALLOWED_LOGO_TYPES.has(entry.type)) {
-    return { ok: false, error: "Use a JPG, PNG, WebP, GIF, or SVG logo." };
+  if (!ALLOWED_BRAND_IMAGE_TYPES.has(entry.type)) {
+    return {
+      ok: false,
+      error: `Use a JPG, PNG, WebP, GIF, or SVG for ${label.toLowerCase()}.`,
+    };
   }
 
   const extension = extensionFor(entry);
   const bytes = Buffer.from(await entry.arrayBuffer());
-  const path = `organizations/${organizationId}/brand/logo-${Date.now()}-${randomUUID()}.${extension}`;
+  const path = `organizations/${organizationId}/brand/${pathPrefix}-${Date.now()}-${randomUUID()}.${extension}`;
   const service = getServiceSupabase();
   const { error } = await service.storage
     .from(BRAND_MEDIA_BUCKET)

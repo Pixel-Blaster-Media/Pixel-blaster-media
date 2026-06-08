@@ -1637,6 +1637,8 @@ create table if not exists public.organizations (
   primary_color     text,
   accent_color      text,
   logo_url          text,
+  booking_hero_image_url text,
+  booking_hero_secondary_image_url text,
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now()
 );
