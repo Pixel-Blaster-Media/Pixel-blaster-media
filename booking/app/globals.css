@@ -17,18 +17,18 @@
   --ink-soft-rgb: 17 24 27;
   --ink-muted: #8a979c;
   --ink-muted-rgb: 138 151 156;
-  --realtor-bg: #f7f4ed;
-  --realtor-bg-rgb: 247 244 237;
-  --realtor-bg-soft: #ede6d9;
-  --realtor-bg-soft-rgb: 237 230 217;
-  --realtor-surface: #fffdf8;
-  --realtor-surface-rgb: 255 253 248;
-  --realtor-surface-muted: #f1eadf;
-  --realtor-surface-muted-rgb: 241 234 223;
-  --realtor-text: #23332b;
-  --realtor-text-rgb: 35 51 43;
-  --realtor-muted: #6f7a70;
-  --realtor-muted-rgb: 111 122 112;
+  --realtor-bg: #f4f7f2;
+  --realtor-bg-rgb: 244 247 242;
+  --realtor-bg-soft: #eaf1ea;
+  --realtor-bg-soft-rgb: 234 241 234;
+  --realtor-surface: #ffffff;
+  --realtor-surface-rgb: 255 255 255;
+  --realtor-surface-muted: #f6f8f5;
+  --realtor-surface-muted-rgb: 246 248 245;
+  --realtor-text: #202b25;
+  --realtor-text-rgb: 32 43 37;
+  --realtor-muted: #5d6962;
+  --realtor-muted-rgb: 93 105 98;
   --realtor-primary: #3f7356;
   --realtor-primary-rgb: 63 115 86;
   --realtor-primary-light: #7fa684;
@@ -39,8 +39,8 @@
   --realtor-accent-rgb: 199 177 122;
   --realtor-blush: #dfb8aa;
   --realtor-blush-rgb: 223 184 170;
-  --realtor-border: rgba(49, 95, 69, 0.16);
-  --realtor-shadow: 0 18px 45px -32px rgba(35, 51, 43, 0.38);
+  --realtor-border: rgba(66, 84, 73, 0.18);
+  --realtor-shadow: 0 18px 44px -36px rgba(32, 43, 37, 0.36);
 }
 
 html,
@@ -87,71 +87,70 @@ a {
 
 .realtor-backdrop {
   background:
-    linear-gradient(180deg, rgba(247, 244, 237, 0.96), rgba(241, 234, 223, 0.9)),
-    radial-gradient(900px 420px at 12% -12%, rgba(111, 154, 120, 0.2), transparent 58%),
-    radial-gradient(700px 360px at 98% 8%, rgba(199, 177, 122, 0.18), transparent 60%),
-    var(--realtor-bg);
+    radial-gradient(760px 380px at 14% -10%, rgba(122, 158, 132, 0.14), transparent 58%),
+    radial-gradient(620px 320px at 94% 0%, rgba(194, 178, 128, 0.08), transparent 62%),
+    linear-gradient(180deg, #fbfcfa 0%, #f2f6f0 48%, #f8f7f2 100%);
 }
 
 .realtor-panel {
   border: 1px solid var(--realtor-border);
-  background: color-mix(in srgb, var(--realtor-surface) 92%, white);
+  background: var(--realtor-surface);
   box-shadow: var(--realtor-shadow);
 }
 
 .realtor-soft-panel {
   border: 1px solid var(--realtor-border);
-  background: color-mix(in srgb, var(--realtor-surface-muted) 70%, white);
+  background: color-mix(in srgb, var(--realtor-surface-muted) 52%, white);
 }
 
 .realtor-elevated-panel {
-  border: 1px solid rgba(49, 95, 69, 0.18);
+  border: 1px solid rgba(66, 84, 73, 0.18);
   background:
-    linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(255, 253, 248, 0.9)),
-    var(--realtor-surface);
+    linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0.97)),
+    #ffffff;
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.9) inset,
-    0 18px 44px -34px rgba(35, 51, 43, 0.42);
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 18px 42px -36px rgba(32, 43, 37, 0.32);
 }
 
 .realtor-warm-panel {
-  border: 1px solid rgba(199, 177, 122, 0.36);
+  border: 1px solid rgba(66, 84, 73, 0.16);
   background:
-    linear-gradient(135deg, rgba(255, 253, 248, 0.96), rgba(241, 234, 223, 0.9)),
-    var(--realtor-surface-muted);
-  box-shadow: 0 14px 34px -30px rgba(99, 77, 34, 0.38);
+    linear-gradient(135deg, rgba(255, 255, 255, 1), rgba(248, 250, 247, 0.98)),
+    #ffffff;
+  box-shadow: 0 14px 34px -31px rgba(32, 43, 37, 0.28);
 }
 
 .realtor-green-panel {
-  border: 1px solid rgba(49, 95, 69, 0.24);
+  border: 1px solid rgba(66, 84, 73, 0.18);
   background:
-    linear-gradient(135deg, rgba(255, 253, 248, 0.96), rgba(111, 154, 120, 0.16)),
-    var(--realtor-surface);
-  box-shadow: 0 16px 38px -32px rgba(36, 71, 53, 0.45);
+    linear-gradient(135deg, rgba(255, 255, 255, 1), rgba(var(--realtor-primary-rgb), 0.035)),
+    #ffffff;
+  box-shadow: 0 16px 38px -32px rgba(32, 43, 37, 0.32);
 }
 
 .realtor-choice {
-  border: 1px solid rgba(49, 95, 69, 0.18);
-  background: rgba(255, 253, 248, 0.78);
+  border: 1px solid rgba(49, 95, 69, 0.22);
+  background: rgba(255, 253, 248, 0.96);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75) inset;
 }
 
 .realtor-choice-selected {
-  border: 1px solid rgba(49, 95, 69, 0.62);
+  border: 1px solid rgba(49, 95, 69, 0.72);
   background:
-    linear-gradient(135deg, rgba(49, 95, 69, 0.16), rgba(111, 154, 120, 0.08)),
-    rgba(255, 253, 248, 0.84);
+    linear-gradient(135deg, rgba(49, 95, 69, 0.09), rgba(255, 253, 248, 0.98)),
+    rgba(255, 253, 248, 0.98);
   box-shadow:
-    0 0 0 1px rgba(49, 95, 69, 0.08),
+    0 0 0 1px rgba(49, 95, 69, 0.12),
     0 12px 24px -22px rgba(36, 71, 53, 0.48);
 }
 
 .realtor-package-card {
   position: relative;
   overflow: hidden;
-  border-color: rgba(49, 95, 69, 0.16);
+  border-color: rgba(49, 95, 69, 0.22);
   background:
-    linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(255, 253, 248, 0.92)),
+    linear-gradient(180deg, rgba(255, 253, 248, 1), rgba(255, 253, 248, 0.96)),
     var(--realtor-surface);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.9) inset,
@@ -159,7 +158,7 @@ a {
 }
 
 .realtor-package-card:hover {
-  border-color: rgba(49, 95, 69, 0.34);
+  border-color: rgba(49, 95, 69, 0.46);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.95) inset,
     0 22px 48px -34px rgba(35, 51, 43, 0.42);
@@ -171,9 +170,9 @@ a {
 }
 
 .realtor-package-card-featured {
-  border-color: rgba(199, 177, 122, 0.38);
+  border-color: rgba(199, 177, 122, 0.48);
   background:
-    linear-gradient(180deg, rgba(255, 253, 248, 0.99), rgba(247, 243, 234, 0.94)),
+    linear-gradient(180deg, rgba(255, 253, 248, 1), rgba(251, 247, 239, 0.98)),
     var(--realtor-surface);
 }
 
@@ -197,14 +196,14 @@ a {
 }
 
 .realtor-service-tile {
-  border-color: rgba(49, 95, 69, 0.14);
-  background: rgba(255, 253, 248, 0.72);
+  border-color: rgba(49, 95, 69, 0.2);
+  background: rgba(255, 253, 248, 0.96);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.72) inset;
 }
 
 .realtor-service-tile:hover {
-  border-color: rgba(49, 95, 69, 0.32);
-  background: rgba(255, 253, 248, 0.9);
+  border-color: rgba(49, 95, 69, 0.42);
+  background: rgba(255, 253, 248, 1);
 }
 
 .realtor-service-tile-selected {
@@ -218,14 +217,465 @@ a {
 }
 
 .realtor-field {
-  border: 1px solid rgba(49, 95, 69, 0.18);
-  background: rgba(255, 253, 248, 0.96);
+  border: 1px solid rgba(49, 95, 69, 0.28);
+  background: rgba(255, 253, 248, 0.98);
   color: var(--realtor-text);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
 }
 
 .realtor-field::placeholder {
+  color: rgba(95, 109, 99, 0.72);
+}
+
+.realtor-field:focus {
+  border-color: rgba(49, 95, 69, 0.56);
+  box-shadow:
+    0 0 0 3px rgba(49, 95, 69, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.8) inset;
+}
+
+.booking-shell.realtor-theme {
+  --realtor-bg: #f4f7f2;
+  --realtor-bg-rgb: 244 247 242;
+  --realtor-bg-soft: #eaf1ea;
+  --realtor-bg-soft-rgb: 234 241 234;
+  --realtor-surface: #ffffff;
+  --realtor-surface-rgb: 255 255 255;
+  --realtor-surface-muted: #f6f8f5;
+  --realtor-surface-muted-rgb: 246 248 245;
+  --realtor-text: #202b25;
+  --realtor-text-rgb: 32 43 37;
+  --realtor-muted: #5d6962;
+  --realtor-muted-rgb: 93 105 98;
+  --realtor-border: rgba(66, 84, 73, 0.18);
+  --realtor-shadow: 0 18px 44px -36px rgba(32, 43, 37, 0.36);
+}
+
+.booking-shell.realtor-backdrop {
+  background:
+    radial-gradient(760px 380px at 14% -10%, rgba(122, 158, 132, 0.16), transparent 58%),
+    radial-gradient(620px 320px at 94% 0%, rgba(194, 178, 128, 0.1), transparent 62%),
+    linear-gradient(180deg, #fbfcfa 0%, #f2f6f0 48%, #f8f7f2 100%);
+}
+
+.booking-shell .realtor-panel,
+.booking-shell .realtor-elevated-panel,
+.booking-shell .realtor-green-panel,
+.booking-shell .realtor-warm-panel {
+  border-color: rgba(66, 84, 73, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0.97)),
+    #ffffff;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 18px 42px -36px rgba(32, 43, 37, 0.32);
+}
+
+.booking-shell .realtor-soft-panel {
+  border-color: rgba(66, 84, 73, 0.16);
+  background: #f8faf7;
+}
+
+.booking-shell .realtor-package-card,
+.booking-shell .realtor-service-tile,
+.booking-shell .realtor-choice {
+  border-color: rgba(66, 84, 73, 0.16);
+  background: #ffffff;
+}
+
+.booking-shell .realtor-package-card:hover,
+.booking-shell .realtor-service-tile:hover,
+.booking-shell .realtor-choice:hover {
+  border-color: rgba(var(--realtor-primary-rgb), 0.42);
+  background: #ffffff;
+}
+
+.booking-shell .realtor-package-card-featured {
+  border-color: rgba(var(--realtor-accent-rgb), 0.34);
+  background:
+    linear-gradient(180deg, #ffffff, #fbfcfa),
+    #ffffff;
+}
+
+.booking-shell .realtor-package-card-selected,
+.booking-shell .realtor-service-tile-selected,
+.booking-shell .realtor-choice-selected {
+  border-color: rgba(var(--realtor-primary-rgb), 0.72);
+  background:
+    linear-gradient(180deg, #ffffff, rgba(var(--realtor-primary-rgb), 0.035)),
+    #ffffff;
+  box-shadow:
+    0 0 0 2px rgba(var(--realtor-primary-rgb), 0.14),
+    0 1px 0 rgba(255, 255, 255, 0.98) inset,
+    0 22px 52px -38px rgba(32, 43, 37, 0.42);
+}
+
+.booking-shell .realtor-field {
+  border-color: rgba(66, 84, 73, 0.2);
+  background: #ffffff;
+}
+
+.booking-hero {
+  overflow: hidden;
+  border: 1px solid rgba(66, 84, 73, 0.16);
+  border-radius: 2rem;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(250, 252, 249, 0.94)),
+    #ffffff;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.96) inset,
+    0 24px 64px -48px rgba(32, 43, 37, 0.44);
+}
+
+.booking-hero-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.booking-hero-grid {
+  display: grid;
+  gap: 1rem;
+  padding: 0 1rem 1rem;
+}
+
+.booking-hero-copy {
+  display: flex;
+  min-height: 18rem;
+  flex-direction: column;
+  justify-content: flex-end;
+  border-radius: 1.55rem;
+  background:
+    radial-gradient(520px 320px at 10% 12%, rgba(var(--realtor-primary-rgb), 0.12), transparent 62%),
+    linear-gradient(135deg, #ffffff 0%, #fbfcfa 52%, #eef5ee 100%);
+  padding: clamp(1.4rem, 3vw, 2.35rem);
+}
+
+.booking-hero-pill,
+.booking-section-kicker {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid rgba(var(--realtor-primary-rgb), 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 0.35rem 0.65rem;
+  color: var(--realtor-primary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.booking-hero-copy h1 {
+  margin-top: 1rem;
+  max-width: 12ch;
+  color: var(--realtor-text);
+  font-size: clamp(2.45rem, 5.8vw, 4.65rem);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  line-height: 0.94;
+}
+
+.booking-hero-copy p {
+  margin-top: 1rem;
+  max-width: 34rem;
   color: var(--realtor-muted);
+  font-size: clamp(0.98rem, 1.4vw, 1.12rem);
+  line-height: 1.65;
+}
+
+.booking-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.35rem;
+}
+
+.booking-hero-login {
+  margin-top: 1rem !important;
+  color: var(--realtor-muted);
+  font-size: 0.78rem !important;
+  line-height: 1.45 !important;
+}
+
+.booking-hero-login a {
+  color: var(--realtor-primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.booking-hero-login a:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.booking-hero-primary,
+.booking-hero-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.65rem;
+  border-radius: 999px;
+  padding: 0.75rem 1.05rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.booking-hero-primary {
+  background: var(--realtor-primary);
+  color: white;
+  box-shadow: 0 14px 28px -18px rgba(var(--realtor-primary-rgb), 0.6);
+}
+
+.booking-hero-secondary {
+  border: 1px solid rgba(66, 84, 73, 0.16);
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--realtor-text);
+}
+
+.booking-hero-primary:hover,
+.booking-hero-secondary:hover {
+  transform: translateY(-1px);
+}
+
+.booking-hero-visual {
+  position: relative;
+  display: grid;
+  min-height: 18rem;
+  grid-template-columns: 1.2fr 0.8fr;
+  grid-template-rows: 1fr auto auto;
+  gap: 0.75rem;
+}
+
+.booking-media-tile,
+.booking-media-panel,
+.booking-media-strip {
+  border: 1px solid rgba(66, 84, 73, 0.14);
+  border-radius: 1.55rem;
+  background: #ffffff;
+  box-shadow: 0 18px 34px -30px rgba(32, 43, 37, 0.36);
+}
+
+.booking-media-tile {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(32, 43, 37, 0.18)),
+    linear-gradient(135deg, rgba(var(--realtor-primary-rgb), 0.24), rgba(199, 177, 122, 0.22)),
+    #edf3ed;
+  padding: 1rem;
+}
+
+.booking-media-tile::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 28% 20%, rgba(255, 255, 255, 0.84) 0 11%, transparent 12%),
+    linear-gradient(155deg, transparent 0 45%, rgba(32, 43, 37, 0.28) 46% 100%),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.28) 0 1px, transparent 1px 18px);
+}
+
+.booking-media-tile::after {
+  content: "";
+  position: absolute;
+  right: 1rem;
+  top: 1rem;
+  height: 38%;
+  width: 42%;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 1rem;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.12)),
+    rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(6px);
+}
+
+.booking-media-tile span {
+  position: relative;
+  z-index: 1;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 0.45rem 0.7rem;
+  color: var(--realtor-text);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.booking-media-tile-large {
+  grid-row: span 2;
+  min-height: 13rem;
+}
+
+.booking-media-tile-small::before {
+  background:
+    radial-gradient(circle at 72% 24%, rgba(255, 255, 255, 0.78) 0 12%, transparent 13%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0) 38%, rgba(32, 43, 37, 0.24)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.28) 0 1px, transparent 1px 16px);
+}
+
+.booking-media-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.booking-media-kicker {
+  display: block;
+  color: var(--realtor-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.booking-media-panel strong {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--realtor-text);
+  font-size: 0.98rem;
+}
+
+.booking-media-check {
+  display: inline-flex;
+  height: 2.15rem;
+  width: 2.15rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--realtor-primary);
+  color: white;
+  font-weight: 800;
+}
+
+.booking-media-strip {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  padding: 0.65rem;
+}
+
+.booking-media-strip span {
+  min-height: 3.4rem;
+  border-radius: 1rem;
+  background:
+    linear-gradient(135deg, rgba(var(--realtor-primary-rgb), 0.08), rgba(var(--realtor-primary-rgb), 0.02)),
+    #f7faf6;
+}
+
+.booking-package-section {
+  scroll-margin-top: 1rem;
+}
+
+.booking-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.booking-section-heading h3 {
+  margin-top: 0.7rem;
+  color: var(--realtor-text);
+  font-size: clamp(1.75rem, 3vw, 2.55rem);
+  font-weight: 740;
+  letter-spacing: -0.025em;
+  line-height: 1;
+}
+
+.booking-section-heading p:not(.booking-section-kicker) {
+  margin-top: 0.65rem;
+  color: var(--realtor-muted);
+  font-size: 0.98rem;
+}
+
+.booking-package-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.booking-package-card {
+  min-height: 18.5rem;
+}
+
+.booking-shell .booking-package-card {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.96) inset,
+    0 20px 42px -38px rgba(32, 43, 37, 0.42);
+}
+
+.booking-shell .booking-package-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 1) inset,
+    0 28px 54px -40px rgba(32, 43, 37, 0.52);
+}
+
+.booking-shell .booking-package-details {
+  background: #f8faf7;
+}
+
+.booking-shell .sticky.bottom-0 {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 -18px 44px -34px rgba(32, 43, 37, 0.32);
+}
+
+@media (min-width: 768px) {
+  .booking-hero {
+    border-radius: 2.35rem;
+  }
+
+  .booking-hero-nav {
+    padding: 1.15rem 1.25rem;
+  }
+
+  .booking-hero-grid {
+    grid-template-columns: minmax(0, 1.1fr) minmax(20rem, 0.9fr);
+    padding: 0 1.25rem 1.25rem;
+  }
+
+  .booking-package-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .booking-hero-copy {
+    min-height: 16rem;
+  }
+
+  .booking-hero-copy h1 {
+    max-width: 12ch;
+  }
+
+  .booking-hero-visual {
+    display: none;
+  }
+
+  .booking-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .booking-package-card {
+    min-height: 0;
+  }
 }
 
 body:has(.realtor-theme),
@@ -239,9 +689,9 @@ body.page-backdrop:has(.realtor-theme),
 body.page-backdrop:has(.auth-earth),
 body.page-backdrop:has(.admin-earth) {
   background:
-    radial-gradient(900px 420px at 10% -12%, rgba(111, 154, 120, 0.16), transparent 58%),
-    radial-gradient(700px 360px at 98% 6%, rgba(199, 177, 122, 0.14), transparent 60%),
-    var(--realtor-bg);
+    radial-gradient(760px 380px at 14% -10%, rgba(122, 158, 132, 0.14), transparent 58%),
+    radial-gradient(620px 320px at 94% 0%, rgba(194, 178, 128, 0.08), transparent 62%),
+    linear-gradient(180deg, #fbfcfa 0%, #f2f6f0 48%, #f8f7f2 100%);
 }
 
 body:has(.realtor-theme) .site-header,
@@ -251,7 +701,8 @@ body:has(.auth-earth) .site-footer,
 body:has(.admin-earth) .site-header,
 body:has(.admin-earth) .site-footer {
   border-color: var(--realtor-border);
-  background: color-mix(in srgb, var(--realtor-bg) 86%, white);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
 }
 
 body:has(.realtor-theme) .site-brand-primary,
@@ -292,13 +743,12 @@ body:has(.realtor-theme) .site-main {
 }
 
 body:has(.realtor-theme) .portal-header {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    linear-gradient(135deg, rgba(74, 111, 84, 0.98), rgba(56, 92, 70, 0.98)),
-    var(--realtor-primary-dark);
+  border: 1px solid rgba(66, 84, 73, 0.16);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(14px);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.12) inset,
-    0 18px 42px -30px rgba(35, 51, 43, 0.42);
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 18px 42px -34px rgba(32, 43, 37, 0.26);
 }
 
 body:has(.realtor-theme) .portal-mark {
@@ -308,8 +758,8 @@ body:has(.realtor-theme) .portal-mark {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: rgba(255, 253, 248, 0.2);
-  color: rgba(255, 253, 248, 0.96);
+  background: rgba(var(--realtor-primary-rgb), 0.1);
+  color: var(--realtor-primary);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -325,24 +775,25 @@ body:has(.realtor-theme) .portal-mark img {
 body:has(.realtor-theme) .portal-kicker,
 body:has(.realtor-theme) .portal-nav-link:hover,
 body:has(.realtor-theme) .portal-sign-out:hover {
-  color: rgba(255, 253, 248, 0.95);
+  color: var(--realtor-primary);
 }
 
 body:has(.realtor-theme) .portal-user {
-  color: white;
+  color: var(--realtor-text);
 }
 
 body:has(.realtor-theme) .portal-nav-link,
 body:has(.realtor-theme) .portal-sign-out {
-  color: rgba(255, 253, 248, 0.78);
+  color: var(--realtor-muted);
 }
 
 body:has(.realtor-theme) .portal-sign-out {
-  border-color: rgba(255, 253, 248, 0.22);
+  border-color: rgba(66, 84, 73, 0.16);
 }
 
 body:has(.realtor-theme) .portal-nav-pill {
-  border-color: rgba(255, 253, 248, 0.2);
+  border-color: rgba(66, 84, 73, 0.16);
+  background: rgba(255, 255, 255, 0.68);
 }
 
 .realtor-theme .address-autocomplete-label,
@@ -432,14 +883,14 @@ body:has(.admin-earth) .site-footer {
 .admin-earth .bg-white\/7,
 .admin-earth .bg-white\/\[0\.03\],
 .admin-earth .bg-white\/\[0\.035\] {
-  background: rgba(255, 253, 248, 0.58) !important;
+  background: rgba(255, 255, 255, 0.68) !important;
 }
 
 .admin-earth .bg-ink,
 .admin-earth .bg-ink\/25,
 .admin-earth .bg-ink\/30,
 .admin-earth .bg-ink\/50 {
-  background: color-mix(in srgb, var(--realtor-bg) 84%, white) !important;
+  background: color-mix(in srgb, var(--realtor-bg) 86%, white) !important;
 }
 
 .admin-earth .bg-ink-soft,
@@ -449,7 +900,7 @@ body:has(.admin-earth) .site-footer {
 .admin-earth .bg-ink-soft\/55,
 .admin-earth .bg-ink-soft\/60,
 .admin-earth .bg-ink-soft\/70 {
-  background: rgba(255, 253, 248, 0.86) !important;
+  background: rgba(255, 255, 255, 0.88) !important;
 }
 
 .admin-earth .bg-brand.text-white,
@@ -483,7 +934,7 @@ body:has(.admin-earth) .site-footer {
   width: 100%;
   border-radius: 0.75rem;
   border: 1px solid var(--realtor-border);
-  background: rgba(255, 253, 248, 0.9);
+  background: rgba(255, 255, 255, 0.92);
   padding: 0.625rem 0.75rem;
   font-size: 0.875rem;
   color: var(--realtor-text);

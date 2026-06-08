@@ -155,7 +155,7 @@ export default function AIPackageRecommender({
             anything obvious, and show what still needs an answer.
           </p>
         </div>
-        <span className="rounded-full border border-realtor-primary/30 bg-realtor-primary/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-realtor-primary">
+        <span className="rounded-full border border-realtor-primary/30 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-realtor-primary">
           AI beta
         </span>
       </div>
@@ -172,7 +172,7 @@ export default function AIPackageRecommender({
                   : starter.text,
               );
             }}
-            className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/70 px-3 py-2 text-left text-xs font-semibold text-realtor-text transition hover:border-realtor-primary/35 hover:bg-realtor-primary/10"
+            className="rounded-2xl border border-realtor-primary/20 bg-white px-3 py-2 text-left text-xs font-semibold text-realtor-text shadow-sm shadow-realtor-text/5 transition hover:border-realtor-primary/50 hover:bg-realtor-surface-muted/40"
           >
             {starter.label}
           </button>
@@ -189,7 +189,7 @@ export default function AIPackageRecommender({
           className="realtor-field min-h-32 w-full rounded-2xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-light/60"
         />
         {knownDetails.length > 0 ? (
-          <div className="rounded-2xl border border-realtor-primary/10 bg-realtor-surface/60 px-3 py-2">
+          <div className="rounded-2xl border border-realtor-primary/20 bg-white px-3 py-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">
               Already in the booking
             </p>
@@ -197,7 +197,7 @@ export default function AIPackageRecommender({
               {knownDetails.map((detail) => (
                 <span
                   key={detail}
-                  className="rounded-full border border-realtor-primary/15 bg-white/70 px-2.5 py-1 text-xs text-realtor-muted"
+                  className="rounded-full border border-realtor-primary/20 bg-realtor-surface px-2.5 py-1 text-xs text-realtor-muted"
                 >
                   {detail}
                 </span>
@@ -210,7 +210,7 @@ export default function AIPackageRecommender({
             type="button"
             onClick={recommend}
             disabled={pending || description.trim().length < 8}
-            className="rounded-md bg-realtor-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-realtor-primary-light disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-realtor-primary/20 transition hover:bg-realtor-primary-light disabled:cursor-not-allowed disabled:opacity-50"
           >
             {pending ? "Thinking..." : "Build my booking plan"}
           </button>

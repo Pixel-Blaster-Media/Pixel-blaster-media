@@ -27,15 +27,13 @@ export default function BookingBrandHeader({
   organization: OrganizationBrand;
 }) {
   return (
-    <header
-      className="rounded-3xl border border-realtor-primary/15 bg-realtor-surface/80 p-4 shadow-lg shadow-realtor-text/10 md:p-5"
-    >
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 md:flex md:items-center md:justify-between md:gap-4">
+    <header className="booking-hero">
+      <nav className="booking-hero-nav">
         <Link
           href={`/book?org=${organization.slug ?? ""}`}
           className="flex min-w-0 items-center gap-3 text-realtor-text"
         >
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-realtor-primary/10 text-sm font-bold text-realtor-primary ring-1 ring-realtor-primary/15">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white text-sm font-bold text-realtor-primary ring-1 ring-realtor-primary/20">
             {organization.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -51,36 +49,64 @@ export default function BookingBrandHeader({
             <span className="block truncate text-sm font-semibold">
               {organization.name}
             </span>
-            <span className="mt-0.5 block text-xs text-realtor-muted">
-              Booking system
+            <span className="mt-0.5 block text-[11px] font-medium uppercase tracking-[0.16em] text-realtor-muted">
+              Booking
             </span>
           </span>
         </Link>
         <Link
           href="/auth/sign-in?next=/portal"
-          className="shrink-0 rounded-full border border-realtor-primary/20 bg-realtor-surface px-3 py-1.5 text-xs font-semibold text-realtor-primary shadow-sm transition hover:border-realtor-primary/35 hover:bg-realtor-primary/10"
+          className="shrink-0 rounded-full border border-realtor-primary/20 bg-white px-4 py-2 text-xs font-semibold text-realtor-primary shadow-sm shadow-realtor-text/5 transition hover:border-realtor-primary/45 hover:bg-realtor-surface-muted/50"
         >
           Realtor login
         </Link>
-      </div>
+      </nav>
 
-      <div className="mt-3 max-w-2xl md:mt-5">
-        <h1 className="text-2xl font-bold leading-tight text-realtor-text md:text-4xl">
-          Book a shoot
-        </h1>
-        <p className="mt-1 max-w-xl text-sm leading-5 text-realtor-muted md:mt-2 md:leading-6">
-          Premium real estate media, scheduled without the back-and-forth.
-        </p>
-        <p className="mt-3 text-xs text-realtor-muted">
-          Already have a profile?{" "}
-          <Link
-            href="/auth/sign-in?next=/portal"
-            className="font-semibold text-realtor-primary underline-offset-4 hover:underline"
-          >
-            Log in to view your media and bookings
-          </Link>
-          .
-        </p>
+      <div className="booking-hero-grid">
+        <div className="booking-hero-copy">
+          <span className="booking-hero-pill">Real estate media booking</span>
+          <h1>Book a shoot. Skip the back-and-forth.</h1>
+          <p>
+            Pick a package, add the property details, choose a time, and your
+            shoot is ready to go.
+          </p>
+          <div className="booking-hero-actions">
+            <a href="#packages" className="booking-hero-primary">
+              Choose a package
+            </a>
+            <Link href="/auth/sign-in?next=/portal" className="booking-hero-secondary">
+              View your portal
+            </Link>
+          </div>
+          <p className="booking-hero-login">
+            Already have a profile?{" "}
+            <Link href="/auth/sign-in?next=/portal">
+              Log in to view your media and bookings
+            </Link>
+            .
+          </p>
+        </div>
+
+        <div className="booking-hero-visual" aria-hidden="true">
+          <div className="booking-media-tile booking-media-tile-large">
+            <span>Photos</span>
+          </div>
+          <div className="booking-media-tile booking-media-tile-small">
+            <span>iGUIDE</span>
+          </div>
+          <div className="booking-media-panel">
+            <div>
+              <span className="booking-media-kicker">Next step</span>
+              <strong>Choose the best fit</strong>
+            </div>
+            <span className="booking-media-check">✓</span>
+          </div>
+          <div className="booking-media-strip">
+            <span />
+            <span />
+            <span />
+          </div>
+        </div>
       </div>
     </header>
   );

@@ -107,14 +107,15 @@ export default function PackageAccordion({
 
   return (
     <div className="space-y-5">
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+      <section id="packages" className="booking-package-section">
+        <div className="booking-section-heading">
           <div>
-            <h3 className="text-base font-semibold text-realtor-text">
-              Start with a package
+            <p className="booking-section-kicker">Packages</p>
+            <h3>
+              Start with the closest fit.
             </h3>
-            <p className="mt-1 text-sm text-realtor-muted">
-              Pick the closest fit, or build a custom order below.
+            <p>
+              Pick a ready-made package or build a custom booking below.
             </p>
           </div>
           {hasBundle ? (
@@ -126,14 +127,14 @@ export default function PackageAccordion({
                 );
                 updateUrl(withoutBundles, selectedAddOnSlugs);
               }}
-              className="text-xs text-realtor-muted underline hover:text-realtor-primary"
+              className="rounded-full border border-realtor-primary/25 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-muted transition hover:border-realtor-primary/50 hover:text-realtor-primary"
             >
               Clear package
             </button>
           ) : null}
         </div>
 
-        <ul className="grid gap-3 xl:grid-cols-2">
+        <ul className="booking-package-grid">
           {bundles.map((b) => {
             const selected = selectedSlugs.includes(b.slug);
             return (
@@ -150,7 +151,7 @@ export default function PackageAccordion({
                     }
                   }}
                   className={
-                    "realtor-package-card flex h-full min-w-0 cursor-pointer flex-col rounded-2xl border p-4 transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 md:p-5 " +
+                    "realtor-package-card booking-package-card flex h-full min-w-0 cursor-pointer flex-col rounded-[1.65rem] border p-4 transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 md:p-5 " +
                     (selected
                       ? "realtor-package-card-selected"
                       : b.highlight
@@ -161,27 +162,27 @@ export default function PackageAccordion({
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-sm font-semibold text-realtor-text md:text-base">
+                        <h4 className="text-base font-semibold text-realtor-text md:text-lg">
                           {b.name}
                         </h4>
                         {b.badge ? (
-                          <span className="rounded-full border border-realtor-primary/40 bg-realtor-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">
+                          <span className="rounded-full border border-realtor-primary/35 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">
                             {b.badge}
                           </span>
                         ) : null}
                       </div>
                       {b.ideal_for ? (
-                        <p className="mt-1 text-xs leading-5 text-realtor-muted md:text-sm">
+                        <p className="mt-1 text-sm leading-6 text-realtor-muted">
                           {b.ideal_for}
                         </p>
                       ) : (
-                        <p className="mt-1 text-xs leading-5 text-realtor-muted md:text-sm">
+                        <p className="mt-1 text-sm leading-6 text-realtor-muted">
                           {shortDescription(b.description)}
                         </p>
                       )}
                     </div>
                     <div className="flex shrink-0 items-start gap-3">
-                      <div className="rounded-2xl bg-realtor-surface-muted/70 px-3 py-2 text-right ring-1 ring-realtor-primary/10">
+                      <div className="rounded-2xl bg-white px-3 py-2 text-right ring-1 ring-realtor-primary/20">
                         <p className="text-lg font-semibold text-realtor-text md:text-xl">
                           ${(b.price_cents / 100).toFixed(0)}
                         </p>
@@ -195,7 +196,7 @@ export default function PackageAccordion({
                           "mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition " +
                           (selected
                             ? "border-realtor-primary bg-realtor-primary text-white shadow-sm"
-                            : "border-realtor-primary/25 bg-realtor-surface text-transparent")
+                            : "border-realtor-primary/35 bg-white text-transparent")
                         }
                       >
                         ✓
@@ -203,22 +204,22 @@ export default function PackageAccordion({
                     </div>
                   </div>
 
-                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <div className="mt-5 flex flex-wrap items-center gap-2">
                     <MediaBadges item={b} />
                     {sqftRuleText(b) ? (
-                      <span className="rounded-full border border-realtor-primary/15 bg-realtor-soft/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
+                      <span className="rounded-full border border-realtor-primary/20 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
                         Sqft pricing
                       </span>
                     ) : null}
                     {selected ? (
-                      <span className="rounded-full bg-realtor-primary px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
+                      <span className="rounded-full bg-realtor-primary px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm shadow-realtor-primary/20">
                         Selected
                       </span>
                     ) : null}
                   </div>
 
                   {sqftRuleText(b) ? (
-                    <p className="mt-3 rounded-xl border border-realtor-primary/15 bg-realtor-primary/10 px-3 py-2 text-xs font-medium text-realtor-primary">
+                    <p className="mt-3 rounded-2xl border border-realtor-primary/20 bg-white px-3 py-2 text-xs font-medium text-realtor-text">
                       {sqftRuleText(b)}
                     </p>
                   ) : null}
@@ -271,7 +272,7 @@ export default function PackageAccordion({
                       "mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition " +
                       (selected
                         ? "border-realtor-primary bg-realtor-primary text-white shadow-sm"
-                        : "border-realtor-primary/25 bg-realtor-surface text-transparent")
+                        : "border-realtor-primary/35 bg-white text-transparent")
                     }
                   >
                     ✓
@@ -292,7 +293,7 @@ export default function PackageAccordion({
                       {a.ideal_for ?? shortDescription(a.description)}
                     </p>
                   </div>
-                  <div className="shrink-0 rounded-2xl bg-realtor-surface-muted/70 px-3 py-2 text-right ring-1 ring-realtor-primary/10">
+                  <div className="shrink-0 rounded-2xl bg-white px-3 py-2 text-right ring-1 ring-realtor-primary/20">
                     <p className="text-sm font-semibold text-realtor-text">
                       ${(a.price_cents / 100).toFixed(0)}
                     </p>
@@ -341,7 +342,7 @@ export default function PackageAccordion({
                         "mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold transition " +
                         (selected
                           ? "border-realtor-primary bg-realtor-primary text-white"
-                          : "border-realtor-primary/25 bg-realtor-surface text-transparent")
+                          : "border-realtor-primary/35 bg-white text-transparent")
                       }
                     >
                       ✓
@@ -404,7 +405,7 @@ function MediaBadges({
             "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider " +
             (inverted
               ? "border-white/25 bg-white/10 text-white/82"
-              : "border-realtor-primary/25 bg-realtor-primary/10 text-realtor-primary")
+              : "border-realtor-primary/25 bg-white text-realtor-primary")
           }
         >
           {badge}
@@ -443,10 +444,10 @@ function PackageDetails({
   );
 
   const boxClass =
-    "mt-3 rounded-lg border p-3 " +
+    "booking-package-details mt-3 rounded-2xl border p-3 " +
     (inverted
-      ? "border-white/18 bg-white/10"
-      : "border-realtor-primary/15 bg-realtor-soft/65");
+      ? "border-white/20 bg-white/10"
+      : "border-realtor-primary/20 bg-white");
 
   return (
     <>
@@ -487,7 +488,7 @@ function AccordionSection({
         "rounded-2xl transition " +
         (accent
           ? "realtor-green-panel"
-          : "realtor-warm-panel")
+          : "realtor-elevated-panel")
       }
     >
       <button
