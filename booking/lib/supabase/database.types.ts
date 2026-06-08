@@ -69,6 +69,7 @@ interface ProfilesTable {
     delivery_cc_emails: string[];
     internal_notes: string | null;
     ai_memory: Json;
+    archived_at: string | null;
     role: UserRole;
     created_at: string;
     updated_at: string;
@@ -88,6 +89,7 @@ interface ProfilesTable {
     delivery_cc_emails?: string[];
     internal_notes?: string | null;
     ai_memory?: Json;
+    archived_at?: string | null;
     role?: UserRole;
   };
   Update: Partial<ProfilesTable["Insert"]>;

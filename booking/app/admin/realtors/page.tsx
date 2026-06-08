@@ -27,6 +27,7 @@ interface ProfileRow {
   delivery_cc_emails: string[];
   internal_notes: string | null;
   ai_memory: Json;
+  archived_at: string | null;
   role: UserRole;
   created_at: string;
 }
@@ -63,10 +64,11 @@ export default async function RealtorsPage({
   const { data: profiles, error } = await supabase
     .from("profiles")
     .select(
-      "id, email, full_name, phone, alternate_phones, brokerage, profile_photo_url, brokerage_logo_url, website_url, instagram_url, delivery_cc_emails, internal_notes, ai_memory, role, created_at",
+      "id, email, full_name, phone, alternate_phones, brokerage, profile_photo_url, brokerage_logo_url, website_url, instagram_url, delivery_cc_emails, internal_notes, ai_memory, archived_at, role, created_at",
     )
     .eq("organization_id", admin.organizationId)
     .eq("role", "realtor")
+    .is("archived_at", null)
     .order("full_name", { ascending: true, nullsFirst: false })
     .order("email", { ascending: true })
     .limit(300)

@@ -1,10 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import type { RealtorAIMemory } from "@/lib/realtors/memory";
 
-import { updateRealtorProfile } from "./actions";
+import { archiveRealtorProfile, updateRealtorProfile } from "./actions";
 
 export interface RealtorProfileView {
   id: string;
@@ -37,7 +38,9 @@ export default function RealtorProfileCard({
 }: {
   realtor: RealtorProfileView;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [isRemoving, startRemoveTransition] = useTransition();
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState<
     { kind: "ok" | "err"; text: string } | null
@@ -99,22 +102,54 @@ export default function RealtorProfileCard({
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            setIsOpen((current) => !current);
-            setMessage(null);
-          }}
-          aria-expanded={isOpen}
-          className={
-            "w-full rounded-full px-4 py-2 text-sm font-semibold transition md:w-auto " +
-            (isOpen
-              ? "border border-realtor-primary/20 bg-white text-realtor-primary hover:bg-realtor-primary/5"
-              : "bg-realtor-primary text-white hover:bg-realtor-primary/90")
-          }
-        >
-          {isOpen ? "Close" : "Edit profile"}
-        </button>
+        <div className="flex flex-col gap-2 md:items-end">
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen((current) => !current);
+              setMessage(null);
+            }}
+            aria-expanded={isOpen}
+            className={
+              "w-full rounded-full px-4 py-2 text-sm font-semibold transition md:w-auto " +
+              (isOpen
+                ? "border border-realtor-primary/20 bg-white text-realtor-primary hover:bg-realtor-primary/5"
+                : "bg-realtor-primary text-white hover:bg-realtor-primary/90")
+            }
+          >
+            {isOpen ? "Close" : "Edit profile"}
+          </button>
+          <button
+            type="button"
+            disabled={isRemoving}
+            onClick={() => {
+              const name = realtor.full_name || realtor.email;
+              if (
+                !window.confirm(
+                  `Remove ${name} from active agents? Their old shoots stay saved, but they will no longer appear in the realtor list or portal.`,
+                )
+              ) {
+                return;
+              }
+              setMessage(null);
+              startRemoveTransition(async () => {
+                const result = await archiveRealtorProfile(realtor.id);
+                setMessage(
+                  result.ok
+                    ? { kind: "ok", text: "Agent removed from active list." }
+                    : {
+                        kind: "err",
+                        text: result.error ?? "Could not remove agent.",
+                      },
+                );
+                if (result.ok) router.refresh();
+              });
+            }}
+            className="w-full rounded-full border border-red-500/25 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:border-red-500 disabled:opacity-60 md:w-auto"
+          >
+            {isRemoving ? "Removing..." : "Remove agent"}
+          </button>
+        </div>
       </div>
 
       {isOpen ? (

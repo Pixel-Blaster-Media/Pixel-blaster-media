@@ -902,6 +902,7 @@ async function loadAssistantContext(organizationId: string): Promise<{
       .select("id, full_name, email, phone, brokerage, internal_notes, delivery_cc_emails, ai_memory")
       .eq("organization_id", organizationId)
       .eq("role", "realtor")
+      .is("archived_at", null)
       .order("full_name", { ascending: true, nullsFirst: false })
       .limit(80)
       .returns<ProfileContextRow[]>(),
@@ -1929,6 +1930,7 @@ async function applyRealtorMemoryUpdate(
     .select("id, internal_notes")
     .eq("organization_id", organizationId)
     .eq("role", "realtor")
+    .is("archived_at", null)
     .eq("id", realtorId)
     .maybeSingle<{ id: string; internal_notes: string | null }>();
   if (readError) return { ok: false, error: readError.message };
@@ -1946,6 +1948,7 @@ async function applyRealtorMemoryUpdate(
     .update({ internal_notes: nextNotes })
     .eq("organization_id", organizationId)
     .eq("role", "realtor")
+    .is("archived_at", null)
     .eq("id", realtorId);
   if (error) return { ok: false, error: error.message };
   return {
@@ -1980,6 +1983,7 @@ async function applyDeliveryCcUpdate(
     .select("id, delivery_cc_emails")
     .eq("organization_id", organizationId)
     .eq("role", "realtor")
+    .is("archived_at", null)
     .eq("id", realtorId)
     .maybeSingle<{ id: string; delivery_cc_emails: string[] | null }>();
   if (readError) return { ok: false, error: readError.message };
@@ -2002,6 +2006,7 @@ async function applyDeliveryCcUpdate(
     .update({ delivery_cc_emails: nextEmails })
     .eq("organization_id", organizationId)
     .eq("role", "realtor")
+    .is("archived_at", null)
     .eq("id", realtorId);
   if (error) return { ok: false, error: error.message };
   return {
@@ -2152,6 +2157,7 @@ async function applyUndoPayload(
       .update({ internal_notes: notes })
       .eq("organization_id", organizationId)
       .eq("role", "realtor")
+      .is("archived_at", null)
       .eq("id", realtorId);
     if (error) return { ok: false, error: error.message };
     return { ok: true, message: "Undone. I restored the realtor memory note." };
@@ -2168,6 +2174,7 @@ async function applyUndoPayload(
       .update({ delivery_cc_emails: emails })
       .eq("organization_id", organizationId)
       .eq("role", "realtor")
+      .is("archived_at", null)
       .eq("id", realtorId);
     if (error) return { ok: false, error: error.message };
     return { ok: true, message: "Undone. I restored the delivery CC list." };

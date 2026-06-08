@@ -374,6 +374,7 @@ async function loadRealtorMemory({
       .eq("id", profileId)
       .eq("organization_id", organizationId)
       .eq("role", "realtor")
+      .is("archived_at", null)
       .maybeSingle<MemoryProfileRow>(),
     supabase
       .from("bookings")

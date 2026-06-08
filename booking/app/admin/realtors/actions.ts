@@ -29,6 +29,7 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/webp",
   "image/gif",
 ]);
+const ACTIVE_BOOKING_STATUSES = ["requested", "confirmed", "shot", "editing"] as const;
 
 export async function updateRealtorProfile(
   formData: FormData,
@@ -129,6 +130,62 @@ export async function updateRealtorProfile(
   revalidatePath("/admin/bookings");
   revalidatePath("/admin/today");
   revalidatePath("/portal");
+  return { ok: true };
+}
+
+export async function archiveRealtorProfile(
+  profileId: string,
+): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  const cleanProfileId = profileId.trim();
+  if (!cleanProfileId) return { ok: false, error: "Missing realtor profile." };
+
+  const service = getServiceSupabase();
+  const { data: profile, error: profileError } = await service
+    .from("profiles")
+    .select("id, email, archived_at")
+    .eq("id", cleanProfileId)
+    .eq("organization_id", admin.organizationId)
+    .eq("role", "realtor")
+    .maybeSingle<{ id: string; email: string; archived_at: string | null }>();
+
+  if (profileError) return { ok: false, error: profileError.message };
+  if (!profile) return { ok: false, error: "Realtor profile was not found." };
+  if (profile.archived_at) return { ok: true };
+
+  const { count, error: bookingError } = await service
+    .from("bookings")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", admin.organizationId)
+    .eq("owner_id", cleanProfileId)
+    .in("status", [...ACTIVE_BOOKING_STATUSES]);
+
+  if (bookingError) return { ok: false, error: bookingError.message };
+  if ((count ?? 0) > 0) {
+    return {
+      ok: false,
+      error:
+        "This realtor still has active shoots. Finish, deliver, or cancel those bookings before removing the agent.",
+    };
+  }
+
+  const { data: updated, error } = await service
+    .from("profiles")
+    .update({ archived_at: new Date().toISOString() })
+    .eq("id", cleanProfileId)
+    .eq("organization_id", admin.organizationId)
+    .eq("role", "realtor")
+    .is("archived_at", null)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+
+  if (error) return { ok: false, error: error.message };
+  if (!updated) return { ok: false, error: "Realtor profile was already removed." };
+
+  revalidatePath("/admin/realtors");
+  revalidatePath("/admin/bookings");
+  revalidatePath("/admin/calendar");
+  revalidatePath("/admin/today");
   return { ok: true };
 }
 

@@ -204,34 +204,35 @@ export default async function AdminCalendarPage({
               a booking.
             </p>
           </div>
-          <div className="grid w-full grid-cols-2 gap-2 text-xs sm:flex sm:w-auto sm:flex-wrap">
-            <Link
-              href={`/admin/calendar?week=${prevWeek}`}
-              className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-2.5 py-1.5 text-center text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary sm:px-3"
-            >
-              Previous
-            </Link>
-            <Link
-              href="/admin/calendar"
-              className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-2.5 py-1.5 text-center text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary sm:px-3"
-            >
-              This week
-            </Link>
-            <Link
-              href={`/admin/calendar?week=${nextWeek}`}
-              className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-2.5 py-1.5 text-center text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary sm:px-3"
-            >
-              Next
-            </Link>
-            <Link
-              href="/admin/settings/availability"
-              className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-2.5 py-1.5 text-center text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary sm:px-3"
-            >
-              Hours + blocks
-            </Link>
-          </div>
+          <Link
+            href="/admin/settings/availability"
+            className="w-full rounded-full border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-center text-xs font-semibold text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary sm:w-auto"
+          >
+            Hours + blocks
+          </Link>
         </div>
       </header>
+
+      <nav className="sticky top-2 z-20 grid grid-cols-3 gap-2 rounded-2xl border border-realtor-primary/15 bg-realtor-surface/95 p-2 text-xs shadow-lg shadow-realtor-text/10 backdrop-blur md:static md:flex md:w-fit md:rounded-full">
+        <Link
+          href={`/admin/calendar?week=${prevWeek}`}
+          className="rounded-full border border-realtor-primary/15 bg-white/45 px-3 py-2 text-center font-semibold text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
+        >
+          Previous
+        </Link>
+        <Link
+          href="/admin/calendar"
+          className="rounded-full border border-realtor-primary/25 bg-white px-3 py-2 text-center font-semibold text-realtor-primary transition hover:border-realtor-primary/45"
+        >
+          This week
+        </Link>
+        <Link
+          href={`/admin/calendar?week=${nextWeek}`}
+          className="rounded-full border border-realtor-primary/15 bg-white/45 px-3 py-2 text-center font-semibold text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
+        >
+          Next
+        </Link>
+      </nav>
 
       <CalendarWeekView
         days={days}

@@ -521,15 +521,19 @@ async function resolveUser(params: {
     if (userId) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("id, email, full_name, organization_id")
+        .select("id, email, full_name, organization_id, archived_at")
         .eq("id", userId)
         .maybeSingle<{
           id: string;
           email: string;
           full_name: string | null;
           organization_id: string | null;
+          archived_at: string | null;
         }>();
       if (profile) {
+        if (profile.archived_at) {
+          return removedRealtorAccount();
+        }
         if (profile.organization_id !== params.organizationId) {
           return organizationMismatch(params.organizationName);
         }
@@ -625,13 +629,14 @@ async function resolveUser(params: {
     }
     const { data: profile } = await service
       .from("profiles")
-      .select("id, email, full_name, organization_id")
+      .select("id, email, full_name, organization_id, archived_at")
       .eq("id", userId)
       .maybeSingle<{
         id: string;
         email: string;
         full_name: string | null;
         organization_id: string | null;
+        archived_at: string | null;
       }>();
     if (!profile) {
       return {
@@ -644,6 +649,9 @@ async function resolveUser(params: {
     }
     if (profile.organization_id !== params.organizationId) {
       return organizationMismatch(params.organizationName);
+    }
+    if (profile.archived_at) {
+      return removedRealtorAccount();
     }
     // Top up phone/brokerage if the user left them empty before, but only
     // after confirming this account belongs to the requested company.
@@ -752,6 +760,19 @@ function organizationMismatch(organizationName: string): ResolveUserErr {
   };
 }
 
+function removedRealtorAccount(): ResolveUserErr {
+  return {
+    ok: false,
+    result: {
+      ok: false,
+      errors: {
+        _form:
+          "This realtor account has been removed from the active client list. Contact the photographer to book again.",
+      },
+    },
+  };
+}
+
 async function maybeFillProfile(
   supabase: ReturnType<typeof getServiceSupabase>,
   userId: string,
@@ -812,6 +833,7 @@ async function findRealtorByPhone(
     )
     .eq("organization_id", organizationId)
     .eq("role", "realtor")
+    .is("archived_at", null)
     .limit(500)
     .returns<RealtorPhoneMatch[]>();
 

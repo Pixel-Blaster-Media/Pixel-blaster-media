@@ -11,6 +11,7 @@ export interface UserContext {
   email: string;
   fullName: string | null;
   phone: string | null;
+  archived_at: string | null;
   role: UserRole;
 }
 
@@ -20,6 +21,7 @@ interface ProfileRow {
   email: string;
   full_name: string | null;
   phone: string | null;
+  archived_at: string | null;
   role: UserRole;
 }
 
@@ -51,12 +53,16 @@ export async function requireUser(nextPath?: string): Promise<UserContext> {
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("id, organization_id, email, full_name, phone, role")
+    .select("id, organization_id, email, full_name, phone, archived_at, role")
     .eq("id", userId)
     .single<ProfileRow>();
 
   if (error || !profile) {
     console.warn("[auth] no profile for authed user", userId, error?.message);
+    redirect("/auth/sign-in");
+  }
+  if (profile.role === "realtor" && profile.archived_at) {
+    console.warn("[auth] archived realtor tried to access portal", userId);
     redirect("/auth/sign-in");
   }
 
@@ -66,6 +72,7 @@ export async function requireUser(nextPath?: string): Promise<UserContext> {
     email: profile.email,
     fullName: profile.full_name,
     phone: profile.phone,
+    archived_at: profile.archived_at,
     role: profile.role,
   };
 }

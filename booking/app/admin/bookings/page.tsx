@@ -41,11 +41,12 @@ const ACTIVE_STATUSES: BookingStatus[] = [
 export default async function BookingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<{ filter?: string; q?: string }>;
 }) {
   const params = await searchParams;
   const filter = (FILTERS.find((f) => f.id === params.filter)?.id ??
     "active") as (typeof FILTERS)[number]["id"];
+  const search = (params.q ?? "").trim();
 
   const admin = await requireAdmin();
   const supabase = await getServerSupabase();
@@ -57,7 +58,7 @@ export default async function BookingsPage({
     .eq("organization_id", admin.organizationId)
     .order("scheduled_at", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .limit(200);
+    .limit(search ? 500 : 200);
 
   if (filter === "active") {
     query = query.in("status", ACTIVE_STATUSES);
@@ -65,7 +66,16 @@ export default async function BookingsPage({
     query = query.eq("status", filter as BookingStatus);
   }
 
-  const { data: bookings, error } = await query.returns<BookingRow[]>();
+  const { data, error } = await query.returns<BookingRow[]>();
+  const bookings = filterBookings(data ?? [], search);
+  const upcoming = bookings
+    .filter(
+      (booking) =>
+        booking.scheduled_at &&
+        new Date(booking.scheduled_at).getTime() >= Date.now() &&
+        ACTIVE_STATUSES.includes(booking.status),
+    )
+    .slice(0, 4);
 
   if (error) {
     return (
@@ -79,22 +89,61 @@ export default async function BookingsPage({
     <div className="space-y-6">
       <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
         <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
-            Job board
-          </p>
-          <h1 className="mt-1 text-2xl font-bold text-white">Bookings</h1>
-          <p className="mt-1 max-w-xl text-sm text-ink-muted">
-            Track upcoming shoots, delivery progress, and job status from one place.
-          </p>
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+              Job board
+            </p>
+            <h1 className="mt-1 text-2xl font-bold text-white">Bookings</h1>
+            <p className="mt-1 max-w-xl text-sm text-ink-muted">
+              Track upcoming shoots, delivery progress, and job status from one place.
+            </p>
+          </div>
+          <Link
+            href="/admin/calendar"
+            className="rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:border-brand-light"
+          >
+            Open calendar
+          </Link>
         </div>
-        <nav className="flex flex-wrap gap-1 text-xs">
+      </header>
+
+      <section className="rounded-2xl border border-white/10 bg-ink-soft/45 p-3 shadow-lg shadow-black/10">
+        <form className="flex flex-col gap-2 sm:flex-row" action="/admin/bookings">
+          <input type="hidden" name="filter" value={filter} />
+          <label className="sr-only" htmlFor="booking-search">
+            Search bookings
+          </label>
+          <input
+            id="booking-search"
+            name="q"
+            defaultValue={search}
+            placeholder="Search by address, realtor, city, email, or service..."
+            className="min-h-11 flex-1 rounded-full border border-white/10 bg-black/15 px-4 text-sm text-white outline-none transition placeholder:text-ink-muted focus:border-brand-light"
+          />
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              className="min-h-11 rounded-full bg-brand px-5 text-sm font-semibold text-white transition hover:bg-brand-light"
+            >
+              Search
+            </button>
+            {search ? (
+              <Link
+                href={`/admin/bookings?filter=${filter}`}
+                className="inline-flex min-h-11 items-center rounded-full border border-white/10 px-4 text-sm font-semibold text-ink-muted transition hover:border-white/30 hover:text-white"
+              >
+                Clear
+              </Link>
+            ) : null}
+          </div>
+        </form>
+        <nav className="mt-3 flex gap-1 overflow-x-auto pb-1 text-xs">
           {FILTERS.map((f) => (
             <Link
               key={f.id}
-              href={`/admin/bookings?filter=${f.id}`}
+              href={bookingHref(f.id, search)}
               className={
-                "rounded-full border px-3 py-1.5 transition " +
+                "shrink-0 rounded-full border px-3 py-1.5 transition " +
                 (f.id === filter
                   ? "border-brand-light bg-brand/15 text-brand-light"
                   : "border-white/10 text-ink-muted hover:border-white/30 hover:text-white")
@@ -104,8 +153,47 @@ export default async function BookingsPage({
             </Link>
           ))}
         </nav>
-        </div>
-      </header>
+      </section>
+
+      {upcoming.length > 0 ? (
+        <section className="rounded-2xl border border-brand-light/20 bg-brand/10 p-4 shadow-lg shadow-black/10">
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+                Coming up next
+              </p>
+              <h2 className="mt-1 text-lg font-semibold text-white">
+                Next scheduled shoots
+              </h2>
+            </div>
+          </div>
+          <div className="grid gap-2 lg:grid-cols-2">
+            {upcoming.map((booking) => (
+              <Link
+                key={booking.id}
+                href={`/admin/bookings/${booking.id}`}
+                className="rounded-xl border border-white/10 bg-black/15 p-3 transition hover:border-brand-light/50 hover:bg-white/[0.04]"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-white">
+                      {booking.properties?.street_address ?? "No address yet"}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-ink-muted">
+                      {booking.profiles?.full_name ??
+                        booking.profiles?.email ??
+                        "Unknown realtor"}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-right text-[11px] font-semibold text-brand-light">
+                    {formatShortDateTime(booking.scheduled_at)}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {bookings && bookings.length > 0 ? (
         <ul className="grid gap-3">
@@ -175,9 +263,46 @@ export default async function BookingsPage({
         </ul>
       ) : (
         <p className="rounded-2xl border border-dashed border-white/10 bg-ink-soft/40 px-4 py-8 text-center text-sm text-ink-muted">
-          No bookings in this view.
+          {search
+            ? `No bookings matched "${search}".`
+            : "No bookings in this view."}
         </p>
       )}
     </div>
   );
+}
+
+function bookingHref(filter: (typeof FILTERS)[number]["id"], search: string) {
+  const params = new URLSearchParams({ filter });
+  if (search) params.set("q", search);
+  return `/admin/bookings?${params.toString()}`;
+}
+
+function filterBookings(bookings: BookingRow[], search: string): BookingRow[] {
+  if (!search) return bookings;
+  const needle = search.toLowerCase();
+  return bookings.filter((booking) => {
+    const haystack = [
+      booking.properties?.street_address,
+      booking.properties?.city,
+      booking.profiles?.full_name,
+      booking.profiles?.email,
+      booking.status,
+      ...booking.services.map(labelForService),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(needle);
+  });
+}
+
+function formatShortDateTime(value: string | null): string {
+  if (!value) return "No date";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
 }

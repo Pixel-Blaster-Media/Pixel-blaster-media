@@ -70,6 +70,7 @@ export async function searchRealtors(
       .select("id, email, full_name, phone, brokerage")
       .eq("organization_id", admin.organizationId)
       .eq("role", "realtor")
+      .is("archived_at", null)
       .ilike("full_name", pattern)
       .order("full_name", { ascending: true, nullsFirst: false })
       .limit(8)
@@ -79,6 +80,7 @@ export async function searchRealtors(
       .select("id, email, full_name, phone, brokerage")
       .eq("organization_id", admin.organizationId)
       .eq("role", "realtor")
+      .is("archived_at", null)
       .ilike("email", pattern)
       .order("email", { ascending: true })
       .limit(8)
@@ -291,12 +293,25 @@ async function findOrCreateRealtor(args: {
   const supabase = getServiceSupabase();
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id")
+    .select("id, archived_at")
     .eq("organization_id", args.organizationId)
     .eq("email", args.email)
     .limit(1)
-    .maybeSingle<InsertedRow>();
-  if (profile?.id) return profile.id;
+    .maybeSingle<{ id: string; archived_at: string | null }>();
+  if (profile?.id) {
+    if (profile.archived_at) {
+      await supabase
+        .from("profiles")
+        .update({
+          archived_at: null,
+          full_name: args.fullName,
+          role: "realtor",
+        })
+        .eq("organization_id", args.organizationId)
+        .eq("id", profile.id);
+    }
+    return profile.id;
+  }
 
   const { data: created, error } = await supabase.auth.admin.createUser({
     email: args.email,
@@ -310,6 +325,7 @@ async function findOrCreateRealtor(args: {
         organization_id: args.organizationId,
         full_name: args.fullName,
         role: "realtor",
+        archived_at: null,
       })
       .eq("id", created.user.id);
     return created.user.id;
@@ -323,7 +339,18 @@ async function findOrCreateRealtor(args: {
     const found = list?.users.find(
       (user) => user.email?.toLowerCase() === args.email,
     );
-    if (found) return found.id;
+    if (found) {
+      await supabase
+        .from("profiles")
+        .update({
+          organization_id: args.organizationId,
+          full_name: args.fullName,
+          role: "realtor",
+          archived_at: null,
+        })
+        .eq("id", found.id);
+      return found.id;
+    }
   }
 
   if (error) {
