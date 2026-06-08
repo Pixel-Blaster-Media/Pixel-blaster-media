@@ -55,15 +55,14 @@ interface BookingRow {
  *   - `"admin"` → email goes to the realtor
  *   - `"realtor"` → email goes to the admin notification address
  *
- * Callers that want RLS-style authorization (e.g. realtor cancelling
- * their own booking) must do that check first; this helper uses the
- * service-role client so it can always flip the row and clear the
- * calendar event.
+ * This helper uses the service-role client so callers must pass the
+ * authorized organization scope. Route actions should also do any
+ * caller-specific authorization first, such as realtor ownership.
  */
 export async function cancelBooking(
   bookingId: string,
   initiator: "admin" | "realtor",
-  scope?: { organizationId?: string },
+  scope: { organizationId: string },
 ): Promise<CancelResult> {
   const supabase = getServiceSupabase();
 
@@ -74,9 +73,7 @@ export async function cancelBooking(
     )
     .eq("id", bookingId);
 
-  if (scope?.organizationId) {
-    bookingQuery = bookingQuery.eq("organization_id", scope.organizationId);
-  }
+  bookingQuery = bookingQuery.eq("organization_id", scope.organizationId);
 
   const { data: booking, error: loadErr } =
     await bookingQuery.maybeSingle<BookingRow>();
@@ -102,9 +99,7 @@ export async function cancelBooking(
     })
     .eq("id", bookingId);
 
-  if (scope?.organizationId) {
-    updateQuery = updateQuery.eq("organization_id", scope.organizationId);
-  }
+  updateQuery = updateQuery.eq("organization_id", scope.organizationId);
 
   const { error: updateErr } = await updateQuery;
 

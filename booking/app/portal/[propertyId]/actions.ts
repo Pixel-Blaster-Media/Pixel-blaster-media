@@ -28,10 +28,12 @@ export async function cancelOwnBooking(
   const supabase = await getServerSupabase();
   const { data: booking, error } = await supabase
     .from("bookings")
-    .select("id, owner_id, property_id")
+    .select("id, organization_id, owner_id, property_id")
     .eq("id", bookingId)
+    .eq("organization_id", user.organizationId)
     .maybeSingle<{
       id: string;
+      organization_id: string;
       owner_id: string;
       property_id: string;
       status: BookingStatus;
@@ -47,7 +49,9 @@ export async function cancelOwnBooking(
     };
   }
 
-  const result = await cancelBooking(bookingId, "realtor");
+  const result = await cancelBooking(bookingId, "realtor", {
+    organizationId: user.organizationId,
+  });
   if (!result.ok) return { ok: false, error: result.error };
 
   revalidatePath(`/portal/${booking.property_id}`);

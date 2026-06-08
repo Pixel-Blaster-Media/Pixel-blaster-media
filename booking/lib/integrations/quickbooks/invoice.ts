@@ -382,16 +382,20 @@ async function findOrCreateCustomer(
   qb: Awaited<ReturnType<typeof getQBClient>>,
   realtor: CreateInvoiceInput["realtor"],
 ): Promise<string | null> {
-  const email = realtor.email.replace(/'/g, "\\'");
+  const email = escapeQBQLString(realtor.email);
 
-  try {
-    const existing = await qb.query<QueryResponse<QBOCustomer>>(
-      `SELECT Id, DisplayName, PrimaryEmailAddr FROM Customer WHERE PrimaryEmailAddr = '${email}' MAXRESULTS 1`,
-    );
-    const hit = existing.QueryResponse.Customer?.[0];
-    if (hit?.Id) return hit.Id;
-  } catch (err) {
-    console.warn("[qbo.invoice] customer lookup failed, will try create", err);
+  if (isValidEmailForQBQL(realtor.email)) {
+    try {
+      const existing = await qb.query<QueryResponse<QBOCustomer>>(
+        `SELECT Id, DisplayName, PrimaryEmailAddr FROM Customer WHERE PrimaryEmailAddr = '${email}' MAXRESULTS 1`,
+      );
+      const hit = existing.QueryResponse.Customer?.[0];
+      if (hit?.Id) return hit.Id;
+    } catch (err) {
+      console.warn("[qbo.invoice] customer lookup failed, will try create", err);
+    }
+  } else {
+    console.warn("[qbo.invoice] skipped customer lookup for invalid email");
   }
 
   const displayName = [realtor.full_name, realtor.brokerage]
@@ -415,6 +419,16 @@ async function findOrCreateCustomer(
     { method: "POST", body },
   );
   return created.Customer?.Id ?? null;
+}
+
+function isValidEmailForQBQL(value: string): boolean {
+  return /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(
+    value,
+  );
+}
+
+function escapeQBQLString(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
 /** Deep-link to the invoice inside QB's UI so the admin can open it. */

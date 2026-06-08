@@ -379,6 +379,7 @@ function AssistantResult({
   confirming: string | null;
   onConfirm: (action: AdminAssistantAction) => void;
 }) {
+  const [confirmationWords, setConfirmationWords] = useState<Record<string, string>>({});
   return (
     <div
       className={`mt-4 rounded-2xl border p-3 ${
@@ -392,9 +393,14 @@ function AssistantResult({
       </p>
       {result.actions.length > 0 ? (
         <div className="mt-3 space-y-2">
-          {result.actions.map((action) => (
+          {result.actions.map((action) => {
+            const key = actionKey(action);
+            const destructiveConfirmed =
+              !action.destructive ||
+              (confirmationWords[key] ?? "").trim().toUpperCase() === "CONFIRM";
+            return (
             <div
-              key={actionKey(action)}
+              key={key}
               className={
                 "flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 " +
                 (action.requiresConfirmation
@@ -431,6 +437,24 @@ function AssistantResult({
                     confirmation button.
                   </p>
                 ) : null}
+                {action.requiresConfirmation && action.destructive ? (
+                  <label className="mt-2 block max-w-xs">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-red-700">
+                      Type CONFIRM to allow this action
+                    </span>
+                    <input
+                      value={confirmationWords[key] ?? ""}
+                      onChange={(event) =>
+                        setConfirmationWords((current) => ({
+                          ...current,
+                          [key]: event.currentTarget.value,
+                        }))
+                      }
+                      placeholder="CONFIRM"
+                      className="mt-1 w-full rounded-xl border border-red-300 bg-white px-3 py-2 text-xs font-semibold text-realtor-text outline-none transition placeholder:text-realtor-muted/50 focus:border-red-500"
+                    />
+                  </label>
+                ) : null}
                 {action.priceChange ? (
                   <div className="mt-2 rounded-xl border border-realtor-primary/10 bg-white/65 p-2">
                     <p className="text-[11px] font-semibold uppercase tracking-wider text-realtor-muted">
@@ -464,7 +488,7 @@ function AssistantResult({
                 {action.requiresConfirmation ? (
                   <button
                     type="button"
-                    disabled={Boolean(confirming)}
+                    disabled={Boolean(confirming) || !destructiveConfirmed}
                     onClick={() => onConfirm(action)}
                     className={
                       "rounded-full border px-3 py-1.5 text-xs font-semibold transition disabled:opacity-60 " +
@@ -498,7 +522,8 @@ function AssistantResult({
                 ) : null}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       ) : null}
     </div>
