@@ -327,14 +327,6 @@ a {
     0 24px 64px -48px rgba(32, 43, 37, 0.44);
 }
 
-.booking-hero-nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1rem;
-}
-
 .booking-hero-grid {
   display: grid;
   gap: 1rem;
@@ -386,13 +378,6 @@ a {
   line-height: 1.65;
 }
 
-.booking-hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 1.35rem;
-}
-
 .booking-hero-login {
   margin-top: 1rem !important;
   color: var(--realtor-muted);
@@ -411,52 +396,17 @@ a {
   text-underline-offset: 0.2em;
 }
 
-.booking-hero-primary,
-.booking-hero-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2.65rem;
-  border-radius: 999px;
-  padding: 0.75rem 1.05rem;
-  font-size: 0.88rem;
-  font-weight: 700;
-  text-decoration: none;
-  transition:
-    transform 160ms ease,
-    border-color 160ms ease,
-    background 160ms ease;
-}
-
-.booking-hero-primary {
-  background: var(--realtor-primary);
-  color: white;
-  box-shadow: 0 14px 28px -18px rgba(var(--realtor-primary-rgb), 0.6);
-}
-
-.booking-hero-secondary {
-  border: 1px solid rgba(66, 84, 73, 0.16);
-  background: rgba(255, 255, 255, 0.76);
-  color: var(--realtor-text);
-}
-
-.booking-hero-primary:hover,
-.booking-hero-secondary:hover {
-  transform: translateY(-1px);
-}
-
 .booking-hero-visual {
   position: relative;
   display: grid;
   min-height: 18rem;
   grid-template-columns: 1.2fr 0.8fr;
-  grid-template-rows: 1fr auto auto;
+  grid-template-rows: 1fr auto;
   gap: 0.75rem;
 }
 
 .booking-media-tile,
-.booking-media-panel,
-.booking-media-strip {
+.booking-media-panel {
   border: 1px solid rgba(66, 84, 73, 0.14);
   border-radius: 1.55rem;
   background: #ffffff;
@@ -536,33 +486,6 @@ a {
   object-fit: cover;
 }
 
-.booking-media-logo-tile {
-  align-items: center;
-  justify-content: center;
-  background:
-    radial-gradient(circle at 30% 20%, rgba(var(--realtor-primary-rgb), 0.08), transparent 46%),
-    #ffffff;
-}
-
-.booking-media-logo-tile::before,
-.booking-media-logo-tile::after {
-  content: none;
-}
-
-.booking-media-logo {
-  position: relative;
-  z-index: 1;
-  max-height: 58%;
-  max-width: 70%;
-  object-fit: contain;
-}
-
-.booking-media-logo-tile span {
-  position: absolute;
-  bottom: 1rem;
-  left: 1rem;
-}
-
 .booking-media-tile-large {
   grid-row: span 2;
   min-height: 13rem;
@@ -609,22 +532,6 @@ a {
   background: var(--realtor-primary);
   color: white;
   font-weight: 800;
-}
-
-.booking-media-strip {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.6rem;
-  padding: 0.65rem;
-}
-
-.booking-media-strip span {
-  min-height: 3.4rem;
-  border-radius: 1rem;
-  background:
-    linear-gradient(135deg, rgba(var(--realtor-primary-rgb), 0.08), rgba(var(--realtor-primary-rgb), 0.02)),
-    #f7faf6;
 }
 
 .booking-package-section {
@@ -689,10 +596,6 @@ a {
 @media (min-width: 768px) {
   .booking-hero {
     border-radius: 2.35rem;
-  }
-
-  .booking-hero-nav {
-    padding: 1.15rem 1.25rem;
   }
 
   .booking-hero-grid {

@@ -143,8 +143,8 @@ export default function BusinessSettingsForm({
                 </span>
               </span>
               <span className="mt-1 block text-xs leading-5 text-realtor-muted">
-                This can appear in the public booking hero and account areas.
-                JPG, PNG, WebP, GIF, or SVG works best.
+                This appears at the top of the public booking page and in
+                account areas. JPG, PNG, WebP, GIF, or SVG works best.
               </span>
             </label>
           </div>
@@ -208,7 +208,7 @@ export default function BusinessSettingsForm({
             clear={clearHeroSecondaryImage}
             previewClassName="aspect-[4/3]"
             emptyLabel="Logo or image"
-            help="Optional. If this is empty, the booking page uses your logo here."
+            help="Optional accent image for the smaller booking page media block."
             onClearChange={setClearHeroSecondaryImage}
             onPreviewChange={setPreviewHeroSecondaryImageUrl}
           />

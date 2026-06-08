@@ -26,10 +26,7 @@ export default function BookingBrandHeader({
   organization: OrganizationBrand;
 }) {
   const mainImageUrl = organization.bookingHeroImageUrl;
-  const secondaryImageUrl =
-    organization.bookingHeroSecondaryImageUrl ?? organization.logoUrl;
-  const secondaryIsLogo =
-    Boolean(organization.logoUrl) && !organization.bookingHeroSecondaryImageUrl;
+  const secondaryImageUrl = organization.bookingHeroSecondaryImageUrl;
 
   return (
     <header className="booking-hero">
@@ -41,14 +38,6 @@ export default function BookingBrandHeader({
             Pick a package, add the property details, choose a time, and your
             shoot is ready to go.
           </p>
-          <div className="booking-hero-actions">
-            <a href="#packages" className="booking-hero-primary">
-              Choose a package
-            </a>
-            <Link href="/auth/sign-in?next=/portal" className="booking-hero-secondary">
-              View your portal
-            </Link>
-          </div>
           <p className="booking-hero-login">
             Already have a profile?{" "}
             <Link href="/auth/sign-in?next=/portal">
@@ -77,19 +66,17 @@ export default function BookingBrandHeader({
           <div
             className={`booking-media-tile booking-media-tile-small ${
               secondaryImageUrl ? "booking-media-tile-has-image" : ""
-            } ${secondaryIsLogo ? "booking-media-logo-tile" : ""}`}
+            }`}
           >
             {secondaryImageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={secondaryImageUrl}
                 alt=""
-                className={
-                  secondaryIsLogo ? "booking-media-logo" : "booking-media-photo"
-                }
+                className="booking-media-photo"
               />
             ) : null}
-            <span>{secondaryIsLogo ? "Logo" : "Media"}</span>
+            <span>Media</span>
           </div>
           <div className="booking-media-panel">
             <div>
@@ -97,11 +84,6 @@ export default function BookingBrandHeader({
               <strong>Choose the best fit</strong>
             </div>
             <span className="booking-media-check">✓</span>
-          </div>
-          <div className="booking-media-strip">
-            <span />
-            <span />
-            <span />
           </div>
         </div>
       </div>
