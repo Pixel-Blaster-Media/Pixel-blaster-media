@@ -119,36 +119,6 @@ export default function RealtorProfileCard({
           >
             {isOpen ? "Close" : "Edit profile"}
           </button>
-          <button
-            type="button"
-            disabled={isRemoving}
-            onClick={() => {
-              const name = realtor.full_name || realtor.email;
-              if (
-                !window.confirm(
-                  `Remove ${name} from active agents? Their old shoots stay saved, but they will no longer appear in the realtor list or portal.`,
-                )
-              ) {
-                return;
-              }
-              setMessage(null);
-              startRemoveTransition(async () => {
-                const result = await archiveRealtorProfile(realtor.id);
-                setMessage(
-                  result.ok
-                    ? { kind: "ok", text: "Agent removed from active list." }
-                    : {
-                        kind: "err",
-                        text: result.error ?? "Could not remove agent.",
-                      },
-                );
-                if (result.ok) router.refresh();
-              });
-            }}
-            className="w-full rounded-full border border-red-500/25 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:border-red-500 disabled:opacity-60 md:w-auto"
-          >
-            {isRemoving ? "Removing..." : "Remove agent"}
-          </button>
         </div>
       </div>
 
@@ -324,6 +294,53 @@ export default function RealtorProfileCard({
                 defaults.
               </p>
             </div>
+
+            <section className="rounded-2xl border border-red-200 bg-red-50/70 p-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-red-800">
+                    Remove from active agents
+                  </p>
+                  <p className="mt-1 text-xs text-red-700/80">
+                    Old shoots stay saved, but this agent leaves active lists
+                    and portal access.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={isRemoving}
+                  onClick={() => {
+                    const name = realtor.full_name || realtor.email;
+                    if (
+                      !window.confirm(
+                        `Remove ${name} from active agents? Their old shoots stay saved, but they will no longer appear in the realtor list or portal.`,
+                      )
+                    ) {
+                      return;
+                    }
+                    setMessage(null);
+                    startRemoveTransition(async () => {
+                      const result = await archiveRealtorProfile(realtor.id);
+                      setMessage(
+                        result.ok
+                          ? {
+                              kind: "ok",
+                              text: "Agent removed from active list.",
+                            }
+                          : {
+                              kind: "err",
+                              text: result.error ?? "Could not remove agent.",
+                            },
+                      );
+                      if (result.ok) router.refresh();
+                    });
+                  }}
+                  className="w-full rounded-full border border-red-500/25 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:border-red-500 disabled:opacity-60 sm:w-auto"
+                >
+                  {isRemoving ? "Removing..." : "Remove agent"}
+                </button>
+              </div>
+            </section>
           </form>
         </div>
       ) : null}

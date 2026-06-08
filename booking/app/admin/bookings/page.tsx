@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { BUSINESS_TZ } from "@/lib/booking/availability";
 import { BOOKING_STATUSES, isCancellable } from "@/lib/booking/booking-status";
 import { labelForService } from "@/lib/booking/services";
 import { requireAdmin } from "@/lib/auth/require-admin";
@@ -67,15 +68,10 @@ export default async function BookingsPage({
   }
 
   const { data, error } = await query.returns<BookingRow[]>();
-  const bookings = filterBookings(data ?? [], search);
-  const upcoming = bookings
-    .filter(
-      (booking) =>
-        booking.scheduled_at &&
-        new Date(booking.scheduled_at).getTime() >= Date.now() &&
-        ACTIVE_STATUSES.includes(booking.status),
-    )
-    .slice(0, 4);
+  const bookings = visibleBookingsForFilter(
+    filterBookings(data ?? [], search),
+    filter,
+  );
 
   if (error) {
     return (
@@ -95,7 +91,9 @@ export default async function BookingsPage({
             </p>
             <h1 className="mt-1 text-2xl font-bold text-white">Bookings</h1>
             <p className="mt-1 max-w-xl text-sm text-ink-muted">
-              Track upcoming shoots, delivery progress, and job status from one place.
+              {filter === "active"
+                ? "Today and upcoming active shoots. Past jobs live in the status filters."
+                : "Search and review shoots by status, realtor, property, or service."}
             </p>
           </div>
           <Link
@@ -155,120 +153,89 @@ export default async function BookingsPage({
         </nav>
       </section>
 
-      {upcoming.length > 0 ? (
-        <section className="rounded-2xl border border-brand-light/20 bg-brand/10 p-4 shadow-lg shadow-black/10">
-          <div className="mb-3 flex items-end justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
-                Coming up next
-              </p>
-              <h2 className="mt-1 text-lg font-semibold text-white">
-                Next scheduled shoots
-              </h2>
-            </div>
-          </div>
-          <div className="grid gap-2 lg:grid-cols-2">
-            {upcoming.map((booking) => (
-              <Link
-                key={booking.id}
-                href={`/admin/bookings/${booking.id}`}
-                className="rounded-xl border border-white/10 bg-black/15 p-3 transition hover:border-brand-light/50 hover:bg-white/[0.04]"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-white">
-                      {booking.properties?.street_address ?? "No address yet"}
-                    </p>
-                    <p className="mt-1 truncate text-xs text-ink-muted">
-                      {booking.profiles?.full_name ??
-                        booking.profiles?.email ??
-                        "Unknown realtor"}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-right text-[11px] font-semibold text-brand-light">
-                    {formatShortDateTime(booking.scheduled_at)}
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
       {bookings && bookings.length > 0 ? (
-        <ul className="grid gap-3">
-          {bookings.map((b) => {
-            const property = b.properties;
-            const profile = b.profiles;
-            const meta = BOOKING_STATUSES[b.status];
-            return (
-              <li
-                key={b.id}
-                className="rounded-2xl border border-white/10 bg-ink-soft/45 p-4 transition hover:border-brand-light/40 hover:bg-white/[0.035]"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <Link
-                    href={`/admin/bookings/${b.id}`}
-                    className="min-w-0 flex-1"
-                  >
-                    <p className="font-semibold text-white">
-                      {property?.street_address ?? "—"}
-                      {property?.city ? (
-                        <span className="text-ink-muted">
-                          {" "}
-                          · {property.city}
-                        </span>
-                      ) : null}
-                    </p>
-                    <p className="mt-0.5 text-xs text-ink-muted">
-                      {profile?.full_name ??
-                        profile?.email ??
-                        "Unknown realtor"}
-                    </p>
-                    <p className="mt-2 line-clamp-2 text-xs text-ink-muted">
-                      {b.services.map(labelForService).join(", ") || "—"}
-                    </p>
-                  </Link>
-                  <div className="flex shrink-0 flex-col items-end gap-2">
-                    <span
-                      className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${meta.pill}`}
-                    >
-                      {meta.label}
-                    </span>
-                    <span className="text-[10px] text-ink-muted">
-                      {b.scheduled_at
-                        ? new Date(b.scheduled_at).toLocaleString()
-                        : "no date"}
-                    </span>
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <Link
-                        href={`/admin/bookings/${b.id}`}
-                        className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:border-brand-light"
-                      >
-                        Open
-                      </Link>
-                      {isCancellable(b.status) ? (
-                        <CancelBookingButton
-                          bookingId={b.id}
-                          label="Cancel"
-                          compact
-                        />
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <section className="space-y-3">
+          {filter === "active" ? (
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+                  Coming up
+                </p>
+                <h2 className="mt-1 text-lg font-semibold text-white">
+                  Today and future shoots
+                </h2>
+              </div>
+              <p className="text-xs text-ink-muted">
+                {bookings.length} active booking{bookings.length === 1 ? "" : "s"}
+              </p>
+            </div>
+          ) : null}
+          <ul className="grid gap-3">
+            {bookings.map((booking) => (
+              <BookingListItem key={booking.id} booking={booking} />
+            ))}
+          </ul>
+        </section>
       ) : (
         <p className="rounded-2xl border border-dashed border-white/10 bg-ink-soft/40 px-4 py-8 text-center text-sm text-ink-muted">
           {search
             ? `No bookings matched "${search}".`
-            : "No bookings in this view."}
+            : filter === "active"
+              ? "No active shoots today or coming up."
+              : "No bookings in this view."}
         </p>
       )}
     </div>
+  );
+}
+
+function BookingListItem({ booking }: { booking: BookingRow }) {
+  const property = booking.properties;
+  const profile = booking.profiles;
+  const meta = BOOKING_STATUSES[booking.status];
+
+  return (
+    <li className="rounded-2xl border border-white/10 bg-ink-soft/45 p-4 transition hover:border-brand-light/40 hover:bg-white/[0.035]">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <Link href={`/admin/bookings/${booking.id}`} className="min-w-0 flex-1">
+          <p className="font-semibold text-white">
+            {property?.street_address ?? "-"}
+            {property?.city ? (
+              <span className="text-ink-muted"> · {property.city}</span>
+            ) : null}
+          </p>
+          <p className="mt-0.5 text-xs text-ink-muted">
+            {profile?.full_name ?? profile?.email ?? "Unknown realtor"}
+          </p>
+          <p className="mt-2 line-clamp-2 text-xs text-ink-muted">
+            {booking.services.map(labelForService).join(", ") || "-"}
+          </p>
+        </Link>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <span
+            className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${meta.pill}`}
+          >
+            {meta.label}
+          </span>
+          <span className="text-[10px] text-ink-muted">
+            {booking.scheduled_at
+              ? new Date(booking.scheduled_at).toLocaleString()
+              : "no date"}
+          </span>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Link
+              href={`/admin/bookings/${booking.id}`}
+              className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:border-brand-light"
+            >
+              Open
+            </Link>
+            {isCancellable(booking.status) ? (
+              <CancelBookingButton bookingId={booking.id} label="Cancel" compact />
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </li>
   );
 }
 
@@ -297,12 +264,24 @@ function filterBookings(bookings: BookingRow[], search: string): BookingRow[] {
   });
 }
 
-function formatShortDateTime(value: string | null): string {
-  if (!value) return "No date";
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
+function visibleBookingsForFilter(
+  bookings: BookingRow[],
+  filter: (typeof FILTERS)[number]["id"],
+): BookingRow[] {
+  if (filter !== "active") return bookings;
+  const todayKey = localDateKey(new Date());
+  return bookings.filter(
+    (booking) =>
+      booking.scheduled_at &&
+      localDateKey(new Date(booking.scheduled_at)) >= todayKey,
+  );
+}
+
+function localDateKey(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
