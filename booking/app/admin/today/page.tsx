@@ -22,7 +22,6 @@ import type {
 } from "@/lib/supabase/database.types";
 import {
   loadTodayCommandPreferences,
-  saveTodayCommandPreferences,
 } from "./actions";
 import DailyAIBriefPanel from "./DailyAIBriefPanel";
 import type { TodayCommandPreferences } from "./preferences";
@@ -122,11 +121,6 @@ export default async function AdminTodayPage() {
   const routePlan = preferences.showRouteWarnings
     ? await buildRoutePlan(bookings ?? [], admin.organizationId)
     : emptyRoutePlan("v1");
-  const summary = buildDailySummary(
-    bookings ?? [],
-    deliverablesByBooking,
-    preferences,
-  );
 
   return (
     <div className="space-y-6">
@@ -153,7 +147,6 @@ export default async function AdminTodayPage() {
       <DailyCommandCenter
         bookings={bookings ?? []}
         deliverablesByBooking={deliverablesByBooking}
-        summary={summary}
         preferences={preferences}
         routePlan={routePlan}
       />
@@ -182,13 +175,11 @@ export default async function AdminTodayPage() {
 function DailyCommandCenter({
   bookings,
   deliverablesByBooking,
-  summary,
   preferences,
   routePlan,
 }: {
   bookings: BookingRow[];
   deliverablesByBooking: Map<string, DeliverableRow[]>;
-  summary: DailySummary;
   preferences: TodayCommandPreferences;
   routePlan: RoutePlan;
 }) {
@@ -239,24 +230,6 @@ function DailyCommandCenter({
         ) : null}
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryTile label="Shoots" value={String(summary.total)} />
-        {preferences.showDeliverables ? (
-          <>
-            <SummaryTile label="Ready media" value={String(summary.withReadyMedia)} />
-            <SummaryTile label="Need attention" value={String(summary.needingAttention)} />
-          </>
-        ) : null}
-        {preferences.showAgentMemory ? (
-          <SummaryTile label="Memory notes" value={String(summary.withMemory)} />
-        ) : null}
-        {preferences.showRouteWarnings ? (
-          <SummaryTile label="Route alerts" value={String(routeSummary.alerts)} />
-        ) : null}
-      </div>
-
-      <CommandCenterPreferencesForm preferences={preferences} />
-
       {preferences.showShootBrief ? <DailyAIBriefPanel /> : null}
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3">
@@ -302,14 +275,14 @@ function DailyCommandCenter({
                 <Link
                   key={booking.id}
                   href={`/admin/bookings/${booking.id}`}
-                  className="block rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 transition hover:border-amber-300/45"
+                  className="block rounded-xl border border-brand-light/25 bg-white/[0.04] p-3 transition hover:border-brand-light/55"
                 >
                   <span className="block text-sm font-semibold text-white">
                     {booking.profiles?.full_name ??
                       booking.profiles?.email ??
                       "Realtor"}
                   </span>
-                  <span className="mt-1 line-clamp-2 block text-xs text-amber-100/80">
+                  <span className="mt-1 line-clamp-2 block text-xs leading-5 text-ink-muted">
                     {booking.internal_notes ?? booking.profiles?.internal_notes}
                   </span>
                 </Link>
@@ -385,100 +358,6 @@ function DailyCommandCenter({
         ) : null}
       </div>
     </section>
-  );
-}
-
-function CommandCenterPreferencesForm({
-  preferences,
-}: {
-  preferences: TodayCommandPreferences;
-}) {
-  return (
-    <details className="mt-4 rounded-2xl border border-white/10 bg-ink/35 p-3">
-      <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-ink-muted">
-        Customize reminders
-      </summary>
-      <form action={saveTodayCommandPreferences} className="mt-3 space-y-3">
-        <div className="grid gap-2 sm:grid-cols-2">
-          <PreferenceToggle
-            name="show_deliverables"
-            label="Deliverable reminders"
-            description="Photos, iGUIDE, floor plans, video, and media checklist."
-            checked={preferences.showDeliverables}
-          />
-          <PreferenceToggle
-            name="show_agent_memory"
-            label="Agent memory"
-            description="Saved realtor preferences and delivery CC reminders."
-            checked={preferences.showAgentMemory}
-          />
-          <PreferenceToggle
-            name="show_route_warnings"
-            label="Route spacing"
-            description="Tight gaps and city changes between shoots."
-            checked={preferences.showRouteWarnings}
-          />
-          <PreferenceToggle
-            name="show_booking_notes"
-            label="Booking notes"
-            description="Client and internal notes on each shoot card."
-            checked={preferences.showBookingNotes}
-          />
-          <PreferenceToggle
-            name="show_shoot_brief"
-            label="AI shoot brief"
-            description="Short practical notes for each shoot."
-            checked={preferences.showShootBrief}
-          />
-        </div>
-        <button
-          type="submit"
-          className="rounded-full bg-brand px-4 py-2 text-xs font-semibold text-white transition hover:bg-brand-light"
-        >
-          Save reminders
-        </button>
-      </form>
-    </details>
-  );
-}
-
-function PreferenceToggle({
-  name,
-  label,
-  description,
-  checked,
-}: {
-  name: string;
-  label: string;
-  description: string;
-  checked: boolean;
-}) {
-  return (
-    <label className="flex gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-      <input
-        type="checkbox"
-        name={name}
-        defaultChecked={checked}
-        className="mt-1 h-4 w-4 rounded border-white/20 bg-ink text-brand"
-      />
-      <span>
-        <span className="block text-sm font-semibold text-white">{label}</span>
-        <span className="mt-0.5 block text-xs leading-5 text-ink-muted">
-          {description}
-        </span>
-      </span>
-    </label>
-  );
-}
-
-function SummaryTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-ink/45 p-3">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
-        {label}
-      </p>
-      <p className="mt-1 text-2xl font-bold text-white">{value}</p>
-    </div>
   );
 }
 
@@ -761,13 +640,6 @@ function chip(label: string, state: "done" | "pending" | "todo") {
   return { label, className, state };
 }
 
-interface DailySummary {
-  total: number;
-  withReadyMedia: number;
-  needingAttention: number;
-  withMemory: number;
-}
-
 interface RouteInsight {
   key: string;
   level: "info" | "warning" | "danger";
@@ -787,36 +659,6 @@ interface RoutePlan {
   mode: "v1" | "v2";
   insights: RouteInsight[];
   nextRoutes: Map<string, NextRoute>;
-}
-
-function buildDailySummary(
-  bookings: BookingRow[],
-  deliverablesByBooking: Map<string, DeliverableRow[]>,
-  preferences: TodayCommandPreferences,
-): DailySummary {
-  return {
-    total: bookings.length,
-    withReadyMedia: preferences.showDeliverables
-      ? bookings.filter((booking) =>
-          (deliverablesByBooking.get(booking.id) ?? []).some(
-            (deliverable) =>
-              deliverable.source !== "fotello" && Boolean(deliverable.ready_at),
-          ),
-        ).length
-      : 0,
-    needingAttention: preferences.showDeliverables
-      ? bookings.filter((booking) =>
-          taskStates(booking, deliverablesByBooking.get(booking.id) ?? []).some(
-            (task) => task.state !== "done",
-          ),
-        ).length
-      : 0,
-    withMemory: preferences.showAgentMemory
-      ? bookings.filter(
-          (booking) => booking.internal_notes || booking.profiles?.internal_notes,
-        ).length
-      : 0,
-  };
 }
 
 async function buildRoutePlan(

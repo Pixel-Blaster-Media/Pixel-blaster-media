@@ -27,11 +27,21 @@ export default function BookingBrandHeader({
 }) {
   const mainImageUrl = organization.bookingHeroImageUrl;
   const secondaryImageUrl = organization.bookingHeroSecondaryImageUrl;
+  const logoUrl = organization.logoUrl;
 
   return (
     <header className="booking-hero">
       <div className="booking-hero-grid">
         <div className="booking-hero-copy">
+          <div className="booking-hero-brand">
+            {logoUrl ? (
+              <span className="booking-hero-brand-logo">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={logoUrl} alt="" />
+              </span>
+            ) : null}
+            <span className="booking-hero-brand-name">{organization.name}</span>
+          </div>
           <span className="booking-hero-pill">Real estate media booking</span>
           <h1>Book a shoot. Skip the back-and-forth.</h1>
           <p>

@@ -345,6 +345,48 @@ a {
   padding: clamp(1.4rem, 3vw, 2.35rem);
 }
 
+.booking-hero-brand {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid rgba(66, 84, 73, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0.45rem 0.8rem 0.45rem 0.5rem;
+  box-shadow: 0 16px 34px -30px rgba(32, 43, 37, 0.42);
+}
+
+.booking-hero-brand-logo {
+  display: inline-flex;
+  height: 2.2rem;
+  width: 2.2rem;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #ffffff;
+}
+
+.booking-hero-brand-logo img {
+  display: block;
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+  padding: 0.25rem;
+}
+
+.booking-hero-brand-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--realtor-text);
+  font-size: 0.86rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .booking-hero-pill,
 .booking-section-kicker {
   display: inline-flex;
@@ -361,7 +403,7 @@ a {
 }
 
 .booking-hero-copy h1 {
-  margin-top: 1rem;
+  margin-top: 0.9rem;
   max-width: 12ch;
   color: var(--realtor-text);
   font-size: clamp(2.45rem, 5.8vw, 4.65rem);

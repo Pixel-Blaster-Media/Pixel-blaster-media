@@ -118,7 +118,7 @@ export default function BusinessSettingsForm({
                   <input
                     name="logo_file"
                     type="file"
-                    accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                    accept="image/png,image/jpeg,image/webp,image/avif,image/gif,image/svg+xml"
                     onChange={(event) => {
                       const file = event.currentTarget.files?.[0];
                       if (file) {
@@ -143,8 +143,8 @@ export default function BusinessSettingsForm({
                 </span>
               </span>
               <span className="mt-1 block text-xs leading-5 text-realtor-muted">
-                This appears at the top of the public booking page and in
-                account areas. JPG, PNG, WebP, GIF, or SVG works best.
+                This appears on the public booking page and in account areas.
+                JPG, PNG, WebP, AVIF, GIF, or SVG works best.
               </span>
             </label>
           </div>
@@ -176,9 +176,8 @@ export default function BusinessSettingsForm({
               Public booking page
             </p>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-realtor-muted">
-              These images fill the top of the booking page. Use a finished
-              exterior, twilight, interior detail, or brand image that feels
-              like the company.
+              The booking page now leads with the company name and logo. Use
+              these optional photos when you want a more visual first screen.
             </p>
           </div>
           <span className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-3 py-1 text-xs font-semibold text-realtor-primary">
@@ -355,7 +354,7 @@ function BrandImageUpload({
         <input
           name={name}
           type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+          accept="image/png,image/jpeg,image/webp,image/avif,image/gif,image/svg+xml"
           onChange={(event) => {
             const file = event.currentTarget.files?.[0];
             if (file) {

@@ -4,6 +4,11 @@ import { isPlatformAdmin } from "@/lib/auth/require-platform-admin";
 import { getCredentialSource } from "@/lib/integrations/credentials";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import CopyBookingLinkButton from "./business/CopyBookingLinkButton";
+import {
+  loadTodayCommandPreferences,
+  saveTodayCommandPreferences,
+} from "../today/actions";
+import type { TodayCommandPreferences } from "../today/preferences";
 
 const SETTINGS_SECTIONS = [
   {
@@ -55,7 +60,10 @@ export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const admin = await requireAdmin();
-  const readiness = await loadLaunchReadiness(admin.organizationId);
+  const [readiness, todayPreferences] = await Promise.all([
+    loadLaunchReadiness(admin.organizationId),
+    loadTodayCommandPreferences(admin.organizationId),
+  ]);
   const sections = isPlatformAdmin(admin)
     ? [
         ...SETTINGS_SECTIONS,
@@ -90,8 +98,112 @@ export default async function SettingsPage() {
 
       <LaunchReadinessCard readiness={readiness} />
 
+      <TodayPreferencesCard preferences={todayPreferences} />
+
       <SettingsHub sections={sections} />
     </div>
+  );
+}
+
+function TodayPreferencesCard({
+  preferences,
+}: {
+  preferences: TodayCommandPreferences;
+}) {
+  return (
+    <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-5 shadow-lg shadow-realtor-text/10">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-realtor-primary/80">
+            Today view
+          </p>
+          <h2 className="mt-2 text-xl font-semibold text-realtor-text">
+            Daily command center reminders
+          </h2>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-realtor-muted">
+            Choose what appears on the Today page. Keep it focused for the way
+            you actually work in the morning.
+          </p>
+        </div>
+        <a
+          href="/admin/today"
+          className="rounded-full border border-realtor-primary/20 bg-white px-4 py-2 text-sm font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+        >
+          Open Today
+        </a>
+      </div>
+      <form action={saveTodayCommandPreferences} className="mt-5 space-y-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <TodayPreferenceToggle
+            name="show_deliverables"
+            label="Delivery reminders"
+            description="Show unfinished media links and delivery checklist items."
+            checked={preferences.showDeliverables}
+          />
+          <TodayPreferenceToggle
+            name="show_agent_memory"
+            label="Agent memory"
+            description="Show saved realtor preferences and private reminder notes."
+            checked={preferences.showAgentMemory}
+          />
+          <TodayPreferenceToggle
+            name="show_route_warnings"
+            label="Route spacing"
+            description="Show tight gaps, city changes, and map links between shoots."
+            checked={preferences.showRouteWarnings}
+          />
+          <TodayPreferenceToggle
+            name="show_booking_notes"
+            label="Booking notes"
+            description="Show client notes and private notes on each shoot card."
+            checked={preferences.showBookingNotes}
+          />
+          <TodayPreferenceToggle
+            name="show_shoot_brief"
+            label="AI shoot brief"
+            description="Show the AI-generated shoot-day plan panel."
+            checked={preferences.showShootBrief}
+          />
+        </div>
+        <button
+          type="submit"
+          className="rounded-full bg-realtor-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-realtor-text/10 transition hover:bg-realtor-primary/90"
+        >
+          Save Today preferences
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function TodayPreferenceToggle({
+  name,
+  label,
+  description,
+  checked,
+}: {
+  name: string;
+  label: string;
+  description: string;
+  checked: boolean;
+}) {
+  return (
+    <label className="flex gap-3 rounded-2xl border border-realtor-primary/12 bg-white/70 p-3 transition hover:border-realtor-primary/35 hover:bg-white">
+      <input
+        type="checkbox"
+        name={name}
+        defaultChecked={checked}
+        className="mt-1 h-4 w-4 accent-realtor-primary"
+      />
+      <span>
+        <span className="block text-sm font-semibold text-realtor-text">
+          {label}
+        </span>
+        <span className="mt-1 block text-xs leading-5 text-realtor-muted">
+          {description}
+        </span>
+      </span>
+    </label>
   );
 }
 

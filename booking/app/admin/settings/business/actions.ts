@@ -20,7 +20,17 @@ const ALLOWED_BRAND_IMAGE_TYPES = new Set([
   "image/png",
   "image/webp",
   "image/gif",
+  "image/avif",
   "image/svg+xml",
+]);
+const ALLOWED_BRAND_IMAGE_EXTENSIONS = new Set([
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "gif",
+  "avif",
+  "svg",
 ]);
 
 interface OrganizationMediaRow {
@@ -216,21 +226,25 @@ async function uploadBrandImageIfPresent({
   if (entry.size > MAX_BRAND_IMAGE_BYTES) {
     return { ok: false, error: `${label} files must be 5 MB or smaller.` };
   }
-  if (!ALLOWED_BRAND_IMAGE_TYPES.has(entry.type)) {
+  const extension = extensionFor(entry);
+  if (
+    !ALLOWED_BRAND_IMAGE_TYPES.has(entry.type) &&
+    !ALLOWED_BRAND_IMAGE_EXTENSIONS.has(extension)
+  ) {
     return {
       ok: false,
-      error: `Use a JPG, PNG, WebP, GIF, or SVG for ${label.toLowerCase()}.`,
+      error: `Use a JPG, PNG, WebP, AVIF, GIF, or SVG for ${label.toLowerCase()}.`,
     };
   }
 
-  const extension = extensionFor(entry);
   const bytes = Buffer.from(await entry.arrayBuffer());
   const path = `organizations/${organizationId}/brand/${pathPrefix}-${Date.now()}-${randomUUID()}.${extension}`;
+  const contentType = entry.type || mimeTypeForExtension(extension);
   const service = getServiceSupabase();
   const { error } = await service.storage
     .from(BRAND_MEDIA_BUCKET)
     .upload(path, bytes, {
-      contentType: entry.type,
+      contentType,
       cacheControl: "3600",
       upsert: true,
     });
@@ -246,6 +260,16 @@ function extensionFor(file: File): string {
   if (file.type === "image/png") return "png";
   if (file.type === "image/webp") return "webp";
   if (file.type === "image/gif") return "gif";
+  if (file.type === "image/avif") return "avif";
   if (file.type === "image/svg+xml") return "svg";
   return "jpg";
+}
+
+function mimeTypeForExtension(extension: string): string {
+  if (extension === "png") return "image/png";
+  if (extension === "webp") return "image/webp";
+  if (extension === "gif") return "image/gif";
+  if (extension === "avif") return "image/avif";
+  if (extension === "svg") return "image/svg+xml";
+  return "image/jpeg";
 }

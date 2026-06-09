@@ -115,6 +115,7 @@ export async function saveTodayCommandPreferences(
     admin.organizationId,
   );
   revalidatePath("/admin/today");
+  revalidatePath("/admin/settings");
 }
 
 export async function generateTodayAIBrief(): Promise<
