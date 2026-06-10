@@ -18,20 +18,30 @@ window.addEventListener('scroll', () => {
 const hamburger = document.getElementById('hamburger');
 const navLinks  = document.getElementById('navLinks');
 
-hamburger.addEventListener('click', () => {
-  const isOpen = hamburger.classList.toggle('open');
+function setMenuOpen(isOpen) {
+  hamburger.classList.toggle('open', isOpen);
   navLinks.classList.toggle('open', isOpen);
   document.body.style.overflow = isOpen ? 'hidden' : '';
+  hamburger.setAttribute('aria-expanded', String(isOpen));
+  hamburger.setAttribute('aria-label', isOpen ? 'Close menu' : 'Open menu');
+}
+
+hamburger.addEventListener('click', () => {
+  setMenuOpen(!hamburger.classList.contains('open'));
 });
 
 // Close menu when any nav link is clicked
 navLinks.querySelectorAll('a').forEach(link => {
-  link.addEventListener('click', () => {
-    hamburger.classList.remove('open');
-    navLinks.classList.remove('open');
-    document.body.style.overflow = '';
-  });
+  link.addEventListener('click', () => setMenuOpen(false));
 });
+
+// If the viewport grows past the mobile breakpoint while the menu is open
+// (rotation, window resize), reset it so body scrolling isn't left locked.
+window.addEventListener('resize', () => {
+  if (window.innerWidth > 640 && hamburger.classList.contains('open')) {
+    setMenuOpen(false);
+  }
+}, { passive: true });
 
 
 /* ------------------------------------------------------------

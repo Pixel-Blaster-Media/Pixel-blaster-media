@@ -95,7 +95,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
               min={0}
               step="0.01"
               defaultValue={(item.price_cents / 100).toFixed(2)}
-              className="w-24 rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
+              className="w-full rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white md:w-24"
             />
           </div>
         </label>
@@ -110,7 +110,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
               min={0}
               step="1"
               defaultValue={item.duration_minutes}
-              className="w-20 rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
+              className="w-full rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white md:w-20"
             />
             <span className="text-xs text-ink-muted">min</span>
           </div>
@@ -125,7 +125,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
             min={0}
             step="1"
             defaultValue={item.display_order}
-            className="w-16 rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white"
+            className="w-full rounded-xl border border-white/10 bg-ink-soft px-2 py-1.5 text-right text-sm text-white md:w-16"
           />
         </label>
       </div>

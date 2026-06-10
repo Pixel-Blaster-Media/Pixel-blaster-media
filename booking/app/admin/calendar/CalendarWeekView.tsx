@@ -513,7 +513,7 @@ export default function CalendarWeekView({
       </div>
 
       {selected ? (
-        <div className="fixed inset-x-4 bottom-4 z-50 max-h-[82vh] overflow-y-auto rounded-2xl border border-brand/30 bg-ink-soft/95 p-4 shadow-2xl shadow-black/50 backdrop-blur-xl md:left-auto md:w-[560px]">
+        <div className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 max-h-[85dvh] overflow-y-auto rounded-2xl border border-brand/30 bg-ink-soft/95 p-4 shadow-2xl shadow-black/50 backdrop-blur-xl md:left-auto md:w-[560px]">
           <div className="relative pr-16">
             <div>
               <p className="text-sm font-semibold text-white">
