@@ -960,3 +960,17 @@ body:has(.admin-earth) .site-footer {
     font-size: max(16px, 1em);
   }
 }
+
+/* ------------------------------------------------------------
+   Touch target helper: WCAG recommends ~44px tap areas. The
+   admin uses compact text pills which look right on desktop but
+   are fiddly on phones. Applying .tap-target keeps the visual
+   style and only grows the hit area on coarse-pointer devices.
+   ------------------------------------------------------------ */
+@media (pointer: coarse) {
+  .tap-target {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}

@@ -829,6 +829,30 @@ button { cursor: pointer; font-family: inherit; }
   align-items: start;
 }
 
+/* Realtor fast-lane into the booking app */
+.realtor-fastlane {
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--teal-border);
+  border-radius: var(--radius);
+  background: linear-gradient(145deg, var(--bg-card), rgba(26, 127, 142, 0.08));
+}
+.realtor-fastlane h4 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+.realtor-fastlane p {
+  font-size: 0.875rem;
+  color: var(--gray-2);
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+.realtor-fastlane .btn {
+  width: 100%;
+  justify-content: center;
+}
+
 /* Info */
 .contact-item {
   display: flex;

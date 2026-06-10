@@ -47,7 +47,7 @@ export default function CancelBookingButton({
         className={
           compact
             ? "rounded-full border border-red-400/35 px-2.5 py-1 text-[11px] font-semibold text-red-200 transition hover:border-red-300 hover:bg-red-500/10 disabled:opacity-60"
-            : "rounded-full border border-red-400/40 px-3 py-1.5 text-xs font-semibold text-red-200 transition hover:border-red-300 hover:bg-red-500/10 disabled:opacity-60"
+            : "tap-target rounded-full border border-red-400/40 px-3 py-1.5 text-xs font-semibold text-red-200 transition hover:border-red-300 hover:bg-red-500/10 disabled:opacity-60"
         }
       >
         {isPending ? "Cancelling..." : label}

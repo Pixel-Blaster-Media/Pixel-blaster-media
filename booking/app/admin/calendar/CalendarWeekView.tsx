@@ -527,7 +527,7 @@ export default function CalendarWeekView({
             <button
               type="button"
               onClick={() => setSelected(null)}
-              className="absolute right-0 top-0 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:border-brand-light hover:bg-brand/20"
+              className="tap-target absolute right-0 top-0 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:border-brand-light hover:bg-brand/20"
             >
               Close
             </button>
@@ -568,7 +568,7 @@ export default function CalendarWeekView({
                 setError(null);
                 setMode("shoot");
               }}
-              className={`rounded-full px-3 py-1.5 ${
+              className={`tap-target rounded-full px-3 py-1.5 ${
                 mode === "shoot"
                   ? "bg-brand text-white"
                   : "text-ink-muted hover:text-white"
@@ -582,7 +582,7 @@ export default function CalendarWeekView({
                 setError(null);
                 setMode("block");
               }}
-              className={`rounded-full px-3 py-1.5 ${
+              className={`tap-target rounded-full px-3 py-1.5 ${
                 mode === "block"
                   ? "bg-brand text-white"
                   : "text-ink-muted hover:text-white"

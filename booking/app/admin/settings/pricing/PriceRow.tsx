@@ -49,7 +49,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
-          className="self-start rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold text-white hover:border-brand-light hover:text-brand-light md:self-center"
+          className="tap-target self-start rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold text-white hover:border-brand-light hover:text-brand-light md:self-center"
         >
           {open ? "Hide details" : "Edit details"}
         </button>
@@ -315,7 +315,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
         <button
           type="submit"
           disabled={pending}
-          className="rounded-full border border-white/15 px-3 py-1.5 text-xs text-white hover:border-brand-light hover:text-brand-light disabled:opacity-50"
+          className="tap-target rounded-full border border-white/15 px-3 py-1.5 text-xs text-white hover:border-brand-light hover:text-brand-light disabled:opacity-50"
         >
           {pending ? "Saving…" : saved ? "✓ Saved" : "Save"}
         </button>
@@ -336,7 +336,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
               if (!res.ok) setError(res.error ?? "Delete failed.");
             });
           }}
-          className="rounded-full border border-red-400/30 px-3 py-1.5 text-xs text-red-200 hover:bg-red-400/10 disabled:opacity-50"
+          className="tap-target rounded-full border border-red-400/30 px-3 py-1.5 text-xs text-red-200 hover:bg-red-400/10 disabled:opacity-50"
         >
           {deleting ? "Deleting…" : "Delete"}
         </button>
