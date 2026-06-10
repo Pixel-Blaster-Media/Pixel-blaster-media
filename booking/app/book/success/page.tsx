@@ -14,6 +14,7 @@ export default async function BookingSuccessPage({
   const end = parseDate(firstValue(params.end));
   const services = firstValue(params.services);
   const orgName = firstValue(params.org);
+  const manageToken = firstValue(params.manage);
 
   const hasTimes = start !== null && end !== null;
   const googleCalendarHref = hasTimes
@@ -122,6 +123,19 @@ export default async function BookingSuccessPage({
           Open portal
         </Link>
       </div>
+
+      {manageToken ? (
+        <p className="mt-5 text-sm text-realtor-muted">
+          Plans changed?{" "}
+          <Link
+            href={`/book/manage/${encodeURIComponent(manageToken)}`}
+            className="font-medium text-realtor-primary underline"
+          >
+            Reschedule or cancel this booking
+          </Link>{" "}
+          — the same link is in your confirmation email.
+        </p>
+      ) : null}
     </main>
   );
 }

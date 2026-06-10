@@ -12,6 +12,7 @@ import {
   isSlotAvailable,
 } from "@/lib/booking/availability";
 import { getActiveCatalog, getCatalogItemPrice } from "@/lib/booking/catalog";
+import { createManageToken } from "@/lib/booking/manage-token";
 import { sendEmail } from "@/lib/email/resend";
 import { getAdminNotificationEmail } from "@/lib/email/settings";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
@@ -436,6 +437,18 @@ export async function createPublicBooking(
     location: [emailAddressLine, city, postalCode].filter(Boolean).join(", "),
     details: `Services: ${serviceLabels}${addonLabels ? `\nAdd-ons: ${addonLabels}` : ""}`,
   });
+  // Signed self-serve link — lets the realtor reschedule/cancel without
+  // emailing the photographer. Best-effort: a signing failure shouldn't
+  // block the confirmation email.
+  let manageToken: string | null = null;
+  try {
+    manageToken = createManageToken(booking.id);
+  } catch (err) {
+    console.warn("[book] manage token creation failed", err);
+  }
+  const manageUrl = manageToken
+    ? `${appUrl}/book/manage/${manageToken}`
+    : null;
 
   await Promise.all([
     sendEmail({
@@ -452,6 +465,11 @@ export async function createPublicBooking(
           ${addonLabels ? `<strong>Add-ons:</strong> ${escapeHtml(addonLabels)}<br>` : ""}
         </p>
         <p><a href="${calendarLink}">Add this shoot to your Google Calendar</a></p>
+        ${
+          manageUrl
+            ? `<p>Need to reschedule or cancel? <a href="${manageUrl}">Manage this booking</a>.</p>`
+            : ""
+        }
         <p>
           ${
             signedInToPortal
@@ -493,6 +511,7 @@ export async function createPublicBooking(
       end: scheduledEndAt.toISOString(),
       services: serviceLabels,
       org: organization.name,
+      ...(manageToken ? { manage: manageToken } : {}),
     });
     redirect(`/book/success?${params.toString()}`);
   }
