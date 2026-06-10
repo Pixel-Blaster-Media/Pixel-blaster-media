@@ -70,6 +70,7 @@ export default async function BookStep1Page({
         addons={addons}
         selectedSlugs={selectedSlugs}
         selectedAddOnSlugs={selectedAddOnSlugs}
+        squareFootage={scopedState.squareFootage}
       />
     </BookingBrandFrame>
   );

@@ -22,6 +22,7 @@ interface OrganizationRow {
   email_from_name: string | null;
   reply_to_email: string | null;
   admin_notification_email: string | null;
+  invoice_timing: string;
 }
 
 interface SetupStatus {
@@ -52,7 +53,7 @@ export default async function BusinessSettingsPage({
     service
       .from("organizations")
       .select(
-        "id, name, slug, primary_color, accent_color, logo_url, booking_hero_image_url, booking_hero_secondary_image_url, email_from_name, reply_to_email, admin_notification_email",
+        "id, name, slug, primary_color, accent_color, logo_url, booking_hero_image_url, booking_hero_secondary_image_url, email_from_name, reply_to_email, admin_notification_email, invoice_timing",
       )
       .eq("id", admin.organizationId)
       .maybeSingle<OrganizationRow>(),

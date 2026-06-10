@@ -320,7 +320,7 @@ export default function AIPackageRecommender({
     <>
       {assistantOpen ? (
         <section
-          className="fixed inset-x-3 z-[80] max-h-[78vh] overflow-y-auto rounded-3xl border border-realtor-primary/20 bg-[#fffdf8] p-3 shadow-2xl shadow-realtor-text/25 md:inset-x-auto md:right-6 md:w-[520px]"
+          className="fixed inset-x-3 z-[80] max-h-[78dvh] overflow-y-auto rounded-3xl border border-realtor-primary/20 bg-[#fffdf8] p-3 shadow-2xl shadow-realtor-text/25 md:inset-x-auto md:right-6 md:w-[520px]"
           style={{
             bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.75rem)",
           }}
@@ -332,7 +332,7 @@ export default function AIPackageRecommender({
             <button
               type="button"
               onClick={() => setAssistantOpen(false)}
-              className="rounded-full border border-realtor-primary/15 px-3 py-1 text-xs font-semibold text-realtor-muted transition hover:text-realtor-primary"
+              className="tap-target rounded-full border border-realtor-primary/15 px-3 py-1 text-xs font-semibold text-realtor-muted transition hover:text-realtor-primary"
             >
               Close
             </button>

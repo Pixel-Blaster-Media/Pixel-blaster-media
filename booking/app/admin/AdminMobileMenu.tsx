@@ -36,7 +36,7 @@ export default function AdminMobileMenu({
       ref={detailsRef}
       className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/90 p-3 shadow-lg shadow-realtor-text/10"
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-1 py-1 text-sm font-semibold text-realtor-text [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-1 py-1 text-sm font-semibold text-realtor-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-realtor-primary/60 [&::-webkit-details-marker]:hidden">
         <span>
           Admin menu
           <span className="mt-0.5 block max-w-[220px] truncate text-xs font-normal text-realtor-muted">

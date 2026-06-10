@@ -8,13 +8,18 @@ interface OrganizationEmailRow {
   email_from_name: string | null;
   reply_to_email: string | null;
   admin_notification_email: string | null;
+  invoice_timing: string | null;
 }
+
+export type InvoiceTiming = "on_delivery" | "at_booking";
 
 export interface OrganizationEmailSettings {
   organizationName: string;
   fromName: string;
   replyToEmail: string | null;
   adminNotificationEmail: string | null;
+  /** When the QuickBooks payment link is emailed automatically. */
+  invoiceTiming: InvoiceTiming;
 }
 
 export async function getOrganizationEmailSettings(
@@ -25,7 +30,9 @@ export async function getOrganizationEmailSettings(
   const supabase = getServiceSupabase();
   const { data, error } = await supabase
     .from("organizations")
-    .select("name, email_from_name, reply_to_email, admin_notification_email")
+    .select(
+      "name, email_from_name, reply_to_email, admin_notification_email, invoice_timing",
+    )
     .eq("id", organizationId)
     .maybeSingle<OrganizationEmailRow>();
 
@@ -45,6 +52,7 @@ export async function getOrganizationEmailSettings(
     adminNotificationEmail:
       clean(data?.admin_notification_email) ||
       clean(process.env.ADMIN_NOTIFICATION_EMAIL),
+    invoiceTiming: normalizeInvoiceTiming(data?.invoice_timing),
   };
 }
 
@@ -77,7 +85,12 @@ function fallbackSettings(): OrganizationEmailSettings {
     fromName: fallbackName,
     replyToEmail: clean(process.env.ADMIN_NOTIFICATION_EMAIL),
     adminNotificationEmail: clean(process.env.ADMIN_NOTIFICATION_EMAIL),
+    invoiceTiming: "on_delivery",
   };
+}
+
+function normalizeInvoiceTiming(value?: string | null): InvoiceTiming {
+  return value === "at_booking" ? "at_booking" : "on_delivery";
 }
 
 function clean(value?: string | null): string | null {

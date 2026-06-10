@@ -54,7 +54,7 @@ export default function BookingTotalBar({
   return (
     <div
       className={
-        (sticky ? "sticky bottom-0 z-20 " : "") +
+        (sticky ? "sticky bottom-[max(0px,env(safe-area-inset-bottom))] z-20 " : "") +
         "mt-5 rounded-2xl border border-realtor-primary/15 bg-realtor-surface/95 px-3 py-3 shadow-lg shadow-realtor-primary/5 backdrop-blur md:static md:rounded-3xl md:p-4"
       }
     >
@@ -73,8 +73,13 @@ export default function BookingTotalBar({
           </div>
           {overageRows.length > 0 ? (
             <p className="mt-1 text-[11px] leading-relaxed text-realtor-primary">
-              Includes sqft adjustment for{" "}
-              {overageRows.map((row) => row.item.name).join(", ")}.
+              {squareFootage?.toLocaleString()} sqft home:{" "}
+              {overageRows
+                .map(
+                  (row) =>
+                    `${row.item.name} +$${(row.price.overageCents / 100).toFixed(0)}`,
+                )
+                .join(", ")}
             </p>
           ) : note ? (
             <p className="mt-1 text-[11px] leading-relaxed text-realtor-muted">

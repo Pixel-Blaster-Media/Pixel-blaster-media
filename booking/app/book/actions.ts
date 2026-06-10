@@ -12,9 +12,14 @@ import {
   isSlotAvailable,
 } from "@/lib/booking/availability";
 import { getActiveCatalog, getCatalogItemPrice } from "@/lib/booking/catalog";
+import { createManageToken } from "@/lib/booking/manage-token";
 import { sendEmail } from "@/lib/email/resend";
-import { getAdminNotificationEmail } from "@/lib/email/settings";
+import {
+  getAdminNotificationEmail,
+  getOrganizationEmailSettings,
+} from "@/lib/email/settings";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
+import { createInvoiceForBooking } from "@/lib/integrations/quickbooks/invoice";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
 import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
@@ -358,11 +363,47 @@ export async function createPublicBooking(
     }
   }
 
+  const scheduledEndAt = new Date(slotStart.getTime() + duration * 60_000);
+
+  // -------- QuickBooks invoice (best-effort, only when billing at booking) --------
+  // Default is billing after delivery, where the invoice rides along with the
+  // delivery-ready email instead. A billing failure must never break the
+  // booking — worst case the confirmation email just omits the pay link.
+  let invoiceUrl: string | null = null;
+  try {
+    const emailSettings = await getOrganizationEmailSettings(organizationId);
+    if (emailSettings.invoiceTiming === "at_booking") {
+      const invoice = await createInvoiceForBooking({
+        bookingId: booking.id,
+        services: legacyServices,
+        addOns: legacyAddons,
+        realtor: {
+          email: userEmail,
+          full_name: userDisplayName,
+          phone: contactPhone || null,
+          brokerage: brokerage || null,
+        },
+        property: {
+          street_address: streetAddress,
+          city: city || null,
+          postal_code: postalCode || null,
+        },
+      });
+      if (invoice.ok) {
+        invoiceUrl = invoice.invoiceUrl ?? null;
+      } else {
+        console.warn("[book] invoice auto-create skipped:", invoice.error);
+      }
+    }
+  } catch (err) {
+    console.warn("[book] invoice auto-create failed", err);
+  }
+
   // -------- Google Calendar event (best-effort) --------
   try {
     const gcal = await getGoogleCalendarClient({ organizationId });
     if (gcal) {
-      const endAt = new Date(slotStart.getTime() + duration * 60_000);
+      const endAt = scheduledEndAt;
       const serviceLabels = validServices.map((s) => s.name).join(", ");
       const addonLabels = validAddons.map((a) => a.name).join(", ");
       const streetLine = unitNumber
@@ -427,6 +468,25 @@ export async function createPublicBooking(
     ? `${streetAddress}, Unit ${unitNumber}`
     : streetAddress;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const calendarLink = googleCalendarTemplateUrl({
+    title: `${organization.name} — media shoot`,
+    start: slotStart,
+    end: scheduledEndAt,
+    location: [emailAddressLine, city, postalCode].filter(Boolean).join(", "),
+    details: `Services: ${serviceLabels}${addonLabels ? `\nAdd-ons: ${addonLabels}` : ""}`,
+  });
+  // Signed self-serve link — lets the realtor reschedule/cancel without
+  // emailing the photographer. Best-effort: a signing failure shouldn't
+  // block the confirmation email.
+  let manageToken: string | null = null;
+  try {
+    manageToken = createManageToken(booking.id);
+  } catch (err) {
+    console.warn("[book] manage token creation failed", err);
+  }
+  const manageUrl = manageToken
+    ? `${appUrl}/book/manage/${manageToken}`
+    : null;
 
   await Promise.all([
     sendEmail({
@@ -442,6 +502,17 @@ export async function createPublicBooking(
           <strong>Services:</strong> ${escapeHtml(serviceLabels)}<br>
           ${addonLabels ? `<strong>Add-ons:</strong> ${escapeHtml(addonLabels)}<br>` : ""}
         </p>
+        <p><a href="${calendarLink}">Add this shoot to your Google Calendar</a></p>
+        ${
+          manageUrl
+            ? `<p>Need to reschedule or cancel? <a href="${manageUrl}">Manage this booking</a>.</p>`
+            : ""
+        }
+        ${
+          invoiceUrl
+            ? `<p><strong>Billing:</strong> Your invoice is ready — <a href="${invoiceUrl}">pay your invoice online</a>.</p>`
+            : ""
+        }
         <p>
           ${
             signedInToPortal
@@ -479,6 +550,11 @@ export async function createPublicBooking(
     const params = new URLSearchParams({
       address: emailAddressLine,
       when: whenLabel,
+      start: slotStart.toISOString(),
+      end: scheduledEndAt.toISOString(),
+      services: serviceLabels,
+      org: organization.name,
+      ...(manageToken ? { manage: manageToken } : {}),
     });
     redirect(`/book/success?${params.toString()}`);
   }
@@ -487,6 +563,29 @@ export async function createPublicBooking(
 }
 
 // -------- Helpers --------
+
+/**
+ * "Add to Google Calendar" template link — no API access needed; it
+ * opens a prefilled event the realtor can save into their own calendar.
+ */
+function googleCalendarTemplateUrl(args: {
+  title: string;
+  start: Date;
+  end: Date;
+  location: string;
+  details: string;
+}): string {
+  const fmt = (d: Date) =>
+    d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: args.title,
+    dates: `${fmt(args.start)}/${fmt(args.end)}`,
+    location: args.location,
+    details: args.details,
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
 
 interface ResolveUserOk {
   ok: true;

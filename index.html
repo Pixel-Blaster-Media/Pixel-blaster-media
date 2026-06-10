@@ -61,6 +61,9 @@
   }
   </script>
 
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -85,7 +88,7 @@
         <li><a href="#about">About</a></li>
         <li><a href="/book/" class="nav-cta">Realtors: Book Now</a></li>
       </ul>
-      <button class="hamburger" id="hamburger" aria-label="Open menu">
+      <button class="hamburger" id="hamburger" aria-label="Open menu" aria-expanded="false" aria-controls="navLinks">
         <span></span>
         <span></span>
         <span></span>
@@ -479,6 +482,7 @@
           id="reelVideo"
           src="videos/reel.m4v"
           preload="metadata"
+          aria-label="Pixel Blaster Media demo reel"
           playsinline>
         </video>
         <button class="reel-play-btn" id="reelPlayBtn" aria-label="Play demo reel">
@@ -549,6 +553,12 @@
       <div class="contact-grid">
 
         <div class="contact-info">
+          <div class="realtor-fastlane">
+            <h4>Real estate agent?</h4>
+            <p>Skip the form — book photos, video, iGuide tours and floor plans online in minutes.</p>
+            <a href="/book/" class="btn btn-primary">Book Real Estate Media →</a>
+          </div>
+
           <div class="contact-item">
             <div class="contact-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">

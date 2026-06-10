@@ -33,7 +33,7 @@ export default async function AdminLayout({
 
   return (
     <div
-      className="admin-earth realtor-theme realtor-backdrop grid min-h-screen w-full max-w-full overflow-x-hidden px-3 pb-32 sm:px-6 md:grid-cols-[220px_1fr] md:gap-8 md:px-6 md:py-10"
+      className="admin-earth realtor-theme realtor-backdrop grid min-h-screen w-full max-w-full overflow-x-hidden px-3 pb-32 sm:px-6 md:grid-cols-[190px_1fr] md:gap-5 md:px-4 md:py-10 lg:grid-cols-[220px_1fr] lg:gap-8 lg:px-6"
       style={{
         ...(brand ? organizationThemeStyle(brand) : {}),
         paddingTop: "max(1rem, calc(env(safe-area-inset-top, 0px) + 0.75rem))",

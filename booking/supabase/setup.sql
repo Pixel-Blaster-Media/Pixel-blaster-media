@@ -1637,8 +1637,6 @@ create table if not exists public.organizations (
   primary_color     text,
   accent_color      text,
   logo_url          text,
-  booking_hero_image_url text,
-  booking_hero_secondary_image_url text,
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now()
 );
@@ -2863,4 +2861,77 @@ comment on column public.profiles.archived_at is
 
 -- ============================================================================
 -- End supabase/migrations/0035_realtor_archive.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/0036_organization_booking_hero_media.sql
+-- ============================================================================
+
+alter table public.organizations
+  add column if not exists booking_hero_image_url text,
+  add column if not exists booking_hero_secondary_image_url text;
+
+comment on column public.organizations.booking_hero_image_url is
+  'Primary visual used in the public booking page hero.';
+
+comment on column public.organizations.booking_hero_secondary_image_url is
+  'Secondary visual used in the public booking page hero.';
+
+-- ============================================================================
+-- End supabase/migrations/0036_organization_booking_hero_media.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/0037_allow_admin_overlap.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Pixel Blaster Booking — Phase 37: allow intentional admin double-booking
+-- ----------------------------------------------------------------------------
+-- The Phase 13 exclusion constraint rejected ANY overlapping active bookings
+-- at the database level. In practice the photographer intentionally overlaps
+-- shoots (e.g. books over the tail of a job that won't use its full slot), so
+-- the hard constraint blocks a legitimate workflow.
+--
+-- Overlap protection for realtor-facing flows is unchanged: the public
+-- booking flow only offers slots the availability engine says are free, and
+-- both the public flow and the self-serve manage page re-check for conflicts
+-- in application code before writing. Dropping the constraint only removes
+-- the atomic backstop (a sub-second race between two simultaneous public
+-- submissions), which is an accepted trade-off for admin flexibility.
+-- ============================================================================
+
+alter table public.bookings
+  drop constraint if exists bookings_active_schedule_no_overlap;
+
+-- ============================================================================
+-- End supabase/migrations/0037_allow_admin_overlap.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/0038_invoice_timing.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Pixel Blaster Booking — Phase 38: invoice timing setting
+-- ----------------------------------------------------------------------------
+-- The photographer bills after a job is delivered, so the QuickBooks payment
+-- link is emailed automatically with the "media ready" email by default.
+-- Some companies prefer collecting up front, so the timing can be switched to
+-- "at booking" — the invoice is then created when the public booking lands
+-- and the payment link rides along in the confirmation email.
+--
+-- Billing stays best-effort everywhere: if QuickBooks is not connected or
+-- invoice creation fails, booking and delivery emails go out unchanged.
+-- ============================================================================
+
+alter table public.organizations
+  add column if not exists invoice_timing text not null default 'on_delivery'
+    check (invoice_timing in ('on_delivery', 'at_booking'));
+
+comment on column public.organizations.invoice_timing is
+  'When the QuickBooks invoice payment link is emailed automatically: after media delivery (default) or as soon as the booking is made.';
+
+-- ============================================================================
+-- End supabase/migrations/0038_invoice_timing.sql
 -- ============================================================================

@@ -944,3 +944,33 @@ body:has(.admin-earth) .site-footer {
 .admin-input::placeholder {
   color: var(--realtor-muted);
 }
+
+/* ------------------------------------------------------------
+   Mobile form fields: iOS Safari auto-zooms into any focused
+   control whose font-size is under 16px. Most fields in the app
+   use Tailwind's text-sm (14px), which is fine on desktop but
+   causes a jarring zoom + horizontal pan on phones. Force a
+   16px floor on small screens only so desktop keeps the compact
+   styling and phones stay put.
+   ------------------------------------------------------------ */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* ------------------------------------------------------------
+   Touch target helper: WCAG recommends ~44px tap areas. The
+   admin uses compact text pills which look right on desktop but
+   are fiddly on phones. Applying .tap-target keeps the visual
+   style and only grows the hit area on coarse-pointer devices.
+   ------------------------------------------------------------ */
+@media (pointer: coarse) {
+  .tap-target {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}

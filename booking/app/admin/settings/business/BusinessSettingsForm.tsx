@@ -20,6 +20,7 @@ interface BusinessSettingsFormProps {
     email_from_name: string | null;
     reply_to_email: string | null;
     admin_notification_email: string | null;
+    invoice_timing: string;
   };
 }
 
@@ -264,6 +265,55 @@ export default function BusinessSettingsForm({
       </section>
 
       <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/80 p-5 shadow-sm shadow-realtor-text/5">
+        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-realtor-primary/80">
+          Billing
+        </p>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-realtor-muted">
+          Controls when the QuickBooks invoice payment link is emailed to the
+          realtor automatically. Billing is always best-effort — if QuickBooks
+          is not connected, booking and delivery emails still go out normally.
+        </p>
+        <div className="mt-4 grid gap-3">
+          <label className="flex items-start gap-3 rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+            <input
+              type="radio"
+              name="invoice_timing"
+              value="on_delivery"
+              defaultChecked={organization.invoice_timing !== "at_booking"}
+              className="mt-1 h-4 w-4 accent-realtor-primary"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-realtor-text">
+                Send payment link after delivery (default)
+              </span>
+              <span className="mt-1 block text-xs leading-5 text-realtor-muted">
+                The invoice is created and the payment link rides along with
+                the &ldquo;media ready&rdquo; email once the job is delivered.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+            <input
+              type="radio"
+              name="invoice_timing"
+              value="at_booking"
+              defaultChecked={organization.invoice_timing === "at_booking"}
+              className="mt-1 h-4 w-4 accent-realtor-primary"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-realtor-text">
+                Send payment link when booking is made
+              </span>
+              <span className="mt-1 block text-xs leading-5 text-realtor-muted">
+                The invoice is created as soon as a booking lands and the
+                payment link is included in the confirmation email.
+              </span>
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/80 p-5 shadow-sm shadow-realtor-text/5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-realtor-text">
@@ -278,7 +328,7 @@ export default function BusinessSettingsForm({
           <button
             type="submit"
             disabled={pending}
-            className="rounded-full bg-realtor-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-realtor-text/10 transition hover:bg-realtor-primary/90 disabled:cursor-not-allowed disabled:opacity-55"
+            className="tap-target rounded-full bg-realtor-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-realtor-text/10 transition hover:bg-realtor-primary/90 disabled:cursor-not-allowed disabled:opacity-55"
           >
             {pending ? "Saving..." : "Save business profile"}
           </button>

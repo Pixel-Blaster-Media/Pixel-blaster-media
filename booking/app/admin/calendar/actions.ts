@@ -285,6 +285,194 @@ export async function createAdminShoot(
   return { ok: true, bookingId: booking.id };
 }
 
+interface BookingForRescheduleRow {
+  id: string;
+  status: string;
+  scheduled_at: string | null;
+  scheduled_ends_at: string | null;
+  owner_id: string;
+  unit_number: string | null;
+  client_notes: string | null;
+  google_calendar_event_id: string | null;
+  properties: {
+    street_address: string;
+    city: string | null;
+    postal_code: string | null;
+  } | null;
+  profiles: {
+    email: string;
+    full_name: string | null;
+    phone: string | null;
+    brokerage: string | null;
+  } | null;
+}
+
+/**
+ * Drag-to-reschedule from the calendar week view. The client sends the
+ * target day (business-TZ date) and minutes-from-midnight snapped to
+ * the 30-minute grid; duration is carried over from the booking itself
+ * so nothing else about the shoot changes.
+ */
+export async function rescheduleCalendarShoot(
+  bookingId: string,
+  dateInput: string,
+  startMinutes: number,
+): Promise<ActionResult> {
+  const admin = await requireAdmin();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+    return { ok: false, error: "Invalid day." };
+  }
+  if (
+    !Number.isInteger(startMinutes) ||
+    startMinutes < 0 ||
+    startMinutes >= 24 * 60
+  ) {
+    return { ok: false, error: "Invalid time." };
+  }
+  const hour = String(Math.floor(startMinutes / 60)).padStart(2, "0");
+  const minute = String(startMinutes % 60).padStart(2, "0");
+  const scheduledAt = businessDateTimeLocalToUtc(
+    `${dateInput}T${hour}:${minute}`,
+  );
+  if (!scheduledAt) return { ok: false, error: "Invalid time." };
+
+  const supabase = getServiceSupabase();
+  const { data: booking, error: bookingError } = await supabase
+    .from("bookings")
+    .select(
+      "id, status, scheduled_at, scheduled_ends_at, owner_id, unit_number, client_notes, google_calendar_event_id, properties(street_address, city, postal_code), profiles(email, full_name, phone, brokerage)",
+    )
+    .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId)
+    .single<BookingForRescheduleRow>();
+
+  if (bookingError || !booking) {
+    return { ok: false, error: "Booking not found." };
+  }
+  if (booking.status === "cancelled") {
+    return { ok: false, error: "That booking is cancelled." };
+  }
+  if (!booking.scheduled_at) {
+    return { ok: false, error: "That booking has no time set yet." };
+  }
+
+  const previousStart = new Date(booking.scheduled_at);
+  const durationMinutes = booking.scheduled_ends_at
+    ? Math.max(
+        Math.round(
+          (new Date(booking.scheduled_ends_at).getTime() -
+            previousStart.getTime()) /
+            60_000,
+        ),
+        30,
+      )
+    : 60;
+  const scheduledEndsAt = new Date(
+    scheduledAt.getTime() + durationMinutes * 60_000,
+  );
+
+  // Deliberately NO overlap check here: the admin drags with the full
+  // calendar in view and intentionally double-books (e.g. over the tail
+  // of a shoot that won't run long). Realtor-facing flows still enforce
+  // conflicts. Requires migration 0037 (drops the DB exclusion guard).
+  const { error: updateError } = await supabase
+    .from("bookings")
+    .update({
+      scheduled_at: scheduledAt.toISOString(),
+      scheduled_ends_at: scheduledEndsAt.toISOString(),
+    })
+    .eq("id", booking.id)
+    .eq("organization_id", admin.organizationId);
+  if (updateError) {
+    if (updateError.code === "23P01") {
+      return {
+        ok: false,
+        error:
+          "The database still has the no-overlap guard. Apply migration 0037_allow_admin_overlap.sql to enable double-booking.",
+      };
+    }
+    return { ok: false, error: updateError.message };
+  }
+
+  // Google Calendar: the client has create/delete only, so move the
+  // event by replacing it (best-effort, same as other admin paths).
+  try {
+    const gcal = await getGoogleCalendarClient({
+      organizationId: admin.organizationId,
+    });
+    if (gcal) {
+      if (booking.google_calendar_event_id) {
+        await gcal.deleteEvent(booking.google_calendar_event_id);
+      }
+      const streetLine = booking.unit_number
+        ? `${booking.properties?.street_address ?? ""}, Unit ${booking.unit_number}`
+        : (booking.properties?.street_address ?? "");
+      const event = await gcal.createEvent({
+        summary: calendarShootTitle({
+          realtor: booking.profiles?.full_name ?? booking.profiles?.email ?? "",
+          services: "",
+          address: streetLine,
+        }),
+        location: [
+          streetLine,
+          booking.properties?.city,
+          booking.properties?.postal_code,
+        ]
+          .filter(Boolean)
+          .join(", "),
+        description:
+          `Realtor: ${booking.profiles?.full_name ?? ""}\n` +
+          `Email: ${booking.profiles?.email ?? ""}\n` +
+          (booking.profiles?.phone ? `Phone: ${booking.profiles.phone}\n` : "") +
+          (booking.client_notes ? `\nNotes:\n${booking.client_notes}\n` : ""),
+        startISO: scheduledAt.toISOString(),
+        endISO: scheduledEndsAt.toISOString(),
+        attendeeEmail: booking.profiles?.email ?? "",
+        attendeeName: booking.profiles?.full_name ?? "",
+      });
+      await supabase
+        .from("bookings")
+        .update({
+          google_calendar_event_id: event.id,
+          google_calendar_event_url: event.htmlLink,
+        })
+        .eq("id", booking.id)
+        .eq("organization_id", admin.organizationId);
+    }
+  } catch (err) {
+    console.warn("[admin-calendar] google calendar reschedule failed", err);
+  }
+
+  await supabase.from("assistant_action_logs").insert({
+    organization_id: admin.organizationId,
+    actor_profile_id: admin.userId,
+    action_type: "calendar_drag_reschedule",
+    target_booking_id: booking.id,
+    target_realtor_id: booking.owner_id,
+    label: "Calendar drag reschedule",
+    details: `Moved ${booking.properties?.street_address ?? "booking"} to ${dateInput} ${hour}:${minute}.`,
+    payload: {
+      old_scheduled_at: booking.scheduled_at,
+      old_scheduled_ends_at: booking.scheduled_ends_at,
+      new_scheduled_at: scheduledAt.toISOString(),
+      new_scheduled_ends_at: scheduledEndsAt.toISOString(),
+    },
+    result_status: "success",
+    result_message: "Booking moved from the calendar week view.",
+    undo_payload: {
+      booking_id: booking.id,
+      scheduled_at: booking.scheduled_at,
+      scheduled_ends_at: booking.scheduled_ends_at,
+    },
+  });
+
+  revalidatePath("/admin/calendar");
+  revalidatePath("/admin/bookings");
+  revalidatePath(`/admin/bookings/${booking.id}`);
+  return { ok: true, bookingId: booking.id };
+}
+
 async function findOrCreateRealtor(args: {
   organizationId: string;
   email: string;

@@ -63,14 +63,14 @@ export default function BookingWorkspaceTabs({
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-white/10 bg-ink-soft/50 p-2">
-        <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-5">
+        <div className="flex gap-2 overflow-x-auto sm:grid sm:grid-cols-3 sm:overflow-x-visible lg:grid-cols-5">
           {tabs.map((tab) => {
             const selected = tab.id === activeTab.id;
             return (
               <Link
                 key={tab.id}
                 href={tab.id === "media" ? baseHref : `${baseHref}?tab=${tab.id}`}
-                className={`rounded-xl px-3 py-3 text-left transition ${
+                className={`shrink-0 whitespace-nowrap rounded-xl px-3 py-3 text-left transition sm:shrink sm:whitespace-normal ${
                   selected
                     ? "bg-brand text-white shadow-sm"
                     : "border border-white/10 text-ink-muted hover:border-brand-light/40 hover:bg-white/5 hover:text-white"

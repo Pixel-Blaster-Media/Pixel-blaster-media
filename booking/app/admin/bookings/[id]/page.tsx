@@ -308,14 +308,14 @@ export default async function BookingDetailPage({
           <div className="flex flex-wrap gap-2">
             <Link
               href={`/admin/bookings/${booking.id}?tab=delivery`}
-              className="rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-light"
+              className="tap-target rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-light"
             >
               Send delivery
             </Link>
             {profile?.phone ? (
               <a
                 href={`tel:${profile.phone}`}
-                className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
+                className="tap-target rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
               >
                 Call realtor
               </a>
@@ -323,7 +323,7 @@ export default async function BookingDetailPage({
             {profile?.email ? (
               <a
                 href={`mailto:${profile.email}`}
-                className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
+                className="tap-target rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
               >
                 Email
               </a>
@@ -335,7 +335,7 @@ export default async function BookingDetailPage({
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
+                className="tap-target rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
               >
                 Map
               </a>
@@ -345,7 +345,7 @@ export default async function BookingDetailPage({
             ) : null}
             <Link
               href="/admin/today"
-              className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
+              className="tap-target rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
             >
               Today
             </Link>

@@ -141,7 +141,7 @@ export default async function BookingsPage({
               key={f.id}
               href={bookingHref(f.id, search)}
               className={
-                "shrink-0 rounded-full border px-3 py-1.5 transition " +
+                "tap-target shrink-0 rounded-full border px-3 py-1.5 transition " +
                 (f.id === filter
                   ? "border-brand-light bg-brand/15 text-brand-light"
                   : "border-white/10 text-ink-muted hover:border-white/30 hover:text-white")

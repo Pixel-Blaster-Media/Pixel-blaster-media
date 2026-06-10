@@ -220,6 +220,7 @@ export function deliveryReadyEmail({
   streetAddress,
   portalLink,
   deliverables,
+  invoiceUrl,
 }: {
   contactName: string;
   streetAddress: string;
@@ -229,6 +230,8 @@ export function deliveryReadyEmail({
     url: string;
     category?: DeliveryLinkCategory;
   }>;
+  /** Optional QuickBooks payment link — renders a "Pay your invoice" button. */
+  invoiceUrl?: string | null;
 }) {
   const firstName = contactName.split(" ")[0] || contactName;
   const groupedLinks = renderDeliveryLinkGroups(deliverables);
@@ -270,6 +273,16 @@ export function deliveryReadyEmail({
       .link-card a {
         color: #3dd5e8 !important;
       }
+      .cta-pay {
+        display: inline-block;
+        padding: 12px 20px;
+        margin: 8px 0 20px;
+        background: #1b6f3c;
+        color: #fff !important;
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: 600;
+      }
       a { color:${BRAND_TEAL}; }
     </style></head>
     <body><div class="wrap">
@@ -282,6 +295,14 @@ export function deliveryReadyEmail({
       ${
         groupedLinks
           ? `<h2>Included media</h2>${groupedLinks}`
+          : ""
+      }
+
+      ${
+        invoiceUrl
+          ? `<h2>Billing</h2>
+      <p>Your invoice for this shoot is ready whenever you are.</p>
+      <p><a href="${escape(invoiceUrl)}" class="cta-pay">Pay your invoice →</a></p>`
           : ""
       }
 
