@@ -45,7 +45,7 @@
 
 html,
 body {
-  background: var(--ink);
+  background: #fbfcfa;
   color: #e8eef0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -65,6 +65,11 @@ a {
     radial-gradient(1200px 600px at 80% -10%, var(--brand-glow), transparent 60%),
     radial-gradient(900px 500px at -10% 110%, var(--brand-glow), transparent 55%),
     var(--ink);
+}
+
+body.page-backdrop:has(.realtor-backdrop),
+body.page-backdrop:has(.portal-layout.realtor-theme) {
+  background: #fbfcfa;
 }
 
 .realtor-theme {

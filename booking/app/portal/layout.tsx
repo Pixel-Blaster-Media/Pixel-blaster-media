@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Viewport } from "next";
 import { redirect } from "next/navigation";
 
 import { signOut } from "@/lib/auth/sign-out";
@@ -12,6 +13,11 @@ import { getServerSupabase } from "@/lib/supabase/server";
 interface ProfilePhotoRow {
   profile_photo_url: string | null;
 }
+
+export const viewport: Viewport = {
+  colorScheme: "light",
+  themeColor: "#fbfcfa",
+};
 
 export default async function PortalLayout({
   children,

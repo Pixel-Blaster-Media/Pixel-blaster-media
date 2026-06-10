@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
@@ -12,6 +12,11 @@ export const metadata: Metadata = {
   // via the root layout.
   robots: { index: true, follow: true },
   alternates: { canonical: "https://www.pixelblastermedia.com/book" },
+};
+
+export const viewport: Viewport = {
+  colorScheme: "light",
+  themeColor: "#fbfcfa",
 };
 
 export default function BookLayout({ children }: { children: ReactNode }) {

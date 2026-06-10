@@ -1,4 +1,10 @@
 import type { ReactNode } from "react";
+import type { Viewport } from "next";
+
+export const viewport: Viewport = {
+  colorScheme: "light",
+  themeColor: "#fbfcfa",
+};
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (

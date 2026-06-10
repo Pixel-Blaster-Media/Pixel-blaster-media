@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import AuthSessionHandler from "./AuthSessionHandler";
 import "./globals.css";
@@ -16,6 +16,11 @@ export const metadata: Metadata = {
     index: false,
     follow: false,
   },
+};
+
+export const viewport: Viewport = {
+  colorScheme: "light dark",
+  themeColor: "#0b0f10",
 };
 
 export default function RootLayout({

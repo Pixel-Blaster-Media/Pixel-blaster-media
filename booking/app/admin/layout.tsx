@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Viewport } from "next";
 
 import { signOut } from "@/lib/auth/sign-out";
 import { requireAdmin } from "@/lib/auth/require-admin";
@@ -19,6 +20,11 @@ const NAV = [
   { href: "/admin/realtors", label: "Realtors" },
   { href: "/admin/settings", label: "Settings" },
 ] as const;
+
+export const viewport: Viewport = {
+  colorScheme: "light",
+  themeColor: "#fbfcfa",
+};
 
 export default async function AdminLayout({
   children,
