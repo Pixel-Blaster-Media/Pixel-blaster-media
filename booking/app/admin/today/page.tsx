@@ -67,20 +67,13 @@ interface DeliverableRow {
   metadata: { status?: string } | null;
 }
 
-interface DailyWeather {
+interface ShootWeather {
   location: string;
   temperatureC: number | null;
-  apparentTemperatureC: number | null;
   windKph: number | null;
-  windDirection: number | null;
   cloudCover: number | null;
-  precipitationMm: number | null;
+  precipitationProbability: number | null;
   weatherCode: number | null;
-  sunrise: string | null;
-  sunset: string | null;
-  sunElevation: number | null;
-  sunAzimuth: number | null;
-  source: "shoot" | "fallback";
 }
 
 export default async function AdminTodayPage() {
@@ -137,36 +130,21 @@ export default async function AdminTodayPage() {
   const routePlan = preferences.showRouteWarnings
     ? await buildRoutePlan(bookings ?? [], admin.organizationId)
     : emptyRoutePlan("v1");
-  const dailyWeather = await getDailyWeather(bookings ?? []);
+  const weatherEntries = await Promise.all(
+    (bookings ?? []).map(async (booking) => [
+      booking.id,
+      await getShootWeather(booking),
+    ] as const),
+  );
+  const weatherByBooking = new Map(weatherEntries);
 
   return (
     <div className="space-y-6">
-      <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
-            {formatFullDate(start)}
-          </p>
-          <h1 className="mt-1 text-2xl font-bold text-realtor-text">Today</h1>
-          <p className="mt-2 text-sm text-realtor-muted">
-            Shoot-day view for addresses, contacts, notes, and upload tasks.
-          </p>
-        </div>
-        <Link
-          href="/admin/calendar"
-          className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
-        >
-          Calendar
-        </Link>
-        </div>
-      </header>
-
-      <DailyCommandCenter
+      <TodayOverview
+        date={start}
         bookings={bookings ?? []}
-        deliverablesByBooking={deliverablesByBooking}
         preferences={preferences}
         routePlan={routePlan}
-        weather={dailyWeather}
       />
 
       {bookings && bookings.length > 0 ? (
@@ -179,6 +157,7 @@ export default async function AdminTodayPage() {
               deliverables={deliverablesByBooking.get(booking.id) ?? []}
               preferences={preferences}
               defaultOpen={bookings.length <= 2}
+              weather={weatherByBooking.get(booking.id) ?? null}
             />
           ))}
         </ol>
@@ -191,35 +170,21 @@ export default async function AdminTodayPage() {
   );
 }
 
-function DailyCommandCenter({
+function TodayOverview({
+  date,
   bookings,
-  deliverablesByBooking,
   preferences,
   routePlan,
-  weather,
 }: {
+  date: Date;
   bookings: BookingRow[];
-  deliverablesByBooking: Map<string, DeliverableRow[]>;
   preferences: TodayCommandPreferences;
   routePlan: RoutePlan;
-  weather: DailyWeather | null;
 }) {
   const nextShoot = bookings.find(
     (booking) =>
       booking.scheduled_at && new Date(booking.scheduled_at).getTime() >= Date.now(),
   );
-  const attention = preferences.showDeliverables
-    ? bookings
-        .map((booking) => ({
-          booking,
-          tasks: taskStates(
-            booking,
-            deliverablesByBooking.get(booking.id) ?? [],
-          ).filter((task) => task.state !== "done"),
-        }))
-        .filter((item) => item.tasks.length > 0)
-        .slice(0, 5)
-    : [];
   const routeInsights = routePlan.insights;
   const routeSummary = buildRouteSummary(routeInsights);
 
@@ -228,62 +193,61 @@ function DailyCommandCenter({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
-            Field overview
+            {formatFullDate(date)}
           </p>
-          <h2 className="mt-1 text-xl font-semibold text-realtor-text">
+          <h1 className="mt-1 text-2xl font-bold text-realtor-text">
             Today at a glance
-          </h2>
+          </h1>
+          <p className="mt-2 text-sm text-realtor-muted">
+            Shoot-day controls, route status, and a quick brief when you need one.
+          </p>
         </div>
-        {nextShoot ? (
-          <Link
-            href={`/admin/bookings/${nextShoot.id}`}
-            className="rounded-full border border-realtor-primary/40 bg-realtor-primary/10 px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:bg-realtor-primary/20"
-          >
-            Next: {nextShoot.scheduled_at ? formatTime(nextShoot.scheduled_at) : ""}
-          </Link>
-        ) : null}
+        <Link
+          href="/admin/calendar"
+          className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+        >
+          Calendar
+        </Link>
       </div>
 
       {preferences.showShootBrief ? <DailyAIBriefPanel /> : null}
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-3">
-        <WeatherCard weather={weather} />
-
-        {preferences.showDeliverables ? (
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
         <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
-            Needs attention
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
+            Shoots
           </p>
-          {attention.length > 0 ? (
-            <div className="mt-2 space-y-2">
-              {attention.map(({ booking, tasks }) => (
-                <Link
-                  key={booking.id}
-                  href={`/admin/bookings/${booking.id}`}
-                  className="block rounded-xl border border-realtor-primary/15 bg-white/65 p-3 transition hover:border-realtor-primary/50"
-                >
-                  <span className="block text-sm font-semibold text-realtor-text">
-                    {booking.scheduled_at ? `${formatTime(booking.scheduled_at)} · ` : ""}
-                    {booking.properties?.street_address ?? "Unknown address"}
-                  </span>
-                  <span className="mt-1 block text-xs text-realtor-muted">
-                    {tasks.map((task) => task.label).join(" · ")}
-                  </span>
-                </Link>
-              ))}
-            </div>
+          <p className="mt-1 text-lg font-semibold text-realtor-text">
+            {bookings.length}
+          </p>
+          <p className="mt-0.5 text-xs text-realtor-muted">
+            {bookings.length === 1 ? "shoot today" : "shoots today"}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
+            Next
+          </p>
+          {nextShoot ? (
+            <Link
+              href={`/admin/bookings/${nextShoot.id}`}
+              className="mt-1 block text-sm font-semibold text-realtor-text transition hover:text-realtor-primary"
+            >
+              {nextShoot.scheduled_at ? formatTime(nextShoot.scheduled_at) : "No time"}
+              <span className="mt-0.5 block truncate text-xs font-normal text-realtor-muted">
+                {nextShoot.properties?.street_address ?? "Unknown address"}
+              </span>
+            </Link>
           ) : (
-            <p className="mt-2 text-sm text-realtor-muted">
-              Nothing urgent flagged from today&apos;s media checklist.
-            </p>
+            <p className="mt-1 text-sm text-realtor-muted">No upcoming shoots.</p>
           )}
         </div>
-        ) : null}
 
         {preferences.showRouteWarnings ? (
         <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
-            Route + travel
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
+            Routes
           </p>
           <p className="mt-1 text-xs text-realtor-muted">
             {routeSummary.label}{" "}
@@ -345,90 +309,20 @@ function DailyCommandCenter({
   );
 }
 
-function WeatherCard({ weather }: { weather: DailyWeather | null }) {
-  return (
-    <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
-      <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
-        Weather + light
-      </p>
-      {weather ? (
-        <div className="mt-2 space-y-3">
-          <div>
-            <p className="text-sm font-semibold text-realtor-text">
-              {weather.temperatureC != null
-                ? `${Math.round(weather.temperatureC)}°C`
-                : "Weather"}
-              {weather.weatherCode != null
-                ? ` · ${weatherLabel(weather.weatherCode)}`
-                : ""}
-            </p>
-            <p className="mt-0.5 text-xs text-realtor-muted">
-              {weather.location}
-              {weather.source === "fallback" ? " fallback" : ""}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <Metric
-              label="Wind"
-              value={
-                weather.windKph != null
-                  ? `${Math.round(weather.windKph)} km/h${windDirectionLabel(weather.windDirection)}`
-                  : "—"
-              }
-            />
-            <Metric
-              label="Clouds"
-              value={weather.cloudCover != null ? `${weather.cloudCover}%` : "—"}
-            />
-            <Metric
-              label="Sunset"
-              value={weather.sunset ? formatTime(weather.sunset) : "—"}
-            />
-            <Metric
-              label="Sun"
-              value={
-                weather.sunElevation != null
-                  ? `${Math.round(weather.sunElevation)}° ${sunPositionLabel(weather.sunElevation)}`
-                  : "—"
-              }
-            />
-          </div>
-          <p className="text-xs leading-5 text-realtor-muted">
-            {weatherInsight(weather)}
-          </p>
-        </div>
-      ) : (
-        <p className="mt-2 text-sm text-realtor-muted">
-          Weather is unavailable right now. Use the map before leaving.
-        </p>
-      )}
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-realtor-primary/10 bg-white/70 px-2 py-1.5">
-      <span className="block text-[10px] uppercase tracking-wider text-realtor-muted">
-        {label}
-      </span>
-      <span className="mt-0.5 block font-semibold text-realtor-text">{value}</span>
-    </div>
-  );
-}
-
 function ShootCard({
   booking,
   nextRoute,
   deliverables,
   preferences,
   defaultOpen,
+  weather,
 }: {
   booking: BookingRow;
   nextRoute: NextRoute | null;
   deliverables: DeliverableRow[];
   preferences: TodayCommandPreferences;
   defaultOpen: boolean;
+  weather: ShootWeather | null;
 }) {
   const property = booking.properties;
   const profile = booking.profiles;
@@ -474,6 +368,7 @@ function ShootCard({
             <p className="mt-0.5 text-sm text-realtor-muted">
               {[property?.city, property?.postal_code].filter(Boolean).join(" ")}
             </p>
+            <ShootWeatherChips weather={weather} />
           </div>
           <div className="flex items-center gap-2">
             <span
@@ -682,6 +577,40 @@ function NoteDisclosure({ title, body }: { title: string; body: string }) {
   );
 }
 
+function ShootWeatherChips({ weather }: { weather: ShootWeather | null }) {
+  if (!weather) return null;
+  const chips = [
+    weather.temperatureC != null
+      ? `${Math.round(weather.temperatureC)}°C${weather.weatherCode != null ? ` · ${weatherLabel(weather.weatherCode)}` : ""}`
+      : weather.weatherCode != null
+        ? weatherLabel(weather.weatherCode)
+        : null,
+    weather.windKph != null ? `Wind ${Math.round(weather.windKph)} km/h` : null,
+    weather.cloudCover != null ? `Clouds ${weather.cloudCover}%` : null,
+    weather.precipitationProbability != null
+      ? `Rain ${weather.precipitationProbability}%`
+      : null,
+  ].filter((chip): chip is string => Boolean(chip));
+
+  if (!chips.length) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {chips.map((chip) => (
+        <span
+          key={chip}
+          className="rounded-full border border-realtor-primary/15 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-realtor-muted"
+        >
+          {chip}
+        </span>
+      ))}
+      <span className="rounded-full border border-realtor-primary/10 bg-realtor-primary/5 px-2 py-0.5 text-[11px] font-medium text-realtor-muted">
+        {weather.location}
+      </span>
+    </div>
+  );
+}
+
 function taskStates(
   booking: BookingRow,
   deliverables: DeliverableRow[],
@@ -738,31 +667,17 @@ function chip(label: string, state: "done" | "pending" | "todo") {
   return { label, className, state };
 }
 
-async function getDailyWeather(
-  bookings: BookingRow[],
-): Promise<DailyWeather | null> {
-  const target =
-    bookings.find(
-      (booking) =>
-        booking.scheduled_at &&
-        new Date(booking.scheduled_at).getTime() >= Date.now(),
-    ) ??
-    bookings[0] ??
-    null;
-  const fallback = {
-    latitude: 43.2557,
-    longitude: -79.8711,
-    label: "Hamilton, ON",
-    source: "fallback" as const,
-  };
-  const place = target ? await geocodeBookingArea(target) : null;
-  const coords = place ?? fallback;
+async function getShootWeather(
+  booking: BookingRow,
+): Promise<ShootWeather | null> {
+  if (!booking.scheduled_at) return null;
+  const coords = await geocodeBookingArea(booking);
+  if (!coords) return null;
   const params = new URLSearchParams({
     latitude: String(coords.latitude),
     longitude: String(coords.longitude),
-    current:
-      "temperature_2m,apparent_temperature,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m",
-    daily: "sunrise,sunset",
+    hourly:
+      "temperature_2m,precipitation_probability,weather_code,cloud_cover,wind_speed_10m",
     timezone: BUSINESS_TZ,
     forecast_days: "1",
   });
@@ -773,39 +688,27 @@ async function getDailyWeather(
     });
     if (!res.ok) return null;
     const json = (await res.json()) as {
-      current?: {
-        temperature_2m?: number;
-        apparent_temperature?: number;
-        precipitation?: number;
-        weather_code?: number;
-        cloud_cover?: number;
-        wind_speed_10m?: number;
-        wind_direction_10m?: number;
-      };
-      daily?: {
-        sunrise?: string[];
-        sunset?: string[];
+      hourly?: {
+        time?: string[];
+        temperature_2m?: number[];
+        precipitation_probability?: number[];
+        weather_code?: number[];
+        cloud_cover?: number[];
+        wind_speed_10m?: number[];
       };
     };
-    const sun = sunPosition({
-      date: new Date(),
-      latitude: coords.latitude,
-      longitude: coords.longitude,
-    });
+    const index = hourlyIndex(json.hourly?.time ?? [], booking.scheduled_at);
+    if (index == null) return null;
+
     return {
       location: coords.label,
-      temperatureC: numeric(json.current?.temperature_2m),
-      apparentTemperatureC: numeric(json.current?.apparent_temperature),
-      windKph: numeric(json.current?.wind_speed_10m),
-      windDirection: numeric(json.current?.wind_direction_10m),
-      cloudCover: numeric(json.current?.cloud_cover),
-      precipitationMm: numeric(json.current?.precipitation),
-      weatherCode: numeric(json.current?.weather_code),
-      sunrise: json.daily?.sunrise?.[0] ?? null,
-      sunset: json.daily?.sunset?.[0] ?? null,
-      sunElevation: sun.elevation,
-      sunAzimuth: sun.azimuth,
-      source: coords.source,
+      temperatureC: numeric(json.hourly?.temperature_2m?.[index]),
+      windKph: numeric(json.hourly?.wind_speed_10m?.[index]),
+      cloudCover: numeric(json.hourly?.cloud_cover?.[index]),
+      precipitationProbability: numeric(
+        json.hourly?.precipitation_probability?.[index],
+      ),
+      weatherCode: numeric(json.hourly?.weather_code?.[index]),
     };
   } catch {
     return null;
@@ -866,6 +769,41 @@ function numeric(value: number | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function hourlyIndex(times: string[], scheduledAt: string): number | null {
+  if (!times.length) return null;
+  const target = localHourKey(scheduledAt);
+  const exact = times.indexOf(target);
+  if (exact >= 0) return exact;
+
+  const targetTime = new Date(scheduledAt).getTime();
+  let bestIndex = 0;
+  let bestDelta = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < times.length; index += 1) {
+    const timestamp = businessDateTimeLocalToUtc(times[index]);
+    if (!timestamp) continue;
+    const delta = Math.abs(timestamp.getTime() - targetTime);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      bestIndex = index;
+    }
+  }
+  return Number.isFinite(bestDelta) ? bestIndex : null;
+}
+
+function localHourKey(iso: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(iso));
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:00`;
+}
+
 function weatherLabel(code: number): string {
   if (code === 0) return "Clear";
   if (code <= 3) return "Partly cloudy";
@@ -875,89 +813,6 @@ function weatherLabel(code: number): string {
   if (code <= 82) return "Showers";
   if (code <= 99) return "Storm risk";
   return "Forecast";
-}
-
-function weatherInsight(weather: DailyWeather): string {
-  const parts: string[] = [];
-  if ((weather.windKph ?? 0) >= 28) {
-    parts.push("Wind may affect drone work and exterior audio.");
-  } else if ((weather.windKph ?? 0) >= 18) {
-    parts.push("Breezy enough to watch drone stability.");
-  }
-  if ((weather.precipitationMm ?? 0) > 0) {
-    parts.push("Rain is showing in the forecast, so exterior timing matters.");
-  }
-  if ((weather.cloudCover ?? 0) >= 75) {
-    parts.push("Cloud cover should soften exterior contrast.");
-  }
-  if (weather.sunset) {
-    parts.push(`Golden hour starts roughly around ${formatTime(addMinutes(weather.sunset, -90))}.`);
-  }
-  return parts.length
-    ? parts.join(" ")
-    : "Conditions look straightforward. Still check the sky before exterior and drone work.";
-}
-
-function windDirectionLabel(degrees: number | null): string {
-  if (degrees == null) return "";
-  const labels = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-  return ` ${labels[Math.round(degrees / 45) % 8]}`;
-}
-
-function sunPositionLabel(elevation: number): string {
-  if (elevation < 0) return "below horizon";
-  if (elevation < 12) return "low";
-  if (elevation < 35) return "mid";
-  return "high";
-}
-
-function sunPosition({
-  date,
-  latitude,
-  longitude,
-}: {
-  date: Date;
-  latitude: number;
-  longitude: number;
-}): { elevation: number; azimuth: number } {
-  const rad = Math.PI / 180;
-  const dayMs = 86400000;
-  const julianDate = date.getTime() / dayMs + 2440587.5;
-  const daysSinceJ2000 = julianDate - 2451545;
-  const meanAnomaly = rad * (357.5291 + 0.98560028 * daysSinceJ2000);
-  const equationOfCenter =
-    rad *
-    (1.9148 * Math.sin(meanAnomaly) +
-      0.02 * Math.sin(2 * meanAnomaly) +
-      0.0003 * Math.sin(3 * meanAnomaly));
-  const eclipticLongitude =
-    meanAnomaly + equationOfCenter + rad * 102.9372 + Math.PI;
-  const declination = Math.asin(
-    Math.sin(eclipticLongitude) * Math.sin(rad * 23.4397),
-  );
-  const rightAscension = Math.atan2(
-    Math.sin(eclipticLongitude) * Math.cos(rad * 23.4397),
-    Math.cos(eclipticLongitude),
-  );
-  const siderealTime = rad * (280.16 + 360.9856235 * daysSinceJ2000) - longitude * rad;
-  const hourAngle = siderealTime - rightAscension;
-  const lat = latitude * rad;
-  const altitude = Math.asin(
-    Math.sin(lat) * Math.sin(declination) +
-      Math.cos(lat) * Math.cos(declination) * Math.cos(hourAngle),
-  );
-  const azimuth = Math.atan2(
-    Math.sin(hourAngle),
-    Math.cos(hourAngle) * Math.sin(lat) - Math.tan(declination) * Math.cos(lat),
-  );
-  return {
-    elevation: altitude / rad,
-    azimuth: ((azimuth / rad + 180) % 360 + 360) % 360,
-  };
-}
-
-function addMinutes(iso: string, minutes: number): string {
-  return new Date(new Date(iso).getTime() + minutes * 60000).toISOString();
 }
 
 interface RouteInsight {

@@ -804,10 +804,9 @@ body:has(.admin-earth) .site-main {
   padding: 0;
 }
 
+body:has(.admin-earth) .site-header,
 body:has(.admin-earth) .site-footer {
-  margin-top: 0;
-  background: var(--realtor-bg);
-  border-color: var(--realtor-border);
+  display: none;
 }
 
 .admin-earth .text-white,
