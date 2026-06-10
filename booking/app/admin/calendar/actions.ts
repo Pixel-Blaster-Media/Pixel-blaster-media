@@ -372,28 +372,10 @@ export async function rescheduleCalendarShoot(
     scheduledAt.getTime() + durationMinutes * 60_000,
   );
 
-  // Same overlap rule as the manual booking-edit form: only other
-  // active bookings conflict; the exclusion constraint (23P01) is the
-  // backstop. Blocks/working hours are intentionally not enforced here —
-  // admins drag with the full calendar in view.
-  const { data: conflicts, error: conflictError } = await supabase
-    .from("bookings")
-    .select("id")
-    .eq("organization_id", admin.organizationId)
-    .neq("id", booking.id)
-    .in("status", ["requested", "confirmed", "shot", "editing", "delivered"])
-    .not("scheduled_at", "is", null)
-    .lt("scheduled_at", scheduledEndsAt.toISOString())
-    .gt("scheduled_ends_at", scheduledAt.toISOString())
-    .limit(1);
-  if (conflictError) return { ok: false, error: conflictError.message };
-  if (conflicts && conflicts.length > 0) {
-    return {
-      ok: false,
-      error: "That time overlaps another active booking.",
-    };
-  }
-
+  // Deliberately NO overlap check here: the admin drags with the full
+  // calendar in view and intentionally double-books (e.g. over the tail
+  // of a shoot that won't run long). Realtor-facing flows still enforce
+  // conflicts. Requires migration 0037 (drops the DB exclusion guard).
   const { error: updateError } = await supabase
     .from("bookings")
     .update({
@@ -406,7 +388,8 @@ export async function rescheduleCalendarShoot(
     if (updateError.code === "23P01") {
       return {
         ok: false,
-        error: "That time overlaps another active booking.",
+        error:
+          "The database still has the no-overlap guard. Apply migration 0037_allow_admin_overlap.sql to enable double-booking.",
       };
     }
     return { ok: false, error: updateError.message };

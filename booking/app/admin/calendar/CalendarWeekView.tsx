@@ -17,6 +17,9 @@ import {
 } from "./actions";
 
 const DRAG_MIME = "application/x-pbm-booking";
+// Finer snap than the 30-min click-to-create grid: dragging is the
+// precision tool, so it lands on 5-minute marks.
+const DRAG_SNAP_MINUTES = 5;
 
 interface CalendarItem {
   id: string;
@@ -223,8 +226,9 @@ export default function CalendarWeekView({
     if (!bookingId) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const minutesIntoDay = ((event.clientY - rect.top) / HOUR_HEIGHT) * 60;
-    const snapped = Math.round(minutesIntoDay / SLOT_MINUTES) * SLOT_MINUTES;
-    const maxStart = (END_HOUR - START_HOUR) * 60 - SLOT_MINUTES;
+    const snapped =
+      Math.round(minutesIntoDay / DRAG_SNAP_MINUTES) * DRAG_SNAP_MINUTES;
+    const maxStart = (END_HOUR - START_HOUR) * 60 - DRAG_SNAP_MINUTES;
     const startMinutes =
       START_HOUR * 60 + Math.min(Math.max(snapped, 0), maxStart);
     setMoveError(null);
