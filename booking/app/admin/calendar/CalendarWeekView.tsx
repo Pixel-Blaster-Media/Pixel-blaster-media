@@ -11,9 +11,12 @@ import AddressAutocomplete, {
 import { addCalendarBlock } from "@/app/admin/settings/availability/actions";
 import {
   createAdminShoot,
+  rescheduleCalendarShoot,
   searchRealtors,
   type RealtorSearchItem,
 } from "./actions";
+
+const DRAG_MIME = "application/x-pbm-booking";
 
 interface CalendarItem {
   id: string;
@@ -96,6 +99,8 @@ export default function CalendarWeekView({
   });
   const [pending, startTransition] = useTransition();
   const [lookupPending, startLookupTransition] = useTransition();
+  const [movePending, startMoveTransition] = useTransition();
+  const [moveError, setMoveError] = useState<string | null>(null);
   const [mobileDayKey, setMobileDayKey] = useState(() => {
     const today = dateInputForLocalDate();
     if (days.some((day) => day.dateInput === today)) return today;
@@ -202,6 +207,41 @@ export default function CalendarWeekView({
     setLookupMessage("Realtor selected.");
   };
 
+  const handleEventDrop = (
+    event: React.DragEvent<HTMLDivElement>,
+    day: DayColumn,
+  ) => {
+    const raw = event.dataTransfer.getData(DRAG_MIME);
+    if (!raw) return;
+    event.preventDefault();
+    let bookingId = "";
+    try {
+      bookingId = String(JSON.parse(raw).id ?? "");
+    } catch {
+      return;
+    }
+    if (!bookingId) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const minutesIntoDay = ((event.clientY - rect.top) / HOUR_HEIGHT) * 60;
+    const snapped = Math.round(minutesIntoDay / SLOT_MINUTES) * SLOT_MINUTES;
+    const maxStart = (END_HOUR - START_HOUR) * 60 - SLOT_MINUTES;
+    const startMinutes =
+      START_HOUR * 60 + Math.min(Math.max(snapped, 0), maxStart);
+    setMoveError(null);
+    startMoveTransition(async () => {
+      const result = await rescheduleCalendarShoot(
+        bookingId,
+        day.dateInput,
+        startMinutes,
+      );
+      if (!result.ok) {
+        setMoveError(result.error ?? "Could not move the shoot.");
+        return;
+      }
+      router.refresh();
+    });
+  };
+
   return (
     <div className="max-w-full space-y-3 overflow-hidden md:space-y-4">
       <div className="hidden text-ink-muted md:flex md:flex-wrap md:items-center md:gap-3 md:text-xs">
@@ -217,6 +257,17 @@ export default function CalendarWeekView({
           <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#dce9dc] ring-1 ring-[#89a68f]" />
           Shoot
         </span>
+        <span className="text-[11px] text-[#6f7a70]">
+          Tip: drag a shoot to a new slot to reschedule it.
+        </span>
+        {movePending ? (
+          <span className="font-semibold text-[#3f7356]">Moving shoot…</span>
+        ) : null}
+        {moveError ? (
+          <span role="alert" className="font-semibold text-red-700">
+            {moveError}
+          </span>
+        ) : null}
       </div>
 
       <div className="hidden overflow-x-auto rounded-2xl border border-[#d8cab9]/70 bg-[#fffdf8]/80 shadow-lg shadow-black/10 md:block">
@@ -251,6 +302,13 @@ export default function CalendarWeekView({
               key={day.key}
               className="relative border-l border-[#d8cab9]/65 bg-[#d7d1c4]/55"
               style={{ height: gridHeight }}
+              onDragOver={(event) => {
+                if (event.dataTransfer.types.includes(DRAG_MIME)) {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                }
+              }}
+              onDrop={(event) => handleEventDrop(event, day)}
             >
               {day.enabled ? (
                 <div
@@ -1114,14 +1172,27 @@ function CalendarEvent({ item }: { item: CalendarItem }) {
   const endMinutes = end.hour * 60 + end.minute;
   const top = ((startMinutes - START_HOUR * 60) / 60) * HOUR_HEIGHT;
   const height = Math.max(((endMinutes - startMinutes) / 60) * HOUR_HEIGHT, 32);
+  const draggable = item.kind === "booking";
   const classes =
     item.kind === "booking"
-      ? "border-[#8ba98f] bg-[#dce9dc] text-[#23332b] hover:bg-[#d2e1d2]"
+      ? "border-[#8ba98f] bg-[#dce9dc] text-[#23332b] hover:bg-[#d2e1d2] cursor-grab active:cursor-grabbing"
       : "border-[#a69d8d]/45 bg-[#c9c3b6]/80 text-[#36423a]";
   const content = (
     <div
       className={`absolute left-1 right-1 z-10 overflow-hidden rounded-xl border px-2 py-1 text-left shadow-sm ${classes}`}
       style={{ top: Math.max(top, 0), height }}
+      draggable={draggable}
+      onDragStart={
+        draggable
+          ? (event) => {
+              event.dataTransfer.setData(
+                DRAG_MIME,
+                JSON.stringify({ id: item.id }),
+              );
+              event.dataTransfer.effectAllowed = "move";
+            }
+          : undefined
+      }
     >
       <p className="truncate text-xs font-semibold">{item.title}</p>
       <p className="truncate text-[10px] opacity-80">{item.subtitle}</p>

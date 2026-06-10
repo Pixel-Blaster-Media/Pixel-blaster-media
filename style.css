@@ -160,16 +160,33 @@ button { cursor: pointer; font-family: inherit; }
   right: 0;
   z-index: 1000;
   padding: 1.5rem 0;
-  transition: padding 0.3s ease, background 0.3s ease, border-color 0.3s ease, backdrop-filter 0.3s ease;
+  transition: padding 0.3s ease, border-color 0.3s ease;
   border-bottom: 1px solid transparent;
+}
+
+/* The frosted-glass background lives on a pseudo-element instead of the
+   navbar itself: backdrop-filter on the navbar would make it the
+   containing block for position:fixed descendants, which traps the
+   full-screen mobile menu inside the navbar's box after scrolling. */
+.navbar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgba(9, 9, 11, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
 }
 
 .navbar.scrolled {
   padding: 1rem 0;
-  background: rgba(9, 9, 11, 0.88);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   border-bottom-color: var(--border);
+}
+.navbar.scrolled::before {
+  opacity: 1;
 }
 
 .nav-container {
