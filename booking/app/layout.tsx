@@ -50,10 +50,10 @@ export default async function RootLayout({
       >
         <AuthSessionHandler />
         <header className="site-header border-b border-white/5">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-6 py-4">
+          <div className="site-header-inner mx-auto flex max-w-6xl items-center justify-between gap-3 px-6 py-4">
             <Link
               href={homeHrefForUser(user)}
-              className="flex min-w-0 shrink items-center gap-2 font-semibold"
+              className="site-brand-link flex min-w-0 shrink items-center gap-2 font-semibold"
             >
               <span className="site-brand-primary text-white">
                 Pixel Blaster
