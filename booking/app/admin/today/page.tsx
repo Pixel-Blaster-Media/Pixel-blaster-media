@@ -234,7 +234,7 @@ function TodayOverview({
       )}
 
       <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
               {bookings.length === 1
@@ -252,9 +252,6 @@ function TodayOverview({
                   }`}
             </p>
           </div>
-          <span className="rounded-full border border-realtor-primary/15 bg-white px-2.5 py-1 text-xs font-semibold text-realtor-muted">
-            {bookings.length}
-          </span>
         </div>
       </div>
     </section>
@@ -516,15 +513,17 @@ function ShootWeatherChips({ weather }: { weather: ShootWeather | null }) {
   if (!chips.length) return null;
 
   return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
+    <div className="mt-2 max-w-full overflow-x-auto">
+      <div className="inline-flex whitespace-nowrap rounded-full border border-realtor-primary/15 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-realtor-muted">
       {chips.map((chip) => (
         <span
           key={chip}
-          className="rounded-full border border-realtor-primary/15 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-realtor-muted"
+          className="after:mx-1.5 after:text-realtor-muted/40 after:content-['•'] last:after:hidden"
         >
           {chip}
         </span>
       ))}
+      </div>
     </div>
   );
 }
