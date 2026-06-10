@@ -53,6 +53,9 @@ export async function saveBusinessSettings(
   const replyToEmail = cleanText(formData.get("reply_to_email")) || null;
   const adminNotificationEmail =
     cleanText(formData.get("admin_notification_email")) || null;
+  const invoiceTimingRaw = cleanText(formData.get("invoice_timing"));
+  const invoiceTiming =
+    invoiceTimingRaw === "at_booking" ? "at_booking" : "on_delivery";
 
   if (!name) {
     return { ok: false, error: "Business name is required." };
@@ -151,6 +154,7 @@ export async function saveBusinessSettings(
       email_from_name: emailFromName,
       reply_to_email: replyToEmail,
       admin_notification_email: adminNotificationEmail,
+      invoice_timing: invoiceTiming,
     })
     .eq("id", admin.organizationId);
 

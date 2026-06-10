@@ -21,6 +21,7 @@ import {
 } from "@/lib/booking/catalog";
 import { buildDeliveryLinks } from "@/lib/booking/delivery-links";
 import { sendEmail } from "@/lib/email/resend";
+import { getOrganizationEmailSettings } from "@/lib/email/settings";
 import { deliveryReadyEmail } from "@/lib/email/templates";
 import {
   createEnhance,
@@ -132,6 +133,7 @@ interface BookingForInvoiceRow {
 interface BookingForDeliveryEmailRow {
   id: string;
   property_id: string;
+  quickbooks_invoice_url: string | null;
   properties: {
     street_address: string;
   } | null;
@@ -733,7 +735,7 @@ export async function sendDeliveryReadyEmail(
   const { data: booking, error: bookingError } = await service
     .from("bookings")
     .select(
-      "id, property_id, properties(street_address), profiles(email, full_name, delivery_cc_emails)",
+      "id, property_id, quickbooks_invoice_url, properties(street_address), profiles(email, full_name, delivery_cc_emails)",
     )
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
@@ -785,6 +787,36 @@ export async function sendDeliveryReadyEmail(
     ...extraRecipients,
   ]).filter((email) => email.toLowerCase() !== primaryRecipient.toLowerCase());
 
+  // Billing (best-effort): when the company bills after delivery, make sure
+  // a QuickBooks invoice exists and ride the payment link along with the
+  // delivery email. Never block delivery on billing — any failure just
+  // means the email goes out without the pay link, exactly as before.
+  let invoiceUrl: string | null = null;
+  const emailSettings = await getOrganizationEmailSettings(
+    admin.organizationId,
+  );
+  if (emailSettings.invoiceTiming === "on_delivery") {
+    invoiceUrl = booking.quickbooks_invoice_url;
+    if (!invoiceUrl) {
+      try {
+        const invoiceResult = await createInvoiceForBookingId(
+          booking.id,
+          admin.organizationId,
+        );
+        if (invoiceResult.ok) {
+          invoiceUrl = invoiceResult.invoiceUrl ?? null;
+        } else {
+          console.warn(
+            "[delivery] invoice auto-create skipped:",
+            invoiceResult.error,
+          );
+        }
+      } catch (err) {
+        console.warn("[delivery] invoice auto-create failed", err);
+      }
+    }
+  }
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   const portalLink = appUrl
     ? `${appUrl}/portal/${booking.property_id}`
@@ -794,6 +826,7 @@ export async function sendDeliveryReadyEmail(
     streetAddress: booking.properties.street_address,
     portalLink,
     deliverables: buildDeliveryLinks(ready, appUrl),
+    invoiceUrl,
   });
 
   const sent = await sendEmail({
@@ -1338,6 +1371,32 @@ export async function createInvoice(
   const admin = await requireAdminForBooking(bookingId);
   if (!admin) return { ok: false, error: "Booking not found." };
 
+  const result = await createInvoiceForBookingId(
+    bookingId,
+    admin.organizationId,
+  );
+  revalidatePath(`/admin/bookings/${bookingId}`);
+  return result;
+}
+
+/**
+ * Load the booking fields QuickBooks needs and create the invoice.
+ *
+ * Shared by the manual "Create invoice" button and the automatic
+ * on-delivery flow so both paths use identical guards. Idempotent —
+ * createInvoiceForBooking short-circuits (returning the existing URL)
+ * if the booking already has an invoice.
+ */
+async function createInvoiceForBookingId(
+  bookingId: string,
+  organizationId: string,
+): Promise<
+  ActionResult & {
+    invoiceUrl?: string;
+    invoiceNumber?: string;
+    totalCents?: number;
+  }
+> {
   const service = getServiceSupabase();
   const { data: booking, error } = await service
     .from("bookings")
@@ -1345,7 +1404,7 @@ export async function createInvoice(
       "id, services, add_ons, property_id, owner_id, properties(street_address, city, postal_code), profiles(email, full_name, phone, brokerage)",
     )
     .eq("id", bookingId)
-    .eq("organization_id", admin.organizationId)
+    .eq("organization_id", organizationId)
     .single<BookingForInvoiceRow>();
 
   if (error || !booking) return { ok: false, error: "Booking not found." };
@@ -1364,7 +1423,6 @@ export async function createInvoice(
     property: booking.properties,
   });
 
-  revalidatePath(`/admin/bookings/${bookingId}`);
   if (!result.ok) return { ok: false, error: result.error };
   return {
     ok: true,

@@ -230,6 +230,7 @@ interface OrganizationsTable {
     email_from_name: string | null;
     reply_to_email: string | null;
     admin_notification_email: string | null;
+    invoice_timing: string;
     created_at: string;
     updated_at: string;
   };
@@ -245,6 +246,7 @@ interface OrganizationsTable {
     email_from_name?: string | null;
     reply_to_email?: string | null;
     admin_notification_email?: string | null;
+    invoice_timing?: string;
   };
   Update: Partial<OrganizationsTable["Insert"]>;
   Relationships: [];

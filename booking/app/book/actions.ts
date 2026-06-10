@@ -14,8 +14,12 @@ import {
 import { getActiveCatalog, getCatalogItemPrice } from "@/lib/booking/catalog";
 import { createManageToken } from "@/lib/booking/manage-token";
 import { sendEmail } from "@/lib/email/resend";
-import { getAdminNotificationEmail } from "@/lib/email/settings";
+import {
+  getAdminNotificationEmail,
+  getOrganizationEmailSettings,
+} from "@/lib/email/settings";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
+import { createInvoiceForBooking } from "@/lib/integrations/quickbooks/invoice";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
 import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
@@ -361,6 +365,40 @@ export async function createPublicBooking(
 
   const scheduledEndAt = new Date(slotStart.getTime() + duration * 60_000);
 
+  // -------- QuickBooks invoice (best-effort, only when billing at booking) --------
+  // Default is billing after delivery, where the invoice rides along with the
+  // delivery-ready email instead. A billing failure must never break the
+  // booking — worst case the confirmation email just omits the pay link.
+  let invoiceUrl: string | null = null;
+  try {
+    const emailSettings = await getOrganizationEmailSettings(organizationId);
+    if (emailSettings.invoiceTiming === "at_booking") {
+      const invoice = await createInvoiceForBooking({
+        bookingId: booking.id,
+        services: legacyServices,
+        addOns: legacyAddons,
+        realtor: {
+          email: userEmail,
+          full_name: userDisplayName,
+          phone: contactPhone || null,
+          brokerage: brokerage || null,
+        },
+        property: {
+          street_address: streetAddress,
+          city: city || null,
+          postal_code: postalCode || null,
+        },
+      });
+      if (invoice.ok) {
+        invoiceUrl = invoice.invoiceUrl ?? null;
+      } else {
+        console.warn("[book] invoice auto-create skipped:", invoice.error);
+      }
+    }
+  } catch (err) {
+    console.warn("[book] invoice auto-create failed", err);
+  }
+
   // -------- Google Calendar event (best-effort) --------
   try {
     const gcal = await getGoogleCalendarClient({ organizationId });
@@ -468,6 +506,11 @@ export async function createPublicBooking(
         ${
           manageUrl
             ? `<p>Need to reschedule or cancel? <a href="${manageUrl}">Manage this booking</a>.</p>`
+            : ""
+        }
+        ${
+          invoiceUrl
+            ? `<p><strong>Billing:</strong> Your invoice is ready — <a href="${invoiceUrl}">pay your invoice online</a>.</p>`
             : ""
         }
         <p>
