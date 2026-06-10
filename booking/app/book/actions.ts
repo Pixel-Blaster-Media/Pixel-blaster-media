@@ -358,11 +358,13 @@ export async function createPublicBooking(
     }
   }
 
+  const scheduledEndAt = new Date(slotStart.getTime() + duration * 60_000);
+
   // -------- Google Calendar event (best-effort) --------
   try {
     const gcal = await getGoogleCalendarClient({ organizationId });
     if (gcal) {
-      const endAt = new Date(slotStart.getTime() + duration * 60_000);
+      const endAt = scheduledEndAt;
       const serviceLabels = validServices.map((s) => s.name).join(", ");
       const addonLabels = validAddons.map((a) => a.name).join(", ");
       const streetLine = unitNumber
@@ -427,6 +429,13 @@ export async function createPublicBooking(
     ? `${streetAddress}, Unit ${unitNumber}`
     : streetAddress;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const calendarLink = googleCalendarTemplateUrl({
+    title: `${organization.name} — media shoot`,
+    start: slotStart,
+    end: scheduledEndAt,
+    location: [emailAddressLine, city, postalCode].filter(Boolean).join(", "),
+    details: `Services: ${serviceLabels}${addonLabels ? `\nAdd-ons: ${addonLabels}` : ""}`,
+  });
 
   await Promise.all([
     sendEmail({
@@ -442,6 +451,7 @@ export async function createPublicBooking(
           <strong>Services:</strong> ${escapeHtml(serviceLabels)}<br>
           ${addonLabels ? `<strong>Add-ons:</strong> ${escapeHtml(addonLabels)}<br>` : ""}
         </p>
+        <p><a href="${calendarLink}">Add this shoot to your Google Calendar</a></p>
         <p>
           ${
             signedInToPortal
@@ -479,6 +489,10 @@ export async function createPublicBooking(
     const params = new URLSearchParams({
       address: emailAddressLine,
       when: whenLabel,
+      start: slotStart.toISOString(),
+      end: scheduledEndAt.toISOString(),
+      services: serviceLabels,
+      org: organization.name,
     });
     redirect(`/book/success?${params.toString()}`);
   }
@@ -487,6 +501,29 @@ export async function createPublicBooking(
 }
 
 // -------- Helpers --------
+
+/**
+ * "Add to Google Calendar" template link — no API access needed; it
+ * opens a prefilled event the realtor can save into their own calendar.
+ */
+function googleCalendarTemplateUrl(args: {
+  title: string;
+  start: Date;
+  end: Date;
+  location: string;
+  details: string;
+}): string {
+  const fmt = (d: Date) =>
+    d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: args.title,
+    dates: `${fmt(args.start)}/${fmt(args.end)}`,
+    location: args.location,
+    details: args.details,
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
 
 interface ResolveUserOk {
   ok: true;

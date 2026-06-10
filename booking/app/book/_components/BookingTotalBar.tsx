@@ -73,8 +73,13 @@ export default function BookingTotalBar({
           </div>
           {overageRows.length > 0 ? (
             <p className="mt-1 text-[11px] leading-relaxed text-realtor-primary">
-              Includes sqft adjustment for{" "}
-              {overageRows.map((row) => row.item.name).join(", ")}.
+              {squareFootage?.toLocaleString()} sqft home:{" "}
+              {overageRows
+                .map(
+                  (row) =>
+                    `${row.item.name} +$${(row.price.overageCents / 100).toFixed(0)}`,
+                )
+                .join(", ")}
             </p>
           ) : note ? (
             <p className="mt-1 text-[11px] leading-relaxed text-realtor-muted">

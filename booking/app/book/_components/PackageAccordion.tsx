@@ -25,12 +25,14 @@ export default function PackageAccordion({
   addons,
   selectedSlugs,
   selectedAddOnSlugs,
+  squareFootage,
 }: {
   bundles: CatalogItemDTO[];
   aLaCarte: CatalogItemDTO[];
   addons: CatalogItemDTO[];
   selectedSlugs: string[];
   selectedAddOnSlugs: string[];
+  squareFootage: number | null;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -184,10 +186,12 @@ export default function PackageAccordion({
                     <div className="flex shrink-0 items-start gap-3">
                       <div className="rounded-2xl bg-white px-3 py-2 text-right ring-1 ring-realtor-primary/20">
                         <p className="text-lg font-semibold text-realtor-text md:text-xl">
-                          ${(b.price_cents / 100).toFixed(0)}
+                          ${(priceForSqft(b, squareFootage) / 100).toFixed(0)}
                         </p>
                         <p className="text-[11px] uppercase tracking-wider text-realtor-muted">
-                          {formatMinutes(b.duration_minutes)}
+                          {priceForSqft(b, squareFootage) !== b.price_cents
+                            ? `${squareFootage?.toLocaleString()} sqft`
+                            : formatMinutes(b.duration_minutes)}
                         </p>
                       </div>
                       <span
@@ -374,10 +378,14 @@ export default function PackageAccordion({
         items={[...bundles, ...aLaCarte, ...addons]}
         selectedSlugs={selectedSlugs}
         selectedAddOnSlugs={selectedAddOnSlugs}
-        squareFootage={null}
+        squareFootage={squareFootage}
         href={continueHref}
         ctaLabel="Continue"
-        note="Square footage adjustments appear after property details."
+        note={
+          squareFootage
+            ? undefined
+            : "Square footage adjustments appear after property details."
+        }
       />
     </div>
   );
@@ -537,6 +545,27 @@ function formatMinutes(minutes: number): string {
   const hours = minutes / 60;
   if (Number.isInteger(hours)) return `${hours}h`;
   return `${Math.floor(hours)}h ${minutes % 60}min`;
+}
+
+/**
+ * Same overage math as BookingTotalBar/getPrice: once we know the
+ * property's square footage (returning from step 2), package cards show
+ * the price the realtor will actually pay instead of the base price.
+ */
+function priceForSqft(item: CatalogItemDTO, squareFootage: number | null): number {
+  if (
+    !item.sqft_pricing_enabled ||
+    !item.included_sqft ||
+    !item.overage_increment_sqft ||
+    !item.overage_price_cents ||
+    !squareFootage ||
+    squareFootage <= item.included_sqft
+  ) {
+    return item.price_cents;
+  }
+  const overageSqft = squareFootage - item.included_sqft;
+  const overageUnits = Math.ceil(overageSqft / item.overage_increment_sqft);
+  return item.price_cents + overageUnits * item.overage_price_cents;
 }
 
 function sqftRuleText(item: CatalogItemDTO): string | null {
