@@ -353,13 +353,11 @@ export default async function BookingDetailPage({
         </div>
         <div className="mt-4 grid gap-2 md:grid-cols-3">
           <SummaryStat label="Ready links" value={`${readyDeliverables.length}`} />
-          <SummaryStat
-            label="Realtor"
-            value={profile?.full_name ?? profile?.email ?? "Unknown"}
-          />
-          <SummaryStat
-            label="Services"
-            value={booking.services.map(labelForService).join(", ") || "—"}
+          <ContactSummary profile={profile} />
+          <ServicesSummary
+            services={booking.services.map(labelForService)}
+            bookingId={booking.id}
+            fullAddress={fullAddress}
           />
         </div>
       </header>
@@ -765,6 +763,89 @@ function SummaryStat({ label, value }: { label: string; value: string }) {
         {label}
       </p>
       <p className="mt-1 truncate text-sm font-semibold text-realtor-text">{value}</p>
+    </div>
+  );
+}
+
+function ContactSummary({ profile }: { profile: BookingDetail["profiles"] }) {
+  return (
+    <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+      <p className="text-[10px] uppercase tracking-wider text-realtor-muted">
+        Realtor
+      </p>
+      <div className="mt-1 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-realtor-text">
+            {profile?.full_name ?? profile?.email ?? "Unknown"}
+          </p>
+          {profile?.brokerage ? (
+            <p className="truncate text-xs text-realtor-muted">
+              {profile.brokerage}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 gap-1.5">
+          {profile?.phone ? (
+            <a
+              href={`tel:${profile.phone}`}
+              className="rounded-full bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-realtor-primary/90"
+            >
+              Call
+            </a>
+          ) : null}
+          {profile?.email ? (
+            <a
+              href={`mailto:${profile.email}`}
+              className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+            >
+              Email
+            </a>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ServicesSummary({
+  services,
+  bookingId,
+  fullAddress,
+}: {
+  services: string[];
+  bookingId: string;
+  fullAddress: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+      <p className="text-[10px] uppercase tracking-wider text-realtor-muted">
+        Services
+      </p>
+      <div className="mt-1 flex items-start justify-between gap-3">
+        <p className="min-w-0 text-sm font-semibold text-realtor-text">
+          {services.join(", ") || "—"}
+        </p>
+        <div className="flex shrink-0 gap-1.5">
+          {fullAddress ? (
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                fullAddress,
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-realtor-primary/90"
+            >
+              Map
+            </a>
+          ) : null}
+          <Link
+            href={`/admin/bookings/${bookingId}?tab=details`}
+            className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+          >
+            Open
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

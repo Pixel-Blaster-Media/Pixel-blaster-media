@@ -5,8 +5,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "Pixel Booking — Real Estate Media Platform",
-    template: "%s · Pixel Booking",
+    default: "Pixel Blaster Booking — Real Estate Media Platform",
+    template: "%s · Pixel Blaster Booking",
   },
   description:
     "Real estate media booking, delivery, listing websites, and client portals for photography companies and realtors.",
@@ -36,7 +36,7 @@ export default function RootLayout({
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-4">
             <Link href="/" className="flex shrink-0 items-center gap-2 whitespace-nowrap font-semibold">
               <span className="site-brand-primary text-white">
-                Pixel
+                Pixel Blaster
               </span>
               <span className="site-brand-accent text-brand-light">
                 Booking

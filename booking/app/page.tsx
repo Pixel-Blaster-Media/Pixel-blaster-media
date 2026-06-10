@@ -5,7 +5,7 @@ export default function Home() {
     <div className="realtor-theme space-y-10">
       <section className="mx-auto max-w-5xl py-6 text-center md:py-12">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-realtor-primary">
-          Pixel Booking
+          Pixel Blaster Booking
         </p>
         <h1 className="mx-auto mt-4 max-w-4xl text-4xl font-semibold leading-tight text-realtor-text md:text-6xl">
           A calmer booking system for real estate media teams.

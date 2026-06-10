@@ -67,6 +67,22 @@ interface DeliverableRow {
   metadata: { status?: string } | null;
 }
 
+interface DailyWeather {
+  location: string;
+  temperatureC: number | null;
+  apparentTemperatureC: number | null;
+  windKph: number | null;
+  windDirection: number | null;
+  cloudCover: number | null;
+  precipitationMm: number | null;
+  weatherCode: number | null;
+  sunrise: string | null;
+  sunset: string | null;
+  sunElevation: number | null;
+  sunAzimuth: number | null;
+  source: "shoot" | "fallback";
+}
+
 export default async function AdminTodayPage() {
   const todayKey = localDateKey(new Date());
   const start = businessDateTimeLocalToUtc(`${todayKey}T00:00`);
@@ -121,6 +137,7 @@ export default async function AdminTodayPage() {
   const routePlan = preferences.showRouteWarnings
     ? await buildRoutePlan(bookings ?? [], admin.organizationId)
     : emptyRoutePlan("v1");
+  const dailyWeather = await getDailyWeather(bookings ?? []);
 
   return (
     <div className="space-y-6">
@@ -149,6 +166,7 @@ export default async function AdminTodayPage() {
         deliverablesByBooking={deliverablesByBooking}
         preferences={preferences}
         routePlan={routePlan}
+        weather={dailyWeather}
       />
 
       {bookings && bookings.length > 0 ? (
@@ -160,6 +178,7 @@ export default async function AdminTodayPage() {
               nextRoute={routePlan.nextRoutes.get(booking.id) ?? null}
               deliverables={deliverablesByBooking.get(booking.id) ?? []}
               preferences={preferences}
+              defaultOpen={bookings.length <= 2}
             />
           ))}
         </ol>
@@ -177,11 +196,13 @@ function DailyCommandCenter({
   deliverablesByBooking,
   preferences,
   routePlan,
+  weather,
 }: {
   bookings: BookingRow[];
   deliverablesByBooking: Map<string, DeliverableRow[]>;
   preferences: TodayCommandPreferences;
   routePlan: RoutePlan;
+  weather: DailyWeather | null;
 }) {
   const nextShoot = bookings.find(
     (booking) =>
@@ -199,13 +220,6 @@ function DailyCommandCenter({
         .filter((item) => item.tasks.length > 0)
         .slice(0, 5)
     : [];
-  const memoryRows = preferences.showAgentMemory
-    ? bookings
-        .filter(
-          (booking) => booking.internal_notes || booking.profiles?.internal_notes,
-        )
-        .slice(0, 4)
-    : [];
   const routeInsights = routePlan.insights;
   const routeSummary = buildRouteSummary(routeInsights);
 
@@ -214,7 +228,7 @@ function DailyCommandCenter({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
-            Command center
+            Field overview
           </p>
           <h2 className="mt-1 text-xl font-semibold text-realtor-text">
             Today at a glance
@@ -233,6 +247,8 @@ function DailyCommandCenter({
       {preferences.showShootBrief ? <DailyAIBriefPanel /> : null}
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3">
+        <WeatherCard weather={weather} />
+
         {preferences.showDeliverables ? (
         <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
@@ -259,38 +275,6 @@ function DailyCommandCenter({
           ) : (
             <p className="mt-2 text-sm text-realtor-muted">
               Nothing urgent flagged from today&apos;s media checklist.
-            </p>
-          )}
-        </div>
-        ) : null}
-
-        {preferences.showAgentMemory ? (
-        <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
-            Agent memory
-          </p>
-          {memoryRows.length > 0 ? (
-            <div className="mt-2 space-y-2">
-              {memoryRows.map((booking) => (
-                <Link
-                  key={booking.id}
-                  href={`/admin/bookings/${booking.id}`}
-                  className="block rounded-xl border border-realtor-primary/25 bg-white/65 p-3 transition hover:border-realtor-primary/55"
-                >
-                  <span className="block text-sm font-semibold text-realtor-text">
-                    {booking.profiles?.full_name ??
-                      booking.profiles?.email ??
-                      "Realtor"}
-                  </span>
-                  <span className="mt-1 line-clamp-2 block text-xs leading-5 text-realtor-muted">
-                    {booking.internal_notes ?? booking.profiles?.internal_notes}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-realtor-muted">
-              No agent memory notes attached to today&apos;s shoots.
             </p>
           )}
         </div>
@@ -361,16 +345,90 @@ function DailyCommandCenter({
   );
 }
 
+function WeatherCard({ weather }: { weather: DailyWeather | null }) {
+  return (
+    <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
+        Weather + light
+      </p>
+      {weather ? (
+        <div className="mt-2 space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-realtor-text">
+              {weather.temperatureC != null
+                ? `${Math.round(weather.temperatureC)}°C`
+                : "Weather"}
+              {weather.weatherCode != null
+                ? ` · ${weatherLabel(weather.weatherCode)}`
+                : ""}
+            </p>
+            <p className="mt-0.5 text-xs text-realtor-muted">
+              {weather.location}
+              {weather.source === "fallback" ? " fallback" : ""}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <Metric
+              label="Wind"
+              value={
+                weather.windKph != null
+                  ? `${Math.round(weather.windKph)} km/h${windDirectionLabel(weather.windDirection)}`
+                  : "—"
+              }
+            />
+            <Metric
+              label="Clouds"
+              value={weather.cloudCover != null ? `${weather.cloudCover}%` : "—"}
+            />
+            <Metric
+              label="Sunset"
+              value={weather.sunset ? formatTime(weather.sunset) : "—"}
+            />
+            <Metric
+              label="Sun"
+              value={
+                weather.sunElevation != null
+                  ? `${Math.round(weather.sunElevation)}° ${sunPositionLabel(weather.sunElevation)}`
+                  : "—"
+              }
+            />
+          </div>
+          <p className="text-xs leading-5 text-realtor-muted">
+            {weatherInsight(weather)}
+          </p>
+        </div>
+      ) : (
+        <p className="mt-2 text-sm text-realtor-muted">
+          Weather is unavailable right now. Use the map before leaving.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-realtor-primary/10 bg-white/70 px-2 py-1.5">
+      <span className="block text-[10px] uppercase tracking-wider text-realtor-muted">
+        {label}
+      </span>
+      <span className="mt-0.5 block font-semibold text-realtor-text">{value}</span>
+    </div>
+  );
+}
+
 function ShootCard({
   booking,
   nextRoute,
   deliverables,
   preferences,
+  defaultOpen,
 }: {
   booking: BookingRow;
   nextRoute: NextRoute | null;
   deliverables: DeliverableRow[];
   preferences: TodayCommandPreferences;
+  defaultOpen: boolean;
 }) {
   const property = booking.properties;
   const profile = booking.profiles;
@@ -395,59 +453,77 @@ function ShootCard({
   ];
   const taskState = taskStates(booking, deliverables);
   const briefItems = shootBriefItems(booking, taskState, preferences);
+  const agentMemory = summarizeRealtorAIMemory(
+    parseRealtorAIMemory(profile?.ai_memory),
+  );
 
   return (
     <li className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
-            {booking.scheduled_at ? formatTime(booking.scheduled_at) : "No time"}
-            {booking.scheduled_ends_at
-              ? `-${formatTime(booking.scheduled_ends_at)}`
-              : ""}
-          </p>
-          <h2 className="mt-1 text-lg font-semibold text-realtor-text">
-            {addressLine || "Unknown address"}
-          </h2>
-          <p className="mt-0.5 text-sm text-realtor-muted">
-            {[property?.city, property?.postal_code].filter(Boolean).join(" ")}
-          </p>
-        </div>
-        <span
-          className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${status.pill}`}
-        >
-          {status.label}
-        </span>
-      </div>
+      <details className="group" open={defaultOpen}>
+        <summary className="flex cursor-pointer list-none flex-wrap items-start justify-between gap-3 [&::-webkit-details-marker]:hidden">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
+              {booking.scheduled_at ? formatTime(booking.scheduled_at) : "No time"}
+              {booking.scheduled_ends_at
+                ? `-${formatTime(booking.scheduled_ends_at)}`
+                : ""}
+            </p>
+            <h2 className="mt-1 text-lg font-semibold text-realtor-text">
+              {addressLine || "Unknown address"}
+            </h2>
+            <p className="mt-0.5 text-sm text-realtor-muted">
+              {[property?.city, property?.postal_code].filter(Boolean).join(" ")}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${status.pill}`}
+            >
+              {status.label}
+            </span>
+            <span className="rounded-full border border-realtor-primary/15 bg-white px-2 py-0.5 text-[10px] font-semibold text-realtor-muted group-open:hidden">
+              Open
+            </span>
+            <span className="hidden rounded-full border border-realtor-primary/15 bg-white px-2 py-0.5 text-[10px] font-semibold text-realtor-muted group-open:inline">
+              Close
+            </span>
+          </div>
+        </summary>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
             Realtor
           </p>
-          <p className="mt-1 text-sm font-semibold text-realtor-text">
-            {profile?.full_name ?? profile?.email ?? "Unknown"}
-          </p>
-          {profile?.brokerage ? (
-            <p className="text-xs text-realtor-muted">{profile.brokerage}</p>
-          ) : null}
-          <div className="mt-3 flex flex-wrap gap-2">
-            {profile?.phone ? (
-              <a
-                href={`tel:${profile.phone}`}
-                className="rounded-full bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-realtor-primary/90"
-              >
-                Call
-              </a>
-            ) : null}
-            {profile?.email ? (
-              <a
-                href={`mailto:${profile.email}`}
-                className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
-              >
-                Email
-              </a>
-            ) : null}
+          <div className="mt-1 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-realtor-text">
+                {profile?.full_name ?? profile?.email ?? "Unknown"}
+              </p>
+              {profile?.brokerage ? (
+                <p className="truncate text-xs text-realtor-muted">
+                  {profile.brokerage}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex shrink-0 gap-1.5">
+              {profile?.phone ? (
+                <a
+                  href={`tel:${profile.phone}`}
+                  className="rounded-full bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-realtor-primary/90"
+                >
+                  Call
+                </a>
+              ) : null}
+              {profile?.email ? (
+                <a
+                  href={`mailto:${profile.email}`}
+                  className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+                >
+                  Email
+                </a>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -455,42 +531,33 @@ function ShootCard({
           <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
             Services
           </p>
-          <p className="mt-1 text-sm text-realtor-text">
-            {services.length ? services.join(", ") : "No services listed"}
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {fullAddress ? (
-              <a
-                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                  fullAddress,
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-full bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-realtor-primary/90"
+          <div className="mt-1 flex items-start justify-between gap-3">
+            <p className="min-w-0 text-sm text-realtor-text">
+              {services.length ? services.join(", ") : "No services listed"}
+            </p>
+            <div className="flex shrink-0 gap-1.5">
+              {fullAddress ? (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                    fullAddress,
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-full bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-realtor-primary/90"
+                >
+                  Map
+                </a>
+              ) : null}
+              <Link
+                href={`/admin/bookings/${booking.id}`}
+                className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
               >
-                Map
-              </a>
-            ) : null}
-            <Link
-              href={`/admin/bookings/${booking.id}`}
-              className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
-            >
-              Open booking
-            </Link>
+                Open
+              </Link>
+            </div>
           </div>
         </div>
       </div>
-
-      {preferences.showBookingNotes && (booking.client_notes || booking.internal_notes) ? (
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          {booking.client_notes ? (
-            <NoteBlock title="Realtor notes" body={booking.client_notes} />
-          ) : null}
-          {booking.internal_notes ? (
-            <NoteBlock title="Internal notes" body={booking.internal_notes} />
-          ) : null}
-        </div>
-      ) : null}
 
       {preferences.showShootBrief ? (
       <div className="mt-3 rounded-2xl border border-realtor-primary/20 bg-realtor-primary/10 p-3">
@@ -569,18 +636,49 @@ function ShootCard({
           Delivery
         </Link>
       </div>
+
+      {preferences.showBookingNotes &&
+      (booking.client_notes || booking.internal_notes) ? (
+        <div className="mt-4 space-y-2">
+          {booking.client_notes ? (
+            <NoteDisclosure title="Realtor notes" body={booking.client_notes} />
+          ) : null}
+          {booking.internal_notes ? (
+            <NoteDisclosure title="Internal notes" body={booking.internal_notes} />
+          ) : null}
+        </div>
+      ) : null}
+
+      {preferences.showAgentMemory &&
+      (profile?.internal_notes || agentMemory.length > 0) ? (
+        <div className="mt-2 space-y-2">
+          {profile?.internal_notes ? (
+            <NoteDisclosure title="Agent memory notes" body={profile.internal_notes} />
+          ) : null}
+          {agentMemory.length > 0 ? (
+            <NoteDisclosure title="AI memory" body={agentMemory.join("\n")} />
+          ) : null}
+        </div>
+      ) : null}
+      </details>
     </li>
   );
 }
 
-function NoteBlock({ title, body }: { title: string; body: string }) {
+function NoteDisclosure({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
-      <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
+    <details className="group rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wider text-realtor-muted [&::-webkit-details-marker]:hidden">
         {title}
-      </p>
+        <span className="rounded-full border border-realtor-primary/15 bg-white px-2 py-0.5 text-[10px] normal-case tracking-normal text-realtor-muted group-open:hidden">
+          Show
+        </span>
+        <span className="hidden rounded-full border border-realtor-primary/15 bg-white px-2 py-0.5 text-[10px] normal-case tracking-normal text-realtor-muted group-open:inline">
+          Hide
+        </span>
+      </summary>
       <p className="mt-1 whitespace-pre-wrap text-sm text-realtor-muted">{body}</p>
-    </div>
+    </details>
   );
 }
 
@@ -638,6 +736,228 @@ function chip(label: string, state: "done" | "pending" | "todo") {
         ? "border-amber-300 bg-amber-50 text-amber-800"
         : "border-realtor-primary/15 bg-white/65 text-realtor-muted";
   return { label, className, state };
+}
+
+async function getDailyWeather(
+  bookings: BookingRow[],
+): Promise<DailyWeather | null> {
+  const target =
+    bookings.find(
+      (booking) =>
+        booking.scheduled_at &&
+        new Date(booking.scheduled_at).getTime() >= Date.now(),
+    ) ??
+    bookings[0] ??
+    null;
+  const fallback = {
+    latitude: 43.2557,
+    longitude: -79.8711,
+    label: "Hamilton, ON",
+    source: "fallback" as const,
+  };
+  const place = target ? await geocodeBookingArea(target) : null;
+  const coords = place ?? fallback;
+  const params = new URLSearchParams({
+    latitude: String(coords.latitude),
+    longitude: String(coords.longitude),
+    current:
+      "temperature_2m,apparent_temperature,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m",
+    daily: "sunrise,sunset",
+    timezone: BUSINESS_TZ,
+    forecast_days: "1",
+  });
+
+  try {
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, {
+      next: { revalidate: 900 },
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      current?: {
+        temperature_2m?: number;
+        apparent_temperature?: number;
+        precipitation?: number;
+        weather_code?: number;
+        cloud_cover?: number;
+        wind_speed_10m?: number;
+        wind_direction_10m?: number;
+      };
+      daily?: {
+        sunrise?: string[];
+        sunset?: string[];
+      };
+    };
+    const sun = sunPosition({
+      date: new Date(),
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+    });
+    return {
+      location: coords.label,
+      temperatureC: numeric(json.current?.temperature_2m),
+      apparentTemperatureC: numeric(json.current?.apparent_temperature),
+      windKph: numeric(json.current?.wind_speed_10m),
+      windDirection: numeric(json.current?.wind_direction_10m),
+      cloudCover: numeric(json.current?.cloud_cover),
+      precipitationMm: numeric(json.current?.precipitation),
+      weatherCode: numeric(json.current?.weather_code),
+      sunrise: json.daily?.sunrise?.[0] ?? null,
+      sunset: json.daily?.sunset?.[0] ?? null,
+      sunElevation: sun.elevation,
+      sunAzimuth: sun.azimuth,
+      source: coords.source,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function geocodeBookingArea(
+  booking: BookingRow,
+): Promise<{
+  latitude: number;
+  longitude: number;
+  label: string;
+  source: "shoot";
+} | null> {
+  const city = booking.properties?.city?.trim();
+  const province = booking.properties?.province?.trim() ?? "ON";
+  const query = [city, province, "Canada"].filter(Boolean).join(", ");
+  if (!city) return null;
+
+  try {
+    const params = new URLSearchParams({
+      name: query,
+      count: "1",
+      language: "en",
+      format: "json",
+    });
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?${params}`, {
+      next: { revalidate: 86400 },
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      results?: Array<{
+        latitude?: number;
+        longitude?: number;
+        name?: string;
+        admin1?: string;
+      }>;
+    };
+    const result = json.results?.[0];
+    if (
+      typeof result?.latitude !== "number" ||
+      typeof result.longitude !== "number"
+    ) {
+      return null;
+    }
+    return {
+      latitude: result.latitude,
+      longitude: result.longitude,
+      label: [result.name, result.admin1].filter(Boolean).join(", ") || city,
+      source: "shoot",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function numeric(value: number | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function weatherLabel(code: number): string {
+  if (code === 0) return "Clear";
+  if (code <= 3) return "Partly cloudy";
+  if (code <= 48) return "Fog";
+  if (code <= 67) return "Rain";
+  if (code <= 77) return "Snow";
+  if (code <= 82) return "Showers";
+  if (code <= 99) return "Storm risk";
+  return "Forecast";
+}
+
+function weatherInsight(weather: DailyWeather): string {
+  const parts: string[] = [];
+  if ((weather.windKph ?? 0) >= 28) {
+    parts.push("Wind may affect drone work and exterior audio.");
+  } else if ((weather.windKph ?? 0) >= 18) {
+    parts.push("Breezy enough to watch drone stability.");
+  }
+  if ((weather.precipitationMm ?? 0) > 0) {
+    parts.push("Rain is showing in the forecast, so exterior timing matters.");
+  }
+  if ((weather.cloudCover ?? 0) >= 75) {
+    parts.push("Cloud cover should soften exterior contrast.");
+  }
+  if (weather.sunset) {
+    parts.push(`Golden hour starts roughly around ${formatTime(addMinutes(weather.sunset, -90))}.`);
+  }
+  return parts.length
+    ? parts.join(" ")
+    : "Conditions look straightforward. Still check the sky before exterior and drone work.";
+}
+
+function windDirectionLabel(degrees: number | null): string {
+  if (degrees == null) return "";
+  const labels = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  return ` ${labels[Math.round(degrees / 45) % 8]}`;
+}
+
+function sunPositionLabel(elevation: number): string {
+  if (elevation < 0) return "below horizon";
+  if (elevation < 12) return "low";
+  if (elevation < 35) return "mid";
+  return "high";
+}
+
+function sunPosition({
+  date,
+  latitude,
+  longitude,
+}: {
+  date: Date;
+  latitude: number;
+  longitude: number;
+}): { elevation: number; azimuth: number } {
+  const rad = Math.PI / 180;
+  const dayMs = 86400000;
+  const julianDate = date.getTime() / dayMs + 2440587.5;
+  const daysSinceJ2000 = julianDate - 2451545;
+  const meanAnomaly = rad * (357.5291 + 0.98560028 * daysSinceJ2000);
+  const equationOfCenter =
+    rad *
+    (1.9148 * Math.sin(meanAnomaly) +
+      0.02 * Math.sin(2 * meanAnomaly) +
+      0.0003 * Math.sin(3 * meanAnomaly));
+  const eclipticLongitude =
+    meanAnomaly + equationOfCenter + rad * 102.9372 + Math.PI;
+  const declination = Math.asin(
+    Math.sin(eclipticLongitude) * Math.sin(rad * 23.4397),
+  );
+  const rightAscension = Math.atan2(
+    Math.sin(eclipticLongitude) * Math.cos(rad * 23.4397),
+    Math.cos(eclipticLongitude),
+  );
+  const siderealTime = rad * (280.16 + 360.9856235 * daysSinceJ2000) - longitude * rad;
+  const hourAngle = siderealTime - rightAscension;
+  const lat = latitude * rad;
+  const altitude = Math.asin(
+    Math.sin(lat) * Math.sin(declination) +
+      Math.cos(lat) * Math.cos(declination) * Math.cos(hourAngle),
+  );
+  const azimuth = Math.atan2(
+    Math.sin(hourAngle),
+    Math.cos(hourAngle) * Math.sin(lat) - Math.tan(declination) * Math.cos(lat),
+  );
+  return {
+    elevation: altitude / rad,
+    azimuth: ((azimuth / rad + 180) % 360 + 360) % 360,
+  };
+}
+
+function addMinutes(iso: string, minutes: number): string {
+  return new Date(new Date(iso).getTime() + minutes * 60000).toISOString();
 }
 
 interface RouteInsight {
