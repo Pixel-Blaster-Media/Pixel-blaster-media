@@ -215,6 +215,72 @@ export function shootConfirmedEmail({
   };
 }
 
+/**
+ * Day-before reminder sent by the /api/cron/reminders job the evening
+ * before a shoot. The goal is purely practical: make sure the property
+ * is photo-ready and someone can let the photographer in.
+ *
+ * `manageLink` is a signed self-serve link (/book/manage/[token]) so the
+ * realtor can reschedule without emailing back and forth.
+ */
+export function shootReminderEmail({
+  contactName,
+  streetAddress,
+  city,
+  timeLabel,
+  manageLink,
+  companyName = "Pixel Blaster Media",
+}: {
+  contactName: string;
+  streetAddress: string;
+  city?: string | null;
+  /** Already formatted in the business timezone, e.g. "10:30 a.m." */
+  timeLabel: string;
+  manageLink: string;
+  companyName?: string;
+}) {
+  const firstName = contactName.split(" ")[0] || contactName;
+  const address = [streetAddress, city].filter(Boolean).join(", ");
+
+  const html = `
+    <!doctype html>
+    <html><head><meta charset="utf-8"><style>${baseStyles}
+      .cta {
+        display: inline-block;
+        padding: 12px 20px;
+        margin: 8px 0 20px;
+        background: ${BRAND_TEAL};
+        color: #fff !important;
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: 600;
+      }
+    </style></head>
+    <body><div class="wrap">
+      <p><span class="pill">Shoot tomorrow</span></p>
+      <h1>See you tomorrow, ${escape(firstName)}.</h1>
+      <p>Your shoot at <strong>${escape(address)}</strong> is tomorrow at <strong>${escape(timeLabel)}</strong>.</p>
+
+      <h2>Before we arrive</h2>
+      <ul>
+        <li>Make sure the property is photo-ready — lights on, blinds open, clutter and personal items tucked away.</li>
+        <li>Arrange access: a lockbox code, someone on site, or an unlocked door.</li>
+        <li>Clear vehicles from the driveway and street frontage if possible.</li>
+      </ul>
+
+      <h2>Need to change the time?</h2>
+      <p><a href="${escape(manageLink)}" class="cta">Reschedule your shoot →</a></p>
+
+      <p class="meta">Reply to this email if anything else comes up. — ${escape(companyName)}</p>
+    </div></body></html>
+  `;
+
+  return {
+    subject: `Reminder: your shoot tomorrow at ${timeLabel} — ${streetAddress}`,
+    html,
+  };
+}
+
 export function deliveryReadyEmail({
   contactName,
   streetAddress,
