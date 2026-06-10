@@ -241,7 +241,7 @@ export default async function AdminCalendarPage({
 
           <form
             action="/admin/calendar"
-            className="flex flex-col gap-2 sm:flex-row lg:min-w-[420px]"
+            className="flex min-w-0 gap-2 lg:min-w-[420px]"
           >
             {params.week ? (
               <input type="hidden" name="week" value={weekStart} />
@@ -254,9 +254,9 @@ export default async function AdminCalendarPage({
               name="q"
               defaultValue={search}
               placeholder="Search calendar"
-              className="min-h-10 flex-1 rounded-full border border-realtor-primary/15 bg-white px-4 text-sm text-realtor-text outline-none transition placeholder:text-realtor-muted/70 focus:border-realtor-primary/45 focus:ring-2 focus:ring-realtor-primary/10"
+              className="min-h-10 min-w-0 flex-1 rounded-full border border-realtor-primary/15 bg-white px-4 text-sm text-realtor-text outline-none transition placeholder:text-realtor-muted/70 focus:border-realtor-primary/45 focus:ring-2 focus:ring-realtor-primary/10"
             />
-            <div className="flex gap-2">
+            <div className="flex shrink-0 gap-2">
               <button
                 type="submit"
                 className="min-h-10 rounded-full bg-realtor-primary px-4 text-sm font-semibold text-white transition hover:bg-realtor-primary/90"
