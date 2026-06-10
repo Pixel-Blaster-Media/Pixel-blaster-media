@@ -127,13 +127,10 @@ export default async function AdminTodayPage() {
   }
 
   const preferences = await loadTodayCommandPreferences(admin.organizationId);
-  const routePlan = preferences.showRouteWarnings
-    ? await buildRoutePlan(bookings ?? [], admin.organizationId)
-    : emptyRoutePlan("v1");
   const weatherEntries = await Promise.all(
     (bookings ?? []).map(async (booking) => [
       booking.id,
-      await getShootWeather(booking),
+      await getShootWeather(booking, admin.organizationId),
     ] as const),
   );
   const weatherByBooking = new Map(weatherEntries);
@@ -144,7 +141,6 @@ export default async function AdminTodayPage() {
         date={start}
         bookings={bookings ?? []}
         preferences={preferences}
-        routePlan={routePlan}
       />
 
       {bookings && bookings.length > 0 ? (
@@ -153,7 +149,6 @@ export default async function AdminTodayPage() {
             <ShootCard
               key={booking.id}
               booking={booking}
-              nextRoute={routePlan.nextRoutes.get(booking.id) ?? null}
               deliverables={deliverablesByBooking.get(booking.id) ?? []}
               preferences={preferences}
               defaultOpen={bookings.length <= 2}
@@ -174,23 +169,51 @@ function TodayOverview({
   date,
   bookings,
   preferences,
-  routePlan,
 }: {
   date: Date;
   bookings: BookingRow[];
   preferences: TodayCommandPreferences;
-  routePlan: RoutePlan;
 }) {
-  const nextShoot = bookings.find(
-    (booking) =>
-      booking.scheduled_at && new Date(booking.scheduled_at).getTime() >= Date.now(),
+  const timed = timedBookings(bookings);
+  const routeHref =
+    googleDayRouteHref(timed) ?? (timed[0] ? googleMapHref(timed[0]) : undefined);
+  const firstStart = timed[0]?.scheduled_at ?? null;
+  const lastEnd =
+    [...timed].reverse().find((booking) => booking.scheduled_ends_at)
+      ?.scheduled_ends_at ??
+    timed[timed.length - 1]?.scheduled_at ??
+    null;
+  const cities = Array.from(
+    new Set(
+      timed
+        .map((booking) => booking.properties?.city?.trim())
+        .filter((city): city is string => Boolean(city)),
+    ),
   );
-  const routeInsights = routePlan.insights;
-  const routeSummary = buildRouteSummary(routeInsights);
+  const actionButtons = (
+    <>
+      <Link
+        href="/admin/calendar"
+        className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+      >
+        Calendar
+      </Link>
+      {routeHref ? (
+        <a
+          href={routeHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+        >
+          Open route
+        </a>
+      ) : null}
+    </>
+  );
 
   return (
     <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
             {formatFullDate(date)}
@@ -199,111 +222,40 @@ function TodayOverview({
             Today at a glance
           </h1>
           <p className="mt-2 text-sm text-realtor-muted">
-            Shoot-day controls, route status, and a quick brief when you need one.
+            Shoot-day controls and a quick brief when you need one.
           </p>
         </div>
-        <Link
-          href="/admin/calendar"
-          className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
-        >
-          Calendar
-        </Link>
       </div>
 
-      {preferences.showShootBrief ? <DailyAIBriefPanel /> : null}
+      {preferences.showShootBrief ? (
+        <DailyAIBriefPanel actions={actionButtons} />
+      ) : (
+        <div className="mt-4 flex flex-wrap gap-2">{actionButtons}</div>
+      )}
 
-      <div className="mt-4 grid gap-3 md:grid-cols-3">
-        <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
-            Shoots
-          </p>
-          <p className="mt-1 text-lg font-semibold text-realtor-text">
-            {bookings.length}
-          </p>
-          <p className="mt-0.5 text-xs text-realtor-muted">
-            {bookings.length === 1 ? "shoot today" : "shoots today"}
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
-            Next
-          </p>
-          {nextShoot ? (
-            <Link
-              href={`/admin/bookings/${nextShoot.id}`}
-              className="mt-1 block text-sm font-semibold text-realtor-text transition hover:text-realtor-primary"
-            >
-              {nextShoot.scheduled_at ? formatTime(nextShoot.scheduled_at) : "No time"}
-              <span className="mt-0.5 block truncate text-xs font-normal text-realtor-muted">
-                {nextShoot.properties?.street_address ?? "Unknown address"}
-              </span>
-            </Link>
-          ) : (
-            <p className="mt-1 text-sm text-realtor-muted">No upcoming shoots.</p>
-          )}
-        </div>
-
-        {preferences.showRouteWarnings ? (
-        <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
-            Routes
-          </p>
-          <p className="mt-1 text-xs text-realtor-muted">
-            {routeSummary.label}{" "}
-            <span className="text-realtor-muted/70">
-              {routePlan.mode === "v2"
-                ? "Using Google drive-time."
-                : "Using V1 schedule checks."}
-            </span>
-          </p>
-          {routeInsights.length > 0 ? (
-            <div className="mt-2 space-y-2">
-              {routeInsights.map((insight) => (
-                <div
-                  key={insight.key}
-                  className={`rounded-xl border p-3 ${
-                    insight.level === "danger"
-                      ? "border-red-200 bg-red-50"
-                      : insight.level === "warning"
-                      ? "border-amber-200 bg-amber-50"
-                      : "border-realtor-primary/15 bg-white/65"
-                  }`}
-                >
-                  <p className="text-sm font-semibold text-realtor-text">
-                    {insight.title}
-                  </p>
-                  <p className="mt-1 text-xs text-realtor-muted">{insight.body}</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {insight.badges.map((badge) => (
-                      <span
-                        key={badge}
-                        className="rounded-full border border-realtor-primary/15 bg-white/65 px-2 py-0.5 text-[10px] font-semibold text-realtor-muted"
-                      >
-                        {badge}
-                      </span>
-                    ))}
-                  </div>
-                  {insight.href ? (
-                    <a
-                      href={insight.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-2 inline-flex rounded-full border border-realtor-primary/20 bg-white px-2.5 py-1 text-[11px] font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
-                    >
-                      Open route
-                    </a>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-realtor-muted">
-              No route warnings for the current schedule.
+      <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
+              {bookings.length === 1
+                ? "One shoot today"
+                : `${bookings.length} shoots today`}
             </p>
-          )}
+            <p className="mt-1 text-sm font-semibold text-realtor-text">
+              {cities.length ? cities.join(" → ") : "No city listed"}
+            </p>
+            <p className="mt-0.5 text-xs text-realtor-muted">
+              {bookings.length === 0
+                ? "Nothing scheduled yet."
+                : `${firstStart ? `Starts ${formatTime(firstStart)}` : "Start time TBD"} · ${
+                    lastEnd ? `Ends ${formatTime(lastEnd)}` : "End time TBD"
+                  }`}
+            </p>
+          </div>
+          <span className="rounded-full border border-realtor-primary/15 bg-white px-2.5 py-1 text-xs font-semibold text-realtor-muted">
+            {bookings.length}
+          </span>
         </div>
-        ) : null}
       </div>
     </section>
   );
@@ -311,14 +263,12 @@ function TodayOverview({
 
 function ShootCard({
   booking,
-  nextRoute,
   deliverables,
   preferences,
   defaultOpen,
   weather,
 }: {
   booking: BookingRow;
-  nextRoute: NextRoute | null;
   deliverables: DeliverableRow[];
   preferences: TodayCommandPreferences;
   defaultOpen: boolean;
@@ -468,35 +418,6 @@ function ShootCard({
           ))}
         </ul>
       </div>
-      ) : null}
-
-      {nextRoute ? (
-        <div
-          className={`mt-3 rounded-2xl border p-3 ${
-            nextRoute.level === "danger"
-              ? "border-red-200 bg-red-50"
-              : nextRoute.level === "warning"
-                ? "border-amber-200 bg-amber-50"
-                : "border-realtor-primary/15 bg-white/65"
-          }`}
-        >
-          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
-            Route to next shoot
-          </p>
-          <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm text-realtor-text">{nextRoute.label}</p>
-            {nextRoute.href ? (
-              <a
-                href={nextRoute.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
-              >
-                Open route
-              </a>
-            ) : null}
-          </div>
-        </div>
       ) : null}
 
       {preferences.showDeliverables ? (
@@ -669,9 +590,10 @@ function chip(label: string, state: "done" | "pending" | "todo") {
 
 async function getShootWeather(
   booking: BookingRow,
+  organizationId: string,
 ): Promise<ShootWeather | null> {
   if (!booking.scheduled_at) return null;
-  const coords = await geocodeBookingArea(booking);
+  const coords = await geocodeBookingArea(booking, organizationId);
   if (!coords) return null;
   const params = new URLSearchParams({
     latitude: String(coords.latitude),
@@ -679,7 +601,7 @@ async function getShootWeather(
     hourly:
       "temperature_2m,precipitation_probability,weather_code,cloud_cover,wind_speed_10m",
     timezone: BUSINESS_TZ,
-    forecast_days: "1",
+    forecast_days: "2",
   });
 
   try {
@@ -717,6 +639,7 @@ async function getShootWeather(
 
 async function geocodeBookingArea(
   booking: BookingRow,
+  organizationId: string,
 ): Promise<{
   latitude: number;
   longitude: number;
@@ -725,19 +648,116 @@ async function geocodeBookingArea(
 } | null> {
   const city = booking.properties?.city?.trim();
   const province = booking.properties?.province?.trim() ?? "ON";
-  const query = [city, province, "Canada"].filter(Boolean).join(", ");
-  if (!city) return null;
+  const address = fullAddress(booking);
+  const googleCoords = await geocodeWithGoogle(address, organizationId);
+  if (googleCoords) return googleCoords;
+
+  const queries = [city].filter(
+    (query, index, list): query is string =>
+      Boolean(query) && list.indexOf(query) === index,
+  );
+
+  for (const query of queries) {
+    const coords = await geocodeWithOpenMeteo(query, province);
+    if (coords) return coords;
+  }
+
+  return null;
+}
+
+async function geocodeWithGoogle(
+  address: string,
+  organizationId: string,
+): Promise<{
+  latitude: number;
+  longitude: number;
+  label: string;
+  source: "shoot";
+} | null> {
+  if (!address) return null;
+  const apiKey =
+    (await getCredential(
+      "google_maps",
+      "api_key",
+      "GOOGLE_MAPS_SERVER_API_KEY",
+      organizationId,
+    )) ??
+    process.env.GOOGLE_ROUTES_API_KEY?.trim() ??
+    null;
+  if (!apiKey) return null;
 
   try {
     const params = new URLSearchParams({
+      address,
+      key: apiKey,
+    });
+    const res = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?${params}`,
+      { next: { revalidate: 86400 } },
+    );
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      status?: string;
+      results?: Array<{
+        formatted_address?: string;
+        geometry?: { location?: { lat?: number; lng?: number } };
+        address_components?: Array<{
+          long_name?: string;
+          types?: string[];
+        }>;
+      }>;
+    };
+    const result = json.results?.[0];
+    const latitude = result?.geometry?.location?.lat;
+    const longitude = result?.geometry?.location?.lng;
+    if (
+      json.status !== "OK" ||
+      typeof latitude !== "number" ||
+      typeof longitude !== "number"
+    ) {
+      return null;
+    }
+    const locality =
+      result?.address_components?.find((component) =>
+        component.types?.includes("locality"),
+      )?.long_name ??
+      result?.address_components?.find((component) =>
+        component.types?.includes("postal_town"),
+      )?.long_name ??
+      result?.address_components?.find((component) =>
+        component.types?.includes("administrative_area_level_3"),
+      )?.long_name;
+    return {
+      latitude,
+      longitude,
+      label: locality ?? result?.formatted_address ?? "Shoot location",
+      source: "shoot",
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function geocodeWithOpenMeteo(
+  query: string,
+  province: string,
+): Promise<{
+  latitude: number;
+  longitude: number;
+  label: string;
+  source: "shoot";
+} | null> {
+  try {
+    const params = new URLSearchParams({
       name: query,
-      count: "1",
+      count: "5",
       language: "en",
       format: "json",
     });
-    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?${params}`, {
-      next: { revalidate: 86400 },
-    });
+    const res = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?${params}`,
+      { next: { revalidate: 86400 } },
+    );
     if (!res.ok) return null;
     const json = (await res.json()) as {
       results?: Array<{
@@ -745,9 +765,18 @@ async function geocodeBookingArea(
         longitude?: number;
         name?: string;
         admin1?: string;
+        country_code?: string;
       }>;
     };
-    const result = json.results?.[0];
+    const provinceKey = normalize(province);
+    const result =
+      json.results?.find(
+        (entry) =>
+          entry.country_code === "CA" &&
+          (!provinceKey || normalize(entry.admin1) === provinceKey),
+      ) ??
+      json.results?.find((entry) => entry.country_code === "CA") ??
+      json.results?.[0];
     if (
       typeof result?.latitude !== "number" ||
       typeof result.longitude !== "number"
@@ -757,7 +786,7 @@ async function geocodeBookingArea(
     return {
       latitude: result.latitude,
       longitude: result.longitude,
-      label: [result.name, result.admin1].filter(Boolean).join(", ") || city,
+      label: [result.name, result.admin1].filter(Boolean).join(", ") || query,
       source: "shoot",
     };
   } catch {
@@ -1244,6 +1273,25 @@ function googleRouteHref(from: BookingRow, to: BookingRow): string | undefined {
     destination,
     travelmode: "driving",
   });
+  return `https://www.google.com/maps/dir/?${qs.toString()}`;
+}
+
+function googleDayRouteHref(bookings: BookingRow[]): string | undefined {
+  const addresses = bookings.map(fullAddress).filter(Boolean);
+  if (addresses.length === 0) return undefined;
+  if (addresses.length === 1) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      addresses[0],
+    )}`;
+  }
+  const qs = new URLSearchParams({
+    api: "1",
+    origin: addresses[0],
+    destination: addresses[addresses.length - 1],
+    travelmode: "driving",
+  });
+  const waypoints = addresses.slice(1, -1);
+  if (waypoints.length > 0) qs.set("waypoints", waypoints.join("|"));
   return `https://www.google.com/maps/dir/?${qs.toString()}`;
 }
 

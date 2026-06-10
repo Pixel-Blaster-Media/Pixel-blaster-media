@@ -54,7 +54,7 @@ export default async function AdminLayout({
         />
       </div>
 
-      <aside className="hidden space-y-4 md:sticky md:top-16 md:block md:self-start">
+      <aside className="hidden space-y-4 md:sticky md:top-4 md:block md:self-start">
         <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 text-sm shadow-lg shadow-realtor-text/10">
           {brand ? (
             <div className="mb-4 flex items-center gap-3 rounded-xl bg-realtor-primary/5 p-2 ring-1 ring-realtor-primary/10">
