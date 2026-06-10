@@ -315,7 +315,6 @@ function ShootCard({
             <p className="mt-0.5 text-sm text-realtor-muted">
               {[property?.city, property?.postal_code].filter(Boolean).join(" ")}
             </p>
-            <ShootWeatherChips weather={weather} />
           </div>
           <div className="absolute right-0 top-0 flex items-center gap-2 md:static">
             <span
@@ -331,6 +330,7 @@ function ShootCard({
             </span>
           </div>
         </summary>
+        <ShootWeatherChips weather={weather} />
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
@@ -497,28 +497,30 @@ function NoteDisclosure({ title, body }: { title: string; body: string }) {
 
 function ShootWeatherChips({ weather }: { weather: ShootWeather | null }) {
   if (!weather) return null;
-  const chips = [
+  const condition =
     weather.temperatureC != null
-      ? `${Math.round(weather.temperatureC)}°C${weather.weatherCode != null ? ` · ${weatherLabel(weather.weatherCode)}` : ""}`
+      ? `${Math.round(weather.temperatureC)}°${weather.weatherCode != null ? ` ${shortWeatherLabel(weather.weatherCode)}` : ""}`
       : weather.weatherCode != null
-        ? weatherLabel(weather.weatherCode)
-        : null,
-    weather.windKph != null ? `Wind ${Math.round(weather.windKph)} km/h` : null,
-    weather.cloudCover != null ? `Clouds ${weather.cloudCover}%` : null,
+        ? shortWeatherLabel(weather.weatherCode)
+        : null;
+  const chips = [
+    condition,
+    weather.windKph != null ? `${Math.round(weather.windKph)} km/h wind` : null,
+    weather.cloudCover != null ? `${weather.cloudCover}% clouds` : null,
     weather.precipitationProbability != null
-      ? `Rain ${weather.precipitationProbability}%`
+      ? `${weather.precipitationProbability}% rain`
       : null,
   ].filter((chip): chip is string => Boolean(chip));
 
   if (!chips.length) return null;
 
   return (
-    <div className="mt-2 max-w-full overflow-x-auto">
-      <div className="inline-flex whitespace-nowrap rounded-full border border-realtor-primary/15 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-realtor-muted">
+    <div className="mt-2 max-w-full">
+      <div className="flex w-full min-w-0 items-center overflow-hidden rounded-full border border-realtor-primary/15 bg-white/70 px-2 py-0.5 text-[10px] font-medium text-realtor-muted sm:w-fit sm:text-[11px]">
       {chips.map((chip) => (
         <span
           key={chip}
-          className="after:mx-1.5 after:text-realtor-muted/40 after:content-['•'] last:after:hidden"
+          className="min-w-0 shrink truncate after:mx-1 after:text-realtor-muted/40 after:content-['•'] last:after:hidden sm:after:mx-1.5"
         >
           {chip}
         </span>
@@ -526,6 +528,18 @@ function ShootWeatherChips({ weather }: { weather: ShootWeather | null }) {
       </div>
     </div>
   );
+}
+
+function shortWeatherLabel(code: number): string {
+  if (code === 0) return "clear";
+  if (code <= 3) return "cloudy";
+  if (code <= 48) return "fog";
+  if (code <= 67) return "rain";
+  if (code <= 77) return "snow";
+  if (code <= 82) return "showers";
+  if (code <= 86) return "snow";
+  if (code <= 99) return "storm";
+  return "weather";
 }
 
 function taskStates(
