@@ -662,7 +662,6 @@ body:has(.realtor-theme) .site-header,
 body:has(.realtor-theme) .site-footer,
 body:has(.auth-earth) .site-header,
 body:has(.auth-earth) .site-footer,
-body:has(.admin-earth) .site-header,
 body:has(.admin-earth) .site-footer {
   border-color: var(--realtor-border);
   background: rgba(255, 255, 255, 0.82);
@@ -671,19 +670,25 @@ body:has(.admin-earth) .site-footer {
 
 body:has(.realtor-theme) .site-brand-primary,
 body:has(.realtor-theme) .site-nav a:hover,
+body:has(.realtor-theme) .site-nav button:hover,
 body:has(.auth-earth) .site-brand-primary,
 body:has(.auth-earth) .site-nav a:hover,
+body:has(.auth-earth) .site-nav button:hover,
 body:has(.admin-earth) .site-brand-primary,
-body:has(.admin-earth) .site-nav a:hover {
+body:has(.admin-earth) .site-nav a:hover,
+body:has(.admin-earth) .site-nav button:hover {
   color: var(--realtor-text);
 }
 
 body:has(.realtor-theme) .site-brand-accent,
 body:has(.realtor-theme) .site-nav a,
+body:has(.realtor-theme) .site-nav button,
 body:has(.auth-earth) .site-brand-accent,
 body:has(.auth-earth) .site-nav a,
+body:has(.auth-earth) .site-nav button,
 body:has(.admin-earth) .site-brand-accent,
-body:has(.admin-earth) .site-nav a {
+body:has(.admin-earth) .site-nav a,
+body:has(.admin-earth) .site-nav button {
   color: var(--realtor-primary);
 }
 
@@ -804,7 +809,6 @@ body:has(.admin-earth) .site-main {
   padding: 0;
 }
 
-body:has(.admin-earth) .site-header,
 body:has(.admin-earth) .site-footer {
   display: none;
 }
