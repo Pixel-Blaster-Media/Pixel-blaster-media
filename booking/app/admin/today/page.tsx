@@ -73,7 +73,7 @@ export default async function AdminTodayPage() {
   const end = businessDateTimeLocalToUtc(`${addDaysKey(todayKey, 1)}T00:00`);
 
   if (!start || !end) {
-    return <p className="text-sm text-red-300">Could not build today view.</p>;
+    return <p className="text-sm text-red-700">Could not build today view.</p>;
   }
 
   const admin = await requireAdmin();
@@ -93,7 +93,7 @@ export default async function AdminTodayPage() {
 
   if (error) {
     return (
-      <p className="text-sm text-red-300">
+      <p className="text-sm text-red-700">
         Could not load today&apos;s shoots: {error.message}
       </p>
     );
@@ -124,20 +124,20 @@ export default async function AdminTodayPage() {
 
   return (
     <div className="space-y-6">
-      <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
+      <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
         <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+          <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
             {formatFullDate(start)}
           </p>
-          <h1 className="mt-1 text-2xl font-bold text-white">Today</h1>
-          <p className="mt-2 text-sm text-ink-muted">
+          <h1 className="mt-1 text-2xl font-bold text-realtor-text">Today</h1>
+          <p className="mt-2 text-sm text-realtor-muted">
             Shoot-day view for addresses, contacts, notes, and upload tasks.
           </p>
         </div>
         <Link
           href="/admin/calendar"
-          className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-ink-muted transition hover:border-white/30 hover:text-white"
+          className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
         >
           Calendar
         </Link>
@@ -164,7 +164,7 @@ export default async function AdminTodayPage() {
           ))}
         </ol>
       ) : (
-        <p className="rounded-2xl border border-dashed border-white/10 bg-ink-soft/40 px-4 py-8 text-center text-sm text-ink-muted">
+        <p className="rounded-2xl border border-dashed border-realtor-primary/15 bg-realtor-surface/60 px-4 py-8 text-center text-sm text-realtor-muted">
           No shoots scheduled today.
         </p>
       )}
@@ -210,20 +210,20 @@ function DailyCommandCenter({
   const routeSummary = buildRouteSummary(routeInsights);
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
+    <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+          <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
             Command center
           </p>
-          <h2 className="mt-1 text-xl font-semibold text-white">
+          <h2 className="mt-1 text-xl font-semibold text-realtor-text">
             Today at a glance
           </h2>
         </div>
         {nextShoot ? (
           <Link
             href={`/admin/bookings/${nextShoot.id}`}
-            className="rounded-full border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand-light transition hover:bg-brand/20"
+            className="rounded-full border border-realtor-primary/40 bg-realtor-primary/10 px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:bg-realtor-primary/20"
           >
             Next: {nextShoot.scheduled_at ? formatTime(nextShoot.scheduled_at) : ""}
           </Link>
@@ -234,8 +234,8 @@ function DailyCommandCenter({
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3">
         {preferences.showDeliverables ? (
-        <div className="rounded-2xl border border-white/10 bg-ink/45 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+        <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
             Needs attention
           </p>
           {attention.length > 0 ? (
@@ -244,20 +244,20 @@ function DailyCommandCenter({
                 <Link
                   key={booking.id}
                   href={`/admin/bookings/${booking.id}`}
-                  className="block rounded-xl border border-white/10 bg-white/[0.03] p-3 transition hover:border-brand-light/50"
+                  className="block rounded-xl border border-realtor-primary/15 bg-white/65 p-3 transition hover:border-realtor-primary/50"
                 >
-                  <span className="block text-sm font-semibold text-white">
+                  <span className="block text-sm font-semibold text-realtor-text">
                     {booking.scheduled_at ? `${formatTime(booking.scheduled_at)} · ` : ""}
                     {booking.properties?.street_address ?? "Unknown address"}
                   </span>
-                  <span className="mt-1 block text-xs text-ink-muted">
+                  <span className="mt-1 block text-xs text-realtor-muted">
                     {tasks.map((task) => task.label).join(" · ")}
                   </span>
                 </Link>
               ))}
             </div>
           ) : (
-            <p className="mt-2 text-sm text-ink-muted">
+            <p className="mt-2 text-sm text-realtor-muted">
               Nothing urgent flagged from today&apos;s media checklist.
             </p>
           )}
@@ -265,8 +265,8 @@ function DailyCommandCenter({
         ) : null}
 
         {preferences.showAgentMemory ? (
-        <div className="rounded-2xl border border-white/10 bg-ink/45 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+        <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
             Agent memory
           </p>
           {memoryRows.length > 0 ? (
@@ -275,21 +275,21 @@ function DailyCommandCenter({
                 <Link
                   key={booking.id}
                   href={`/admin/bookings/${booking.id}`}
-                  className="block rounded-xl border border-brand-light/25 bg-white/[0.04] p-3 transition hover:border-brand-light/55"
+                  className="block rounded-xl border border-realtor-primary/25 bg-white/65 p-3 transition hover:border-realtor-primary/55"
                 >
-                  <span className="block text-sm font-semibold text-white">
+                  <span className="block text-sm font-semibold text-realtor-text">
                     {booking.profiles?.full_name ??
                       booking.profiles?.email ??
                       "Realtor"}
                   </span>
-                  <span className="mt-1 line-clamp-2 block text-xs leading-5 text-ink-muted">
+                  <span className="mt-1 line-clamp-2 block text-xs leading-5 text-realtor-muted">
                     {booking.internal_notes ?? booking.profiles?.internal_notes}
                   </span>
                 </Link>
               ))}
             </div>
           ) : (
-            <p className="mt-2 text-sm text-ink-muted">
+            <p className="mt-2 text-sm text-realtor-muted">
               No agent memory notes attached to today&apos;s shoots.
             </p>
           )}
@@ -297,13 +297,13 @@ function DailyCommandCenter({
         ) : null}
 
         {preferences.showRouteWarnings ? (
-        <div className="rounded-2xl border border-white/10 bg-ink/45 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+        <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
             Route + travel
           </p>
-          <p className="mt-1 text-xs text-ink-muted">
+          <p className="mt-1 text-xs text-realtor-muted">
             {routeSummary.label}{" "}
-            <span className="text-ink-muted/70">
+            <span className="text-realtor-muted/70">
               {routePlan.mode === "v2"
                 ? "Using Google drive-time."
                 : "Using V1 schedule checks."}
@@ -316,21 +316,21 @@ function DailyCommandCenter({
                   key={insight.key}
                   className={`rounded-xl border p-3 ${
                     insight.level === "danger"
-                      ? "border-red-300/30 bg-red-400/10"
+                      ? "border-red-200 bg-red-50"
                       : insight.level === "warning"
-                      ? "border-amber-300/25 bg-amber-300/10"
-                      : "border-white/10 bg-white/[0.03]"
+                      ? "border-amber-200 bg-amber-50"
+                      : "border-realtor-primary/15 bg-white/65"
                   }`}
                 >
-                  <p className="text-sm font-semibold text-white">
+                  <p className="text-sm font-semibold text-realtor-text">
                     {insight.title}
                   </p>
-                  <p className="mt-1 text-xs text-ink-muted">{insight.body}</p>
+                  <p className="mt-1 text-xs text-realtor-muted">{insight.body}</p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {insight.badges.map((badge) => (
                       <span
                         key={badge}
-                        className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold text-ink-muted"
+                        className="rounded-full border border-realtor-primary/15 bg-white/65 px-2 py-0.5 text-[10px] font-semibold text-realtor-muted"
                       >
                         {badge}
                       </span>
@@ -341,7 +341,7 @@ function DailyCommandCenter({
                       href={insight.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mt-2 inline-flex rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:border-brand-light"
+                      className="mt-2 inline-flex rounded-full border border-realtor-primary/20 bg-white px-2.5 py-1 text-[11px] font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
                     >
                       Open route
                     </a>
@@ -350,7 +350,7 @@ function DailyCommandCenter({
               ))}
             </div>
           ) : (
-            <p className="mt-2 text-sm text-ink-muted">
+            <p className="mt-2 text-sm text-realtor-muted">
               No route warnings for the current schedule.
             </p>
           )}
@@ -397,19 +397,19 @@ function ShootCard({
   const briefItems = shootBriefItems(booking, taskState, preferences);
 
   return (
-    <li className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
+    <li className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
+          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
             {booking.scheduled_at ? formatTime(booking.scheduled_at) : "No time"}
             {booking.scheduled_ends_at
               ? `-${formatTime(booking.scheduled_ends_at)}`
               : ""}
           </p>
-          <h2 className="mt-1 text-lg font-semibold text-white">
+          <h2 className="mt-1 text-lg font-semibold text-realtor-text">
             {addressLine || "Unknown address"}
           </h2>
-          <p className="mt-0.5 text-sm text-ink-muted">
+          <p className="mt-0.5 text-sm text-realtor-muted">
             {[property?.city, property?.postal_code].filter(Boolean).join(" ")}
           </p>
         </div>
@@ -421,21 +421,21 @@ function ShootCard({
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <div className="rounded-2xl border border-white/10 bg-ink/50 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+        <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
             Realtor
           </p>
-          <p className="mt-1 text-sm font-semibold text-white">
+          <p className="mt-1 text-sm font-semibold text-realtor-text">
             {profile?.full_name ?? profile?.email ?? "Unknown"}
           </p>
           {profile?.brokerage ? (
-            <p className="text-xs text-ink-muted">{profile.brokerage}</p>
+            <p className="text-xs text-realtor-muted">{profile.brokerage}</p>
           ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
             {profile?.phone ? (
               <a
                 href={`tel:${profile.phone}`}
-                className="rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-light"
+                className="rounded-full bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-realtor-primary/90"
               >
                 Call
               </a>
@@ -443,7 +443,7 @@ function ShootCard({
             {profile?.email ? (
               <a
                 href={`mailto:${profile.email}`}
-                className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
+                className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
               >
                 Email
               </a>
@@ -451,11 +451,11 @@ function ShootCard({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-ink/50 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+        <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
             Services
           </p>
-          <p className="mt-1 text-sm text-white">
+          <p className="mt-1 text-sm text-realtor-text">
             {services.length ? services.join(", ") : "No services listed"}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -466,14 +466,14 @@ function ShootCard({
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-light"
+                className="rounded-full bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-realtor-primary/90"
               >
                 Map
               </a>
             ) : null}
             <Link
               href={`/admin/bookings/${booking.id}`}
-              className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
+              className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
             >
               Open booking
             </Link>
@@ -493,14 +493,14 @@ function ShootCard({
       ) : null}
 
       {preferences.showShootBrief ? (
-      <div className="mt-3 rounded-2xl border border-brand-light/20 bg-brand/10 p-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
+      <div className="mt-3 rounded-2xl border border-realtor-primary/20 bg-realtor-primary/10 p-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
           AI shoot brief
         </p>
-        <ul className="mt-2 grid gap-2 text-sm text-ink-muted md:grid-cols-2">
+        <ul className="mt-2 grid gap-2 text-sm text-realtor-muted md:grid-cols-2">
           {briefItems.map((item) => (
             <li key={item} className="flex gap-2">
-              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-light" />
+              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-realtor-primary" />
               <span>{item}</span>
             </li>
           ))}
@@ -512,23 +512,23 @@ function ShootCard({
         <div
           className={`mt-3 rounded-2xl border p-3 ${
             nextRoute.level === "danger"
-              ? "border-red-300/30 bg-red-400/10"
+              ? "border-red-200 bg-red-50"
               : nextRoute.level === "warning"
-                ? "border-amber-300/25 bg-amber-300/10"
-                : "border-white/10 bg-ink/45"
+                ? "border-amber-200 bg-amber-50"
+                : "border-realtor-primary/15 bg-white/65"
           }`}
         >
-          <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
             Route to next shoot
           </p>
           <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm text-white">{nextRoute.label}</p>
+            <p className="text-sm text-realtor-text">{nextRoute.label}</p>
             {nextRoute.href ? (
               <a
                 href={nextRoute.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-brand-light"
+                className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
               >
                 Open route
               </a>
@@ -539,7 +539,7 @@ function ShootCard({
 
       {preferences.showDeliverables ? (
       <div className="mt-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+        <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
           Delivery checklist
         </p>
         <div className="mt-2 flex flex-wrap gap-2">
@@ -558,13 +558,13 @@ function ShootCard({
       <div className="mt-4 flex flex-wrap gap-2">
         <Link
           href={`/admin/bookings/${booking.id}`}
-          className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
+          className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
         >
           Add media
         </Link>
         <Link
           href={`/admin/bookings/${booking.id}?tab=delivery`}
-          className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
+          className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
         >
           Delivery
         </Link>
@@ -575,11 +575,11 @@ function ShootCard({
 
 function NoteBlock({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-ink/50 p-3">
-      <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+    <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
         {title}
       </p>
-      <p className="mt-1 whitespace-pre-wrap text-sm text-ink-muted">{body}</p>
+      <p className="mt-1 whitespace-pre-wrap text-sm text-realtor-muted">{body}</p>
     </div>
   );
 }
@@ -633,10 +633,10 @@ function taskStates(
 function chip(label: string, state: "done" | "pending" | "todo") {
   const className =
     state === "done"
-      ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-200"
+      ? "border-emerald-300 bg-emerald-50 text-emerald-700"
       : state === "pending"
-        ? "border-amber-400/40 bg-amber-400/10 text-amber-200"
-        : "border-white/10 bg-white/[0.03] text-ink-muted";
+        ? "border-amber-300 bg-amber-50 text-amber-800"
+        : "border-realtor-primary/15 bg-white/65 text-realtor-muted";
   return { label, className, state };
 }
 

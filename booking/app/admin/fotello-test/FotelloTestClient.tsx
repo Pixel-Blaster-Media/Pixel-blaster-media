@@ -190,46 +190,46 @@ export default function FotelloTestClient() {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-2xl border border-white/10 bg-ink-soft/60 p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
+      <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-realtor-primary">
           1. Test listing / upload / enhance
         </h2>
         <div className="mt-4 grid gap-3">
           <label className="block">
-            <span className="text-xs text-ink-muted">Listing name</span>
+            <span className="text-xs text-realtor-muted">Listing name</span>
             <input
               value={listingName}
               onChange={(event) => setListingName(event.target.value)}
-              className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
             />
           </label>
           <label className="block">
-            <span className="text-xs text-ink-muted">
+            <span className="text-xs text-realtor-muted">
               Listing ID for upload test
             </span>
             <input
               value={listingId}
               onChange={(event) => setListingId(event.target.value)}
               placeholder="Optional — leave blank to create one"
-              className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
+              className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text placeholder-realtor-muted/60"
             />
           </label>
           <label className="block">
-            <span className="text-xs text-ink-muted">Photos</span>
+            <span className="text-xs text-realtor-muted">Photos</span>
             <input
               type="file"
               multiple
               accept="image/*"
               onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
-              className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white file:mr-3 file:rounded-full file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+              className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text file:mr-3 file:rounded-full file:border-0 file:bg-realtor-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
             />
           </label>
           <label className="block">
-            <span className="text-xs text-ink-muted">Shot type</span>
+            <span className="text-xs text-realtor-muted">Shot type</span>
             <select
               value={shotType}
               onChange={(event) => setShotType(event.target.value as "interior" | "exterior")}
-              className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
             >
               <option value="interior">interior</option>
               <option value="exterior">exterior</option>
@@ -240,7 +240,7 @@ export default function FotelloTestClient() {
               type="button"
               onClick={createListingOnly}
               disabled={pending || uploading}
-              className="rounded-full border border-white/15 px-3 py-2 text-sm text-white hover:border-brand-light hover:bg-brand/10 disabled:opacity-50"
+              className="rounded-full border border-realtor-primary/20 px-3 py-2 text-sm text-realtor-text hover:border-realtor-primary/40 hover:bg-realtor-primary/10 disabled:opacity-50"
             >
               Create listing only
             </button>
@@ -248,7 +248,7 @@ export default function FotelloTestClient() {
               type="button"
               onClick={uploadAndEnhance}
               disabled={pending || uploading}
-              className="rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
+              className="rounded-full bg-realtor-primary px-3 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-50"
             >
               {uploading ? "Working..." : "Upload + create enhance"}
             </button>
@@ -256,11 +256,11 @@ export default function FotelloTestClient() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-ink-soft/60 p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
+      <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-realtor-primary">
           2. Optional: check one enhance
         </h2>
-        <p className="mt-2 text-sm text-ink-muted">
+        <p className="mt-2 text-sm text-realtor-muted">
           Use this only when you have a Fotello enhance ID from the upload flow.
           A dashboard/listing ID will usually return 404 here.
         </p>
@@ -269,51 +269,51 @@ export default function FotelloTestClient() {
             value={enhanceId}
             onChange={(event) => setEnhanceId(event.target.value)}
             placeholder="Enhance ID, not listing ID"
-            className="rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
+            className="rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text placeholder-realtor-muted/60"
           />
           <button
             type="button"
             onClick={() => refreshEnhance()}
             disabled={pending || uploading || !enhanceId.trim()}
-            className="rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
+            className="rounded-full bg-realtor-primary px-3 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-50"
           >
             Check enhance
           </button>
         </div>
         {result ? (
-          <div className="mt-4 rounded-xl border border-white/10 bg-ink/60 p-3 text-sm">
-            <p className="text-white">Status: <span className="font-semibold">{result.status}</span></p>
-            <p className="mt-1 break-all text-xs text-ink-muted">ID: {result.id}</p>
+          <div className="mt-4 rounded-xl border border-realtor-primary/15 bg-white/65 p-3 text-sm">
+            <p className="text-realtor-text">Status: <span className="font-semibold">{result.status}</span></p>
+            <p className="mt-1 break-all text-xs text-realtor-muted">ID: {result.id}</p>
             {result.enhancedImageUrl ? (
-              <p className="mt-2 break-all text-xs text-ink-muted">
-                URL: <a href={result.enhancedImageUrl} target="_blank" rel="noopener" className="text-brand-light underline">{result.enhancedImageUrl}</a>
+              <p className="mt-2 break-all text-xs text-realtor-muted">
+                URL: <a href={result.enhancedImageUrl} target="_blank" rel="noopener" className="text-realtor-primary underline">{result.enhancedImageUrl}</a>
               </p>
             ) : null}
             {result.enhancedImageUrlExpires ? (
-              <p className="mt-1 text-xs text-ink-muted">Expires: {result.enhancedImageUrlExpires}</p>
+              <p className="mt-1 text-xs text-realtor-muted">Expires: {result.enhancedImageUrlExpires}</p>
             ) : null}
           </div>
         ) : null}
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-ink-soft/60 p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
+      <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-realtor-primary">
           3. Test realtor delivery links
         </h2>
-        <p className="mt-2 text-sm text-ink-muted">
+        <p className="mt-2 text-sm text-realtor-muted">
           Admin-only sandbox. This does not save to bookings, the realtor portal,
           or delivery emails. Paste the listing ID from Fotello, or the whole
           dashboard URL.
         </p>
         <label className="mt-4 block">
-          <span className="text-xs text-ink-muted">
+          <span className="text-xs text-realtor-muted">
             Listing ID or dashboard URL
           </span>
           <input
             value={listingId}
             onChange={(event) => setListingId(event.target.value)}
             placeholder="https://app.fotello.co/dashboard/listings/WkgmcWEz7UUSqtfwSn6P"
-            className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
+            className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text placeholder-realtor-muted/60"
           />
         </label>
         <div className="mt-4 flex flex-wrap gap-2">
@@ -321,7 +321,7 @@ export default function FotelloTestClient() {
             type="button"
             onClick={buildShareLink}
             disabled={pending || uploading || !listingId.trim()}
-            className="rounded-full border border-white/15 px-3 py-2 text-sm text-white hover:border-brand-light hover:bg-brand/10 disabled:opacity-50"
+            className="rounded-full border border-realtor-primary/20 px-3 py-2 text-sm text-realtor-text hover:border-realtor-primary/40 hover:bg-realtor-primary/10 disabled:opacity-50"
           >
             Build share link
           </button>
@@ -329,13 +329,13 @@ export default function FotelloTestClient() {
             type="button"
             onClick={preparePhotoZip}
             disabled={pending || uploading || diagnosingZip || !listingId.trim()}
-            className="rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
+            className="rounded-full bg-realtor-primary px-3 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-50"
           >
             {diagnosingZip ? "Checking Fotello..." : "Diagnose photo ZIP endpoint"}
           </button>
         </div>
         {diagnosingZip ? (
-          <div className="mt-4 rounded-xl border border-amber-200/70 bg-amber-50 p-3 text-sm text-stone-700">
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-stone-700">
             Checking Fotello's possible ZIP endpoints. This can take up to a
             minute because a couple of the URLs time out instead of answering
             right away.
@@ -357,7 +357,7 @@ export default function FotelloTestClient() {
           </div>
         ) : null}
         {downloadAttempts.length ? (
-          <div className="mt-4 rounded-xl border border-amber-200/60 bg-amber-50 p-3 text-xs text-stone-700">
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-stone-700">
             <p className="font-semibold text-stone-900">
               Fotello ZIP endpoint attempts
             </p>
@@ -365,7 +365,7 @@ export default function FotelloTestClient() {
               {downloadAttempts.map((attempt) => (
                 <div
                   key={`${attempt.label}-${attempt.endpoint}`}
-                  className="rounded-lg border border-amber-200/70 bg-white/70 p-2"
+                  className="rounded-lg border border-amber-200 bg-white/70 p-2"
                 >
                   <p className="font-semibold text-stone-900">
                     {attempt.ok ? "Worked" : "Did not work"} · {attempt.label}
@@ -387,25 +387,25 @@ export default function FotelloTestClient() {
           </div>
         ) : null}
         {deliveryResult ? (
-          <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-ink/60 p-3 text-sm">
-            <p className="break-all text-xs text-ink-muted">
+          <div className="mt-4 space-y-3 rounded-xl border border-realtor-primary/15 bg-white/65 p-3 text-sm">
+            <p className="break-all text-xs text-realtor-muted">
               Listing ID: {deliveryResult.listingId}
             </p>
             {deliveryResult.downloadUrl ? (
-              <p className="break-all text-xs text-ink-muted">
+              <p className="break-all text-xs text-realtor-muted">
                 ZIP download:{" "}
                 <a
                   href={deliveryResult.downloadUrl}
                   target="_blank"
                   rel="noopener"
-                  className="text-brand-light underline"
+                  className="text-realtor-primary underline"
                 >
                   {deliveryResult.downloadUrl}
                 </a>
               </p>
             ) : null}
             {deliveryResult.totalItems !== null ? (
-              <p className="text-xs text-ink-muted">
+              <p className="text-xs text-realtor-muted">
                 Items: {deliveryResult.processedItems}/
                 {deliveryResult.totalItems}
               </p>
@@ -414,9 +414,9 @@ export default function FotelloTestClient() {
         ) : null}
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-ink-soft/60 p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">Log</h2>
-        <div className="mt-3 space-y-1 rounded-xl bg-black/20 p-3 font-mono text-xs text-ink-muted">
+      <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-realtor-primary">Log</h2>
+        <div className="mt-3 space-y-1 rounded-xl bg-white/65 p-3 font-mono text-xs text-realtor-muted">
           {log.length ? log.map((item) => <p key={item}>{item}</p>) : <p>No test calls yet.</p>}
         </div>
       </section>

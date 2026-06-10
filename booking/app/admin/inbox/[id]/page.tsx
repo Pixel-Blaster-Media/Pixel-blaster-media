@@ -43,7 +43,7 @@ export default async function RequestDetailPage({
       <div className="flex items-center justify-between">
         <Link
           href="/admin/inbox"
-          className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-ink-muted transition hover:border-white/30 hover:text-white"
+          className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
         >
           ← Inbox
         </Link>
@@ -54,12 +54,12 @@ export default async function RequestDetailPage({
         </span>
       </div>
 
-      <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
-        <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+      <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
+        <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
           Request detail
         </p>
-        <h1 className="mt-1 text-2xl font-bold text-white">{req.street_address}</h1>
-        <p className="mt-1 text-sm text-ink-muted">
+        <h1 className="mt-1 text-2xl font-bold text-realtor-text">{req.street_address}</h1>
+        <p className="mt-1 text-sm text-realtor-muted">
           {[req.city, req.postal_code].filter(Boolean).join(" ")}
           {req.square_footage ? ` · ${req.square_footage} sq ft` : ""}
         </p>
@@ -73,7 +73,7 @@ export default async function RequestDetailPage({
             value={
               <a
                 href={`mailto:${req.contact_email}`}
-                className="text-brand-light underline"
+                className="text-realtor-primary underline"
               >
                 {req.contact_email}
               </a>
@@ -106,7 +106,7 @@ export default async function RequestDetailPage({
 
       {req.notes ? (
         <Panel title="Notes">
-          <p className="whitespace-pre-wrap text-sm text-ink-muted">{req.notes}</p>
+          <p className="whitespace-pre-wrap text-sm text-realtor-muted">{req.notes}</p>
         </Panel>
       ) : null}
 
@@ -123,7 +123,7 @@ export default async function RequestDetailPage({
             value={
               <Link
                 href={`/admin/bookings/${req.booking_id}`}
-                className="text-brand-light underline"
+                className="text-realtor-primary underline"
               >
                 Open booking →
               </Link>
@@ -151,8 +151,8 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-ink-soft/50 p-4 shadow-lg shadow-black/5">
-      <p className="text-[11px] uppercase tracking-wider text-ink-muted">
+    <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/5">
+      <p className="text-[11px] uppercase tracking-wider text-realtor-muted">
         {title}
       </p>
       <div className="mt-3 space-y-2 text-sm">{children}</div>
@@ -168,9 +168,9 @@ function Row({
   value: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap justify-between gap-2 rounded-xl border border-white/5 bg-ink/25 px-3 py-2">
-      <span className="text-xs text-ink-muted">{label}</span>
-      <span className="text-right text-white">{value}</span>
+    <div className="flex flex-wrap justify-between gap-2 rounded-xl border border-realtor-primary/10 bg-white/65 px-3 py-2">
+      <span className="text-xs text-realtor-muted">{label}</span>
+      <span className="text-right text-realtor-text">{value}</span>
     </div>
   );
 }

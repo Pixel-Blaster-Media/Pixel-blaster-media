@@ -19,15 +19,15 @@ export default async function PricingPage() {
 
   return (
     <div className="space-y-10">
-      <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
+      <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
         <Link
           href="/admin/settings"
-          className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-light hover:text-white"
+          className="text-xs font-semibold uppercase tracking-[0.2em] text-realtor-primary hover:text-realtor-primary"
         >
           ← Settings
         </Link>
-        <h1 className="mt-1 text-2xl font-bold text-white">Pricing</h1>
-        <p className="mt-2 text-sm text-ink-muted">
+        <h1 className="mt-1 text-2xl font-bold text-realtor-text">Pricing</h1>
+        <p className="mt-2 text-sm text-realtor-muted">
           Bundles, à la carte items, and add-ons shown on the booking form
           and invoiced via QuickBooks. Edits here take effect immediately
           for new bookings. Existing bookings keep whatever price was
@@ -71,12 +71,12 @@ function Section({
   return (
     <section>
       <div className="flex flex-col gap-1">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-realtor-primary">
           {title}
         </h2>
-        <p className="text-xs text-ink-muted">{blurb}</p>
+        <p className="text-xs text-realtor-muted">{blurb}</p>
       </div>
-      <ul className="mt-4 divide-y divide-white/5 rounded-2xl border border-white/10 bg-ink-soft/50">
+      <ul className="mt-4 divide-y divide-realtor-primary/10 rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85">
         {items.map((it) => (
           <li
             key={it.id}
@@ -86,7 +86,7 @@ function Section({
           </li>
         ))}
         {items.length === 0 ? (
-          <li className="p-4 text-sm text-ink-muted">
+          <li className="p-4 text-sm text-realtor-muted">
             Nothing here yet — add one below.
           </li>
         ) : null}

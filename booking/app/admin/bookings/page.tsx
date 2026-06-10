@@ -75,7 +75,7 @@ export default async function BookingsPage({
 
   if (error) {
     return (
-      <p className="text-sm text-red-300">
+      <p className="text-sm text-red-700">
         Could not load bookings: {error.message}
       </p>
     );
@@ -83,14 +83,14 @@ export default async function BookingsPage({
 
   return (
     <div className="space-y-6">
-      <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
+      <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+            <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
               Job board
             </p>
-            <h1 className="mt-1 text-2xl font-bold text-white">Bookings</h1>
-            <p className="mt-1 max-w-xl text-sm text-ink-muted">
+            <h1 className="mt-1 text-2xl font-bold text-realtor-text">Bookings</h1>
+            <p className="mt-1 max-w-xl text-sm text-realtor-muted">
               {filter === "active"
                 ? "Today and upcoming active shoots. Past jobs live in the status filters."
                 : "Search and review shoots by status, realtor, property, or service."}
@@ -98,14 +98,14 @@ export default async function BookingsPage({
           </div>
           <Link
             href="/admin/calendar"
-            className="rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:border-brand-light"
+            className="rounded-full border border-realtor-primary/15 px-3 py-2 text-xs font-semibold text-realtor-text transition hover:border-realtor-primary/40"
           >
             Open calendar
           </Link>
         </div>
       </header>
 
-      <section className="rounded-2xl border border-white/10 bg-ink-soft/45 p-3 shadow-lg shadow-black/10">
+      <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/60 p-3 shadow-lg shadow-realtor-text/10">
         <form className="flex flex-col gap-2 sm:flex-row" action="/admin/bookings">
           <input type="hidden" name="filter" value={filter} />
           <label className="sr-only" htmlFor="booking-search">
@@ -116,19 +116,19 @@ export default async function BookingsPage({
             name="q"
             defaultValue={search}
             placeholder="Search by address, realtor, city, email, or service..."
-            className="min-h-11 flex-1 rounded-full border border-white/10 bg-black/15 px-4 text-sm text-white outline-none transition placeholder:text-ink-muted focus:border-brand-light"
+            className="min-h-11 flex-1 rounded-full border border-realtor-primary/15 bg-white/65 px-4 text-sm text-realtor-text outline-none transition placeholder:text-realtor-muted focus:border-realtor-primary/45"
           />
           <div className="flex gap-2">
             <button
               type="submit"
-              className="min-h-11 rounded-full bg-brand px-5 text-sm font-semibold text-white transition hover:bg-brand-light"
+              className="min-h-11 rounded-full bg-realtor-primary px-5 text-sm font-semibold text-white transition hover:bg-realtor-primary/90"
             >
               Search
             </button>
             {search ? (
               <Link
                 href={`/admin/bookings?filter=${filter}`}
-                className="inline-flex min-h-11 items-center rounded-full border border-white/10 px-4 text-sm font-semibold text-ink-muted transition hover:border-white/30 hover:text-white"
+                className="inline-flex min-h-11 items-center rounded-full border border-realtor-primary/15 px-4 text-sm font-semibold text-realtor-muted transition hover:border-realtor-primary/40 hover:text-realtor-primary"
               >
                 Clear
               </Link>
@@ -143,8 +143,8 @@ export default async function BookingsPage({
               className={
                 "tap-target shrink-0 rounded-full border px-3 py-1.5 transition " +
                 (f.id === filter
-                  ? "border-brand-light bg-brand/15 text-brand-light"
-                  : "border-white/10 text-ink-muted hover:border-white/30 hover:text-white")
+                  ? "border-realtor-primary bg-realtor-primary/15 text-realtor-primary"
+                  : "border-realtor-primary/15 text-realtor-muted hover:border-realtor-primary/40 hover:text-realtor-primary")
               }
             >
               {f.label}
@@ -158,14 +158,14 @@ export default async function BookingsPage({
           {filter === "active" ? (
             <div className="flex flex-wrap items-end justify-between gap-2">
               <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+                <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
                   Coming up
                 </p>
-                <h2 className="mt-1 text-lg font-semibold text-white">
+                <h2 className="mt-1 text-lg font-semibold text-realtor-text">
                   Today and future shoots
                 </h2>
               </div>
-              <p className="text-xs text-ink-muted">
+              <p className="text-xs text-realtor-muted">
                 {bookings.length} active booking{bookings.length === 1 ? "" : "s"}
               </p>
             </div>
@@ -177,7 +177,7 @@ export default async function BookingsPage({
           </ul>
         </section>
       ) : (
-        <p className="rounded-2xl border border-dashed border-white/10 bg-ink-soft/40 px-4 py-8 text-center text-sm text-ink-muted">
+        <p className="rounded-2xl border border-dashed border-realtor-primary/15 bg-realtor-surface/60 px-4 py-8 text-center text-sm text-realtor-muted">
           {search
             ? `No bookings matched "${search}".`
             : filter === "active"
@@ -195,19 +195,19 @@ function BookingListItem({ booking }: { booking: BookingRow }) {
   const meta = BOOKING_STATUSES[booking.status];
 
   return (
-    <li className="rounded-2xl border border-white/10 bg-ink-soft/45 p-4 transition hover:border-brand-light/40 hover:bg-white/[0.035]">
+    <li className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/60 p-4 transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <Link href={`/admin/bookings/${booking.id}`} className="min-w-0 flex-1">
-          <p className="font-semibold text-white">
+          <p className="font-semibold text-realtor-text">
             {property?.street_address ?? "-"}
             {property?.city ? (
-              <span className="text-ink-muted"> · {property.city}</span>
+              <span className="text-realtor-muted"> · {property.city}</span>
             ) : null}
           </p>
-          <p className="mt-0.5 text-xs text-ink-muted">
+          <p className="mt-0.5 text-xs text-realtor-muted">
             {profile?.full_name ?? profile?.email ?? "Unknown realtor"}
           </p>
-          <p className="mt-2 line-clamp-2 text-xs text-ink-muted">
+          <p className="mt-2 line-clamp-2 text-xs text-realtor-muted">
             {booking.services.map(labelForService).join(", ") || "-"}
           </p>
         </Link>
@@ -217,7 +217,7 @@ function BookingListItem({ booking }: { booking: BookingRow }) {
           >
             {meta.label}
           </span>
-          <span className="text-[10px] text-ink-muted">
+          <span className="text-[10px] text-realtor-muted">
             {booking.scheduled_at
               ? new Date(booking.scheduled_at).toLocaleString()
               : "no date"}
@@ -225,7 +225,7 @@ function BookingListItem({ booking }: { booking: BookingRow }) {
           <div className="flex flex-wrap justify-end gap-2">
             <Link
               href={`/admin/bookings/${booking.id}`}
-              className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:border-brand-light"
+              className="rounded-full border border-realtor-primary/20 bg-white px-2.5 py-1 text-[11px] font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
             >
               Open
             </Link>

@@ -93,7 +93,7 @@ export default async function IGuideReviewPage({
 
   if (error) {
     return (
-      <p className="text-sm text-red-300">
+      <p className="text-sm text-red-700">
         Could not load iGUIDE review queue: {error.message}
       </p>
     );
@@ -132,14 +132,14 @@ export default async function IGuideReviewPage({
 
   return (
     <div className="space-y-6">
-      <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
-        <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+      <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
+        <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
           iGUIDE
         </p>
-        <h1 className="mt-1 text-2xl font-bold text-white">
+        <h1 className="mt-1 text-2xl font-bold text-realtor-text">
           iGUIDEs needing a booking
         </h1>
-        <p className="mt-2 max-w-3xl text-sm text-ink-muted">
+        <p className="mt-2 max-w-3xl text-sm text-realtor-muted">
           Review iGUIDEs the site could not safely match by itself, and quickly
           confirm which bookings already have iGUIDE media attached.
         </p>
@@ -165,20 +165,20 @@ export default async function IGuideReviewPage({
       </div>
 
       {linkedBookings && linkedBookings.length > 0 ? (
-        <section className="rounded-2xl border border-white/10 bg-ink-soft/40 p-4">
+        <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/60 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-white">
+              <h2 className="text-sm font-semibold text-realtor-text">
                 Bookings already linked to iGUIDE
               </h2>
-              <p className="mt-1 text-xs text-ink-muted">
+              <p className="mt-1 text-xs text-realtor-muted">
                 These will not show in the review queue because the site already
                 knows which booking they belong to.
               </p>
             </div>
             <Link
               href="/admin/bookings"
-              className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-ink-muted hover:border-white/30 hover:text-white"
+              className="rounded-full border border-realtor-primary/15 px-3 py-1.5 text-xs text-realtor-muted hover:border-realtor-primary/40 hover:text-realtor-primary"
             >
               Open bookings
             </Link>
@@ -187,20 +187,20 @@ export default async function IGuideReviewPage({
             {linkedBookings.slice(0, 6).map((booking) => (
               <li
                 key={booking.id}
-                className="rounded-2xl border border-white/10 bg-black/20 p-3"
+                className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-white">
+                    <p className="truncate text-sm font-semibold text-realtor-text">
                       {formatBookingAddress(booking)}
                     </p>
-                    <p className="mt-1 truncate text-xs text-ink-muted">
+                    <p className="mt-1 truncate text-xs text-realtor-muted">
                       {booking.profiles?.full_name ??
                         booking.profiles?.email ??
                         "No realtor"}{" "}
                       · {formatBookingDate(booking.scheduled_at)}
                     </p>
-                    <p className="mt-1 truncate text-[11px] text-ink-muted">
+                    <p className="mt-1 truncate text-[11px] text-realtor-muted">
                       {booking.iguide_portal_id
                         ? `Portal ${booking.iguide_portal_id}`
                         : "No portal ID"}
@@ -209,7 +209,7 @@ export default async function IGuideReviewPage({
                   </div>
                   <Link
                     href={`/admin/bookings/${booking.id}`}
-                    className="shrink-0 rounded-full bg-brand px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-brand-light"
+                    className="shrink-0 rounded-full bg-realtor-primary px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-realtor-primary/90"
                   >
                     Open
                   </Link>
@@ -218,19 +218,19 @@ export default async function IGuideReviewPage({
             ))}
           </ul>
           {linkedBookings.length > 6 ? (
-            <p className="mt-3 text-xs text-ink-muted">
+            <p className="mt-3 text-xs text-realtor-muted">
               Showing the newest 6 linked bookings.
             </p>
           ) : null}
         </section>
       ) : null}
 
-      <section className="rounded-2xl border border-brand-light/20 bg-brand/10 p-4">
+      <section className="rounded-2xl border border-realtor-primary/20 bg-realtor-primary/10 p-4">
         <div>
-          <h2 className="text-sm font-semibold text-white">
+          <h2 className="text-sm font-semibold text-realtor-text">
             Link an iGUIDE manually
           </h2>
-          <p className="mt-1 text-xs text-ink-muted">
+          <p className="mt-1 text-xs text-realtor-muted">
             For existing iGUIDEs, paste the public tour URL, unbranded URL,
             manage URL, alias, or Portal ID here. Pick the booking and the site
             will save it and try to sync deliverables.
@@ -245,12 +245,12 @@ export default async function IGuideReviewPage({
             name="iguide_ref"
             required
             placeholder="Paste iGUIDE link, alias, or Portal ID"
-            className="rounded-full border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text placeholder-realtor-muted/60 focus:outline-none focus:ring-2 focus:ring-realtor-primary/60"
           />
           <select
             name="booking_id"
             required
-            className="min-w-0 rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="min-w-0 rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text focus:outline-none focus:ring-2 focus:ring-realtor-primary/60"
             defaultValue=""
           >
             <option value="" disabled>
@@ -264,20 +264,20 @@ export default async function IGuideReviewPage({
           </select>
           <button
             type="submit"
-            className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light"
+            className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90"
           >
             Link + sync
           </button>
         </form>
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-ink-soft/40 p-4">
+      <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/60 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-white">
+            <h2 className="text-sm font-semibold text-realtor-text">
               Portal search is not available yet
             </h2>
-            <p className="mt-1 text-xs text-ink-muted">
+            <p className="mt-1 text-xs text-realtor-muted">
               iGUIDE support confirmed that the endpoint for listing all tours
               is not exposed for external/customer use yet, even though the
               permission appears in API settings. They added this use case to
@@ -286,16 +286,16 @@ export default async function IGuideReviewPage({
           </div>
           <Link
             href="/admin/settings/integrations"
-            className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-ink-muted hover:border-white/30 hover:text-white"
+            className="rounded-full border border-realtor-primary/15 px-3 py-1.5 text-xs text-realtor-muted hover:border-realtor-primary/40 hover:text-realtor-primary"
           >
             iGUIDE settings
           </Link>
         </div>
-        <div className="mt-4 rounded-2xl border border-amber-300/30 bg-amber-400/10 p-4">
-          <p className="text-sm font-semibold text-amber-100">
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-semibold text-amber-800">
             Current workflow
           </p>
-          <p className="mt-1 text-xs text-amber-100/80">
+          <p className="mt-1 text-xs text-amber-800">
             New iGUIDEs can still arrive through webhooks going forward. For
             existing tours, open the iGUIDE in your portal, copy the public tour
             URL, manage URL, alias, or Portal ID, then paste it into the manual
@@ -311,8 +311,8 @@ export default async function IGuideReviewPage({
             className={
               "rounded-full border px-3 py-1.5 transition " +
               (view === "likely"
-                ? "border-brand-light bg-brand/15 text-brand-light"
-                : "border-white/10 text-ink-muted hover:border-white/30 hover:text-white")
+                ? "border-realtor-primary bg-realtor-primary/15 text-realtor-primary"
+                : "border-realtor-primary/15 text-realtor-muted hover:border-realtor-primary/40 hover:text-realtor-primary")
             }
           >
             Likely matches ({likelyItems.length})
@@ -322,8 +322,8 @@ export default async function IGuideReviewPage({
             className={
               "rounded-full border px-3 py-1.5 transition " +
               (view === "all"
-                ? "border-brand-light bg-brand/15 text-brand-light"
-                : "border-white/10 text-ink-muted hover:border-white/30 hover:text-white")
+                ? "border-realtor-primary bg-realtor-primary/15 text-realtor-primary"
+                : "border-realtor-primary/15 text-realtor-muted hover:border-realtor-primary/40 hover:text-realtor-primary")
             }
           >
             All unmatched ({reviewItems.length})
@@ -341,7 +341,7 @@ export default async function IGuideReviewPage({
             ))}
             <button
               type="submit"
-              className="rounded-full border border-red-300/30 px-3 py-1.5 text-xs text-red-200 hover:border-red-300 hover:bg-red-500/10"
+              className="rounded-full border border-red-200 px-3 py-1.5 text-xs text-red-700 hover:border-red-300 hover:bg-red-50"
             >
               Hide {unrelatedItems.length} unrelated iGUIDEs
             </button>
@@ -356,30 +356,30 @@ export default async function IGuideReviewPage({
             return (
               <li
                 key={event.id}
-                className="rounded-2xl border border-white/10 bg-ink-soft/50 p-4"
+                className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-white">
+                    <p className="font-semibold text-realtor-text">
                       {details.address || event.alias || event.iguide_id}
                     </p>
-                    <p className="mt-1 text-sm text-ink-muted">
+                    <p className="mt-1 text-sm text-realtor-muted">
                       {suggested
                         ? "Possible match found. Check the dropdown, then link it."
                         : hasSamePostal
                           ? "Same postal code as a booking. Choose carefully before linking."
                           : "No matching postal code in current bookings. This is probably unrelated."}
                     </p>
-                    <p className="mt-1 text-xs text-ink-muted">
+                    <p className="mt-1 text-xs text-realtor-muted">
                       Portal ID:{" "}
-                      <code className="rounded bg-black/30 px-1 py-0.5 text-[11px] text-white/90">
+                      <code className="rounded bg-white/65 px-1 py-0.5 text-[11px] text-realtor-text/90">
                         {event.iguide_id}
                       </code>
                       {event.work_order_id ? ` · Work order ${event.work_order_id}` : ""}
                       {event.alias ? ` · ${event.alias}` : ""}
                     </p>
                     {event.last_error ? (
-                      <p className="mt-1 text-xs text-red-300">
+                      <p className="mt-1 text-xs text-red-700">
                         {event.last_error}
                       </p>
                     ) : null}
@@ -390,7 +390,7 @@ export default async function IGuideReviewPage({
                     >
                       {status.label}
                     </span>
-                    <p className="mt-1 text-[10px] text-ink-muted">
+                    <p className="mt-1 text-[10px] text-realtor-muted">
                       {new Date(event.received_at).toLocaleString()}
                     </p>
                   </div>
@@ -406,8 +406,8 @@ export default async function IGuideReviewPage({
           })}
         </ul>
       ) : (
-        <div className="rounded-2xl border border-dashed border-white/10 bg-ink-soft/40 px-4 py-8 text-center">
-          <p className="text-sm text-ink-muted">
+        <div className="rounded-2xl border border-dashed border-realtor-primary/15 bg-realtor-surface/60 px-4 py-8 text-center">
+          <p className="text-sm text-realtor-muted">
             {view === "likely" && unrelatedItems.length > 0
               ? "No likely matches. The remaining iGUIDEs look unrelated to current bookings."
               : "Nothing to review. If an iGUIDE comes in and the site cannot match it, it will show up here."}
@@ -415,7 +415,7 @@ export default async function IGuideReviewPage({
           {view === "likely" && unrelatedItems.length > 0 ? (
             <Link
               href="/admin/iguide?view=all"
-              className="mt-3 inline-flex rounded-full border border-white/10 px-3 py-1.5 text-xs text-brand-light hover:border-brand-light"
+              className="mt-3 inline-flex rounded-full border border-realtor-primary/15 px-3 py-1.5 text-xs text-realtor-primary hover:border-realtor-primary/40"
             >
               See all unmatched iGUIDEs
             </Link>
@@ -423,9 +423,9 @@ export default async function IGuideReviewPage({
         </div>
       )}
 
-      <p className="text-xs text-ink-muted">
+      <p className="text-xs text-realtor-muted">
         Matched iGUIDEs appear on the relevant{" "}
-        <Link href="/admin/bookings" className="text-brand-light underline">
+        <Link href="/admin/bookings" className="text-realtor-primary underline">
           booking
         </Link>
         .
@@ -436,9 +436,9 @@ export default async function IGuideReviewPage({
 
 function InfoBox({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-ink-soft/40 p-4">
-      <p className="text-sm font-semibold text-white">{title}</p>
-      <p className="mt-1 text-xs text-ink-muted">{body}</p>
+    <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/60 p-4">
+      <p className="text-sm font-semibold text-realtor-text">{title}</p>
+      <p className="mt-1 text-xs text-realtor-muted">{body}</p>
     </div>
   );
 }
@@ -447,18 +447,18 @@ function statusCopy(status: string): { label: string; classes: string } {
   if (status === "failed") {
     return {
       label: "Needs help",
-      classes: "border-red-300/40 text-red-200",
+      classes: "border-red-200 text-red-700",
     };
   }
   if (status === "received") {
     return {
       label: "New",
-      classes: "border-brand-light/50 text-brand-light",
+      classes: "border-realtor-primary/50 text-realtor-primary",
     };
   }
   return {
     label: "Needs review",
-    classes: "border-amber-300/40 text-amber-200",
+    classes: "border-amber-200 text-amber-800",
   };
 }
 

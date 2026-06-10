@@ -278,7 +278,7 @@ export default async function BookingDetailPage({
       <div className="flex items-center justify-between">
         <Link
           href="/admin/bookings"
-          className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-ink-muted transition hover:border-white/30 hover:text-white"
+          className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
         >
           ← Bookings
         </Link>
@@ -289,16 +289,16 @@ export default async function BookingDetailPage({
         </span>
       </div>
 
-      <header className="rounded-2xl border border-white/10 bg-ink-soft/60 p-4 shadow-lg shadow-black/10 md:p-5">
+      <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10 md:p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+            <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
               Booking workspace
             </p>
-            <h1 className="mt-1 text-2xl font-bold text-white">
+            <h1 className="mt-1 text-2xl font-bold text-realtor-text">
               {property?.street_address ?? "—"}
             </h1>
-            <p className="mt-1 text-sm text-ink-muted">
+            <p className="mt-1 text-sm text-realtor-muted">
               {[property?.city, property?.postal_code].filter(Boolean).join(" ")}
               {booking.scheduled_at
                 ? ` · ${formatDateTime(booking.scheduled_at)}`
@@ -308,14 +308,14 @@ export default async function BookingDetailPage({
           <div className="flex flex-wrap gap-2">
             <Link
               href={`/admin/bookings/${booking.id}?tab=delivery`}
-              className="tap-target rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-light"
+              className="tap-target rounded-full bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-realtor-primary/90"
             >
               Send delivery
             </Link>
             {profile?.phone ? (
               <a
                 href={`tel:${profile.phone}`}
-                className="tap-target rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
+                className="tap-target rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
               >
                 Call realtor
               </a>
@@ -323,7 +323,7 @@ export default async function BookingDetailPage({
             {profile?.email ? (
               <a
                 href={`mailto:${profile.email}`}
-                className="tap-target rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
+                className="tap-target rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
               >
                 Email
               </a>
@@ -335,7 +335,7 @@ export default async function BookingDetailPage({
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="tap-target rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
+                className="tap-target rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
               >
                 Map
               </a>
@@ -345,7 +345,7 @@ export default async function BookingDetailPage({
             ) : null}
             <Link
               href="/admin/today"
-              className="tap-target rounded-full border border-white/10 px-3 py-1.5 text-xs text-white transition hover:border-brand-light"
+              className="tap-target rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
             >
               Today
             </Link>
@@ -549,7 +549,7 @@ function DetailsTab({
               profile?.email ? (
                 <a
                   href={`mailto:${profile.email}`}
-                  className="text-brand-light underline"
+                  className="text-realtor-primary underline"
                 >
                   {profile.email}
                 </a>
@@ -564,7 +564,7 @@ function DetailsTab({
               profile?.phone ? (
                 <a
                   href={`tel:${profile.phone}`}
-                  className="text-brand-light underline"
+                  className="text-realtor-primary underline"
                 >
                   {profile.phone}
                 </a>
@@ -626,7 +626,7 @@ function DetailsTab({
               )}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="block rounded-xl border border-white/10 bg-ink/25 px-3 py-2 text-sm font-semibold text-brand-light transition hover:border-brand-light/50"
+              className="block rounded-xl border border-realtor-primary/15 bg-white/65 px-3 py-2 text-sm font-semibold text-realtor-primary transition hover:border-realtor-primary/50"
             >
               Open in Google Maps
             </a>
@@ -644,7 +644,7 @@ function DetailsTab({
               ) : null}
             </>
           ) : (
-            <p className="text-sm text-ink-muted">No notes on this booking.</p>
+            <p className="text-sm text-realtor-muted">No notes on this booking.</p>
           )}
         </Panel>
       </div>
@@ -660,17 +660,17 @@ function AgentNotesReminder({
   memory: string[];
 }) {
   return (
-    <div className="rounded-2xl border border-amber-300/40 bg-amber-300/10 p-4 shadow-lg shadow-black/10">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-200">
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-lg shadow-realtor-text/10">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-800">
         Agent notes reminder
       </p>
       {notes ? (
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-amber-50">
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-amber-900">
           {notes}
         </p>
       ) : null}
       {memory.length ? (
-        <ul className="mt-2 space-y-1 text-sm leading-6 text-amber-50">
+        <ul className="mt-2 space-y-1 text-sm leading-6 text-amber-900">
           {memory.slice(0, 4).map((item) => (
             <li key={item}>{item}</li>
           ))}
@@ -687,18 +687,18 @@ function DeliveryLinksPanel({ links }: { links: DeliveryLink[] }) {
     <Panel title="Delivery preview">
       {links.length > 0 ? (
         <div className="space-y-3">
-          <div className="rounded-2xl border border-white/10 bg-ink/25 p-3">
-            <p className="text-sm font-semibold text-white">
+          <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+            <p className="text-sm font-semibold text-realtor-text">
               {totalLinks} delivery link{totalLinks === 1 ? "" : "s"} ready
             </p>
-            <p className="mt-1 text-xs text-ink-muted">
+            <p className="mt-1 text-xs text-realtor-muted">
               These are grouped the same way the realtor sees them in their
               portal media kit and delivery email.
             </p>
           </div>
           {groups.map((group) => (
             <div key={group.category}>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-light">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">
                 {group.title}
               </p>
               <ul className="mt-1 space-y-1">
@@ -708,7 +708,7 @@ function DeliveryLinksPanel({ links }: { links: DeliveryLink[] }) {
                       href={link.url}
                       target="_blank"
                       rel="noopener"
-                      className="block truncate text-xs text-white/90 underline decoration-white/20 hover:text-brand-light"
+                      className="block truncate text-xs text-realtor-text/90 underline decoration-white/20 hover:text-realtor-primary"
                     >
                       {link.label}
                     </a>
@@ -719,7 +719,7 @@ function DeliveryLinksPanel({ links }: { links: DeliveryLink[] }) {
           ))}
         </div>
       ) : (
-        <p className="text-sm text-ink-muted">
+        <p className="text-sm text-realtor-muted">
           Delivery links will appear here once video, iGUIDE, or manual links
           are ready.
         </p>
@@ -760,11 +760,11 @@ function groupDeliveryLinks(links: DeliveryLink[]): Array<{
 
 function SummaryStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-ink/50 p-3">
-      <p className="text-[10px] uppercase tracking-wider text-ink-muted">
+    <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+      <p className="text-[10px] uppercase tracking-wider text-realtor-muted">
         {label}
       </p>
-      <p className="mt-1 truncate text-sm font-semibold text-white">{value}</p>
+      <p className="mt-1 truncate text-sm font-semibold text-realtor-text">{value}</p>
     </div>
   );
 }
@@ -780,11 +780,11 @@ function SectionIntro({
 }) {
   return (
     <div>
-      <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+      <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
         {eyebrow}
       </p>
-      <h2 className="mt-1 text-xl font-semibold text-white">{title}</h2>
-      <p className="mt-1 text-sm text-ink-muted">{body}</p>
+      <h2 className="mt-1 text-xl font-semibold text-realtor-text">{title}</h2>
+      <p className="mt-1 text-sm text-realtor-muted">{body}</p>
     </div>
   );
 }
@@ -792,10 +792,10 @@ function SectionIntro({
 function Note({ title, body }: { title: string; body: string }) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+      <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
         {title}
       </p>
-      <p className="mt-1 whitespace-pre-wrap text-sm text-ink-muted">{body}</p>
+      <p className="mt-1 whitespace-pre-wrap text-sm text-realtor-muted">{body}</p>
     </div>
   );
 }
@@ -808,8 +808,8 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
-      <p className="text-[11px] uppercase tracking-wider text-brand-light/80">
+    <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
+      <p className="text-[11px] uppercase tracking-wider text-realtor-primary/80">
         {title}
       </p>
       <div className="mt-3 space-y-2 text-sm">{children}</div>
@@ -825,9 +825,9 @@ function Row({
   value: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap justify-between gap-2 rounded-xl border border-white/5 bg-ink/25 px-3 py-2">
-      <span className="text-xs text-ink-muted">{label}</span>
-      <span className="text-right text-white">{value}</span>
+    <div className="flex flex-wrap justify-between gap-2 rounded-xl border border-realtor-primary/10 bg-white/65 px-3 py-2">
+      <span className="text-xs text-realtor-muted">{label}</span>
+      <span className="text-right text-realtor-text">{value}</span>
     </div>
   );
 }

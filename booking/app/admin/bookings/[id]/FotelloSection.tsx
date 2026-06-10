@@ -161,13 +161,13 @@ export default function FotelloSection({
   return (
     <div
       id="fotello"
-      className="space-y-5 rounded-2xl border border-brand/20 bg-brand/5 p-4"
+      className="space-y-5 rounded-2xl border border-realtor-primary/20 bg-realtor-primary/5 p-4"
     >
       <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-realtor-primary">
           Fotello
         </h2>
-        <p className="mt-1 text-xs text-ink-muted">
+        <p className="mt-1 text-xs text-realtor-muted">
           Upload photos here and we will send them to Fotello, track the
           enhancement, and show the finished gallery in the realtor portal
           automatically.
@@ -177,12 +177,12 @@ export default function FotelloSection({
       {/* Upload photos */}
       <form
         action={onUpload}
-        className="rounded-2xl border border-white/10 bg-ink-soft/50 p-3"
+        className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-3"
       >
-        <p className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+        <p className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
           Upload to Fotello
         </p>
-        <p className="mt-1 text-xs text-ink-muted">
+        <p className="mt-1 text-xs text-realtor-muted">
           Pick photos from this shoot and Fotello will enhance them under this
           booking's listing.
         </p>
@@ -193,21 +193,21 @@ export default function FotelloSection({
             multiple
             accept="image/*"
             disabled={uploading}
-            className="rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white file:mr-3 file:rounded-full file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white disabled:opacity-60"
+            className="rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text file:mr-3 file:rounded-full file:border-0 file:bg-realtor-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white disabled:opacity-60"
           />
           <button
             type="submit"
             disabled={uploading}
-            className="rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
+            className="rounded-full bg-realtor-primary px-3 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-50"
           >
             {uploading ? "Working..." : "Upload + enhance"}
           </button>
         </div>
         {uploadStatus ? (
-          <p className="mt-2 text-xs text-emerald-300">{uploadStatus}</p>
+          <p className="mt-2 text-xs text-emerald-700">{uploadStatus}</p>
         ) : null}
         {uploadError ? (
-          <p className="mt-2 text-xs text-red-300" role="alert">
+          <p className="mt-2 text-xs text-red-700" role="alert">
             {uploadError}
           </p>
         ) : null}
@@ -215,10 +215,10 @@ export default function FotelloSection({
 
       {/* Listing ID */}
       <div>
-        <label className="block text-xs font-medium uppercase tracking-wider text-ink-muted">
+        <label className="block text-xs font-medium uppercase tracking-wider text-realtor-muted">
           Fotello listing ID
         </label>
-        <p className="mt-1 text-xs text-ink-muted">
+        <p className="mt-1 text-xs text-realtor-muted">
           This is the ID after <span className="font-mono">/listings/</span> in
           a Fotello dashboard URL. It connects the Fotello listing to this
           booking, but it does not add anything to the realtor portal by itself.
@@ -229,24 +229,24 @@ export default function FotelloSection({
             value={listingId}
             onChange={(e) => setListingId(e.target.value)}
             placeholder="WkgmcWEz7UUSqtfwSn6P or full Fotello listing URL"
-            className="flex-1 min-w-[260px] rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+            className="flex-1 min-w-[260px] rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text placeholder-realtor-muted/60 focus:outline-none focus:ring-2 focus:ring-realtor-primary/60"
           />
           <button
             type="button"
             disabled={savingListing || !listingDirty}
             onClick={onSaveListing}
-            className="rounded-full border border-white/15 px-3 py-2 text-sm text-white/90 hover:border-brand-light hover:bg-brand/10 disabled:opacity-50"
+            className="rounded-full border border-realtor-primary/20 px-3 py-2 text-sm text-realtor-text/90 hover:border-realtor-primary/40 hover:bg-realtor-primary/10 disabled:opacity-50"
           >
             {savingListing ? "Saving…" : "Save"}
           </button>
         </div>
         {listingError ? (
-          <p className="mt-1 text-xs text-red-300" role="alert">
+          <p className="mt-1 text-xs text-red-700" role="alert">
             {listingError}
           </p>
         ) : null}
         {listingMessage ? (
-          <p className="mt-1 text-xs text-emerald-300">{listingMessage}</p>
+          <p className="mt-1 text-xs text-emerald-700">{listingMessage}</p>
         ) : null}
       </div>
 
@@ -265,19 +265,19 @@ export default function FotelloSection({
             router.refresh();
           });
         }}
-        className="rounded-2xl border border-white/10 bg-ink-soft/50 p-3"
+        className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-3"
       >
-        <p className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+        <p className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
           Realtor delivery links
         </p>
-        <p className="mt-1 text-xs text-ink-muted">
+        <p className="mt-1 text-xs text-realtor-muted">
           Fotello says these listing-level links are the right links to send to
           realtors. Paste them here when Fotello gives them to you; leave a field
           blank to remove it.
         </p>
         <div className="mt-3 grid gap-2">
           <label className="block">
-            <span className="text-[10px] uppercase tracking-wider text-ink-muted">
+            <span className="text-[10px] uppercase tracking-wider text-realtor-muted">
               Listing Share Link
             </span>
             <input
@@ -285,11 +285,11 @@ export default function FotelloSection({
               type="url"
               defaultValue={deliveryLink("listing_share")}
               placeholder="https://..."
-              className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
+              className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text placeholder-realtor-muted/60"
             />
           </label>
           <label className="block">
-            <span className="text-[10px] uppercase tracking-wider text-ink-muted">
+            <span className="text-[10px] uppercase tracking-wider text-realtor-muted">
               Branded Property Website
             </span>
             <input
@@ -297,11 +297,11 @@ export default function FotelloSection({
               type="url"
               defaultValue={deliveryLink("branded_property_website")}
               placeholder="https://..."
-              className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
+              className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text placeholder-realtor-muted/60"
             />
           </label>
           <label className="block">
-            <span className="text-[10px] uppercase tracking-wider text-ink-muted">
+            <span className="text-[10px] uppercase tracking-wider text-realtor-muted">
               Unbranded Property Website
             </span>
             <input
@@ -309,33 +309,33 @@ export default function FotelloSection({
               type="url"
               defaultValue={deliveryLink("unbranded_property_website")}
               placeholder="https://..."
-              className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
+              className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text placeholder-realtor-muted/60"
             />
           </label>
         </div>
         <button
           type="submit"
           disabled={savingDeliveryLinks}
-          className="mt-3 rounded-full border border-white/15 px-3 py-2 text-sm font-semibold text-white hover:border-brand-light hover:bg-brand/10 disabled:opacity-50"
+          className="mt-3 rounded-full border border-realtor-primary/20 px-3 py-2 text-sm font-semibold text-realtor-text hover:border-realtor-primary/40 hover:bg-realtor-primary/10 disabled:opacity-50"
         >
           {savingDeliveryLinks ? "Saving..." : "Save delivery links"}
         </button>
         {deliveryLinksError ? (
-          <p className="mt-2 text-xs text-red-300" role="alert">
+          <p className="mt-2 text-xs text-red-700" role="alert">
             {deliveryLinksError}
           </p>
         ) : null}
         {deliveryLinksOk ? (
-          <p className="mt-2 text-xs text-emerald-300">{deliveryLinksOk}</p>
+          <p className="mt-2 text-xs text-emerald-700">{deliveryLinksOk}</p>
         ) : null}
       </form>
 
       {/* Track a new enhance */}
-      <div className="rounded-2xl border border-white/10 bg-ink-soft/50 p-3">
-        <p className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+      <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-3">
+        <p className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
           Track an enhance
         </p>
-        <p className="mt-1 text-xs text-ink-muted">
+        <p className="mt-1 text-xs text-realtor-muted">
           Backup option for an existing Fotello job if you already have the
           enhance ID. Fotello may not show a public gallery link.
         </p>
@@ -345,31 +345,31 @@ export default function FotelloSection({
             value={enhanceInput}
             onChange={(e) => setEnhanceInput(e.target.value)}
             placeholder="Enhance ID from Fotello"
-            className="rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder-ink-muted/60"
+            className="rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text placeholder-realtor-muted/60"
           />
           <button
             type="button"
             disabled={trackingPending || !enhanceInput.trim()}
             onClick={onTrack}
-            className="rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
+            className="rounded-full bg-realtor-primary px-3 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-50"
           >
             {trackingPending ? "Checking…" : "Track"}
           </button>
         </div>
         {trackError ? (
-          <p className="mt-2 text-xs text-red-300" role="alert">
+          <p className="mt-2 text-xs text-red-700" role="alert">
             {trackError}
           </p>
         ) : null}
         {trackOk ? (
-          <p className="mt-2 text-xs text-emerald-300">{trackOk}</p>
+          <p className="mt-2 text-xs text-emerald-700">{trackOk}</p>
         ) : null}
       </div>
 
       {/* Tracked enhances */}
       {trackedEnhances.length > 0 ? (
         <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+          <p className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
             Tracked enhances ({trackedEnhances.length})
           </p>
           <ul className="mt-2 space-y-2">
@@ -424,12 +424,12 @@ function TrackedEnhanceRow({
   const statusChip = statusChipFor(localStatus);
 
   return (
-    <li className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-ink-soft/40 p-3 text-sm">
+    <li className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-realtor-primary/15 bg-realtor-surface/60 p-3 text-sm">
       <div className="min-w-0">
-        <p className="truncate font-mono text-xs text-white">
+        <p className="truncate font-mono text-xs text-realtor-text">
           {deliverable.external_id ?? "—"}
         </p>
-        <p className="mt-0.5 text-[11px] text-ink-muted">
+        <p className="mt-0.5 text-[11px] text-realtor-muted">
           {deliverable.syncedAt
             ? `synced ${new Date(deliverable.syncedAt).toLocaleTimeString()}`
             : "never synced"}
@@ -445,7 +445,7 @@ function TrackedEnhanceRow({
           type="button"
           disabled={refreshing}
           onClick={onRefresh}
-          className="rounded-full border border-white/15 px-2.5 py-1 text-xs text-white hover:border-brand-light hover:text-brand-light disabled:opacity-50"
+          className="rounded-full border border-realtor-primary/20 px-2.5 py-1 text-xs text-realtor-text hover:border-realtor-primary/40 hover:text-realtor-primary disabled:opacity-50"
         >
           {refreshing ? "…" : "Refresh"}
         </button>
@@ -453,13 +453,13 @@ function TrackedEnhanceRow({
           type="button"
           disabled={deleting}
           onClick={onDelete}
-          className="text-xs text-red-300 hover:text-red-200 disabled:opacity-50"
+          className="text-xs text-red-700 hover:text-red-800 disabled:opacity-50"
         >
           {deleting ? "…" : "Remove"}
         </button>
       </div>
       {error ? (
-        <p className="w-full text-xs text-red-300" role="alert">
+        <p className="w-full text-xs text-red-700" role="alert">
           {error}
         </p>
       ) : null}
@@ -476,23 +476,23 @@ function statusChipFor(status: string | null): {
       return {
         label: "Ready",
         className:
-          "border-emerald-400/40 bg-emerald-400/10 text-emerald-200",
+          "border-emerald-300 bg-emerald-50 text-emerald-700",
       };
     case "failed":
       return {
         label: "Failed",
-        className: "border-red-400/40 bg-red-400/10 text-red-200",
+        className: "border-red-300 bg-red-50 text-red-700",
       };
     case "in_progress":
     case "pending":
       return {
         label: "In progress",
-        className: "border-amber-400/40 bg-amber-400/10 text-amber-200",
+        className: "border-amber-300 bg-amber-50 text-amber-800",
       };
     default:
       return {
         label: status ?? "Unknown",
-        className: "border-white/15 text-ink-muted",
+        className: "border-realtor-primary/20 text-realtor-muted",
       };
   }
 }

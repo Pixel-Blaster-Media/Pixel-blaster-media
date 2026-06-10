@@ -73,28 +73,28 @@ export default function BookingActions({
   const showCancel = isCancellable(currentStatus);
 
   return (
-    <div className="space-y-5 rounded-2xl border border-brand/20 bg-brand/5 p-4">
+    <div className="space-y-5 rounded-2xl border border-realtor-primary/20 bg-realtor-primary/5 p-4">
       <header>
-        <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
+        <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
           Job status
         </p>
-        <h2 className="mt-1 text-lg font-semibold text-white">
+        <h2 className="mt-1 text-lg font-semibold text-realtor-text">
           Move the job through the pipeline
         </h2>
       </header>
 
-      <section className="rounded-2xl border border-white/10 bg-ink-soft/50 p-3">
+      <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="text-sm font-semibold text-white">Status</h3>
-            <p className="mt-0.5 text-xs text-ink-muted">
+            <h3 className="text-sm font-semibold text-realtor-text">Status</h3>
+            <p className="mt-0.5 text-xs text-realtor-muted">
               Current: {BOOKING_STATUSES[currentStatus].label}
             </p>
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {forwardOnly.length === 0 && !showCancel ? (
-            <p className="text-xs text-ink-muted">
+            <p className="text-xs text-realtor-muted">
               Terminal state — no further transitions.
             </p>
           ) : (
@@ -104,7 +104,7 @@ export default function BookingActions({
                 type="button"
                 disabled={isPending}
                 onClick={() => moveTo(s)}
-                className="rounded-full border border-white/15 px-3 py-1.5 text-sm text-white/90 hover:border-brand-light hover:bg-brand/10 disabled:opacity-60"
+                className="rounded-full border border-realtor-primary/20 px-3 py-1.5 text-sm text-realtor-text/90 hover:border-realtor-primary/40 hover:bg-realtor-primary/10 disabled:opacity-60"
               >
                 Move to {BOOKING_STATUSES[s].label}
               </button>
@@ -115,14 +115,14 @@ export default function BookingActions({
               type="button"
               disabled={isPending}
               onClick={cancel}
-              className="rounded-full border border-red-400/40 px-3 py-1.5 text-sm text-red-200 hover:border-red-300 hover:bg-red-500/10 disabled:opacity-60"
+              className="rounded-full border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:border-red-300 hover:bg-red-50 disabled:opacity-60"
             >
               Cancel booking
             </button>
           ) : null}
         </div>
         {error ? (
-          <p className="mt-2 text-sm text-red-300" role="alert">
+          <p className="mt-2 text-sm text-red-700" role="alert">
             {error}
           </p>
         ) : null}
@@ -148,14 +148,14 @@ export function DeliveryEmailPanel({
   adminEmail: string;
 }) {
   return (
-    <section className="rounded-2xl border border-brand/20 bg-brand/5 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
+    <section className="rounded-2xl border border-realtor-primary/20 bg-realtor-primary/5 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
         Delivery email
       </p>
-      <h2 className="mt-1 text-lg font-semibold text-white">
+      <h2 className="mt-1 text-lg font-semibold text-realtor-text">
         Send the finished media
       </h2>
-      <p className="mt-1 text-xs text-ink-muted">
+      <p className="mt-1 text-xs text-realtor-muted">
         Email the realtor when their media links are ready. You can resend it
         any time.
       </p>
@@ -196,12 +196,12 @@ function DeliveryEmailButton({
   return (
     <div className="mt-3">
       {sentAt ? (
-        <p className="mb-2 text-xs text-emerald-300">
+        <p className="mb-2 text-xs text-emerald-700">
           Already sent {formatSentAt(sentAt)}.
         </p>
       ) : null}
-      <div className="mb-3 rounded-2xl border border-white/10 bg-ink/30 p-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+      <div className="mb-3 rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
           Recipients
         </p>
         <div className="mt-2 flex flex-wrap gap-2">
@@ -212,7 +212,7 @@ function DeliveryEmailButton({
               name={primaryRecipientName}
             />
           ) : (
-            <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-100">
+            <span className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
               Realtor email missing
             </span>
           )}
@@ -227,7 +227,7 @@ function DeliveryEmailButton({
           ))}
         </div>
       </div>
-      <label className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">
+      <label className="block text-xs font-semibold uppercase tracking-wider text-realtor-muted">
         Extra recipients for this send
       </label>
       <textarea
@@ -235,9 +235,9 @@ function DeliveryEmailButton({
         onChange={(event) => setExtraRecipients(event.target.value)}
         rows={2}
         placeholder="teammate@example.com, assistant@example.com"
-        className="mt-1 w-full rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60"
+        className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text placeholder-realtor-muted/60"
       />
-      <p className="mt-1 text-[11px] text-ink-muted">
+      <p className="mt-1 text-[11px] text-realtor-muted">
         Add one-off teammates here. Saved CCs come from the realtor profile.
       </p>
       <button
@@ -263,7 +263,7 @@ function DeliveryEmailButton({
             );
           });
         }}
-        className="mt-3 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+        className="mt-3 rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-60"
       >
         {isPending
           ? "Sending..."
@@ -274,12 +274,12 @@ function DeliveryEmailButton({
             : "Send delivery email"}
       </button>
       {error ? (
-        <p className="mt-2 text-sm text-red-300" role="alert">
+        <p className="mt-2 text-sm text-red-700" role="alert">
           {error}
         </p>
       ) : null}
       {message ? (
-        <p className="mt-2 text-xs text-emerald-300">{message}</p>
+        <p className="mt-2 text-xs text-emerald-700">{message}</p>
       ) : null}
     </div>
   );
@@ -295,8 +295,8 @@ function RecipientPill({
   name: string | null;
 }) {
   return (
-    <span className="rounded-full border border-white/10 bg-ink-soft px-3 py-1.5 text-xs text-white">
-      <span className="text-ink-muted">{label}: </span>
+    <span className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-3 py-1.5 text-xs text-realtor-text">
+      <span className="text-realtor-muted">{label}: </span>
       {name ? `${name} · ` : ""}
       {email}
     </span>
@@ -311,12 +311,12 @@ export function ManualLinksPanel({
   deliverables: DeliverableSummary[];
 }) {
   return (
-    <details className="rounded-2xl border border-white/10 bg-ink-soft/50 p-4">
-      <summary className="cursor-pointer text-sm font-semibold text-white">
+    <details className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4">
+      <summary className="cursor-pointer text-sm font-semibold text-realtor-text">
         Advanced manual links
       </summary>
       <div className="mt-3">
-        <p className="text-xs text-ink-muted">
+        <p className="text-xs text-realtor-muted">
           Fallback for unusual public links like video, Drive, Dropbox,
           floor plan, or iGUIDE URLs.
         </p>
@@ -325,17 +325,17 @@ export function ManualLinksPanel({
 
       {deliverables.length > 0 ? (
         <div>
-          <h3 className="mt-5 text-sm font-semibold text-white">
+          <h3 className="mt-5 text-sm font-semibold text-realtor-text">
             Manage existing links
           </h3>
           <ul className="mt-3 space-y-2">
             {deliverables.map((d) => (
               <li
                 key={d.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-ink/25 px-3 py-2 text-sm"
+                className="flex items-center justify-between gap-3 rounded-xl border border-realtor-primary/15 bg-white/65 px-3 py-2 text-sm"
               >
-                <span className="truncate text-ink-muted">
-                  <span className="text-white">
+                <span className="truncate text-realtor-muted">
+                  <span className="text-realtor-text">
                     {deliverableTypeLabel(d.type)}
                   </span>
                   {" · "}
@@ -388,7 +388,7 @@ function ManualDeliverableForm({ bookingId }: { bookingId: string }) {
       <select
         name="type"
         defaultValue=""
-        className="rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
+        className="rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
       >
         <option value="" disabled>
           Type…
@@ -404,28 +404,28 @@ function ManualDeliverableForm({ bookingId }: { bookingId: string }) {
         type="url"
         placeholder="https://youriguide.com/..."
         required
-        className="rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
+        className="rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
       />
       <input
         name="thumbnail_url"
         type="url"
         placeholder="Thumbnail (opt)"
-        className="rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
+        className="rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
       />
       <button
         type="submit"
         disabled={isPending}
-        className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+        className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-60"
       >
         {isPending ? "Adding…" : "Add"}
       </button>
       {error ? (
-        <p className="md:col-span-4 text-sm text-red-300" role="alert">
+        <p className="md:col-span-4 text-sm text-red-700" role="alert">
           {error}
         </p>
       ) : null}
       {okMessage ? (
-        <p className="md:col-span-4 text-xs text-emerald-300">{okMessage}</p>
+        <p className="md:col-span-4 text-xs text-emerald-700">{okMessage}</p>
       ) : null}
     </form>
   );
@@ -449,7 +449,7 @@ function DeleteButton({
           await deleteDeliverable(bookingId, deliverableId);
         });
       }}
-      className="text-xs text-red-300 hover:text-red-200 disabled:opacity-60"
+      className="text-xs text-red-700 hover:text-red-800 disabled:opacity-60"
     >
       {isPending ? "…" : "Delete"}
     </button>

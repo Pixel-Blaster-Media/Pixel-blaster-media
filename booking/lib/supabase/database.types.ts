@@ -155,6 +155,7 @@ interface BookingsTable {
     unit_number: string | null;
     is_vacant: "vacant" | "occupied" | "partial" | null;
     include_basement: boolean | null;
+    reminder_sent_at: string | null;
     created_at: string;
     updated_at: string;
   };
@@ -185,6 +186,7 @@ interface BookingsTable {
     unit_number?: string | null;
     is_vacant?: "vacant" | "occupied" | "partial" | null;
     include_basement?: boolean | null;
+    reminder_sent_at?: string | null;
   };
   Update: Partial<BookingsTable["Insert"]>;
   Relationships: [];
