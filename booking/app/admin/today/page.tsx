@@ -304,8 +304,8 @@ function ShootCard({
   return (
     <li className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
       <details className="group" open={defaultOpen}>
-        <summary className="flex cursor-pointer list-none flex-wrap items-start justify-between gap-3 [&::-webkit-details-marker]:hidden">
-          <div className="min-w-0">
+        <summary className="relative flex cursor-pointer list-none items-start gap-3 pr-28 md:justify-between md:pr-0 [&::-webkit-details-marker]:hidden">
+          <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
               {booking.scheduled_at ? formatTime(booking.scheduled_at) : "No time"}
               {booking.scheduled_ends_at
@@ -320,7 +320,7 @@ function ShootCard({
             </p>
             <ShootWeatherChips weather={weather} />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="absolute right-0 top-0 flex items-center gap-2 md:static">
             <span
               className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${status.pill}`}
             >
@@ -525,9 +525,6 @@ function ShootWeatherChips({ weather }: { weather: ShootWeather | null }) {
           {chip}
         </span>
       ))}
-      <span className="rounded-full border border-realtor-primary/10 bg-realtor-primary/5 px-2 py-0.5 text-[11px] font-medium text-realtor-muted">
-        {weather.location}
-      </span>
     </div>
   );
 }
