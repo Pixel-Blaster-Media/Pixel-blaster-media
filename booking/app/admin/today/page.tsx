@@ -301,19 +301,22 @@ function ShootCard({
   return (
     <li className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
       <details className="group" open={defaultOpen}>
-        <summary className="relative flex cursor-pointer list-none items-start gap-3 pr-28 md:justify-between md:pr-0 [&::-webkit-details-marker]:hidden">
+        <summary className="relative flex cursor-pointer list-none items-start gap-3 md:justify-between [&::-webkit-details-marker]:hidden">
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
+            <p className="pr-28 text-xs font-semibold uppercase tracking-wider text-realtor-primary md:pr-0">
               {booking.scheduled_at ? formatTime(booking.scheduled_at) : "No time"}
               {booking.scheduled_ends_at
                 ? `-${formatTime(booking.scheduled_ends_at)}`
                 : ""}
             </p>
-            <h2 className="mt-1 text-lg font-semibold text-realtor-text">
+            <h2 className="mt-1 pr-28 text-lg font-semibold text-realtor-text md:pr-0">
               {addressLine || "Unknown address"}
             </h2>
-            <p className="mt-0.5 text-sm text-realtor-muted">
-              {[property?.city, property?.postal_code].filter(Boolean).join(" ")}
+            <p className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-realtor-muted">
+              <span>
+                {[property?.city, property?.postal_code].filter(Boolean).join(" ")}
+              </span>
+              <ShootWeatherLine weather={weather} />
             </p>
           </div>
           <div className="absolute right-0 top-0 flex items-center gap-2 md:static">
@@ -330,7 +333,6 @@ function ShootCard({
             </span>
           </div>
         </summary>
-        <ShootWeatherChips weather={weather} />
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
@@ -495,7 +497,7 @@ function NoteDisclosure({ title, body }: { title: string; body: string }) {
   );
 }
 
-function ShootWeatherChips({ weather }: { weather: ShootWeather | null }) {
+function ShootWeatherLine({ weather }: { weather: ShootWeather | null }) {
   if (!weather) return null;
   const condition =
     weather.temperatureC != null
@@ -515,18 +517,17 @@ function ShootWeatherChips({ weather }: { weather: ShootWeather | null }) {
   if (!chips.length) return null;
 
   return (
-    <div className="mt-2 max-w-full">
-      <div className="flex w-full min-w-0 items-center overflow-hidden rounded-full border border-realtor-primary/15 bg-white/70 px-2 py-0.5 text-[10px] font-medium text-realtor-muted sm:w-fit sm:text-[11px]">
+    <>
+      <span className="text-realtor-muted/40">·</span>
       {chips.map((chip) => (
         <span
           key={chip}
-          className="min-w-0 shrink truncate after:mx-1 after:text-realtor-muted/40 after:content-['•'] last:after:hidden sm:after:mx-1.5"
+          className="whitespace-nowrap text-xs font-medium after:ml-1.5 after:text-realtor-muted/40 after:content-['•'] last:after:hidden"
         >
           {chip}
         </span>
       ))}
-      </div>
-    </div>
+    </>
   );
 }
 
