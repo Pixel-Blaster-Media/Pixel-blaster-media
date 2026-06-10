@@ -41,7 +41,7 @@ export default function LinkEventForm({
         <select
           name="booking_id"
           defaultValue={suggestedBookingId ?? ""}
-          className="rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white"
+          className="rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
           required
         >
           <option value="" disabled>
@@ -56,7 +56,7 @@ export default function LinkEventForm({
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+          className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-60"
         >
           {isPending ? "Linking..." : "Link to booking"}
         </button>
@@ -80,18 +80,18 @@ export default function LinkEventForm({
         <button
           type="submit"
           disabled={isPending}
-          className="text-xs text-ink-muted underline hover:text-red-300 disabled:opacity-60"
+          className="text-xs text-realtor-muted underline hover:text-red-800 disabled:opacity-60"
         >
           This is not my shoot
         </button>
       </form>
       {error ? (
-        <p className="text-sm text-red-300" role="alert">
+        <p className="text-sm text-red-700" role="alert">
           {error}
         </p>
       ) : null}
       {ok ? (
-        <p className="text-xs text-emerald-300">Saved.</p>
+        <p className="text-xs text-emerald-700">Saved.</p>
       ) : null}
     </div>
   );

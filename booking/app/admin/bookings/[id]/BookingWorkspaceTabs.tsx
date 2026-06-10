@@ -62,7 +62,7 @@ export default function BookingWorkspaceTabs({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-white/10 bg-ink-soft/50 p-2">
+      <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-2">
         <div className="flex gap-2 overflow-x-auto sm:grid sm:grid-cols-3 sm:overflow-x-visible lg:grid-cols-5">
           {tabs.map((tab) => {
             const selected = tab.id === activeTab.id;
@@ -72,8 +72,8 @@ export default function BookingWorkspaceTabs({
                 href={tab.id === "media" ? baseHref : `${baseHref}?tab=${tab.id}`}
                 className={`shrink-0 whitespace-nowrap rounded-xl px-3 py-3 text-left transition sm:shrink sm:whitespace-normal ${
                   selected
-                    ? "bg-brand text-white shadow-sm"
-                    : "border border-white/10 text-ink-muted hover:border-brand-light/40 hover:bg-white/5 hover:text-white"
+                    ? "bg-realtor-primary text-white shadow-sm"
+                    : "border border-realtor-primary/15 text-realtor-muted hover:border-realtor-primary/40 hover:bg-realtor-primary/5 hover:text-realtor-primary"
                 }`}
                 aria-current={selected ? "page" : undefined}
               >

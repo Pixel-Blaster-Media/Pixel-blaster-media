@@ -248,7 +248,7 @@ export default function CalendarWeekView({
 
   return (
     <div className="max-w-full space-y-3 overflow-hidden md:space-y-4">
-      <div className="hidden text-ink-muted md:flex md:flex-wrap md:items-center md:gap-3 md:text-xs">
+      <div className="hidden text-realtor-muted md:flex md:flex-wrap md:items-center md:gap-3 md:text-xs">
         <span className="inline-flex min-w-0 items-center gap-1.5">
           <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#fffdf8] ring-1 ring-[#d8cab9]" />
           Working hours
@@ -575,28 +575,28 @@ export default function CalendarWeekView({
       </div>
 
       {selected ? (
-        <div className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 max-h-[85dvh] overflow-y-auto rounded-2xl border border-brand/30 bg-ink-soft/95 p-4 shadow-2xl shadow-black/50 backdrop-blur-xl md:left-auto md:w-[560px]">
+        <div className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 max-h-[85dvh] overflow-y-auto rounded-2xl border border-realtor-primary/30 bg-realtor-surface/95 p-4 shadow-2xl shadow-realtor-text/15 backdrop-blur-xl md:left-auto md:w-[560px]">
           <div className="relative pr-16">
             <div>
-              <p className="text-sm font-semibold text-white">
+              <p className="text-sm font-semibold text-realtor-text">
                 {selected.day.label} at{" "}
                 {formatTime(selected.hour, selected.minute)}
               </p>
-              <p className="mt-1 text-xs text-ink-muted">
+              <p className="mt-1 text-xs text-realtor-muted">
                 Add a confirmed shoot here, or block the time off privately.
               </p>
             </div>
             <button
               type="button"
               onClick={() => setSelected(null)}
-              className="tap-target absolute right-0 top-0 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:border-brand-light hover:bg-brand/20"
+              className="tap-target absolute right-0 top-0 rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-text shadow-sm transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
             >
               Close
             </button>
           </div>
 
-          <label className="mt-4 block overflow-hidden rounded-2xl border border-white/10 bg-ink/75 p-3">
-            <span className="text-xs font-semibold text-ink-muted">
+          <label className="mt-4 block overflow-hidden rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+            <span className="text-xs font-semibold text-realtor-muted">
               Adjust time manually
             </span>
             <select
@@ -613,7 +613,7 @@ export default function CalendarWeekView({
                   );
                 }
               }}
-              className="mt-1 box-border block w-full min-w-0 max-w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-left text-sm text-white outline-none [color-scheme:dark] focus:border-brand-light/60"
+              className="mt-1 box-border block w-full min-w-0 max-w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-left text-sm text-realtor-text outline-none focus:border-realtor-primary/45"
             >
               {selectedTimeOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -623,7 +623,7 @@ export default function CalendarWeekView({
             </select>
           </label>
 
-          <div className="mt-4 inline-flex rounded-full border border-white/10 bg-ink p-1 text-xs">
+          <div className="mt-4 inline-flex rounded-full border border-realtor-primary/15 bg-realtor-surface p-1 text-xs">
             <button
               type="button"
               onClick={() => {
@@ -632,8 +632,8 @@ export default function CalendarWeekView({
               }}
               className={`tap-target rounded-full px-3 py-1.5 ${
                 mode === "shoot"
-                  ? "bg-brand text-white"
-                  : "text-ink-muted hover:text-white"
+                  ? "bg-realtor-primary text-white"
+                  : "text-realtor-muted hover:text-realtor-primary"
               }`}
             >
               Add shoot
@@ -646,8 +646,8 @@ export default function CalendarWeekView({
               }}
               className={`tap-target rounded-full px-3 py-1.5 ${
                 mode === "block"
-                  ? "bg-brand text-white"
-                  : "text-ink-muted hover:text-white"
+                  ? "bg-realtor-primary text-white"
+                  : "text-realtor-muted hover:text-realtor-primary"
               }`}
             >
               Block time
@@ -690,7 +690,7 @@ export default function CalendarWeekView({
               >
                 <div className="grid gap-3 md:grid-cols-2">
                   <label className="relative block">
-                    <span className="text-xs text-ink-muted">Realtor name</span>
+                    <span className="text-xs text-realtor-muted">Realtor name</span>
                     <div className="mt-1">
                       <input
                         name="contact_name"
@@ -721,10 +721,10 @@ export default function CalendarWeekView({
                             brokerage: "",
                           }));
                         }}
-                        className="w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white"
+                        className="w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
                       />
                       {isRealtorSearchOpen && realtorSearchResults.length > 0 ? (
-                        <ul className="absolute left-0 right-0 z-30 mt-1 max-h-60 overflow-auto rounded-xl border border-white/10 bg-ink shadow-2xl shadow-black/40">
+                        <ul className="absolute left-0 right-0 z-30 mt-1 max-h-60 overflow-auto rounded-xl border border-realtor-primary/15 bg-realtor-surface shadow-2xl shadow-realtor-text/15">
                           {realtorSearchResults.map((result) => (
                             <li key={result.id}>
                               <button
@@ -733,12 +733,12 @@ export default function CalendarWeekView({
                                   event.preventDefault();
                                   selectRealtor(result);
                                 }}
-                                className="block w-full px-3 py-2 text-left text-sm text-white transition hover:bg-brand/15"
+                                className="block w-full px-3 py-2 text-left text-sm text-realtor-text transition hover:bg-realtor-primary/10"
                               >
                                 <span className="block font-semibold">
                                   {result.fullName || result.email}
                                 </span>
-                                <span className="block truncate text-xs text-ink-muted">
+                                <span className="block truncate text-xs text-realtor-muted">
                                   {[result.email, result.brokerage]
                                     .filter(Boolean)
                                     .join(" · ")}
@@ -793,7 +793,7 @@ export default function CalendarWeekView({
                   />
                 </div>
                 {lookupMessage ? (
-                  <p className="text-xs text-brand-light">
+                  <p className="text-xs text-realtor-primary">
                     {lookupPending ? "Checking realtor..." : lookupMessage}
                   </p>
                 ) : null}
@@ -894,11 +894,11 @@ export default function CalendarWeekView({
               </FormSection>
 
               <label className="block">
-                <span className="text-xs text-ink-muted">Notes</span>
+                <span className="text-xs text-realtor-muted">Notes</span>
                 <textarea
                   name="notes"
                   rows={3}
-                  className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white"
+                  className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
                 />
               </label>
 
@@ -906,12 +906,12 @@ export default function CalendarWeekView({
                 <button
                   type="submit"
                   disabled={pending}
-                  className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-light disabled:opacity-60"
+                  className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-realtor-primary/90 disabled:opacity-60"
                 >
                   {pending ? "Adding..." : "Add confirmed shoot"}
                 </button>
                 {error ? (
-                  <p className="text-sm text-red-300" role="alert">
+                  <p className="text-sm text-red-700" role="alert">
                     {error}
                   </p>
                 ) : null}
@@ -938,7 +938,7 @@ export default function CalendarWeekView({
               value={selectedSlot ?? ""}
             />
             <label className="block">
-              <span className="text-xs text-ink-muted">Ends</span>
+              <span className="text-xs text-realtor-muted">Ends</span>
               <input
                 type="datetime-local"
                 name="ends_at"
@@ -948,27 +948,27 @@ export default function CalendarWeekView({
                   selected.minute,
                 )}
                 required
-                className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white"
+                className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
               />
             </label>
             <label className="block">
-              <span className="text-xs text-ink-muted">Private label</span>
+              <span className="text-xs text-realtor-muted">Private label</span>
               <input
                 type="text"
                 name="label"
                 defaultValue="Busy"
-                className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white"
+                className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
               />
             </label>
             <button
               type="submit"
               disabled={pending}
-              className="self-end rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-light disabled:opacity-60"
+              className="self-end rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-realtor-primary/90 disabled:opacity-60"
             >
               {pending ? "Adding..." : "Add block"}
             </button>
             {error ? (
-              <p className="md:col-span-3 text-sm text-red-300" role="alert">
+              <p className="md:col-span-3 text-sm text-red-700" role="alert">
                 {error}
               </p>
             ) : null}
@@ -989,10 +989,10 @@ function TextField({
 }) {
   return (
     <label className={`block ${className ?? ""}`}>
-      <span className="text-xs text-ink-muted">{label}</span>
+      <span className="text-xs text-realtor-muted">{label}</span>
       <input
         {...props}
-        className="mt-1 w-full rounded-xl border border-white/10 bg-ink px-3 py-2 text-sm text-white"
+        className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
       />
     </label>
   );
@@ -1010,14 +1010,14 @@ function FormSection({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-3 border-t border-white/10 pt-4 first:border-t-0 first:pt-0">
+    <section className="space-y-3 border-t border-realtor-primary/15 pt-4 first:border-t-0 first:pt-0">
       <div className="flex items-start gap-3">
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-brand/40 bg-brand/10 text-xs font-semibold text-brand-light">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-realtor-primary/40 bg-realtor-primary/10 text-xs font-semibold text-realtor-primary">
           {step}
         </span>
         <div>
-          <h2 className="text-sm font-semibold text-white">{title}</h2>
-          <p className="text-xs text-ink-muted">{detail}</p>
+          <h2 className="text-sm font-semibold text-realtor-text">{title}</h2>
+          <p className="text-xs text-realtor-muted">{detail}</p>
         </div>
       </div>
       <div className="space-y-3">{children}</div>
@@ -1039,7 +1039,7 @@ function CatalogPicker({ items }: { items: CatalogItemOption[] }) {
         if (groupItems.length === 0) return null;
         return (
           <fieldset key={group.title}>
-            <legend className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+            <legend className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
               {group.title}
             </legend>
             <div className="mt-2 grid gap-2 md:grid-cols-2">
@@ -1048,7 +1048,7 @@ function CatalogPicker({ items }: { items: CatalogItemOption[] }) {
                 return (
                   <div
                     key={item.id}
-                    className="rounded-2xl border border-white/10 bg-ink p-3 text-sm text-white transition hover:border-brand/40 hover:bg-white/[0.03]"
+                    className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface p-3 text-sm text-realtor-text transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
                   >
                     <div className="flex gap-3">
                       <input
@@ -1056,18 +1056,18 @@ function CatalogPicker({ items }: { items: CatalogItemOption[] }) {
                         type="checkbox"
                         name="catalog_item_id"
                         value={item.id}
-                        className="mt-1 h-4 w-4 shrink-0 rounded border-white/20 bg-ink"
+                        className="mt-1 h-4 w-4 shrink-0 rounded border-realtor-primary/25 bg-realtor-surface"
                       />
                       <label htmlFor={inputId} className="min-w-0 flex-1 cursor-pointer">
                         <span className="flex flex-wrap items-center gap-2 font-semibold">
                           {item.name}
                           {item.badge ? (
-                            <span className="rounded border border-brand/30 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-brand-light">
+                            <span className="rounded border border-realtor-primary/30 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-realtor-primary">
                               {item.badge}
                             </span>
                           ) : null}
                         </span>
-                        <span className="mt-1 block text-xs text-ink-muted">
+                        <span className="mt-1 block text-xs text-realtor-muted">
                           {formatPrice(item.priceCents)} ·{" "}
                           {formatDuration(item.durationMinutes)}
                           {item.requireHasVideo ? " · needs video" : ""}
@@ -1097,20 +1097,20 @@ function CatalogDescription({ description }: { description: string }) {
   const detailLines = lines.length > 1 ? lines : [description];
 
   return (
-    <details className="group mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-ink-muted marker:hidden">
+    <details className="group mt-3 rounded-xl border border-realtor-primary/15 bg-white/65 px-3 py-2">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-realtor-muted marker:hidden">
         <span className="line-clamp-1 min-w-0">{preview}</span>
-        <span className="shrink-0 text-[10px] uppercase tracking-wider text-brand-light group-open:hidden">
+        <span className="shrink-0 text-[10px] uppercase tracking-wider text-realtor-primary group-open:hidden">
           Details
         </span>
-        <span className="hidden shrink-0 text-[10px] uppercase tracking-wider text-brand-light group-open:inline">
+        <span className="hidden shrink-0 text-[10px] uppercase tracking-wider text-realtor-primary group-open:inline">
           Hide
         </span>
       </summary>
-      <ul className="mt-2 space-y-1.5 border-t border-white/10 pt-2 text-xs leading-5 text-ink-muted">
+      <ul className="mt-2 space-y-1.5 border-t border-realtor-primary/15 pt-2 text-xs leading-5 text-realtor-muted">
         {detailLines.map((line, index) => (
           <li key={`${line}-${index}`} className="flex gap-2">
-            <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-brand-light/70" />
+            <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-realtor-primary/70" />
             <span>{line}</span>
           </li>
         ))}

@@ -335,7 +335,7 @@ export default function RealtorProfileCard({
                       if (result.ok) router.refresh();
                     });
                   }}
-                  className="w-full rounded-full border border-red-500/25 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:border-red-500 disabled:opacity-60 sm:w-auto"
+                  className="w-full rounded-full border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:border-red-400 disabled:opacity-60 sm:w-auto"
                 >
                   {isRemoving ? "Removing..." : "Remove agent"}
                 </button>

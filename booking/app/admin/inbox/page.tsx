@@ -61,7 +61,7 @@ export default async function InboxPage({
 
   if (error) {
     return (
-      <p className="text-sm text-red-300">
+      <p className="text-sm text-red-700">
         Could not load inbox: {error.message}
       </p>
     );
@@ -69,16 +69,16 @@ export default async function InboxPage({
 
   return (
     <div className="space-y-6">
-      <header className="rounded-2xl border border-white/10 bg-ink-soft/55 p-4 shadow-lg shadow-black/10">
+      <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
         <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-brand-light">
+          <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
             Inbox · historical
           </p>
-          <h1 className="mt-1 text-2xl font-bold text-white">
+          <h1 className="mt-1 text-2xl font-bold text-realtor-text">
             Booking requests
           </h1>
-          <p className="mt-1 max-w-xl text-sm text-ink-muted">
+          <p className="mt-1 max-w-xl text-sm text-realtor-muted">
             Older request-form submissions live here. New self-serve bookings
             land directly on the main booking board.
           </p>
@@ -91,8 +91,8 @@ export default async function InboxPage({
               className={
                 "rounded-full border px-3 py-1.5 transition " +
                 (f.id === filter
-                  ? "border-brand-light bg-brand/15 text-brand-light"
-                  : "border-white/10 text-ink-muted hover:border-white/30 hover:text-white")
+                  ? "border-realtor-primary bg-realtor-primary/15 text-realtor-primary"
+                  : "border-realtor-primary/15 text-realtor-muted hover:border-realtor-primary/40 hover:text-realtor-primary")
               }
             >
               {f.label}
@@ -102,9 +102,9 @@ export default async function InboxPage({
         </div>
       </header>
 
-      <p className="rounded-2xl border border-white/10 bg-ink-soft/40 px-4 py-3 text-xs text-ink-muted">
+      <p className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/60 px-4 py-3 text-xs text-realtor-muted">
         New self-serve bookings go directly to{" "}
-        <Link href="/admin/bookings" className="text-brand-light underline">
+        <Link href="/admin/bookings" className="text-realtor-primary underline">
           Bookings
         </Link>
         . This inbox is the archive of older &ldquo;request&rdquo; submissions.
@@ -116,27 +116,27 @@ export default async function InboxPage({
             <li key={r.id}>
               <Link
                 href={`/admin/inbox/${r.id}`}
-                className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-white/10 bg-ink-soft/50 px-4 py-3 shadow-lg shadow-black/5 transition hover:border-brand-light/40 hover:bg-white/[0.03]"
+                className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 px-4 py-3 shadow-lg shadow-realtor-text/5 transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-white">
+                  <p className="font-semibold text-realtor-text">
                     {r.street_address}
                     {r.city ? (
-                      <span className="text-ink-muted"> · {r.city}</span>
+                      <span className="text-realtor-muted"> · {r.city}</span>
                     ) : null}
                   </p>
-                  <p className="mt-0.5 text-xs text-ink-muted">
+                  <p className="mt-0.5 text-xs text-realtor-muted">
                     {r.contact_name}
                     {r.brokerage ? ` · ${r.brokerage}` : ""} · {r.contact_email}
                   </p>
-                  <p className="mt-1 text-xs text-ink-muted">
+                  <p className="mt-1 text-xs text-realtor-muted">
                     {r.services.map(labelForService).join(", ") || "No services"}
                     {r.preferred_date ? ` · prefers ${r.preferred_date}` : ""}
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1">
                   <StatusPill status={r.status} />
-                  <span className="text-[10px] text-ink-muted">
+                  <span className="text-[10px] text-realtor-muted">
                     {new Date(r.created_at).toLocaleDateString()}
                   </span>
                 </div>
@@ -145,7 +145,7 @@ export default async function InboxPage({
           ))}
         </ul>
       ) : (
-        <p className="rounded-2xl border border-dashed border-white/10 bg-ink-soft/40 px-4 py-8 text-center text-sm text-ink-muted">
+        <p className="rounded-2xl border border-dashed border-realtor-primary/15 bg-realtor-surface/60 px-4 py-8 text-center text-sm text-realtor-muted">
           No requests in this view.
         </p>
       )}

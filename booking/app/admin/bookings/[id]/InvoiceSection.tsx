@@ -62,13 +62,13 @@ export default function InvoiceSection({
   const hasInvoice = !!state.id || !!initial.id;
 
   return (
-    <div className="space-y-4 rounded-2xl border border-brand/20 bg-brand/5 p-4">
+    <div className="space-y-4 rounded-2xl border border-realtor-primary/20 bg-realtor-primary/5 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-realtor-primary">
             Invoice
           </h2>
-          <p className="mt-1 text-xs text-ink-muted">
+          <p className="mt-1 text-xs text-realtor-muted">
             Created in QuickBooks using the prices in /admin/settings/pricing.
             Re-running is a no-op if an invoice already exists.
           </p>
@@ -76,7 +76,7 @@ export default function InvoiceSection({
         {hasInvoice ? (
           <StatusPill status={state.status ?? "open"} />
         ) : (
-          <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] uppercase tracking-wider text-ink-muted">
+          <span className="rounded-full border border-realtor-primary/20 px-2 py-0.5 text-[10px] uppercase tracking-wider text-realtor-muted">
             Not invoiced
           </span>
         )}
@@ -86,14 +86,14 @@ export default function InvoiceSection({
         <dl className="grid gap-y-1 text-sm md:grid-cols-[140px_1fr]">
           {state.number || initial.number ? (
             <>
-              <dt className="text-ink-muted">Invoice #</dt>
-              <dd className="text-white">{state.number ?? initial.number}</dd>
+              <dt className="text-realtor-muted">Invoice #</dt>
+              <dd className="text-realtor-text">{state.number ?? initial.number}</dd>
             </>
           ) : null}
           {(state.totalCents ?? initial.totalCents) != null ? (
             <>
-              <dt className="text-ink-muted">Total</dt>
-              <dd className="text-white">
+              <dt className="text-realtor-muted">Total</dt>
+              <dd className="text-realtor-text">
                 ${(
                   ((state.totalCents ?? initial.totalCents) as number) / 100
                 ).toFixed(2)}
@@ -102,8 +102,8 @@ export default function InvoiceSection({
           ) : null}
           {(state.syncedAt ?? initial.syncedAt) ? (
             <>
-              <dt className="text-ink-muted">Last synced</dt>
-              <dd className="text-white">
+              <dt className="text-realtor-muted">Last synced</dt>
+              <dd className="text-realtor-text">
                 {new Date(
                   (state.syncedAt ?? initial.syncedAt) as string,
                 ).toLocaleString()}
@@ -114,7 +114,7 @@ export default function InvoiceSection({
       ) : null}
 
       {error ? (
-        <p role="alert" className="text-sm text-red-300">
+        <p role="alert" className="text-sm text-red-700">
           {error}
         </p>
       ) : null}
@@ -125,7 +125,7 @@ export default function InvoiceSection({
             type="button"
             onClick={onCreate}
             disabled={pending}
-            className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+            className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-60"
           >
             {pending ? "Creating…" : "Create invoice"}
           </button>
@@ -135,7 +135,7 @@ export default function InvoiceSection({
               type="button"
               onClick={onRefresh}
               disabled={pending}
-              className="rounded-full border border-white/15 px-3 py-2 text-sm text-white hover:border-brand-light hover:text-brand-light disabled:opacity-60"
+              className="rounded-full border border-realtor-primary/20 px-3 py-2 text-sm text-realtor-text hover:border-realtor-primary/40 hover:text-realtor-primary disabled:opacity-60"
             >
               {pending ? "Refreshing…" : "Refresh status"}
             </button>
@@ -144,7 +144,7 @@ export default function InvoiceSection({
                 href={(state.url ?? initial.url) as string}
                 target="_blank"
                 rel="noopener"
-                className="rounded-full border border-brand/40 px-3 py-2 text-sm font-semibold text-brand-light hover:border-brand-light hover:bg-brand/10"
+                className="rounded-full border border-realtor-primary/40 px-3 py-2 text-sm font-semibold text-realtor-primary hover:border-realtor-primary/40 hover:bg-realtor-primary/10"
               >
                 Open in QuickBooks ↗
               </a>
@@ -160,10 +160,10 @@ function StatusPill({ status }: { status: string }) {
   const normalized = status.toLowerCase();
   const className =
     normalized === "paid"
-      ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-200"
+      ? "border-emerald-300 bg-emerald-50 text-emerald-700"
       : normalized === "void"
-        ? "border-red-400/40 bg-red-400/10 text-red-200"
-        : "border-amber-400/40 bg-amber-400/10 text-amber-200";
+        ? "border-red-300 bg-red-50 text-red-700"
+        : "border-amber-300 bg-amber-50 text-amber-800";
   return (
     <span
       className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${className}`}

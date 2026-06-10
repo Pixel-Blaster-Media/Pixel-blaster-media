@@ -34,34 +34,34 @@ export default function RequestActions({
   }
 
   return (
-    <div className="space-y-4 rounded-2xl border border-brand/20 bg-brand/5 p-4 shadow-lg shadow-black/5">
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
+    <div className="space-y-4 rounded-2xl border border-realtor-primary/20 bg-realtor-primary/5 p-4 shadow-lg shadow-realtor-text/5">
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-realtor-primary">
         Actions
       </h2>
 
       <div className="grid gap-3 md:grid-cols-2">
         <label className="block">
-          <span className="text-xs text-ink-muted">Confirm date</span>
+          <span className="text-xs text-realtor-muted">Confirm date</span>
           <input
             type="date"
             value={scheduledDate}
             onChange={(e) => setScheduledDate(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-white"
+            className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-realtor-text"
           />
         </label>
         <label className="block">
-          <span className="text-xs text-ink-muted">Confirm time</span>
+          <span className="text-xs text-realtor-muted">Confirm time</span>
           <input
             type="time"
             value={scheduledTime}
             onChange={(e) => setScheduledTime(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-white"
+            className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-realtor-text"
           />
         </label>
       </div>
 
       {error ? (
-        <p className="text-sm text-red-300" role="alert">
+        <p className="text-sm text-red-700" role="alert">
           {error}
         </p>
       ) : null}
@@ -71,7 +71,7 @@ export default function RequestActions({
           type="button"
           disabled={isPending}
           onClick={() => call(() => acceptRequest(requestId, combineDateTime()))}
-          className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-60"
+          className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-60"
         >
           {isPending ? "Accepting…" : "Accept & create booking"}
         </button>
@@ -79,7 +79,7 @@ export default function RequestActions({
           type="button"
           disabled={isPending}
           onClick={() => call(() => markReviewing(requestId))}
-          className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-white/40 disabled:opacity-60"
+          className="rounded-full border border-realtor-primary/20 px-4 py-2 text-sm text-realtor-text/80 hover:border-realtor-primary/40 disabled:opacity-60"
         >
           Mark reviewing
         </button>
@@ -88,13 +88,13 @@ export default function RequestActions({
             type="button"
             disabled={isPending}
             onClick={() => call(() => declineRequest(requestId))}
-            className="rounded-full border border-red-400/30 px-4 py-2 text-sm text-red-200 hover:border-red-400/60 disabled:opacity-60"
+            className="rounded-full border border-red-300 px-4 py-2 text-sm text-red-700 hover:border-red-300 disabled:opacity-60"
           >
             Decline
           </button>
         ) : null}
       </div>
-      <p className="text-[11px] text-ink-muted">
+      <p className="text-[11px] text-realtor-muted">
         Accepting creates the realtor's account (if new), the property record,
         and a confirmed booking — then opens it.
       </p>

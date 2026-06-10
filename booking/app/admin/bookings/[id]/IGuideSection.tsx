@@ -140,13 +140,13 @@ export default function IGuideSection({
   return (
     <div
       id="iguide"
-      className="space-y-4 rounded-2xl border border-brand/20 bg-brand/5 p-4"
+      className="space-y-4 rounded-2xl border border-realtor-primary/20 bg-realtor-primary/5 p-4"
     >
       <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-brand-light">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-realtor-primary">
           iGuide
         </h2>
-        <p className="mt-1 text-xs text-ink-muted">
+        <p className="mt-1 text-xs text-realtor-muted">
           Create an iGuide from this booking for exact webhook matching, or
           paste any of: tour URL, alias, Portal ID (e.g. igYGFV5GG6V8DD1), or a
           manage.youriguide.com edit URL. Sync pulls the tour + floor plan into
@@ -164,16 +164,16 @@ export default function IGuideSection({
           type="button"
           disabled={!canCreate}
           onClick={onCreate}
-          className="rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
+          className="rounded-full bg-realtor-primary px-3 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-50"
         >
           {creating ? "Creating…" : "Create iGuide"}
         </button>
         {!portalApiConfigured ? (
-          <p className="text-xs text-amber-300/80">
+          <p className="text-xs text-amber-700">
             Add iGuide API credentials before creating tours from here.
           </p>
         ) : portalId ? (
-          <p className="text-xs text-ink-muted">
+          <p className="text-xs text-realtor-muted">
             This booking is already linked to an iGuide Portal record.
           </p>
         ) : null}
@@ -185,13 +185,13 @@ export default function IGuideSection({
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           placeholder="Paste URL, alias, or Portal ID (igXXXXX)…"
-          className="rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+          className="rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text placeholder-realtor-muted/60 focus:outline-none focus:ring-2 focus:ring-realtor-primary/60"
         />
         <button
           type="button"
           disabled={saving || !canSave}
           onClick={onSave}
-          className="rounded-full border border-white/15 px-3 py-2 text-sm text-white/90 hover:border-brand-light hover:bg-brand/10 disabled:opacity-50"
+          className="rounded-full border border-realtor-primary/20 px-3 py-2 text-sm text-realtor-text/90 hover:border-realtor-primary/40 hover:bg-realtor-primary/10 disabled:opacity-50"
         >
           {saving ? "Saving…" : "Save"}
         </button>
@@ -199,19 +199,19 @@ export default function IGuideSection({
           type="button"
           disabled={syncing || !hasLink || canSave}
           onClick={onSync}
-          className="rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
+          className="rounded-full bg-realtor-primary px-3 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-50"
         >
           {syncing ? "Syncing…" : "Sync from iGuide"}
         </button>
       </div>
-      <p className="text-xs text-ink-muted">
+      <p className="text-xs text-realtor-muted">
         Paste the iGUIDE link or Portal ID, click Save, then click Sync from
         iGuide. If sync complains about asset links, paste the public
         youriguide.com tour URL as well.
       </p>
 
       {savedId || portalId ? (
-        <div className="space-y-1 text-xs text-ink-muted">
+        <div className="space-y-1 text-xs text-realtor-muted">
           {savedId ? (
             <p>
               Alias:{" "}
@@ -219,7 +219,7 @@ export default function IGuideSection({
                 href={`https://youriguide.com/${savedId}/`}
                 target="_blank"
                 rel="noopener"
-                className="text-brand-light underline"
+                className="text-realtor-primary underline"
               >
                 youriguide.com/{savedId}
               </a>
@@ -228,15 +228,15 @@ export default function IGuideSection({
           {portalId ? (
             <p>
               Portal ID:{" "}
-              <code className="rounded bg-black/30 px-1 py-0.5 text-[11px] text-white/90">
+              <code className="rounded bg-white/65 px-1 py-0.5 text-[11px] text-realtor-text/90">
                 {portalId}
               </code>
-              <span className="ml-2 text-emerald-300">
+              <span className="ml-2 text-emerald-700">
                 · Portal API ready
               </span>
             </p>
           ) : savedId ? (
-            <p className="text-amber-300/80">
+            <p className="text-amber-700">
               No portal ID yet — sync will use the public RESO endpoint
               until the ready webhook fires. If that 401s, paste the
               Portal ID (igXXXXX) from manage.youriguide.com.
@@ -245,11 +245,11 @@ export default function IGuideSection({
           {job ? (
             <p>
               Job:{" "}
-              <span className="text-white/90">{job.status}</span>
+              <span className="text-realtor-text/90">{job.status}</span>
               {job.work_order_id ? (
                 <>
                   {" · "}Work order:{" "}
-                  <code className="rounded bg-black/30 px-1 py-0.5 text-[11px] text-white/90">
+                  <code className="rounded bg-white/65 px-1 py-0.5 text-[11px] text-realtor-text/90">
                     {job.work_order_id}
                   </code>
                 </>
@@ -260,15 +260,15 @@ export default function IGuideSection({
             type="button"
             onClick={onClear}
             disabled={saving}
-            className="mt-1 text-[11px] text-ink-muted/80 underline hover:text-red-300 disabled:opacity-50"
+            className="mt-1 text-[11px] text-realtor-muted/80 underline hover:text-red-800 disabled:opacity-50"
           >
             Clear iGuide link
           </button>
         </div>
       ) : null}
 
-      <details className="rounded-xl border border-white/10 bg-ink/25 p-3">
-        <summary className="cursor-pointer text-sm font-semibold text-white">
+      <details className="rounded-xl border border-realtor-primary/15 bg-white/65 p-3">
+        <summary className="cursor-pointer text-sm font-semibold text-realtor-text">
           Photo ZIP download links
         </summary>
         <form
@@ -286,59 +286,59 @@ export default function IGuideSection({
             });
           }}
         >
-          <p className="text-xs leading-relaxed text-ink-muted">
+          <p className="text-xs leading-relaxed text-realtor-muted">
             Older iGUIDEs may only give us the tour and PDFs when you paste a
             public link. If the realtor portal is missing photo downloads, copy
             the Low-Res Image Gallery and Hi-Res Image Gallery links from the
             iGUIDE report and save them here.
           </p>
           <div className="grid gap-2 md:grid-cols-2">
-            <label className="space-y-1 text-xs text-ink-muted">
+            <label className="space-y-1 text-xs text-realtor-muted">
               <span>MLS / low-res photo ZIP</span>
               <input
                 name="mls_photo_zip_url"
                 type="url"
                 defaultValue={initialPhotoDownloads.mls ?? ""}
                 placeholder="https://youriguide.com/.../doc/gallery-low-res.zip"
-                className="w-full rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+                className="w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text placeholder-realtor-muted/60 focus:outline-none focus:ring-2 focus:ring-realtor-primary/60"
               />
             </label>
-            <label className="space-y-1 text-xs text-ink-muted">
+            <label className="space-y-1 text-xs text-realtor-muted">
               <span>High-res photo ZIP</span>
               <input
                 name="high_res_photo_zip_url"
                 type="url"
                 defaultValue={initialPhotoDownloads.highRes ?? ""}
                 placeholder="https://youriguide.com/.../doc/gallery.zip"
-                className="w-full rounded-xl border border-white/10 bg-ink-soft px-3 py-2 text-sm text-white placeholder-ink-muted/60 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+                className="w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text placeholder-realtor-muted/60 focus:outline-none focus:ring-2 focus:ring-realtor-primary/60"
               />
             </label>
           </div>
           <button
             type="submit"
             disabled={photoSaving}
-            className="rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-light disabled:opacity-50"
+            className="rounded-full bg-realtor-primary px-3 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-50"
           >
             {photoSaving ? "Saving…" : "Save photo downloads"}
           </button>
           {photoError ? (
-            <p className="text-sm text-red-300" role="alert">
+            <p className="text-sm text-red-700" role="alert">
               {photoError}
             </p>
           ) : null}
           {photoMessage ? (
-            <p className="text-xs text-emerald-300">{photoMessage}</p>
+            <p className="text-xs text-emerald-700">{photoMessage}</p>
           ) : null}
         </form>
       </details>
 
       {error ? (
-        <p className="text-sm text-red-300" role="alert">
+        <p className="text-sm text-red-700" role="alert">
           {error}
         </p>
       ) : null}
       {okMessage ? (
-        <p className="text-xs text-emerald-300">{okMessage}</p>
+        <p className="text-xs text-emerald-700">{okMessage}</p>
       ) : null}
     </div>
   );

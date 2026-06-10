@@ -240,12 +240,12 @@ export default function EditBookingForm({
       </div>
 
       {error ? (
-        <p className="rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-100">
+        <p className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </p>
       ) : null}
       {saved ? (
-        <p className="rounded-xl border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
+        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           Booking saved.
         </p>
       ) : null}
@@ -254,7 +254,7 @@ export default function EditBookingForm({
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-realtor-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isPending ? "Saving..." : "Save booking"}
         </button>
@@ -273,15 +273,15 @@ function CatalogGroup({
   selected: string[];
 }) {
   return (
-    <fieldset className="rounded-xl border border-white/10 bg-ink/20 p-3">
-      <legend className="px-1 text-xs font-semibold uppercase tracking-wider text-brand-light/80">
+    <fieldset className="rounded-xl border border-realtor-primary/15 bg-white/65 p-3">
+      <legend className="px-1 text-xs font-semibold uppercase tracking-wider text-realtor-primary/80">
         {title}
       </legend>
       <div className="mt-2 space-y-2">
         {items.map((item) => (
           <label
             key={item.id}
-            className="flex items-start gap-2 rounded-lg border border-white/5 bg-ink-soft/50 px-2 py-2 text-sm text-white"
+            className="flex items-start gap-2 rounded-lg border border-realtor-primary/10 bg-realtor-surface/85 px-2 py-2 text-sm text-realtor-text"
           >
             <input
               name="catalog_item_id"
@@ -292,14 +292,14 @@ function CatalogGroup({
             />
             <span className="min-w-0">
               <span className="block font-semibold">{item.name}</span>
-              <span className="block text-xs text-ink-muted">
+              <span className="block text-xs text-realtor-muted">
                 {formatDuration(item.durationMinutes)} · {formatPrice(item.priceCents)}
               </span>
             </span>
           </label>
         ))}
         {items.length === 0 ? (
-          <p className="text-xs text-ink-muted">No active items.</p>
+          <p className="text-xs text-realtor-muted">No active items.</p>
         ) : null}
       </div>
     </fieldset>
@@ -315,7 +315,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="text-xs font-medium uppercase tracking-wider text-ink-muted">
+      <span className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
         {label}
       </span>
       <span className="mt-1 block">{children}</span>
@@ -335,4 +335,4 @@ function formatDuration(minutes: number): string {
 }
 
 const inputClass =
-  "w-full rounded-md border border-white/10 bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60";
+  "w-full rounded-md border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-realtor-text placeholder-realtor-muted focus:outline-none focus:ring-2 focus:ring-realtor-primary/60";

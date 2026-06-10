@@ -46,7 +46,7 @@ const TEMPLATES: Array<{
     id: "estate_cinematic",
     name: "Estate Cinematic",
     helper: "Dark, dramatic, luxury-first.",
-    classes: "bg-[#111513] text-white ring-[#c8a96a]/40",
+    classes: "bg-[#111513] text-realtor-text ring-[#c8a96a]/40",
   },
   {
     id: "clean_mls_plus",
@@ -121,16 +121,16 @@ export default function ListingWebsiteSection({
   const publicUrl = `${defaults.publicBaseUrl}/listings/${slug || defaults.slug}`;
 
   return (
-    <section className="space-y-4 rounded-2xl border border-brand/20 bg-brand/5 p-4">
+    <section className="space-y-4 rounded-2xl border border-realtor-primary/20 bg-realtor-primary/5 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
+          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
             Listing website
           </p>
-          <h2 className="mt-1 text-lg font-semibold text-white">
+          <h2 className="mt-1 text-lg font-semibold text-realtor-text">
             Build a public launch page
           </h2>
-          <p className="mt-1 max-w-2xl text-xs text-ink-muted">
+          <p className="mt-1 max-w-2xl text-xs text-realtor-muted">
             Pick a template, polish the copy, then publish a shareable page for
             the agent. This is separate from the private realtor portal.
           </p>
@@ -140,7 +140,7 @@ export default function ListingWebsiteSection({
             href={`/listings/${initial.slug}`}
             target="_blank"
             rel="noopener"
-            className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:border-brand-light"
+            className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
           >
             Preview public page ↗
           </a>
@@ -177,8 +177,8 @@ export default function ListingWebsiteSection({
                 key={option.id}
                 className={`cursor-pointer rounded-2xl border p-3 transition ${
                   selected
-                    ? "border-brand-light bg-brand/15"
-                    : "border-white/10 bg-ink/25 hover:border-white/25"
+                    ? "border-realtor-primary bg-realtor-primary/15"
+                    : "border-realtor-primary/15 bg-white/65 hover:border-realtor-primary/40"
                 }`}
               >
                 <input
@@ -194,12 +194,12 @@ export default function ListingWebsiteSection({
                   <div className="mt-3 h-2 w-3/4 rounded-full bg-current/40" />
                   <div className="mt-2 h-2 w-1/2 rounded-full bg-current/25" />
                 </div>
-                <p className="mt-3 text-sm font-semibold text-white">
+                <p className="mt-3 text-sm font-semibold text-realtor-text">
                   {option.name}
                 </p>
-                <p className="mt-1 text-xs text-ink-muted">{option.helper}</p>
+                <p className="mt-1 text-xs text-realtor-muted">{option.helper}</p>
                 {selected ? (
-                  <p className="mt-2 text-xs font-semibold text-brand-light">
+                  <p className="mt-2 text-xs font-semibold text-realtor-primary">
                     Selected
                   </p>
                 ) : null}
@@ -230,7 +230,7 @@ export default function ListingWebsiteSection({
               <button
                 type="button"
                 disabled
-                className="mt-2 rounded-full border border-white/10 px-3 py-1.5 text-xs text-ink-muted"
+                className="mt-2 rounded-full border border-realtor-primary/15 px-3 py-1.5 text-xs text-realtor-muted"
               >
                 AI draft coming soon
               </button>
@@ -244,7 +244,7 @@ export default function ListingWebsiteSection({
                 placeholder={"Renovated kitchen\nFinished basement\nWalkable neighbourhood"}
                 className="admin-input"
               />
-              <p className="mt-1 text-[11px] text-ink-muted">
+              <p className="mt-1 text-[11px] text-realtor-muted">
                 One feature per line. We show up to 8.
               </p>
             </Field>
@@ -267,8 +267,8 @@ export default function ListingWebsiteSection({
                       onClick={() => setHeroImageUrl(url)}
                       className={`overflow-hidden rounded-2xl border text-left transition ${
                         heroImageUrl === url
-                          ? "border-brand-light"
-                          : "border-white/10 hover:border-white/25"
+                          ? "border-realtor-primary"
+                          : "border-realtor-primary/15 hover:border-realtor-primary/40"
                       }`}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -277,7 +277,7 @@ export default function ListingWebsiteSection({
                         alt=""
                         className="aspect-[4/3] w-full object-cover"
                       />
-                      <span className="block px-2 py-1 text-[11px] text-ink-muted">
+                      <span className="block px-2 py-1 text-[11px] text-realtor-muted">
                         {heroImageUrl === url ? "Hero selected" : `Image ${index + 1}`}
                       </span>
                     </button>
@@ -287,11 +287,11 @@ export default function ListingWebsiteSection({
             </Field>
 
             {defaults.heroImageOptions.length > 0 ? (
-              <div className="rounded-2xl border border-white/10 bg-ink-soft/50 p-4">
-                <p className="text-sm font-semibold text-white">
+              <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4">
+                <p className="text-sm font-semibold text-realtor-text">
                   Website gallery photos
                 </p>
-                <p className="mt-1 text-xs text-ink-muted">
+                <p className="mt-1 text-xs text-realtor-muted">
                   Uncheck photos that should stay out of the public listing
                   page. Click a photo above to make it the hero shot.
                 </p>
@@ -299,7 +299,7 @@ export default function ListingWebsiteSection({
                   {defaults.heroImageOptions.slice(0, 24).map((url, index) => (
                     <label
                       key={url}
-                      className="overflow-hidden rounded-2xl border border-white/10 bg-ink/25"
+                      className="overflow-hidden rounded-2xl border border-realtor-primary/15 bg-white/65"
                     >
                       <input
                         type="checkbox"
@@ -314,9 +314,9 @@ export default function ListingWebsiteSection({
                         alt=""
                         className="aspect-[4/3] w-full object-cover opacity-40 transition peer-checked:opacity-100"
                       />
-                      <span className="flex items-center justify-between px-2 py-1 text-[11px] text-ink-muted peer-checked:text-white">
+                      <span className="flex items-center justify-between px-2 py-1 text-[11px] text-realtor-muted peer-checked:text-realtor-text">
                         Photo {index + 1}
-                        <span className="rounded-full border border-white/10 px-2 py-0.5">
+                        <span className="rounded-full border border-realtor-primary/15 px-2 py-0.5">
                           Show
                         </span>
                       </span>
@@ -328,11 +328,11 @@ export default function ListingWebsiteSection({
           </div>
 
           <div className="space-y-4">
-            <div className="rounded-2xl border border-white/10 bg-ink-soft/50 p-4">
-              <p className="text-sm font-semibold text-white">
+            <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4">
+              <p className="text-sm font-semibold text-realtor-text">
                 Show on public page
               </p>
-              <p className="mt-1 text-xs text-ink-muted">
+              <p className="mt-1 text-xs text-realtor-muted">
                 Choose which delivered assets should appear directly on the
                 custom listing website.
               </p>
@@ -340,20 +340,20 @@ export default function ListingWebsiteSection({
                 {SECTION_OPTIONS.map((option) => (
                   <label
                     key={option.id}
-                    className="flex items-start gap-2 rounded-xl border border-white/10 bg-ink/25 px-3 py-2"
+                    className="flex items-start gap-2 rounded-xl border border-realtor-primary/15 bg-white/65 px-3 py-2"
                   >
                     <input
                       type="checkbox"
                       name="included_sections"
                       value={option.id}
                       defaultChecked={includedSections.has(option.id)}
-                      className="mt-1 h-4 w-4 accent-brand"
+                      className="mt-1 h-4 w-4 accent-realtor-primary"
                     />
                     <span>
-                      <span className="block text-sm font-semibold text-white">
+                      <span className="block text-sm font-semibold text-realtor-text">
                         {option.label}
                       </span>
-                      <span className="block text-[11px] text-ink-muted">
+                      <span className="block text-[11px] text-realtor-muted">
                         {option.helper}
                       </span>
                     </span>
@@ -362,16 +362,16 @@ export default function ListingWebsiteSection({
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-ink-soft/50 p-4">
-              <p className="text-sm font-semibold text-white">Publish</p>
-              <label className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-ink/25 px-3 py-2">
-                <span className="text-sm text-white">Public website</span>
+            <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4">
+              <p className="text-sm font-semibold text-realtor-text">Publish</p>
+              <label className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-realtor-primary/15 bg-white/65 px-3 py-2">
+                <span className="text-sm text-realtor-text">Public website</span>
                 <input
                   type="checkbox"
                   name="is_published"
                   checked={isPublished}
                   onChange={(event) => setIsPublished(event.target.checked)}
-                  className="h-4 w-4 accent-brand"
+                  className="h-4 w-4 accent-realtor-primary"
                 />
               </label>
               <Field label="Public URL slug">
@@ -382,13 +382,13 @@ export default function ListingWebsiteSection({
                   className="admin-input"
                 />
               </Field>
-              <p className="mt-2 break-all text-[11px] text-ink-muted">
+              <p className="mt-2 break-all text-[11px] text-realtor-muted">
                 {publicUrl}
               </p>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-ink-soft/50 p-4">
-              <p className="text-sm font-semibold text-white">Agent contact</p>
+            <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4">
+              <p className="text-sm font-semibold text-realtor-text">Agent contact</p>
               <div className="mt-3 space-y-3">
                 <Field label="Agent name">
                   <input
@@ -446,16 +446,16 @@ export default function ListingWebsiteSection({
         </div>
 
         {error ? (
-          <p className="text-sm text-red-300" role="alert">
+          <p className="text-sm text-red-700" role="alert">
             {error}
           </p>
         ) : null}
-        {message ? <p className="text-xs text-emerald-300">{message}</p> : null}
+        {message ? <p className="text-xs text-emerald-700">{message}</p> : null}
 
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-light disabled:opacity-60"
+          className="rounded-full bg-realtor-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-realtor-primary/90 disabled:opacity-60"
         >
           {isPending ? "Saving..." : "Save listing website"}
         </button>
@@ -473,7 +473,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-realtor-muted">
         {label}
       </span>
       <div className="mt-1">{children}</div>
