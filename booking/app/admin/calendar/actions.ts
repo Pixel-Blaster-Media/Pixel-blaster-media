@@ -14,6 +14,7 @@ import {
   validateCart,
   type CatalogItemRow,
 } from "@/lib/booking/catalog";
+import { ccRecipientsFor } from "@/lib/email/recipients";
 import { sendEmail } from "@/lib/email/resend";
 import { getOrganizationEmailSettings } from "@/lib/email/settings";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
@@ -195,6 +196,12 @@ export async function createAdminShoot(
     })
     .eq("organization_id", admin.organizationId)
     .eq("id", userId);
+  const { data: notificationProfile } = await supabase
+    .from("profiles")
+    .select("delivery_cc_emails")
+    .eq("organization_id", admin.organizationId)
+    .eq("id", userId)
+    .maybeSingle<{ delivery_cc_emails: string[] | null }>();
 
   const propertyId = await findOrCreateProperty({
     organizationId: admin.organizationId,
@@ -271,6 +278,10 @@ export async function createAdminShoot(
 
   await sendConfirmationBestEffort({
     email: contactEmail,
+    ccEmails: ccRecipientsFor(
+      contactEmail,
+      notificationProfile?.delivery_cc_emails,
+    ),
     organizationId: admin.organizationId,
     name: contactName,
     streetAddress: unitNumber
@@ -660,6 +671,7 @@ function calendarShootTitle(args: {
 
 async function sendConfirmationBestEffort(args: {
   email: string;
+  ccEmails: string[];
   organizationId: string;
   name: string;
   streetAddress: string;
@@ -676,6 +688,7 @@ async function sendConfirmationBestEffort(args: {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
     await sendEmail({
       to: args.email,
+      ...(args.ccEmails.length > 0 ? { cc: args.ccEmails } : {}),
       subject: `Booking confirmed - ${args.streetAddress}`,
       organizationId: args.organizationId,
       html: `

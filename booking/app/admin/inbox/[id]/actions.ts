@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { totalDurationMinutes } from "@/lib/booking/services";
+import { ccRecipientsFor } from "@/lib/email/recipients";
 import { sendEmail } from "@/lib/email/resend";
 import { getOrganizationEmailSettings } from "@/lib/email/settings";
 import { shootConfirmedEmail } from "@/lib/email/templates";
@@ -152,6 +153,12 @@ export async function acceptRequest(
     }
     return { ok: false, error: "Could not accept booking request." };
   }
+  const { data: notificationProfile } = await supabase
+    .from("profiles")
+    .select("delivery_cc_emails")
+    .eq("id", userId)
+    .eq("organization_id", admin.organizationId)
+    .maybeSingle<{ delivery_cc_emails: string[] | null }>();
 
   // 3b. Push to Google Calendar (best-effort). Skipped if no calendar is
   // connected. If the scheduledAt is null (accepted without a date), we
@@ -212,6 +219,10 @@ export async function acceptRequest(
   await sendShootConfirmedEmail({
     bookingId,
     email: req.contact_email,
+    ccEmails: ccRecipientsFor(
+      req.contact_email,
+      notificationProfile?.delivery_cc_emails,
+    ),
     organizationId: admin.organizationId,
     contactName: req.contact_name,
     streetAddress: req.street_address,
@@ -247,6 +258,7 @@ function calendarShootTitle(args: {
 async function sendShootConfirmedEmail(args: {
   bookingId: string;
   email: string;
+  ccEmails: string[];
   organizationId: string;
   contactName: string;
   streetAddress: string;
@@ -262,6 +274,13 @@ async function sendShootConfirmedEmail(args: {
       bookingId: args.bookingId,
       kind: "shoot_confirmed",
       recipientEmail: args.email,
+      status: "skipped",
+      error: "NEXT_PUBLIC_APP_URL not set",
+    });
+    await logManyBookingNotifications({
+      bookingId: args.bookingId,
+      kind: "shoot_confirmed",
+      recipientEmails: args.ccEmails,
       status: "skipped",
       error: "NEXT_PUBLIC_APP_URL not set",
     });
@@ -317,6 +336,26 @@ async function sendShootConfirmedEmail(args: {
     organizationId: args.organizationId,
     replyTo: emailSettings.replyToEmail ?? undefined,
   });
+  const ccMail =
+    args.ccEmails.length > 0
+      ? shootConfirmedEmail({
+          contactName: args.contactName,
+          streetAddress: args.streetAddress,
+          scheduledAt: args.scheduledAt,
+          services: args.services,
+          portalLink: `${appUrl}/portal`,
+          companyName: emailSettings.organizationName,
+        })
+      : null;
+  const ccResult = ccMail
+    ? await sendEmail({
+        to: args.ccEmails,
+        subject: ccMail.subject,
+        html: ccMail.html,
+        organizationId: args.organizationId,
+        replyTo: emailSettings.replyToEmail ?? undefined,
+      })
+    : null;
 
   await logBookingNotification({
     bookingId: args.bookingId,
@@ -330,10 +369,51 @@ async function sendShootConfirmedEmail(args: {
       emailSkipped: Boolean(result.skipped),
     },
   });
+  if (ccResult) {
+    await logManyBookingNotifications({
+      bookingId: args.bookingId,
+      kind: "shoot_confirmed",
+      recipientEmails: args.ccEmails,
+      status: ccResult.ok ? (ccResult.skipped ? "skipped" : "sent") : "failed",
+      providerMessageId: ccResult.id,
+      error: ccResult.ok ? undefined : ccResult.error,
+      metadata: {
+        sentWithoutMagicLink: true,
+        emailSkipped: Boolean(ccResult.skipped),
+      },
+    });
+  }
 
   if (!result.ok) {
     console.warn("[accept.email] send failed", result.error);
   }
+  if (ccResult && !ccResult.ok) {
+    console.warn("[accept.email] cc send failed", ccResult.error);
+  }
+}
+
+async function logManyBookingNotifications(args: {
+  bookingId: string;
+  kind: string;
+  recipientEmails: string[];
+  status: "sent" | "skipped" | "failed";
+  providerMessageId?: string;
+  error?: string;
+  metadata?: Record<string, boolean | string | number | null>;
+}): Promise<void> {
+  await Promise.all(
+    args.recipientEmails.map((recipientEmail) =>
+      logBookingNotification({
+        bookingId: args.bookingId,
+        kind: args.kind,
+        recipientEmail,
+        status: args.status,
+        providerMessageId: args.providerMessageId,
+        error: args.error,
+        metadata: args.metadata,
+      }),
+    ),
+  );
 }
 
 async function logBookingNotification(args: {
