@@ -53,6 +53,7 @@ import EditBookingForm, {
 import IGuideSection from "./IGuideSection";
 import InvoiceSection from "./InvoiceSection";
 import ListingWebsiteSection from "./ListingWebsiteSection";
+import RescheduleBookingForm from "./RescheduleBookingForm";
 import VideoLinksSection from "./VideoLinksSection";
 
 export const dynamic = "force-dynamic";
@@ -344,6 +345,12 @@ export default async function BookingDetailPage({
               <CancelBookingButton bookingId={booking.id} />
             ) : null}
             <Link
+              href={`/admin/bookings/${booking.id}?tab=details#reschedule`}
+              className="tap-target rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+            >
+              Reschedule
+            </Link>
+            <Link
               href="/admin/today"
               className="tap-target rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
             >
@@ -526,6 +533,12 @@ function DetailsTab({
         title="Edit and reference"
         body="Fix the schedule, address, selected services, realtor info, or notes without leaving this booking."
       />
+      <div id="reschedule">
+        <RescheduleBookingForm
+          bookingId={booking.id}
+          initialScheduledAtLocal={editableInitial.scheduledAtLocal}
+        />
+      </div>
       <Panel title="Edit booking">
         <EditBookingForm
           bookingId={booking.id}

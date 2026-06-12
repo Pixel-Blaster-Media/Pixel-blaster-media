@@ -9,6 +9,7 @@ import {
 import {
   businessDateTimeLocalToUtc,
 } from "@/lib/booking/availability";
+import { rescheduleCalendarShoot } from "@/app/admin/calendar/actions";
 import { nextBookingStatuses } from "@/lib/booking/booking-status";
 import { cancelBooking } from "@/lib/booking/cancel";
 import {
@@ -520,6 +521,44 @@ export async function updateBookingDetails(
   revalidatePath("/admin/bookings");
   revalidatePath("/admin/calendar");
   revalidatePath(`/admin/bookings/${bookingId}`);
+  return { ok: true };
+}
+
+/**
+ * Explicit reschedule action for the booking detail screen. This reuses the
+ * calendar move flow so duration, Google Calendar replacement, cache refresh,
+ * and audit logging stay identical to drag-to-reschedule.
+ */
+export async function rescheduleBookingFromDetails(
+  bookingId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  const scheduledRaw = str(formData, "scheduled_at");
+  if (!scheduledRaw) return { ok: false, error: "Pick a new date and time." };
+
+  const scheduledAt = businessDateTimeLocalToUtc(scheduledRaw);
+  if (!scheduledAt) return { ok: false, error: "Pick a valid date and time." };
+
+  const dateInput = scheduledRaw.slice(0, 10);
+  const timeInput = scheduledRaw.slice(11, 16);
+  const [hourRaw, minuteRaw] = timeInput.split(":");
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(dateInput) ||
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute)
+  ) {
+    return { ok: false, error: "Pick a valid date and time." };
+  }
+
+  const result = await rescheduleCalendarShoot(
+    bookingId,
+    dateInput,
+    hour * 60 + minute,
+  );
+
+  if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
 }
 
