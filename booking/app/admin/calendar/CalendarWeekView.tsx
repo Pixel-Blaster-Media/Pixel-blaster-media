@@ -11,12 +11,13 @@ import AddressAutocomplete, {
 import { addCalendarBlock } from "@/app/admin/settings/availability/actions";
 import {
   createAdminShoot,
+  moveCalendarBlock,
   rescheduleCalendarShoot,
   searchRealtors,
   type RealtorSearchItem,
 } from "./actions";
 
-const DRAG_MIME = "application/x-pbm-booking";
+const DRAG_MIME = "application/x-pbm-calendar-item";
 // Finer snap than the 30-min click-to-create grid: dragging is the
 // precision tool, so it lands on 5-minute marks.
 const DRAG_SNAP_MINUTES = 5;
@@ -104,6 +105,10 @@ export default function CalendarWeekView({
   const [lookupPending, startLookupTransition] = useTransition();
   const [movePending, startMoveTransition] = useTransition();
   const [moveError, setMoveError] = useState<string | null>(null);
+  const [draggingItem, setDraggingItem] = useState<{
+    id: string;
+    kind: CalendarItem["kind"];
+  } | null>(null);
   const [mobileDayKey, setMobileDayKey] = useState(() => {
     const today = dateInputForLocalDate();
     if (days.some((day) => day.dateInput === today)) return today;
@@ -217,13 +222,16 @@ export default function CalendarWeekView({
     const raw = event.dataTransfer.getData(DRAG_MIME);
     if (!raw) return;
     event.preventDefault();
-    let bookingId = "";
+    let droppedItem: { id: string; kind: CalendarItem["kind"] } | null = null;
     try {
-      bookingId = String(JSON.parse(raw).id ?? "");
+      const parsed = JSON.parse(raw) as Partial<CalendarItem>;
+      const id = String(parsed.id ?? "");
+      const kind = parsed.kind === "block" ? "block" : "booking";
+      droppedItem = id ? { id, kind } : null;
     } catch {
       return;
     }
-    if (!bookingId) return;
+    if (!droppedItem) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const minutesIntoDay = ((event.clientY - rect.top) / HOUR_HEIGHT) * 60;
     const snapped =
@@ -233,15 +241,19 @@ export default function CalendarWeekView({
       START_HOUR * 60 + Math.min(Math.max(snapped, 0), maxStart);
     setMoveError(null);
     startMoveTransition(async () => {
-      const result = await rescheduleCalendarShoot(
-        bookingId,
-        day.dateInput,
-        startMinutes,
-      );
+      const result =
+        droppedItem.kind === "block"
+          ? await moveCalendarBlock(droppedItem.id, day.dateInput, startMinutes)
+          : await rescheduleCalendarShoot(
+              droppedItem.id,
+              day.dateInput,
+              startMinutes,
+            );
       if (!result.ok) {
-        setMoveError(result.error ?? "Could not move the shoot.");
+        setMoveError(result.error ?? "Could not move that calendar item.");
         return;
       }
+      setDraggingItem(null);
       router.refresh();
     });
   };
@@ -262,10 +274,12 @@ export default function CalendarWeekView({
           Shoot
         </span>
         <span className="text-[11px] text-[#6f7a70]">
-          Tip: drag a shoot to a new slot to reschedule it.
+          Tip: drag a shoot or blocked time to move it.
         </span>
         {movePending ? (
-          <span className="font-semibold text-[#3f7356]">Moving shoot…</span>
+          <span className="font-semibold text-[#3f7356]">
+            Moving calendar item...
+          </span>
         ) : null}
         {moveError ? (
           <span role="alert" className="font-semibold text-red-700">
@@ -377,7 +391,16 @@ export default function CalendarWeekView({
               )}
 
               {(itemsByDay.get(day.dateInput) ?? []).map((item) => (
-                <CalendarEvent key={`${item.kind}-${item.id}`} item={item} />
+                <CalendarEvent
+                  key={`${item.kind}-${item.id}`}
+                  item={item}
+                  isDragging={
+                    draggingItem?.id === item.id &&
+                    draggingItem?.kind === item.kind
+                  }
+                  onDragStart={(dragged) => setDraggingItem(dragged)}
+                  onDragEnd={() => setDraggingItem(null)}
+                />
               ))}
             </div>
           ))}
@@ -1169,37 +1192,54 @@ function MobileTimelineEvent({
   return item.href ? <Link href={item.href}>{content}</Link> : content;
 }
 
-function CalendarEvent({ item }: { item: CalendarItem }) {
+function CalendarEvent({
+  item,
+  isDragging,
+  onDragStart,
+  onDragEnd,
+}: {
+  item: CalendarItem;
+  isDragging: boolean;
+  onDragStart: (item: { id: string; kind: CalendarItem["kind"] }) => void;
+  onDragEnd: () => void;
+}) {
   const start = parseLocalParts(item.startsAt);
   const end = parseLocalParts(item.endsAt);
   const startMinutes = start.hour * 60 + start.minute;
   const endMinutes = end.hour * 60 + end.minute;
   const top = ((startMinutes - START_HOUR * 60) / 60) * HOUR_HEIGHT;
   const height = Math.max(((endMinutes - startMinutes) / 60) * HOUR_HEIGHT, 32);
-  const draggable = item.kind === "booking";
   const classes =
     item.kind === "booking"
-      ? "border-[#8ba98f] bg-[#dce9dc] text-[#23332b] hover:bg-[#d2e1d2] cursor-grab active:cursor-grabbing"
-      : "border-[#a69d8d]/45 bg-[#c9c3b6]/80 text-[#36423a]";
+      ? "border-[#8ba98f] bg-[#dce9dc] text-[#23332b] hover:bg-[#d2e1d2]"
+      : "border-[#a69d8d]/45 bg-[#c9c3b6]/80 text-[#36423a] hover:bg-[#beb7aa]";
   const content = (
     <div
-      className={`absolute left-1 right-1 z-10 overflow-hidden rounded-xl border px-2 py-1 text-left shadow-sm ${classes}`}
+      className={`absolute left-1 right-1 z-10 overflow-hidden rounded-xl border px-2 py-1 text-left shadow-sm cursor-grab transition active:cursor-grabbing ${classes} ${
+        isDragging ? "opacity-60 ring-2 ring-[#3f7356]/45" : ""
+      }`}
       style={{ top: Math.max(top, 0), height }}
-      draggable={draggable}
-      onDragStart={
-        draggable
-          ? (event) => {
-              event.dataTransfer.setData(
-                DRAG_MIME,
-                JSON.stringify({ id: item.id }),
-              );
-              event.dataTransfer.effectAllowed = "move";
-            }
-          : undefined
-      }
+      draggable
+      title="Drag to move"
+      onDragStart={(event) => {
+        event.dataTransfer.setData(
+          DRAG_MIME,
+          JSON.stringify({ id: item.id, kind: item.kind }),
+        );
+        event.dataTransfer.effectAllowed = "move";
+        onDragStart({ id: item.id, kind: item.kind });
+      }}
+      onDragEnd={onDragEnd}
     >
-      <p className="truncate text-xs font-semibold">{item.title}</p>
-      <p className="truncate text-[10px] opacity-80">{item.subtitle}</p>
+      <div className="flex min-w-0 items-start justify-between gap-1.5">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold">{item.title}</p>
+          <p className="truncate text-[10px] opacity-80">{item.subtitle}</p>
+        </div>
+        <span className="shrink-0 rounded border border-current/20 bg-white/35 px-1 py-0.5 text-[8px] font-semibold uppercase tracking-wider opacity-70">
+          Drag
+        </span>
+      </div>
       {item.statusLabel ? (
         <span
           className={`mt-1 inline-block rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-wider ${item.statusClass}`}

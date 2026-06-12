@@ -318,6 +318,13 @@ interface BookingForRescheduleRow {
   } | null;
 }
 
+interface CalendarBlockForMoveRow {
+  id: string;
+  starts_at: string;
+  ends_at: string;
+  label: string | null;
+}
+
 /**
  * Drag-to-reschedule from the calendar week view. The client sends the
  * target day (business-TZ date) and minutes-from-midnight snapped to
@@ -482,6 +489,91 @@ export async function rescheduleCalendarShoot(
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${booking.id}`);
   return { ok: true, bookingId: booking.id };
+}
+
+/**
+ * Drag-to-move a private blocked-time item. The block keeps its original
+ * duration; only the start/end timestamps shift.
+ */
+export async function moveCalendarBlock(
+  blockId: string,
+  dateInput: string,
+  startMinutes: number,
+): Promise<ActionResult> {
+  const admin = await requireAdmin();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+    return { ok: false, error: "Invalid day." };
+  }
+  if (
+    !Number.isInteger(startMinutes) ||
+    startMinutes < 0 ||
+    startMinutes >= 24 * 60
+  ) {
+    return { ok: false, error: "Invalid time." };
+  }
+
+  const hour = String(Math.floor(startMinutes / 60)).padStart(2, "0");
+  const minute = String(startMinutes % 60).padStart(2, "0");
+  const startsAt = businessDateTimeLocalToUtc(`${dateInput}T${hour}:${minute}`);
+  if (!startsAt) return { ok: false, error: "Invalid time." };
+
+  const supabase = getServiceSupabase();
+  const { data: block, error: blockError } = await supabase
+    .from("calendar_blocks")
+    .select("id, starts_at, ends_at, label")
+    .eq("id", blockId)
+    .eq("organization_id", admin.organizationId)
+    .single<CalendarBlockForMoveRow>();
+
+  if (blockError || !block) {
+    return { ok: false, error: "Blocked time not found." };
+  }
+
+  const oldStart = new Date(block.starts_at);
+  const oldEnd = new Date(block.ends_at);
+  const durationMinutes = Math.max(
+    Math.round((oldEnd.getTime() - oldStart.getTime()) / 60_000),
+    5,
+  );
+  const endsAt = new Date(startsAt.getTime() + durationMinutes * 60_000);
+
+  const { error: updateError } = await supabase
+    .from("calendar_blocks")
+    .update({
+      starts_at: startsAt.toISOString(),
+      ends_at: endsAt.toISOString(),
+    })
+    .eq("id", block.id)
+    .eq("organization_id", admin.organizationId);
+
+  if (updateError) return { ok: false, error: updateError.message };
+
+  await supabase.from("assistant_action_logs").insert({
+    organization_id: admin.organizationId,
+    actor_profile_id: admin.userId,
+    action_type: "calendar_block_drag_move",
+    label: "Calendar block drag move",
+    details: `Moved ${block.label ?? "blocked time"} to ${dateInput} ${hour}:${minute}.`,
+    payload: {
+      block_id: block.id,
+      old_starts_at: block.starts_at,
+      old_ends_at: block.ends_at,
+      new_starts_at: startsAt.toISOString(),
+      new_ends_at: endsAt.toISOString(),
+    },
+    result_status: "success",
+    result_message: "Blocked time moved from the calendar week view.",
+    undo_payload: {
+      block_id: block.id,
+      starts_at: block.starts_at,
+      ends_at: block.ends_at,
+    },
+  });
+
+  revalidatePath("/admin/settings/availability");
+  revalidatePath("/admin/calendar");
+  return { ok: true };
 }
 
 async function findOrCreateRealtor(args: {
