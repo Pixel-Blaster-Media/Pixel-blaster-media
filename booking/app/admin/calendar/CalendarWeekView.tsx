@@ -1240,16 +1240,28 @@ function CalendarEvent({
           Drag
         </span>
       </div>
-      {item.statusLabel ? (
-        <span
-          className={`mt-1 inline-block rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-wider ${item.statusClass}`}
-        >
-          {item.statusLabel}
-        </span>
-      ) : null}
+      <div className="mt-1 flex min-w-0 items-center gap-1.5">
+        {item.statusLabel ? (
+          <span
+            className={`inline-block rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-wider ${item.statusClass}`}
+          >
+            {item.statusLabel}
+          </span>
+        ) : null}
+        {item.href ? (
+          <Link
+            href={item.href}
+            draggable={false}
+            onClick={(event) => event.stopPropagation()}
+            className="rounded-full border border-current/20 bg-white/35 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider opacity-80 hover:opacity-100"
+          >
+            Open
+          </Link>
+        ) : null}
+      </div>
     </div>
   );
-  return item.href ? <Link href={item.href}>{content}</Link> : content;
+  return content;
 }
 
 function parseLocalParts(iso: string): { hour: number; minute: number } {
