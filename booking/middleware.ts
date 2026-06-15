@@ -30,6 +30,11 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(
+    "x-current-path",
+    `${request.nextUrl.pathname}${request.nextUrl.search}`,
+  );
 
   // 1. Auth-code handoff. Any `?code=` on a non-callback, non-API path
   // gets funnelled through /auth/callback which handles the exchange.
@@ -51,18 +56,18 @@ export async function middleware(request: NextRequest) {
     path.startsWith("/admin") || path.startsWith("/portal");
 
   if (!protectedPath) {
-    return NextResponse.next({ request });
+    return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
   const sessionIsValid = isSessionCookieValid(request);
   if (!sessionIsValid) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/sign-in";
-    url.searchParams.set("next", path);
+    url.searchParams.set("next", `${path}${request.nextUrl.search}`);
     return NextResponse.redirect(url);
   }
 
-  return NextResponse.next({ request });
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 /**

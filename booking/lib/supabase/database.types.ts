@@ -638,6 +638,94 @@ interface BookingNotificationsTable {
   Relationships: [];
 }
 
+interface AutoenhanceBatchesTable {
+  Row: {
+    id: string;
+    organization_id: string;
+    booking_id: string;
+    property_id: string;
+    order_id: string;
+    order_name: string;
+    upload_mode: "hdr" | "single";
+    status: string;
+    process_status: string | null;
+    brackets_per_image: number;
+    settings: Json;
+    bracket_ids: string[];
+    uploaded_image_ids: string[];
+    finished_image_ids: string[];
+    iguide_portal_id: string | null;
+    iguide_uploaded_image_ids: string[];
+    iguide_failed_image_ids: string[];
+    last_iguide_push_at: string | null;
+    last_error: string | null;
+    created_by: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  Insert: {
+    id?: string;
+    organization_id: string;
+    booking_id: string;
+    property_id: string;
+    order_id: string;
+    order_name: string;
+    upload_mode?: "hdr" | "single";
+    status?: string;
+    process_status?: string | null;
+    brackets_per_image?: number;
+    settings?: Json;
+    bracket_ids?: string[];
+    uploaded_image_ids?: string[];
+    finished_image_ids?: string[];
+    iguide_portal_id?: string | null;
+    iguide_uploaded_image_ids?: string[];
+    iguide_failed_image_ids?: string[];
+    last_iguide_push_at?: string | null;
+    last_error?: string | null;
+    created_by?: string | null;
+  };
+  Update: Partial<AutoenhanceBatchesTable["Insert"]>;
+  Relationships: [];
+}
+
+interface AutoenhanceIGuideUploadsTable {
+  Row: {
+    id: string;
+    organization_id: string;
+    batch_id: string;
+    booking_id: string;
+    iguide_portal_id: string;
+    autoenhance_image_id: string;
+    filename: string;
+    status: "pending" | "uploaded" | "failed";
+    iguide_asset_name: string | null;
+    iguide_job_id: string | null;
+    process_complete: boolean | null;
+    warning: string | null;
+    error: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  Insert: {
+    id?: string;
+    organization_id: string;
+    batch_id: string;
+    booking_id: string;
+    iguide_portal_id: string;
+    autoenhance_image_id: string;
+    filename: string;
+    status?: "pending" | "uploaded" | "failed";
+    iguide_asset_name?: string | null;
+    iguide_job_id?: string | null;
+    process_complete?: boolean | null;
+    warning?: string | null;
+    error?: string | null;
+  };
+  Update: Partial<AutoenhanceIGuideUploadsTable["Insert"]>;
+  Relationships: [];
+}
+
 interface TelegramConnectionsTable {
   Row: {
     id: string;
@@ -781,6 +869,8 @@ export interface Database {
       catalog_items: CatalogItemsTable;
       booking_line_items: BookingLineItemsTable;
       booking_notifications: BookingNotificationsTable;
+      autoenhance_batches: AutoenhanceBatchesTable;
+      autoenhance_iguide_uploads: AutoenhanceIGuideUploadsTable;
       telegram_connections: TelegramConnectionsTable;
       assistant_action_logs: AssistantActionLogsTable;
       listing_websites: ListingWebsitesTable;

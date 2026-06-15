@@ -1,5 +1,7 @@
 import "server-only";
 
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+
 import { getCredential } from "@/lib/integrations/credentials";
 
 /**
@@ -314,6 +316,37 @@ export interface IGuideWorkOrderResponse {
   [key: string]: unknown;
 }
 
+export interface IGuideUploadAssetInput {
+  iguideId: string;
+  filename: string;
+  bytes: ArrayBuffer;
+  contentType?: string;
+  appendToViews?: "default" | "all";
+  waitForProcess?: boolean;
+}
+
+export interface IGuideUploadAssetResponse {
+  assetName: string;
+  jid?: string;
+  timestamp?: number;
+  rawProcessResponse?: unknown;
+  processComplete?: boolean;
+  processWarning?: string;
+}
+
+interface IGuideUploadPermitResponse {
+  name: string;
+  uploadToken: string;
+  uploadPermit: {
+    region: string;
+    bucket: string;
+    key: string;
+    accessKeyId: string;
+    secretAccessKey: string;
+    sessionToken: string;
+  };
+}
+
 // ===========================================================================
 // Endpoints we actually use
 // ===========================================================================
@@ -418,6 +451,137 @@ export async function getAssetUrls(
     {},
     scope,
   );
+}
+
+/**
+ * Upload a finished photo or asset into an iGUIDE gallery.
+ *
+ * iGUIDE uses a direct-to-S3 flow:
+ * 1. POST /iguides/:id/assets for a temporary upload permit.
+ * 2. Upload the bytes to the S3 bucket/key from that permit.
+ * 3. POST /assets/:assetName/process with the upload token.
+ *
+ * Passing appendToViews=default adds photos to the default gallery view, which
+ * is what we want for Autoenhance-finished listing photos.
+ */
+export async function uploadAssetToIGuide(
+  input: IGuideUploadAssetInput,
+  scope?: PortalScope,
+): Promise<PortalResult<IGuideUploadAssetResponse>> {
+  const bytes = new Uint8Array(input.bytes);
+  if (!bytes.byteLength) {
+    return { ok: false, status: 400, error: "Asset file is empty." };
+  }
+
+  const permit = await portalFetch<IGuideUploadPermitResponse>(
+    `/iguides/${encodeURIComponent(input.iguideId)}/assets`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        filename: input.filename,
+        filesize: bytes.byteLength,
+      }),
+    },
+    scope,
+  );
+  if (!permit.ok || !permit.data) {
+    return {
+      ok: false,
+      status: permit.status,
+      error: permit.error ?? "iGUIDE did not return an upload permit.",
+    };
+  }
+
+  const uploadPermit = permit.data.uploadPermit;
+  try {
+    const s3 = new S3Client({
+      region: uploadPermit.region,
+      credentials: {
+        accessKeyId: uploadPermit.accessKeyId,
+        secretAccessKey: uploadPermit.secretAccessKey,
+        sessionToken: uploadPermit.sessionToken,
+      },
+    });
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: uploadPermit.bucket,
+        Key: uploadPermit.key,
+        Body: bytes,
+        ACL: "bucket-owner-full-control",
+        ContentType: input.contentType ?? "application/octet-stream",
+      }),
+    );
+  } catch (err) {
+    return {
+      ok: false,
+      status: 0,
+      error:
+        err instanceof Error
+          ? `Could not upload asset to iGUIDE storage: ${err.message}`
+          : "Could not upload asset to iGUIDE storage.",
+    };
+  }
+
+  const query = new URLSearchParams({
+    uploadToken: permit.data.uploadToken,
+  });
+  if (input.appendToViews) {
+    query.set("appendToViews", input.appendToViews);
+  }
+  const processed = await portalFetch<{ jid?: string; timestamp?: number }>(
+    `/iguides/${encodeURIComponent(input.iguideId)}/assets/${encodeURIComponent(
+      permit.data.name,
+    )}/process?${query.toString()}`,
+    { method: "POST" },
+    scope,
+  );
+  if (!processed.ok) {
+    return {
+      ok: false,
+      status: processed.status,
+      error: processed.error ?? "iGUIDE could not process the uploaded asset.",
+    };
+  }
+
+  let processComplete: boolean | undefined;
+  let processWarning: string | undefined;
+  if (input.waitForProcess) {
+    const wait = await portalFetch<unknown>(
+      `/iguides/${encodeURIComponent(input.iguideId)}/assets/${encodeURIComponent(
+        permit.data.name,
+      )}/waitForProcess`,
+      {},
+      scope,
+    );
+    if (wait.ok) {
+      processComplete = true;
+    } else if (wait.status === 581) {
+      processComplete = false;
+      processWarning =
+        "iGUIDE accepted the upload, but the background processor is still working. Check the iGUIDE gallery again in a minute.";
+    } else {
+      return {
+        ok: false,
+        status: wait.status,
+        error:
+          wait.error ??
+          "iGUIDE accepted the upload, but processing status could not be confirmed.",
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    status: processed.status,
+    data: {
+      assetName: permit.data.name,
+      jid: processed.data?.jid,
+      timestamp: processed.data?.timestamp,
+      rawProcessResponse: processed.data,
+      processComplete,
+      processWarning,
+    },
+  };
 }
 
 /**

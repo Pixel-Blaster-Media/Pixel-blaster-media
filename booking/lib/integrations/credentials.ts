@@ -28,6 +28,7 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 
 export type Provider =
   | "admin_settings"
+  | "autoenhance"
   | "fotello"
   | "google_maps"
   | "iguide"

@@ -29,6 +29,7 @@ import {
   type IGuidePhotoZipKind,
 } from "@/lib/integrations/iguide/photo-downloads";
 import { hasPortalCredentials } from "@/lib/integrations/iguide/portal-client";
+import { listBookingAutoenhanceBatches } from "@/lib/integrations/autoenhance/workflow";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type {
   BookingStatus,
@@ -46,6 +47,7 @@ import BookingActions, {
 import BookingWorkspaceTabs, {
   type WorkspaceTabId,
 } from "./BookingWorkspaceTabs";
+import AutoenhanceSection from "./AutoenhanceSection";
 import EditBookingForm, {
   type EditableBookingInitial,
   type EditCatalogItem,
@@ -164,6 +166,7 @@ export default async function BookingDetailPage({
     { data: deliveryNotification },
     { data: listingWebsite },
     { data: bookingLineItems },
+    autoenhanceBatches,
     catalog,
   ] =
     await Promise.all([
@@ -209,6 +212,7 @@ export default async function BookingDetailPage({
         .select("catalog_item_id")
         .eq("booking_id", id)
         .returns<BookingLineItemSelectionRow[]>(),
+      listBookingAutoenhanceBatches({ admin, bookingId: id }),
       getActiveCatalog({ organizationId: admin.organizationId }),
     ]);
 
@@ -386,6 +390,11 @@ export default async function BookingDetailPage({
               portalApiConfigured={portalApiConfigured}
               job={iguideJob ?? null}
               initialPhotoDownloads={iguidePhotoDownloads}
+            />
+            <AutoenhanceSection
+              bookingId={booking.id}
+              iguidePortalId={booking.iguide_portal_id}
+              initialBatches={autoenhanceBatches}
             />
             <VideoLinksSection bookingId={booking.id} />
             <ManualLinksPanel

@@ -89,6 +89,7 @@ export default async function IntegrationsPage({
   // show whether each field is set without ever leaking values.
   const [
     resendApiKeyStatus,
+    autoenhanceApiKeyStatus,
     openAiApiKeyStatus,
     openAiModelStatus,
     googleMapsApiKeyStatus,
@@ -104,6 +105,12 @@ export default async function IntegrationsPage({
           admin.organizationId,
         )
       : Promise.resolve({ source: "none" as const }),
+    getCredentialSource(
+      "autoenhance",
+      "api_key",
+      "AUTOENHANCE_API_KEY",
+      admin.organizationId,
+    ),
     getCredentialSource(
       "openai",
       "api_key",
@@ -138,6 +145,7 @@ export default async function IntegrationsPage({
   ]);
 
   const resendConfigured = resendApiKeyStatus.source !== "none";
+  const autoenhanceConfigured = autoenhanceApiKeyStatus.source !== "none";
   const openAiConfigured = openAiApiKeyStatus.source !== "none";
   const googleMapsConfigured = googleMapsApiKeyStatus.source !== "none";
   const iguideConfigured =
@@ -311,6 +319,59 @@ export default async function IntegrationsPage({
           </Link>
         </section>
       )}
+
+      <section className="realtor-elevated-panel rounded-2xl p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-realtor-text">
+              Autoenhance.ai
+            </h2>
+            <p className="mt-1 text-sm text-realtor-muted">
+              Optional photo enhancement provider. Use the sandbox first to
+              test uploads, processing, and enhanced downloads before wiring it
+              into real bookings.
+            </p>
+          </div>
+          {autoenhanceConfigured ? (
+            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+              Configured
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+              Not configured
+            </span>
+          )}
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
+          <p className="text-sm font-semibold text-realtor-text">
+            Test before delivery
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-realtor-muted">
+            Autoenhance uses an <code>x-api-key</code> header. The browser never
+            sees the key; the admin sandbox does all API calls from server code.
+          </p>
+          <Link
+            href="/admin/autoenhance-test"
+            className="mt-3 inline-flex rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+          >
+            Open Autoenhance test
+          </Link>
+        </div>
+
+        <CredentialsForm
+          provider="autoenhance"
+          fields={[
+            {
+              name: "api_key",
+              label: "Autoenhance API key",
+              helper:
+                "Create this in Autoenhance. For Vercel env fallback use AUTOENHANCE_API_KEY.",
+            },
+          ]}
+          statuses={{ api_key: autoenhanceApiKeyStatus }}
+        />
+      </section>
 
       <section className="realtor-elevated-panel rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4">

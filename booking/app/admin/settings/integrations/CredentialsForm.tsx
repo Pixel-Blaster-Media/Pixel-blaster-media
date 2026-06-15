@@ -21,7 +21,13 @@ export interface CredentialFieldStatus {
 }
 
 export interface CredentialsFormProps {
-  provider: "fotello" | "google_maps" | "iguide" | "openai" | "resend";
+  provider:
+    | "autoenhance"
+    | "fotello"
+    | "google_maps"
+    | "iguide"
+    | "openai"
+    | "resend";
   fields: CredentialFieldDef[];
   /** One status entry per field, keyed by field.name. */
   statuses: Record<string, CredentialFieldStatus>;

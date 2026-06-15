@@ -164,15 +164,15 @@ export default function ManageBookingClient({
             )}
 
             {selected ? (
-              <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl border border-realtor-primary/15 bg-realtor-surface-muted/60 p-4">
-                <p className="text-sm text-realtor-text">
+              <div className="sticky bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-20 mt-5 flex flex-col gap-3 rounded-2xl border border-realtor-primary/20 bg-realtor-surface/95 p-4 shadow-2xl shadow-realtor-text/15 backdrop-blur-xl md:static md:flex-row md:flex-wrap md:items-center md:bg-realtor-surface-muted/60 md:shadow-none md:backdrop-blur-0">
+                <p className="text-sm text-realtor-text" aria-live="polite">
                   New time: <strong>{selected.label}</strong>
                 </p>
                 <button
                   type="button"
                   onClick={handleReschedule}
                   disabled={pending}
-                  className="tap-target rounded-full bg-brand-light px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand disabled:cursor-not-allowed disabled:opacity-60"
+                  className="tap-target w-full rounded-full bg-brand-light px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
                 >
                   {pending ? "Rescheduling…" : "Confirm new time"}
                 </button>
@@ -180,7 +180,7 @@ export default function ManageBookingClient({
                   type="button"
                   onClick={() => setSelected(null)}
                   disabled={pending}
-                  className="tap-target rounded-full border border-realtor-primary/20 px-4 py-2 text-sm text-realtor-muted transition hover:border-realtor-primary/35 hover:bg-realtor-surface disabled:cursor-not-allowed disabled:opacity-60"
+                  className="tap-target w-full rounded-full border border-realtor-primary/20 px-4 py-2 text-sm text-realtor-muted transition hover:border-realtor-primary/35 hover:bg-realtor-surface disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
                 >
                   Clear
                 </button>
