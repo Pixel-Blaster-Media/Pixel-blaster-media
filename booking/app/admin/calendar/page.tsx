@@ -3,12 +3,19 @@ import type { Metadata } from "next";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { BOOKING_STATUSES } from "@/lib/booking/booking-status";
-import { BUSINESS_TZ } from "@/lib/booking/availability";
+import {
+  BUSINESS_TZ,
+  businessDateTimeLocalToUtc,
+} from "@/lib/booking/availability";
 import { getActiveCatalog } from "@/lib/booking/catalog";
 import {
   labelForService,
   totalDurationMinutes,
 } from "@/lib/booking/services";
+import {
+  getGoogleCalendarClient,
+  type GoogleCalendarEvent,
+} from "@/lib/integrations/google-calendar/client";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type { BookingStatus } from "@/lib/supabase/database.types";
 
@@ -17,11 +24,14 @@ import CalendarWeekView from "./CalendarWeekView";
 export const metadata: Metadata = { title: "Calendar" };
 export const dynamic = "force-dynamic";
 
+const CALENDAR_DAY_START_HOUR = 7;
+
 interface BookingRow {
   id: string;
   status: BookingStatus;
   scheduled_at: string;
   scheduled_ends_at: string | null;
+  google_calendar_event_id: string | null;
   services: string[];
   add_ons: string[];
   properties: { street_address: string } | null;
@@ -44,7 +54,7 @@ interface BusinessHoursRow {
 
 interface CalendarItem {
   id: string;
-  kind: "booking" | "block";
+  kind: "booking" | "block" | "google";
   title: string;
   subtitle: string;
   startsAt: string;
@@ -89,7 +99,7 @@ export default async function AdminCalendarPage({
     supabase
       .from("bookings")
       .select(
-        "id, status, scheduled_at, scheduled_ends_at, services, add_ons, properties(street_address), profiles(full_name, email)",
+        "id, status, scheduled_at, scheduled_ends_at, google_calendar_event_id, services, add_ons, properties(street_address), profiles(full_name, email)",
       )
       .eq("organization_id", admin.organizationId)
       .not("scheduled_at", "is", null)
@@ -113,6 +123,15 @@ export default async function AdminCalendarPage({
       .returns<BusinessHoursRow[]>(),
     getActiveCatalog({ organizationId: admin.organizationId }),
   ]);
+  const googleEvents = await fetchGoogleEventsBestEffort({
+    organizationId: admin.organizationId,
+    from: rangeStart,
+    to: rangeEnd,
+  });
+  const googleEventsById = new Map(
+    googleEvents.map((event) => [event.id, event]),
+  );
+  const bookingGoogleEventIds = new Set<string>();
 
   const hoursByDow = new Map(
     (hoursRes.data ?? []).map((row) => [row.day_of_week, row]),
@@ -143,17 +162,26 @@ export default async function AdminCalendarPage({
 
   const items: CalendarItem[] = [];
   for (const booking of bookingsRes.data ?? []) {
-    const startsAt = new Date(booking.scheduled_at);
+    if (booking.google_calendar_event_id) {
+      bookingGoogleEventIds.add(booking.google_calendar_event_id);
+    }
+    const linkedGoogleEvent = booking.google_calendar_event_id
+      ? googleEventsById.get(booking.google_calendar_event_id)
+      : null;
+    const startsAt = linkedGoogleEvent?.start ?? new Date(booking.scheduled_at);
     const localDate = localDateKey(startsAt);
     if (!weekKeys.has(localDate)) continue;
     const minutes = Math.max(
       totalDurationMinutes(booking.services, booking.add_ons),
       60,
     );
-    const endsAt = booking.scheduled_ends_at
-      ? new Date(booking.scheduled_ends_at)
-      : new Date(startsAt.getTime() + minutes * 60_000);
+    const endsAt =
+      linkedGoogleEvent?.end ??
+      (booking.scheduled_ends_at
+        ? new Date(booking.scheduled_ends_at)
+        : new Date(startsAt.getTime() + minutes * 60_000));
     const meta = BOOKING_STATUSES[booking.status];
+    const dbStartsAt = new Date(booking.scheduled_at);
     items.push({
       id: booking.id,
       kind: "booking",
@@ -161,6 +189,9 @@ export default async function AdminCalendarPage({
       subtitle: [
         booking.profiles?.full_name ?? booking.profiles?.email ?? "Unknown",
         booking.services.map(labelForService).join(", "),
+        linkedGoogleEvent && linkedGoogleEvent.start.getTime() !== dbStartsAt.getTime()
+          ? "Google Calendar time"
+          : null,
       ]
         .filter(Boolean)
         .join(" · "),
@@ -186,6 +217,34 @@ export default async function AdminCalendarPage({
       startsAt: startsAt.toISOString(),
       endsAt: endsAt.toISOString(),
       localDate,
+    });
+  }
+
+  for (const event of googleEvents) {
+    if (bookingGoogleEventIds.has(event.id)) continue;
+
+    const startsAt = event.allDay
+      ? localDisplayTimeForDateOnly(event.start, CALENDAR_DAY_START_HOUR)
+      : event.start;
+    const endsAt = event.allDay
+      ? localDisplayTimeForDateOnly(event.start, CALENDAR_DAY_START_HOUR + 1)
+      : event.end;
+    const localDate = localDateKey(startsAt);
+    if (!weekKeys.has(localDate)) continue;
+
+    items.push({
+      id: event.id,
+      kind: "google",
+      title: event.summary,
+      subtitle: [event.location, event.allDay ? "All-day" : "Google Calendar"]
+        .filter(Boolean)
+        .join(" · "),
+      startsAt: startsAt.toISOString(),
+      endsAt: endsAt.toISOString(),
+      localDate,
+      href: event.htmlLink,
+      statusLabel: "Google",
+      statusClass: "border-sky-200 bg-sky-100 text-sky-800",
     });
   }
   const visibleItems = filterCalendarItems(items, search);
@@ -359,6 +418,34 @@ function filterCalendarItems(
       .join(" ")
       .toLowerCase()
       .includes(needle),
+  );
+}
+
+async function fetchGoogleEventsBestEffort({
+  organizationId,
+  from,
+  to,
+}: {
+  organizationId: string;
+  from: Date;
+  to: Date;
+}): Promise<GoogleCalendarEvent[]> {
+  try {
+    const client = await getGoogleCalendarClient({ organizationId });
+    if (!client) return [];
+    return await client.getEvents(from, to);
+  } catch (err) {
+    console.warn("[admin-calendar] google events fetch failed", err);
+    return [];
+  }
+}
+
+function localDisplayTimeForDateOnly(date: Date, hour: number): Date {
+  const key = keyFromDate(date);
+  return (
+    businessDateTimeLocalToUtc(
+      `${key}T${String(hour).padStart(2, "0")}:00`,
+    ) ?? date
   );
 }
 

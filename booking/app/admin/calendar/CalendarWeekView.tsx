@@ -23,7 +23,7 @@ const DRAG_SNAP_MINUTES = 5;
 
 interface CalendarItem {
   id: string;
-  kind: "booking" | "block";
+  kind: "booking" | "block" | "google";
   title: string;
   subtitle: string;
   startsAt: string;
@@ -383,6 +383,10 @@ export default function CalendarWeekView({
           <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#dce9dc] ring-1 ring-[#89a68f]" />
           Shoot
         </span>
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#d9edf8] ring-1 ring-[#5aa6c8]" />
+          Google Calendar
+        </span>
         <span className="text-[11px] text-[#6f7a70]">
           Tip: drag a shoot or blocked time to move it.
         </span>
@@ -574,7 +578,7 @@ export default function CalendarWeekView({
           })}
         </div>
 
-        <div className="grid max-w-full grid-cols-3 gap-1 rounded-xl border border-[#d8cab9]/70 bg-[#fffdf8]/75 p-1.5 text-[9px] text-[#6f7a70]">
+        <div className="grid max-w-full grid-cols-4 gap-1 rounded-xl border border-[#d8cab9]/70 bg-[#fffdf8]/75 p-1.5 text-[9px] text-[#6f7a70]">
           <span className="inline-flex min-w-0 items-center justify-center gap-1">
             <span className="h-2 w-2 shrink-0 rounded-sm bg-[#fffdf8] ring-1 ring-[#d8cab9]" />
             <span className="truncate">Working</span>
@@ -586,6 +590,10 @@ export default function CalendarWeekView({
           <span className="inline-flex min-w-0 items-center justify-center gap-1">
             <span className="h-2 w-2 shrink-0 rounded-sm bg-[#dce9dc] ring-1 ring-[#89a68f]" />
             <span className="truncate">Shoot</span>
+          </span>
+          <span className="inline-flex min-w-0 items-center justify-center gap-1">
+            <span className="h-2 w-2 shrink-0 rounded-sm bg-[#d9edf8] ring-1 ring-[#5aa6c8]" />
+            <span className="truncate">Google</span>
           </span>
         </div>
 
@@ -1306,7 +1314,9 @@ function MobileTimelineEvent({
   const classes =
     item.kind === "booking"
       ? "border-[#8ba98f] bg-[#dce9dc] text-[#23332b] shadow-[#23332b]/10"
-      : "border-[#a69d8d]/50 bg-[#d7d1c4] text-[#36423a]";
+      : item.kind === "google"
+        ? "border-[#5aa6c8]/60 bg-[#d9edf8] text-[#17465b]"
+        : "border-[#a69d8d]/50 bg-[#d7d1c4] text-[#36423a]";
   const canMove = item.kind === "booking" || item.kind === "block";
   const content = (
     <div
@@ -1326,7 +1336,12 @@ function MobileTimelineEvent({
           </p>
         </div>
         <span className="w-fit rounded-full border border-current/25 bg-white/40 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
-          {item.statusLabel ?? (item.kind === "block" ? "Blocked" : "Shoot")}
+          {item.statusLabel ??
+            (item.kind === "block"
+              ? "Blocked"
+              : item.kind === "google"
+                ? "Google"
+                : "Shoot")}
         </span>
       </div>
     </div>
@@ -1397,10 +1412,12 @@ function CalendarEvent({
   const classes =
     item.kind === "booking"
       ? "border-[#8ba98f] bg-[#dce9dc] text-[#23332b] hover:bg-[#d2e1d2]"
-      : "border-[#a69d8d]/45 bg-[#c9c3b6]/80 text-[#36423a]";
+      : item.kind === "google"
+        ? "border-[#5aa6c8]/60 bg-[#d9edf8] text-[#17465b] hover:bg-[#cbe5f2]"
+        : "border-[#a69d8d]/45 bg-[#c9c3b6]/80 text-[#36423a] hover:bg-[#beb7aa]";
   const content = (
     <div
-      className={`absolute left-1 right-1 z-10 overflow-hidden rounded-xl border px-2 py-1 text-left shadow-sm cursor-grab transition active:cursor-grabbing ${classes} ${
+      className={`absolute left-1 right-1 z-10 overflow-hidden rounded-xl border px-2 py-1 text-left shadow-sm transition ${classes} ${
         isDragging ? "opacity-60 ring-2 ring-[#3f7356]/45" : ""
       }`}
       style={{ top: Math.max(top, 0), height }}
@@ -1410,9 +1427,11 @@ function CalendarEvent({
           <p className="truncate text-xs font-semibold">{item.title}</p>
           <p className="truncate text-[10px] opacity-80">{item.subtitle}</p>
         </div>
-        <span className="shrink-0 rounded border border-current/20 bg-white/35 px-1 py-0.5 text-[8px] font-semibold uppercase tracking-wider opacity-70">
-          Drag
-        </span>
+        {canMove ? (
+          <span className="shrink-0 rounded border border-current/20 bg-white/35 px-1 py-0.5 text-[8px] font-semibold uppercase tracking-wider opacity-70">
+            Drag
+          </span>
+        ) : null}
       </div>
       <div className="mt-1 flex min-w-0 items-center gap-1.5">
         {item.statusLabel ? (

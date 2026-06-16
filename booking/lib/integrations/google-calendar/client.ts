@@ -29,6 +29,8 @@ export interface GoogleCalendarClient {
   calendarId: string;
   /** ISO UTC timestamps where the connected calendar is BUSY within [from, to]. */
   getBusy(from: Date, to: Date): Promise<{ start: Date; end: Date }[]>;
+  /** Calendar events in [from, to], used by the admin calendar display. */
+  getEvents(from: Date, to: Date): Promise<GoogleCalendarEvent[]>;
   /** Create an event, returning Google's event id + html link for storage on the booking. */
   createEvent(input: CreateEventInput): Promise<CreatedEvent>;
   /** Delete an event — best-effort, safe to call if the event was already deleted. */
@@ -51,6 +53,17 @@ export interface CreateEventInput {
 export interface CreatedEvent {
   id: string;
   htmlLink: string;
+}
+
+export interface GoogleCalendarEvent {
+  id: string;
+  summary: string;
+  description?: string;
+  location?: string;
+  htmlLink?: string;
+  start: Date;
+  end: Date;
+  allDay: boolean;
 }
 
 export interface CalendarConnectionScope {
@@ -126,6 +139,9 @@ export async function getGoogleCalendarClient(
     calendarId,
     async getBusy(from, to) {
       return queryFreeBusy(accessToken, calendarId, from, to);
+    },
+    async getEvents(from, to) {
+      return listEvents(accessToken, calendarId, from, to);
     },
     async createEvent(input) {
       return insertEvent(accessToken, calendarId, input);
@@ -214,6 +230,81 @@ async function queryFreeBusy(
     start: new Date(b.start),
     end: new Date(b.end),
   }));
+}
+
+async function listEvents(
+  accessToken: string,
+  calendarId: string,
+  from: Date,
+  to: Date,
+): Promise<GoogleCalendarEvent[]> {
+  const url = new URL(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
+  );
+  url.searchParams.set("timeMin", from.toISOString());
+  url.searchParams.set("timeMax", to.toISOString());
+  url.searchParams.set("singleEvents", "true");
+  url.searchParams.set("orderBy", "startTime");
+  url.searchParams.set("showDeleted", "false");
+
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new GoogleCalendarError(
+      `events.list failed: ${body.slice(0, 500)}`,
+      res.status,
+    );
+  }
+
+  const json = (await res.json()) as {
+    items?: Array<{
+      id?: string;
+      summary?: string;
+      description?: string;
+      location?: string;
+      htmlLink?: string;
+      start?: { dateTime?: string; date?: string };
+      end?: { dateTime?: string; date?: string };
+    }>;
+  };
+
+  return (json.items ?? [])
+    .map((event) => normalizeListedEvent(event))
+    .filter((event): event is GoogleCalendarEvent => Boolean(event));
+}
+
+function normalizeListedEvent(event: {
+  id?: string;
+  summary?: string;
+  description?: string;
+  location?: string;
+  htmlLink?: string;
+  start?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
+}): GoogleCalendarEvent | null {
+  if (!event.id) return null;
+  const startRaw = event.start?.dateTime ?? event.start?.date;
+  const endRaw = event.end?.dateTime ?? event.end?.date;
+  if (!startRaw || !endRaw) return null;
+
+  const allDay = Boolean(event.start?.date);
+  return {
+    id: event.id,
+    summary: event.summary?.trim() || "Google Calendar event",
+    description: event.description,
+    location: event.location,
+    htmlLink: event.htmlLink,
+    start: allDay ? dateOnlyToUtc(event.start?.date ?? startRaw) : new Date(startRaw),
+    end: allDay ? dateOnlyToUtc(event.end?.date ?? endRaw) : new Date(endRaw),
+    allDay,
+  };
+}
+
+function dateOnlyToUtc(value: string): Date {
+  return new Date(`${value}T00:00:00.000Z`);
 }
 
 async function insertEvent(
