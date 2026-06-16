@@ -199,6 +199,7 @@ interface GoogleCalendarConnectionTable {
     google_account_email: string;
     calendar_id: string;
     display_name: string | null;
+    source_color: string;
     source_type: "primary" | "external";
     show_on_admin_calendar: boolean;
     block_availability: boolean;
@@ -216,6 +217,7 @@ interface GoogleCalendarConnectionTable {
     google_account_email: string;
     calendar_id?: string;
     display_name?: string | null;
+    source_color?: string;
     source_type?: "primary" | "external";
     show_on_admin_calendar?: boolean;
     block_availability?: boolean;

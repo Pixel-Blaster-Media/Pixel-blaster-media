@@ -37,6 +37,7 @@ interface CalendarItem {
   href?: string;
   statusLabel?: string;
   statusClass?: string;
+  sourceColor?: string;
 }
 
 interface PositionedCalendarItem extends CalendarItem {
@@ -1373,13 +1374,17 @@ function MobileTimelineEvent({
     item.kind === "booking"
       ? "border-[#8ba98f] bg-[#dce9dc] text-[#23332b] shadow-[#23332b]/10"
       : item.kind === "google"
-        ? "border-[#5aa6c8]/60 bg-[#d9edf8] text-[#17465b]"
+        ? "text-[#17465b]"
         : "border-[#a69d8d]/50 bg-[#d7d1c4] text-[#36423a]";
+  const sourceStyle = calendarSourceEventStyle(item);
   const canMove = item.kind === "booking" || item.kind === "block";
   const content = (
     <div
       className={`absolute z-10 overflow-hidden rounded-xl border px-2.5 py-1.5 text-left shadow-sm ${classes}`}
-      style={eventLayoutStyle({ top, height, layout: item.layout, mobile: true })}
+      style={{
+        ...eventLayoutStyle({ top, height, layout: item.layout, mobile: true }),
+        ...sourceStyle,
+      }}
     >
       <div className="flex h-full min-w-0 flex-col justify-between gap-1">
         <div className="min-w-0">
@@ -1420,7 +1425,10 @@ function MobileTimelineEvent({
             ? "scale-[0.98] opacity-35"
             : "cursor-grab active:cursor-grabbing"
         } ${classes}`}
-        style={eventLayoutStyle({ top, height, layout: item.layout, mobile: true })}
+        style={{
+          ...eventLayoutStyle({ top, height, layout: item.layout, mobile: true }),
+          ...sourceStyle,
+        }}
       >
         <div className="flex h-full min-w-0 flex-col justify-between gap-1">
           <div className="min-w-0">
@@ -1471,18 +1479,22 @@ function CalendarEvent({
     item.kind === "booking"
       ? "border-[#8ba98f] bg-[#dce9dc] text-[#23332b] hover:bg-[#d2e1d2]"
       : item.kind === "google"
-        ? "border-[#5aa6c8]/60 bg-[#d9edf8] text-[#17465b] hover:bg-[#cbe5f2]"
+        ? "text-[#17465b]"
         : "border-[#a69d8d]/45 bg-[#c9c3b6]/80 text-[#36423a] hover:bg-[#beb7aa]";
+  const sourceStyle = calendarSourceEventStyle(item);
   const content = (
     <div
       className={`absolute z-10 overflow-hidden rounded-xl border px-3 py-2 text-left shadow-sm transition ${classes} ${
         isDragging ? "opacity-60 ring-2 ring-[#3f7356]/45" : ""
       }`}
-      style={eventLayoutStyle({
-        top: Math.max(top, 0),
-        height,
-        layout: item.layout,
-      })}
+      style={{
+        ...eventLayoutStyle({
+          top: Math.max(top, 0),
+          height,
+          layout: item.layout,
+        }),
+        ...sourceStyle,
+      }}
     >
       <div className="flex h-full min-w-0 flex-col justify-between gap-2">
         <div className="min-w-0">
@@ -1539,11 +1551,14 @@ function CalendarEvent({
             ? "scale-[0.98] opacity-35"
             : "cursor-grab hover:bg-[#d2e1d2] active:cursor-grabbing"
         } ${classes}`}
-        style={eventLayoutStyle({
-          top: Math.max(top, 0),
-          height,
-          layout: item.layout,
-        })}
+        style={{
+          ...eventLayoutStyle({
+            top: Math.max(top, 0),
+            height,
+            layout: item.layout,
+          }),
+          ...sourceStyle,
+        }}
       >
         <div className="flex h-full min-w-0 flex-col justify-between gap-2">
           <div className="min-w-0">
@@ -1702,6 +1717,27 @@ function eventLayoutStyle({
     left: `calc((${lane} * 100%) / ${laneCount} + 0.25rem)`,
     width: `calc(100% / ${laneCount} - 0.5rem)`,
   };
+}
+
+function calendarSourceEventStyle(item: CalendarItem): CSSProperties {
+  if (item.kind !== "google" || !isHexColor(item.sourceColor)) return {};
+  return {
+    borderColor: hexToRgba(item.sourceColor, 0.58),
+    backgroundColor: hexToRgba(item.sourceColor, 0.18),
+    boxShadow: `inset 3px 0 0 ${item.sourceColor}`,
+  };
+}
+
+function isHexColor(value: string | undefined): value is string {
+  return Boolean(value && /^#[0-9a-fA-F]{6}$/.test(value));
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const n = Number.parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function parseLocalParts(iso: string): { hour: number; minute: number } {

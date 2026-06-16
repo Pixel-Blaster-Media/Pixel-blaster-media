@@ -14,12 +14,15 @@ import {
 } from "@/lib/booking/services";
 import {
   getGoogleCalendarClients,
+  getGoogleCalendarSources,
+  type GoogleCalendarSource,
   type GoogleCalendarEvent,
 } from "@/lib/integrations/google-calendar/client";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type { BookingStatus } from "@/lib/supabase/database.types";
 
 import CalendarWeekView from "./CalendarWeekView";
+import { updateCalendarSourcePreferences } from "./actions";
 
 export const metadata: Metadata = { title: "Calendar" };
 export const dynamic = "force-dynamic";
@@ -64,6 +67,7 @@ interface CalendarItem {
   statusLabel?: string;
   statusClass?: string;
   sourceName?: string;
+  sourceColor?: string;
 }
 
 interface CatalogItemOption {
@@ -124,6 +128,9 @@ export default async function AdminCalendarPage({
       .returns<BusinessHoursRow[]>(),
     getActiveCatalog({ organizationId: admin.organizationId }),
   ]);
+  const calendarSources = await getGoogleCalendarSources({
+    organizationId: admin.organizationId,
+  });
   const googleEvents = await fetchGoogleEventsBestEffort({
     organizationId: admin.organizationId,
     from: rangeStart,
@@ -250,6 +257,7 @@ export default async function AdminCalendarPage({
       localDate,
       href: event.htmlLink,
       sourceName: event.sourceName,
+      sourceColor: event.sourceColor,
       statusLabel: event.sourceName,
       statusClass: "border-sky-200 bg-sky-100 text-sky-800",
     });
@@ -351,11 +359,171 @@ export default async function AdminCalendarPage({
         </div>
       </section>
 
-      <CalendarWeekView
-        days={days}
-        items={visibleItems}
-        catalogItems={catalogToOptions(catalog)}
+      <div className="grid min-h-0 max-w-full gap-3 overflow-hidden md:grid-cols-[252px_minmax(0,1fr)]">
+        <CalendarSidebar
+          sources={calendarSources}
+          weekStart={weekStart}
+          todayKey={todayKey}
+          visibleItems={visibleItems}
+        />
+        <CalendarWeekView
+          days={days}
+          items={visibleItems}
+          catalogItems={catalogToOptions(catalog)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CalendarSidebar({
+  sources,
+  weekStart,
+  todayKey,
+  visibleItems,
+}: {
+  sources: GoogleCalendarSource[];
+  weekStart: string;
+  todayKey: string;
+  visibleItems: CalendarItem[];
+}) {
+  const monthDate = dateFromKey(weekStart);
+  const monthLabel = new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    month: "long",
+    year: "numeric",
+  }).format(monthDate);
+  const monthGrid = buildMonthGrid(weekStart);
+
+  return (
+    <aside className="hidden min-h-[calc(100dvh-190px)] rounded-xl border border-realtor-primary/15 bg-realtor-surface/90 p-3 shadow-lg shadow-realtor-text/10 md:flex md:flex-col">
+      <section>
+        <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary/80">
+          Calendars
+        </p>
+        <div className="mt-3 space-y-2">
+          <CalendarStaticSource
+            label="Pixel Blaster shoots"
+            color="#3f7356"
+            count={visibleItems.filter((item) => item.kind === "booking").length}
+          />
+          <CalendarStaticSource
+            label="Manual blocks"
+            color="#a69d8d"
+            count={visibleItems.filter((item) => item.kind === "block").length}
+          />
+          {sources.map((source) => (
+            <form
+              key={source.id}
+              action={updateCalendarSourcePreferences}
+              className="rounded-lg border border-realtor-primary/10 bg-white/65 p-2"
+            >
+              <input type="hidden" name="source_id" value={source.id} />
+              <div className="flex items-start gap-2">
+                <input
+                  aria-label={`${source.displayName} colour`}
+                  type="color"
+                  name="source_color"
+                  defaultValue={source.sourceColor}
+                  className="mt-0.5 h-7 w-7 shrink-0 cursor-pointer rounded border border-realtor-primary/15 bg-transparent p-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <label className="flex min-w-0 items-start gap-2 text-xs font-semibold text-realtor-text">
+                    <input
+                      type="checkbox"
+                      name="show_on_admin_calendar"
+                      defaultChecked={source.showOnAdminCalendar}
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded border-realtor-primary/25 text-realtor-primary"
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate">{source.displayName}</span>
+                      <span className="block truncate font-normal text-realtor-muted">
+                        {source.writeBookings ? "Booking calendar" : source.calendarId}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="mt-2 flex items-center gap-2 text-[11px] text-realtor-muted">
+                    <input
+                      type="checkbox"
+                      name="block_availability"
+                      defaultChecked={source.blockAvailability}
+                      className="h-3.5 w-3.5 rounded border-realtor-primary/25 text-realtor-primary"
+                    />
+                    Blocks booking slots
+                  </label>
+                </div>
+                <button
+                  type="submit"
+                  className="rounded-full border border-realtor-primary/15 bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary transition hover:border-realtor-primary/35 hover:bg-realtor-primary/5"
+                >
+                  Save
+                </button>
+              </div>
+            </form>
+          ))}
+        </div>
+      </section>
+
+      <section className="mt-auto pt-4">
+        <div className="rounded-xl border border-realtor-primary/10 bg-white/65 p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-realtor-text">
+              {monthLabel}
+            </p>
+            <Link
+              href={calendarHref()}
+              className="text-[11px] font-semibold text-realtor-primary"
+            >
+              Today
+            </Link>
+          </div>
+          <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase text-realtor-muted">
+            {["S", "M", "T", "W", "T", "F", "S"].map((label, index) => (
+              <span key={`${label}-${index}`}>{label}</span>
+            ))}
+          </div>
+          <div className="mt-1 grid grid-cols-7 gap-1 text-center text-[11px]">
+            {monthGrid.map((day) => (
+              <Link
+                key={day.key}
+                href={calendarHref({ week: startOfWeekKey(day.key) })}
+                className={`rounded-full px-1.5 py-1 transition ${
+                  day.key === todayKey
+                    ? "bg-realtor-primary text-white"
+                    : day.inMonth
+                      ? "text-realtor-text hover:bg-realtor-primary/10"
+                      : "text-realtor-muted/40 hover:bg-realtor-primary/5"
+                }`}
+              >
+                {day.day}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+    </aside>
+  );
+}
+
+function CalendarStaticSource({
+  label,
+  color,
+  count,
+}: {
+  label: string;
+  color: string;
+  count: number;
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-realtor-primary/10 bg-white/55 p-2 text-xs">
+      <span
+        className="h-3 w-3 shrink-0 rounded-sm"
+        style={{ backgroundColor: color }}
       />
+      <span className="min-w-0 flex-1 truncate font-semibold text-realtor-text">
+        {label}
+      </span>
+      <span className="text-realtor-muted">{count}</span>
     </div>
   );
 }
@@ -399,13 +567,36 @@ function addDaysKey(key: string, days: number): string {
   return keyFromDate(date);
 }
 
+function buildMonthGrid(activeKey: string): Array<{
+  key: string;
+  day: number;
+  inMonth: boolean;
+}> {
+  const activeDate = dateFromKey(activeKey);
+  const firstOfMonth = new Date(
+    Date.UTC(activeDate.getUTCFullYear(), activeDate.getUTCMonth(), 1),
+  );
+  const gridStart = new Date(firstOfMonth);
+  gridStart.setUTCDate(gridStart.getUTCDate() - gridStart.getUTCDay());
+
+  return Array.from({ length: 42 }).map((_, index) => {
+    const date = new Date(gridStart);
+    date.setUTCDate(gridStart.getUTCDate() + index);
+    return {
+      key: keyFromDate(date),
+      day: date.getUTCDate(),
+      inMonth: date.getUTCMonth() === activeDate.getUTCMonth(),
+    };
+  });
+}
+
 function calendarHref({
   week,
   q,
 }: {
   week?: string;
   q?: string;
-}): string {
+} = {}): string {
   const params = new URLSearchParams();
   if (week) params.set("week", week);
   if (q) params.set("q", q);
@@ -441,6 +632,7 @@ async function fetchGoogleEventsBestEffort({
     GoogleCalendarEvent & {
       sourceId: number;
       sourceName: string;
+      sourceColor: string;
       writeBookings: boolean;
     }
   >
@@ -457,6 +649,7 @@ async function fetchGoogleEventsBestEffort({
           ...event,
           sourceId: client.connectionId,
           sourceName: client.displayName,
+          sourceColor: client.sourceColor,
           writeBookings: client.writeBookings,
         }));
       }),

@@ -52,6 +52,29 @@ interface InsertedRow {
   id: string;
 }
 
+export async function updateCalendarSourcePreferences(
+  formData: FormData,
+): Promise<void> {
+  const admin = await requireAdmin();
+  const sourceId = Number(formData.get("source_id"));
+  if (!Number.isInteger(sourceId)) return;
+
+  const color = normalizeHexColor(str(formData, "source_color"));
+  const supabase = getServiceSupabase();
+  await supabase
+    .from("google_calendar_connection")
+    .update({
+      source_color: color,
+      show_on_admin_calendar: formData.get("show_on_admin_calendar") === "on",
+      block_availability: formData.get("block_availability") === "on",
+    })
+    .eq("organization_id", admin.organizationId)
+    .eq("id", sourceId);
+
+  revalidatePath("/admin/calendar");
+  revalidatePath("/admin/settings/integrations");
+}
+
 export async function searchRealtors(
   query: string,
 ): Promise<RealtorSearchResult> {
@@ -806,6 +829,11 @@ async function sendConfirmationBestEffort(args: {
 
 function str(formData: FormData, key: string): string {
   return ((formData.get(key) as string | null) ?? "").trim();
+}
+
+function normalizeHexColor(value: string): string {
+  const trimmed = value.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed : "#2f80b7";
 }
 
 function parseOptionalInt(value: string): number | null {

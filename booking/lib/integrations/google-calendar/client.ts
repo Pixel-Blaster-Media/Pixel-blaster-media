@@ -29,6 +29,7 @@ export interface GoogleCalendarClient {
   connectionId: number;
   calendarId: string;
   displayName: string;
+  sourceColor: string;
   sourceType: "primary" | "external";
   showOnAdminCalendar: boolean;
   blockAvailability: boolean;
@@ -76,6 +77,7 @@ export interface GoogleCalendarSource {
   id: number;
   calendarId: string;
   displayName: string;
+  sourceColor: string;
   googleAccountEmail: string;
   sourceType: "primary" | "external";
   showOnAdminCalendar: boolean;
@@ -110,6 +112,7 @@ function isMissingCalendarSourceColumn(error: unknown): boolean {
       candidate.message?.includes("show_on_admin_calendar") === true ||
       candidate.message?.includes("block_availability") === true ||
       candidate.message?.includes("display_name") === true ||
+      candidate.message?.includes("source_color") === true ||
       candidate.message?.includes("source_type") === true)
   );
 }
@@ -277,6 +280,7 @@ async function clientFromConnection(
     connectionId: conn.id,
     calendarId,
     displayName: calendarSourceName(conn),
+    sourceColor: calendarSourceColor(conn),
     sourceType: conn.source_type ?? "primary",
     showOnAdminCalendar: conn.show_on_admin_calendar ?? true,
     blockAvailability: conn.block_availability ?? true,
@@ -301,6 +305,7 @@ function calendarSourceFromRow(conn: ConnectionRow): GoogleCalendarSource {
     id: conn.id,
     calendarId: conn.calendar_id || "primary",
     displayName: calendarSourceName(conn),
+    sourceColor: calendarSourceColor(conn),
     googleAccountEmail: conn.google_account_email,
     sourceType: conn.source_type ?? "primary",
     showOnAdminCalendar: conn.show_on_admin_calendar ?? true,
@@ -308,6 +313,10 @@ function calendarSourceFromRow(conn: ConnectionRow): GoogleCalendarSource {
     writeBookings: conn.write_bookings ?? true,
     connectedAt: conn.connected_at,
   };
+}
+
+function calendarSourceColor(conn: ConnectionRow): string {
+  return conn.source_color || (conn.write_bookings ? "#3f7356" : "#2f80b7");
 }
 
 function calendarSourceName(conn: ConnectionRow): string {
@@ -576,6 +585,7 @@ export async function persistTokens(args: {
     ...basePayload,
     organization_id: organizationId(args),
     display_name: "Main booking calendar",
+    source_color: "#3f7356",
     source_type: "primary" as const,
     show_on_admin_calendar: true,
     block_availability: true,

@@ -440,6 +440,7 @@ export async function addExternalGoogleCalendarSource(
       google_account_email: primary.google_account_email,
       calendar_id: calendarId,
       display_name: name || calendarId,
+      source_color: "#2f80b7",
       source_type: "external",
       show_on_admin_calendar: showOnAdmin,
       block_availability: blockAvailability,
