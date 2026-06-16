@@ -93,8 +93,10 @@ interface CalendarDragState {
 const START_HOUR = 7;
 const END_HOUR = 20;
 const SLOT_MINUTES = 30;
-const HOUR_HEIGHT = 72;
-const MOBILE_HOUR_HEIGHT = 56;
+const HOUR_HEIGHT = 96;
+const MOBILE_HOUR_HEIGHT = 72;
+const DESKTOP_DAY_BASE_WIDTH = 220;
+const DESKTOP_LANE_WIDTH = 172;
 
 export default function CalendarWeekView({
   days,
@@ -160,6 +162,35 @@ export default function CalendarWeekView({
     () => buildPositionedItemsByDay(items),
     [items],
   );
+  const desktopDayWidths = useMemo(() => {
+    const widths = new Map<string, number>();
+    for (const day of days) {
+      const maxLaneCount = Math.max(
+        1,
+        ...(positionedItemsByDay.get(day.dateInput) ?? []).map(
+          (item) => item.layout.laneCount,
+        ),
+      );
+      widths.set(
+        day.dateInput,
+        Math.max(DESKTOP_DAY_BASE_WIDTH, maxLaneCount * DESKTOP_LANE_WIDTH),
+      );
+    }
+    return widths;
+  }, [days, positionedItemsByDay]);
+  const desktopGridTemplateColumns = `64px ${days
+    .map(
+      (day) =>
+        `minmax(${desktopDayWidths.get(day.dateInput) ?? DESKTOP_DAY_BASE_WIDTH}px, 1fr)`,
+    )
+    .join(" ")}`;
+  const desktopGridMinWidth =
+    64 +
+    days.reduce(
+      (total, day) =>
+        total + (desktopDayWidths.get(day.dateInput) ?? DESKTOP_DAY_BASE_WIDTH),
+      0,
+    );
 
   const gridHeight = (END_HOUR - START_HOUR) * HOUR_HEIGHT;
   const selectedSlot = selected
@@ -420,13 +451,19 @@ export default function CalendarWeekView({
         ) : null}
       </div>
 
-      <div className="hidden overflow-x-auto rounded-2xl border border-[#d8cab9]/70 bg-[#fffdf8]/80 shadow-lg shadow-black/10 md:block">
-        <div className="grid min-w-[980px] grid-cols-[64px_repeat(7,minmax(120px,1fr))]">
-          <div className="border-b border-[#d8cab9]/70 bg-[#fffdf8] px-2 py-3" />
+      <div className="hidden max-h-[72dvh] overflow-auto rounded-2xl border border-[#d8cab9]/70 bg-[#fffdf8]/80 shadow-lg shadow-black/10 md:block">
+        <div
+          className="grid"
+          style={{
+            gridTemplateColumns: desktopGridTemplateColumns,
+            minWidth: desktopGridMinWidth,
+          }}
+        >
+          <div className="sticky left-0 top-0 z-30 border-b border-[#d8cab9]/70 bg-[#fffdf8] px-2 py-3" />
           {days.map((day) => (
             <div
               key={day.key}
-              className="border-b border-l border-[#d8cab9]/70 bg-[#fffdf8] px-3 py-3"
+              className="sticky top-0 z-20 border-b border-l border-[#d8cab9]/70 bg-[#fffdf8] px-3 py-3"
             >
               <p className="text-xs uppercase tracking-wider text-[#6f7a70]">
                 {day.shortLabel}
@@ -435,7 +472,10 @@ export default function CalendarWeekView({
             </div>
           ))}
 
-          <div className="relative bg-[#fffdf8]" style={{ height: gridHeight }}>
+          <div
+            className="sticky left-0 z-20 bg-[#fffdf8]"
+            style={{ height: gridHeight }}
+          >
             {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, i) => (
               <div
                 key={i}
@@ -1425,7 +1465,7 @@ function CalendarEvent({
   const startMinutes = start.hour * 60 + start.minute;
   const endMinutes = end.hour * 60 + end.minute;
   const top = ((startMinutes - START_HOUR * 60) / 60) * HOUR_HEIGHT;
-  const height = Math.max(((endMinutes - startMinutes) / 60) * HOUR_HEIGHT, 32);
+  const height = Math.max(((endMinutes - startMinutes) / 60) * HOUR_HEIGHT, 56);
   const canMove = item.kind === "booking" || item.kind === "block";
   const classes =
     item.kind === "booking"
@@ -1435,7 +1475,7 @@ function CalendarEvent({
         : "border-[#a69d8d]/45 bg-[#c9c3b6]/80 text-[#36423a] hover:bg-[#beb7aa]";
   const content = (
     <div
-      className={`absolute z-10 overflow-hidden rounded-xl border px-2 py-1 text-left shadow-sm transition ${classes} ${
+      className={`absolute z-10 overflow-hidden rounded-xl border px-3 py-2 text-left shadow-sm transition ${classes} ${
         isDragging ? "opacity-60 ring-2 ring-[#3f7356]/45" : ""
       }`}
       style={eventLayoutStyle({
@@ -1444,35 +1484,42 @@ function CalendarEvent({
         layout: item.layout,
       })}
     >
-      <div className="flex min-w-0 items-start justify-between gap-1.5">
+      <div className="flex h-full min-w-0 flex-col justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-xs font-semibold">{item.title}</p>
-          <p className="truncate text-[10px] opacity-80">{item.subtitle}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">
+            {formatDateTimeRange(item.startsAt, item.endsAt)}
+          </p>
+          <p className="mt-1 line-clamp-2 break-words text-sm font-semibold leading-tight">
+            {item.title}
+          </p>
+          <p className="mt-1 line-clamp-2 break-words text-xs leading-snug opacity-85">
+            {item.subtitle}
+          </p>
         </div>
-        {canMove ? (
-          <span className="shrink-0 rounded border border-current/20 bg-white/35 px-1 py-0.5 text-[8px] font-semibold uppercase tracking-wider opacity-70">
-            Drag
-          </span>
-        ) : null}
-      </div>
-      <div className="mt-1 flex min-w-0 items-center gap-1.5">
-        {item.statusLabel ? (
-          <span
-            className={`inline-block rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-wider ${item.statusClass}`}
-          >
-            {item.statusLabel}
-          </span>
-        ) : null}
-        {item.href ? (
-          <Link
-            href={item.href}
-            draggable={false}
-            onClick={(event) => event.stopPropagation()}
-            className="rounded-full border border-current/20 bg-white/35 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider opacity-80 hover:opacity-100"
-          >
-            Open
-          </Link>
-        ) : null}
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          {item.statusLabel ? (
+            <span
+              className={`inline-block rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${item.statusClass}`}
+            >
+              {item.statusLabel}
+            </span>
+          ) : null}
+          {canMove ? (
+            <span className="rounded-full border border-current/20 bg-white/35 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider opacity-75">
+              Drag
+            </span>
+          ) : null}
+          {item.href ? (
+            <Link
+              href={item.href}
+              draggable={false}
+              onClick={(event) => event.stopPropagation()}
+              className="rounded-full border border-current/20 bg-white/35 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider opacity-80 hover:opacity-100"
+            >
+              Open
+            </Link>
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -1487,7 +1534,7 @@ function CalendarEvent({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        className={`absolute z-10 block touch-none select-none overflow-hidden rounded-xl border px-2 py-1 text-left shadow-sm transition ${
+        className={`absolute z-10 block touch-none select-none overflow-hidden rounded-xl border px-3 py-2 text-left shadow-sm transition ${
           isDragging
             ? "scale-[0.98] opacity-35"
             : "cursor-grab hover:bg-[#d2e1d2] active:cursor-grabbing"
@@ -1498,15 +1545,31 @@ function CalendarEvent({
           layout: item.layout,
         })}
       >
-        <p className="truncate text-xs font-semibold">{item.title}</p>
-        <p className="truncate text-[10px] opacity-80">{item.subtitle}</p>
-        {item.statusLabel ? (
-          <span
-            className={`mt-1 inline-block rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-wider ${item.statusClass}`}
-          >
-            {item.statusLabel}
-          </span>
-        ) : null}
+        <div className="flex h-full min-w-0 flex-col justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">
+              {formatDateTimeRange(item.startsAt, item.endsAt)}
+            </p>
+            <p className="mt-1 line-clamp-2 break-words text-sm font-semibold leading-tight">
+              {item.title}
+            </p>
+            <p className="mt-1 line-clamp-2 break-words text-xs leading-snug opacity-85">
+              {item.subtitle}
+            </p>
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            {item.statusLabel ? (
+              <span
+                className={`inline-block rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${item.statusClass}`}
+              >
+                {item.statusLabel}
+              </span>
+            ) : null}
+            <span className="rounded-full border border-current/20 bg-white/35 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider opacity-75">
+              Drag
+            </span>
+          </div>
+        </div>
       </button>
     );
   }
