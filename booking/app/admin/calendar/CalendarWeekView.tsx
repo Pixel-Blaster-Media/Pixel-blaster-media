@@ -642,14 +642,14 @@ export default function CalendarWeekView({
         </div>
       </div>
 
-      <div className="relative max-w-full space-y-3 pb-28 md:hidden">
-        <section className="rounded-[28px] border border-[#d8cab9]/80 bg-[#fffdf8] p-4 shadow-lg shadow-black/10">
+      <div className="relative max-w-full space-y-2 pb-28 md:hidden">
+        <section className="rounded-[24px] border border-[#d8cab9]/80 bg-[#fffdf8] p-3 shadow-lg shadow-black/10">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6f7a70]">
                 Calendar
               </p>
-              <h2 className="mt-1 truncate text-2xl font-bold text-[#23332b]">
+              <h2 className="mt-0.5 truncate text-xl font-bold text-[#23332b]">
                 {mobileMonthLabel}
               </h2>
             </div>
@@ -675,7 +675,7 @@ export default function CalendarWeekView({
             </div>
           </div>
 
-          <div className="mt-4 grid max-w-full grid-cols-7 gap-1">
+          <div className="mt-3 grid max-w-full grid-cols-7 gap-1">
             {days.map((day) => {
               const isSelected = day.dateInput === mobileDay?.dateInput;
               const dayItems = itemsByDay.get(day.dateInput) ?? [];
@@ -734,8 +734,8 @@ export default function CalendarWeekView({
             onTouchEnd={handleMobileSwipeEnd}
             className="max-w-full overflow-hidden rounded-[28px] border border-[#d8cab9]/80 bg-[#fffdf8] shadow-lg shadow-black/10"
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 px-4 pt-4">
+            <div className="flex items-start justify-between gap-2 px-4 pt-4">
+              <div className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#6f7a70]">
                   {mobileDay.shortLabel}
                 </p>
@@ -746,7 +746,7 @@ export default function CalendarWeekView({
                   {mobileDayItems.length} item{mobileDayItems.length === 1 ? "" : "s"}
                 </p>
               </div>
-              <span className="mr-4 mt-4 shrink-0 rounded-full border border-[#d8cab9] bg-[#f7f4ed] px-2 py-1 text-[10px] text-[#6f7a70]">
+              <span className="shrink-0 rounded-full border border-[#d8cab9] bg-[#f7f4ed] px-2 py-1 text-[10px] text-[#6f7a70]">
                 {mobileDay.enabled
                   ? `${minutesToLabel(
                       mobileDay.workStartMinutes,
@@ -755,7 +755,8 @@ export default function CalendarWeekView({
               </span>
             </div>
 
-            <div className="mt-4 border-t border-[#d8cab9]/70 px-3 pb-3 pt-3">
+            <div className="mt-3 border-t border-[#d8cab9]/70 px-3 pb-3 pt-3">
+              <div className="max-h-[calc(100dvh-330px)] min-h-[390px] overflow-y-auto overscroll-contain rounded-3xl [-webkit-overflow-scrolling:touch]">
               <div
                 data-calendar-drop-day={mobileDay.dateInput}
                 data-calendar-drop-mode="mobile"
@@ -847,9 +848,6 @@ export default function CalendarWeekView({
                     rangeEnd={mobileTimelineEnd}
                     isDragging={dragState?.item.id === item.id}
                     onOpen={openCalendarItem}
-                    onPointerDown={beginBookingDrag}
-                    onPointerMove={updateBookingDrag}
-                    onPointerUp={finishBookingDrag}
                   />
                 ))}
 
@@ -863,6 +861,7 @@ export default function CalendarWeekView({
                     mobile
                   />
                 ) : null}
+              </div>
               </div>
             </div>
           </section>
@@ -1469,18 +1468,12 @@ function MobileTimelineEvent({
   rangeEnd,
   isDragging,
   onOpen,
-  onPointerDown,
-  onPointerMove,
-  onPointerUp,
 }: {
   item: PositionedCalendarItem;
   rangeStart: number;
   rangeEnd: number;
   isDragging: boolean;
   onOpen: (item: CalendarItem) => void;
-  onPointerDown: (event: PointerEvent<HTMLElement>, item: CalendarItem) => void;
-  onPointerMove: (event: PointerEvent<HTMLElement>) => void;
-  onPointerUp: (event: PointerEvent<HTMLElement>) => void;
 }) {
   const startMinutes = localMinutesFromIso(item.startsAt);
   const endMinutes = localMinutesFromIso(item.endsAt);
@@ -1499,7 +1492,6 @@ function MobileTimelineEvent({
         ? "text-[#17465b]"
         : "border-[#a69d8d]/50 bg-[#d7d1c4] text-[#36423a]";
   const sourceStyle = calendarSourceEventStyle(item);
-  const canMove = item.kind === "booking" || item.kind === "block";
   const content = (
     <div
       className={`absolute z-10 overflow-hidden rounded-xl border px-2.5 py-1.5 text-left shadow-sm ${classes}`}
@@ -1532,20 +1524,14 @@ function MobileTimelineEvent({
     </div>
   );
 
-  if (canMove) {
+  if (item.href) {
     return (
       <button
         type="button"
-        aria-label={`Open or drag ${item.title}`}
+        aria-label={`Open ${item.title}`}
         onClick={() => onOpen(item)}
-        onPointerDown={(event) => onPointerDown(event, item)}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        className={`absolute left-12 right-1.5 z-10 block touch-none select-none overflow-hidden rounded-xl border px-2.5 py-1.5 text-left shadow-sm transition ${
-          isDragging
-            ? "scale-[0.98] opacity-35"
-            : "cursor-grab active:cursor-grabbing"
+        className={`absolute left-12 right-1.5 z-10 block select-none overflow-hidden rounded-xl border px-2.5 py-1.5 text-left shadow-sm transition active:scale-[0.99] ${
+          isDragging ? "opacity-35" : ""
         } ${classes}`}
         style={{
           ...eventLayoutStyle({ top, height, layout: item.layout, mobile: true }),
@@ -1565,14 +1551,19 @@ function MobileTimelineEvent({
             </p>
           </div>
           <span className="w-fit rounded-full border border-current/25 bg-white/40 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
-            {item.statusLabel ?? "Shoot"}
+            {item.statusLabel ??
+              (item.kind === "block"
+                ? "Blocked"
+                : item.kind === "google"
+                  ? "Google"
+                  : "Shoot")}
           </span>
         </div>
       </button>
     );
   }
 
-  return item.href ? <Link href={item.href}>{content}</Link> : content;
+  return content;
 }
 
 function CalendarEvent({

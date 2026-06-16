@@ -352,7 +352,7 @@ export default function AdminAssistant() {
           onPointerUp={stopBubbleDrag}
           onPointerCancel={stopBubbleDrag}
           onClick={openBubble}
-          className="fixed z-[80] flex h-14 w-14 touch-none select-none items-center justify-center rounded-full border border-realtor-primary/20 bg-realtor-primary text-lg font-bold text-white shadow-2xl shadow-realtor-text/30 transition hover:scale-105 hover:bg-realtor-primary-light"
+          className="fixed z-[80] hidden h-14 w-14 touch-none select-none items-center justify-center rounded-full border border-realtor-primary/20 bg-realtor-primary text-lg font-bold text-white shadow-2xl shadow-realtor-text/30 transition hover:scale-105 hover:bg-realtor-primary-light md:flex"
           style={{
             right: bubblePosition.right,
             bottom: bubblePosition.bottom,
