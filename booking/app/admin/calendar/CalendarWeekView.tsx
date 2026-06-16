@@ -419,22 +419,22 @@ export default function CalendarWeekView({
   };
 
   return (
-    <div className="max-w-full space-y-2 overflow-hidden">
-      <div className="hidden text-realtor-muted md:flex md:flex-wrap md:items-center md:gap-3 md:text-xs">
+    <div className="max-w-full space-y-2 px-0.5">
+      <div className="hidden pl-1 text-realtor-muted md:flex md:flex-wrap md:items-center md:gap-3 md:text-xs">
         <span className="inline-flex min-w-0 items-center gap-1.5">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#fffdf8] ring-1 ring-[#d8cab9]" />
+          <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-[#d8cab9] bg-[#fffdf8]" />
           Working hours
         </span>
         <span className="inline-flex min-w-0 items-center gap-1.5">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#d7d1c4] ring-1 ring-[#bdb4a5]" />
+          <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-[#bdb4a5] bg-[#d7d1c4]" />
           Blocked/off hours
         </span>
         <span className="inline-flex min-w-0 items-center gap-1.5">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#dce9dc] ring-1 ring-[#89a68f]" />
+          <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-[#89a68f] bg-[#dce9dc]" />
           Shoot
         </span>
         <span className="inline-flex min-w-0 items-center gap-1.5">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#d9edf8] ring-1 ring-[#5aa6c8]" />
+          <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-[#5aa6c8] bg-[#d9edf8]" />
           Google Calendar
         </span>
         <span className="text-[11px] text-[#6f7a70]">
@@ -584,7 +584,7 @@ export default function CalendarWeekView({
         </div>
       </div>
 
-      <div className="max-w-full space-y-2 overflow-hidden md:hidden">
+      <div className="max-w-full space-y-2 md:hidden">
         <div className="grid max-w-full grid-cols-7 gap-1">
           {days.map((day) => {
             const isSelected = day.dateInput === mobileDay?.dateInput;
@@ -639,19 +639,19 @@ export default function CalendarWeekView({
 
         <div className="grid max-w-full grid-cols-4 gap-1 rounded-xl border border-[#d8cab9]/70 bg-[#fffdf8]/75 p-1.5 text-[9px] text-[#6f7a70]">
           <span className="inline-flex min-w-0 items-center justify-center gap-1">
-            <span className="h-2 w-2 shrink-0 rounded-sm bg-[#fffdf8] ring-1 ring-[#d8cab9]" />
+            <span className="h-2 w-2 shrink-0 rounded-sm border border-[#d8cab9] bg-[#fffdf8]" />
             <span className="truncate">Working</span>
           </span>
           <span className="inline-flex min-w-0 items-center justify-center gap-1">
-            <span className="h-2 w-2 shrink-0 rounded-sm bg-[#d7d1c4] ring-1 ring-[#bdb4a5]" />
+            <span className="h-2 w-2 shrink-0 rounded-sm border border-[#bdb4a5] bg-[#d7d1c4]" />
             <span className="truncate">Blocked</span>
           </span>
           <span className="inline-flex min-w-0 items-center justify-center gap-1">
-            <span className="h-2 w-2 shrink-0 rounded-sm bg-[#dce9dc] ring-1 ring-[#89a68f]" />
+            <span className="h-2 w-2 shrink-0 rounded-sm border border-[#89a68f] bg-[#dce9dc]" />
             <span className="truncate">Shoot</span>
           </span>
           <span className="inline-flex min-w-0 items-center justify-center gap-1">
-            <span className="h-2 w-2 shrink-0 rounded-sm bg-[#d9edf8] ring-1 ring-[#5aa6c8]" />
+            <span className="h-2 w-2 shrink-0 rounded-sm border border-[#5aa6c8] bg-[#d9edf8]" />
             <span className="truncate">Google</span>
           </span>
         </div>

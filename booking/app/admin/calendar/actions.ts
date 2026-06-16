@@ -65,8 +65,6 @@ export async function updateCalendarSourcePreferences(
     .from("google_calendar_connection")
     .update({
       source_color: color,
-      show_on_admin_calendar: formData.get("show_on_admin_calendar") === "on",
-      block_availability: formData.get("block_availability") === "on",
     })
     .eq("organization_id", admin.organizationId)
     .eq("id", sourceId);

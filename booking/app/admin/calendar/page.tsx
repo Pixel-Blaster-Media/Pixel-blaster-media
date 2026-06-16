@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { BOOKING_STATUSES } from "@/lib/booking/booking-status";
@@ -267,7 +268,7 @@ export default async function AdminCalendarPage({
     .length;
 
   return (
-    <div className="max-w-full space-y-3 overflow-hidden">
+    <div className="max-w-full space-y-3 px-0.5">
       <header className="rounded-xl border border-realtor-primary/15 bg-realtor-surface/85 p-3 shadow-lg shadow-realtor-text/10">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
@@ -359,7 +360,7 @@ export default async function AdminCalendarPage({
         </div>
       </section>
 
-      <div className="grid min-h-0 max-w-full gap-3 overflow-hidden md:grid-cols-[252px_minmax(0,1fr)]">
+      <div className="grid min-h-0 max-w-full gap-3 md:grid-cols-[280px_minmax(0,1fr)]">
         <CalendarSidebar
           sources={calendarSources}
           weekStart={weekStart}
@@ -394,6 +395,8 @@ function CalendarSidebar({
     year: "numeric",
   }).format(monthDate);
   const monthGrid = buildMonthGrid(weekStart);
+  const bookingItems = visibleItems.filter((item) => item.kind === "booking");
+  const blockItems = visibleItems.filter((item) => item.kind === "block");
 
   return (
     <aside className="hidden min-h-[calc(100dvh-190px)] rounded-xl border border-realtor-primary/15 bg-realtor-surface/90 p-3 shadow-lg shadow-realtor-text/10 md:flex md:flex-col">
@@ -402,65 +405,54 @@ function CalendarSidebar({
           Calendars
         </p>
         <div className="mt-3 space-y-2">
-          <CalendarStaticSource
+          <CalendarSourceSummary
             label="Pixel Blaster shoots"
             color="#3f7356"
-            count={visibleItems.filter((item) => item.kind === "booking").length}
+            items={bookingItems}
+            detail="Bookings created in Pixel Blaster"
+            defaultOpen
           />
-          <CalendarStaticSource
+          <CalendarSourceSummary
             label="Manual blocks"
             color="#a69d8d"
-            count={visibleItems.filter((item) => item.kind === "block").length}
+            items={blockItems}
+            detail="Private blocked/off time"
           />
-          {sources.map((source) => (
-            <form
-              key={source.id}
-              action={updateCalendarSourcePreferences}
-              className="rounded-lg border border-realtor-primary/10 bg-white/65 p-2"
-            >
-              <input type="hidden" name="source_id" value={source.id} />
-              <div className="flex items-start gap-2">
-                <input
-                  aria-label={`${source.displayName} colour`}
-                  type="color"
-                  name="source_color"
-                  defaultValue={source.sourceColor}
-                  className="mt-0.5 h-7 w-7 shrink-0 cursor-pointer rounded border border-realtor-primary/15 bg-transparent p-0"
-                />
-                <div className="min-w-0 flex-1">
-                  <label className="flex min-w-0 items-start gap-2 text-xs font-semibold text-realtor-text">
+          {sources.map((source) => {
+            const sourceItems = visibleItems.filter(
+              (item) =>
+                item.kind === "google" && item.id.startsWith(`${source.id}:`),
+            );
+            return (
+              <CalendarSourceSummary
+                key={source.id}
+                label={source.displayName}
+                color={source.sourceColor}
+                items={sourceItems}
+                detail={
+                  source.writeBookings ? "Booking calendar" : source.calendarId
+                }
+                form={
+                  <form action={updateCalendarSourcePreferences} className="flex items-center gap-2">
+                    <input type="hidden" name="source_id" value={source.id} />
                     <input
-                      type="checkbox"
-                      name="show_on_admin_calendar"
-                      defaultChecked={source.showOnAdminCalendar}
-                      className="mt-0.5 h-4 w-4 shrink-0 rounded border-realtor-primary/25 text-realtor-primary"
+                      aria-label={`${source.displayName} colour`}
+                      type="color"
+                      name="source_color"
+                      defaultValue={source.sourceColor}
+                      className="h-7 w-7 shrink-0 cursor-pointer rounded border border-realtor-primary/15 bg-transparent p-0"
                     />
-                    <span className="min-w-0">
-                      <span className="block truncate">{source.displayName}</span>
-                      <span className="block truncate font-normal text-realtor-muted">
-                        {source.writeBookings ? "Booking calendar" : source.calendarId}
-                      </span>
-                    </span>
-                  </label>
-                  <label className="mt-2 flex items-center gap-2 text-[11px] text-realtor-muted">
-                    <input
-                      type="checkbox"
-                      name="block_availability"
-                      defaultChecked={source.blockAvailability}
-                      className="h-3.5 w-3.5 rounded border-realtor-primary/25 text-realtor-primary"
-                    />
-                    Blocks booking slots
-                  </label>
-                </div>
-                <button
-                  type="submit"
-                  className="rounded-full border border-realtor-primary/15 bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary transition hover:border-realtor-primary/35 hover:bg-realtor-primary/5"
-                >
-                  Save
-                </button>
-              </div>
-            </form>
-          ))}
+                    <button
+                      type="submit"
+                      className="rounded-full border border-realtor-primary/15 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary transition hover:border-realtor-primary/35 hover:bg-realtor-primary/5"
+                    >
+                      Save
+                    </button>
+                  </form>
+                }
+              />
+            );
+          })}
         </div>
       </section>
 
@@ -505,26 +497,82 @@ function CalendarSidebar({
   );
 }
 
-function CalendarStaticSource({
+function CalendarSourceSummary({
   label,
   color,
-  count,
+  items,
+  detail,
+  form,
+  defaultOpen = false,
 }: {
   label: string;
   color: string;
-  count: number;
+  items: CalendarItem[];
+  detail: string;
+  form?: ReactNode;
+  defaultOpen?: boolean;
 }) {
+  const sortedItems = [...items].sort(
+    (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+  );
+
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-realtor-primary/10 bg-white/55 p-2 text-xs">
-      <span
-        className="h-3 w-3 shrink-0 rounded-sm"
-        style={{ backgroundColor: color }}
-      />
-      <span className="min-w-0 flex-1 truncate font-semibold text-realtor-text">
-        {label}
-      </span>
-      <span className="text-realtor-muted">{count}</span>
-    </div>
+    <details
+      className="group rounded-lg border border-realtor-primary/10 bg-white/60 p-2 text-xs"
+      open={defaultOpen}
+    >
+      <summary className="flex cursor-pointer list-none items-start gap-2">
+        <span
+          className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-sm border border-black/10"
+          style={{ backgroundColor: color }}
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-semibold text-realtor-text">
+            {label}
+          </span>
+          <span className="block truncate text-[11px] text-realtor-muted">
+            {items.length} item{items.length === 1 ? "" : "s"} this week
+          </span>
+        </span>
+        <span className="shrink-0 text-realtor-muted transition group-open:rotate-90">
+          &gt;
+        </span>
+      </summary>
+      <div className="mt-2 border-t border-realtor-primary/10 pt-2">
+        <div className="flex items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-[11px] text-realtor-muted">
+            {detail}
+          </p>
+          {form}
+        </div>
+        <div className="mt-2 space-y-1.5">
+          {sortedItems.length > 0 ? (
+            sortedItems.slice(0, 5).map((item) => (
+              <div
+                key={`${item.kind}-${item.id}`}
+                className="rounded-md bg-realtor-surface/75 px-2 py-1.5"
+              >
+                <p className="truncate font-semibold text-realtor-text">
+                  {item.title}
+                </p>
+                <p className="mt-0.5 truncate text-[11px] text-realtor-muted">
+                  {formatSummaryTime(item)}
+                </p>
+              </div>
+            ))
+          ) : (
+            <p className="rounded-md bg-realtor-surface/75 px-2 py-1.5 text-[11px] text-realtor-muted">
+              Nothing visible this week.
+            </p>
+          )}
+          {sortedItems.length > 5 ? (
+            <p className="px-2 text-[11px] font-semibold text-realtor-primary">
+              +{sortedItems.length - 5} more
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </details>
   );
 }
 
@@ -617,6 +665,27 @@ function filterCalendarItems(
       .toLowerCase()
       .includes(needle),
   );
+}
+
+function formatSummaryTime(item: CalendarItem): string {
+  const start = new Date(item.startsAt);
+  const end = new Date(item.endsAt);
+  const day = new Intl.DateTimeFormat("en-US", {
+    timeZone: BUSINESS_TZ,
+    weekday: "short",
+  }).format(start);
+  const startTime = new Intl.DateTimeFormat("en-US", {
+    timeZone: BUSINESS_TZ,
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(start);
+  const endTime = new Intl.DateTimeFormat("en-US", {
+    timeZone: BUSINESS_TZ,
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(end);
+
+  return `${day} ${startTime}-${endTime}`;
 }
 
 async function fetchGoogleEventsBestEffort({
