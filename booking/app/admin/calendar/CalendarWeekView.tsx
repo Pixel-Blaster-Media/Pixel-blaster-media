@@ -7,6 +7,7 @@ import type {
   InputHTMLAttributes,
   PointerEvent,
   ReactNode,
+  TouchEvent,
 } from "react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
@@ -145,6 +146,9 @@ export default function CalendarWeekView({
   const [dragState, setDragState] = useState<CalendarDragState | null>(null);
   const dragRef = useRef<CalendarDragState | null>(null);
   const suppressOpenUntilRef = useRef(0);
+  const mobileSwipeRef = useRef<{ x: number; y: number; time: number } | null>(
+    null,
+  );
   const [mobileDayKey, setMobileDayKey] = useState(() => {
     const today = dateInputForLocalDate();
     if (days.some((day) => day.dateInput === today)) return today;
@@ -202,9 +206,17 @@ export default function CalendarWeekView({
     : [];
   const mobileDay =
     days.find((day) => day.dateInput === mobileDayKey) ?? days[0] ?? null;
+  const mobileDayIndex = mobileDay
+    ? days.findIndex((day) => day.dateInput === mobileDay.dateInput)
+    : -1;
   const mobileDayItems = mobileDay
     ? positionedItemsByDay.get(mobileDay.dateInput) ?? []
     : [];
+  const mobileMonthLabel = mobileDay
+    ? new Intl.DateTimeFormat("en-US", { month: "long" }).format(
+        new Date(`${mobileDay.dateInput}T00:00:00`),
+      )
+    : "";
   const mobileTimelineStart = START_HOUR * 60;
   const mobileTimelineEnd = END_HOUR * 60;
   const mobileTimelineHeight =
@@ -418,6 +430,52 @@ export default function CalendarWeekView({
     router.push(item.href);
   };
 
+  const selectMobileDayByOffset = (offset: number) => {
+    if (!mobileDay) return;
+    const currentIndex = days.findIndex(
+      (day) => day.dateInput === mobileDay.dateInput,
+    );
+    const next = days[currentIndex + offset];
+    if (next) {
+      setMobileDayKey(next.dateInput);
+    }
+  };
+
+  const handleMobileSwipeStart = (event: TouchEvent<HTMLElement>) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    mobileSwipeRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      time: Date.now(),
+    };
+  };
+
+  const handleMobileSwipeEnd = (event: TouchEvent<HTMLElement>) => {
+    const start = mobileSwipeRef.current;
+    mobileSwipeRef.current = null;
+    const touch = event.changedTouches[0];
+    if (!start || !touch) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Math.abs(dx) < 56 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+    if (Date.now() - start.time > 700) return;
+    selectMobileDayByOffset(dx < 0 ? 1 : -1);
+  };
+
+  const openMobileAddSheet = () => {
+    if (!mobileDay) return;
+    const minutes = defaultMobileAddMinutes(mobileDay);
+    setError(null);
+    setLookupMessage(null);
+    setMode("shoot");
+    setSelected({
+      day: mobileDay,
+      hour: Math.floor(minutes / 60),
+      minute: minutes % 60,
+    });
+  };
+
   return (
     <div className="max-w-full space-y-2 px-0.5">
       <div className="hidden pl-1 text-realtor-muted md:flex md:flex-wrap md:items-center md:gap-3 md:text-xs">
@@ -584,90 +642,111 @@ export default function CalendarWeekView({
         </div>
       </div>
 
-      <div className="max-w-full space-y-2 md:hidden">
-        <div className="grid max-w-full grid-cols-7 gap-1">
-          {days.map((day) => {
-            const isSelected = day.dateInput === mobileDay?.dateInput;
-            const dayItems = itemsByDay.get(day.dateInput) ?? [];
-            return (
+      <div className="relative max-w-full space-y-3 pb-28 md:hidden">
+        <section className="rounded-[28px] border border-[#d8cab9]/80 bg-[#fffdf8] p-4 shadow-lg shadow-black/10">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6f7a70]">
+                Calendar
+              </p>
+              <h2 className="mt-1 truncate text-2xl font-bold text-[#23332b]">
+                {mobileMonthLabel}
+              </h2>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
               <button
-                key={day.key}
                 type="button"
-                onClick={() => setMobileDayKey(day.dateInput)}
-                className={`min-w-0 rounded-lg border px-1 py-1 text-center shadow-sm transition ${
-                  isSelected
-                    ? "border-[#3f7356] bg-[#3f7356] text-white"
-                    : "border-[#d8cab9] bg-[#fffdf8] text-[#23332b]"
-                }`}
+                onClick={() => selectMobileDayByOffset(-1)}
+                disabled={mobileDayIndex <= 0}
+                aria-label="Previous day"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#d8cab9] bg-white text-lg font-semibold text-[#36423a] shadow-sm disabled:opacity-35"
               >
-                <span
-                  className={`block text-[8px] uppercase tracking-wide ${
-                    isSelected ? "text-white/75" : "text-[#6f7a70]"
+                &lt;
+              </button>
+              <button
+                type="button"
+                onClick={() => selectMobileDayByOffset(1)}
+                disabled={mobileDayIndex < 0 || mobileDayIndex >= days.length - 1}
+                aria-label="Next day"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#d8cab9] bg-white text-lg font-semibold text-[#36423a] shadow-sm disabled:opacity-35"
+              >
+                &gt;
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 grid max-w-full grid-cols-7 gap-1">
+            {days.map((day) => {
+              const isSelected = day.dateInput === mobileDay?.dateInput;
+              const dayItems = itemsByDay.get(day.dateInput) ?? [];
+              return (
+                <button
+                  key={day.key}
+                  type="button"
+                  onClick={() => setMobileDayKey(day.dateInput)}
+                  className={`min-w-0 rounded-lg border px-1 py-1 text-center shadow-sm transition ${
+                    isSelected
+                      ? "border-[#3f7356] bg-[#3f7356] text-white"
+                      : "border-[#d8cab9] bg-[#fffdf8] text-[#23332b]"
                   }`}
                 >
-                  {day.shortLabel.slice(0, 3)}
-                </span>
-                <span className="mt-0.5 block text-[11px] font-semibold leading-none">
-                  {day.label.split(" ").at(-1)}
-                </span>
-                <span
-                  aria-label={
-                    dayItems.length > 0
-                      ? `${dayItems.length} item${dayItems.length === 1 ? "" : "s"}`
-                      : day.enabled
-                        ? "Open"
-                        : "Closed"
-                  }
-                  className={`mx-auto mt-1 block h-1.5 w-1.5 rounded-full ${
-                    dayItems.length > 0
-                      ? isSelected
-                        ? "bg-white/85"
-                        : "bg-[#3f7356]"
-                      : day.enabled
+                  <span
+                    className={`block text-[8px] uppercase tracking-wide ${
+                      isSelected ? "text-white/75" : "text-[#6f7a70]"
+                    }`}
+                  >
+                    {day.shortLabel.slice(0, 3)}
+                  </span>
+                  <span className="mt-0.5 block text-[11px] font-semibold leading-none">
+                    {day.label.split(" ").at(-1)}
+                  </span>
+                  <span
+                    aria-label={
+                      dayItems.length > 0
+                        ? `${dayItems.length} item${dayItems.length === 1 ? "" : "s"}`
+                        : day.enabled
+                          ? "Open"
+                          : "Closed"
+                    }
+                    className={`mx-auto mt-1 block h-1.5 w-1.5 rounded-full ${
+                      dayItems.length > 0
                         ? isSelected
-                          ? "bg-white/45"
-                          : "bg-[#9fb79f]"
-                        : isSelected
-                          ? "bg-white/25"
-                          : "bg-[#d7d1c4]"
-                  }`}
-                />
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="grid max-w-full grid-cols-4 gap-1 rounded-xl border border-[#d8cab9]/70 bg-[#fffdf8]/75 p-1.5 text-[9px] text-[#6f7a70]">
-          <span className="inline-flex min-w-0 items-center justify-center gap-1">
-            <span className="h-2 w-2 shrink-0 rounded-sm border border-[#d8cab9] bg-[#fffdf8]" />
-            <span className="truncate">Working</span>
-          </span>
-          <span className="inline-flex min-w-0 items-center justify-center gap-1">
-            <span className="h-2 w-2 shrink-0 rounded-sm border border-[#bdb4a5] bg-[#d7d1c4]" />
-            <span className="truncate">Blocked</span>
-          </span>
-          <span className="inline-flex min-w-0 items-center justify-center gap-1">
-            <span className="h-2 w-2 shrink-0 rounded-sm border border-[#89a68f] bg-[#dce9dc]" />
-            <span className="truncate">Shoot</span>
-          </span>
-          <span className="inline-flex min-w-0 items-center justify-center gap-1">
-            <span className="h-2 w-2 shrink-0 rounded-sm border border-[#5aa6c8] bg-[#d9edf8]" />
-            <span className="truncate">Google</span>
-          </span>
-        </div>
+                          ? "bg-white/85"
+                          : "bg-[#3f7356]"
+                        : day.enabled
+                          ? isSelected
+                            ? "bg-white/45"
+                            : "bg-[#9fb79f]"
+                          : isSelected
+                            ? "bg-white/25"
+                            : "bg-[#d7d1c4]"
+                    }`}
+                  />
+                </button>
+              );
+            })}
+          </div>
+        </section>
 
         {mobileDay ? (
-          <section className="max-w-full overflow-hidden rounded-xl border border-[#d8cab9]/80 bg-[#fffdf8] p-2.5 shadow-lg shadow-black/10">
+          <section
+            onTouchStart={handleMobileSwipeStart}
+            onTouchEnd={handleMobileSwipeEnd}
+            className="max-w-full overflow-hidden rounded-[28px] border border-[#d8cab9]/80 bg-[#fffdf8] shadow-lg shadow-black/10"
+          >
             <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-[#6f7a70]">
-                  Day view
+              <div className="min-w-0 px-4 pt-4">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#6f7a70]">
+                  {mobileDay.shortLabel}
                 </p>
-                <h2 className="mt-0.5 text-sm font-semibold text-[#23332b]">
-                  {mobileDay.shortLabel} {mobileDay.label}
+                <h2 className="mt-1 text-base font-semibold text-[#23332b]">
+                  {mobileDay.label}
                 </h2>
+                <p className="mt-0.5 text-xs text-[#6f7a70]">
+                  {mobileDayItems.length} item{mobileDayItems.length === 1 ? "" : "s"}
+                </p>
               </div>
-              <span className="shrink-0 rounded-full border border-[#d8cab9] bg-[#f7f4ed] px-2 py-1 text-[10px] text-[#6f7a70]">
+              <span className="mr-4 mt-4 shrink-0 rounded-full border border-[#d8cab9] bg-[#f7f4ed] px-2 py-1 text-[10px] text-[#6f7a70]">
                 {mobileDay.enabled
                   ? `${minutesToLabel(
                       mobileDay.workStartMinutes,
@@ -676,17 +755,11 @@ export default function CalendarWeekView({
               </span>
             </div>
 
-            <div className="mt-3 border-t border-[#d8cab9]/70 pt-3">
-              <p className="text-xs font-semibold text-[#23332b]">
-                Daily calendar
-              </p>
-              <p className="mt-0.5 text-[10px] text-[#6f7a70]">
-                Tap any open slot to add a shoot or block time.
-              </p>
+            <div className="mt-4 border-t border-[#d8cab9]/70 px-3 pb-3 pt-3">
               <div
                 data-calendar-drop-day={mobileDay.dateInput}
                 data-calendar-drop-mode="mobile"
-                className="relative mt-3 overflow-hidden rounded-r-2xl border border-[#d8cab9] bg-[#d7d1c4]/55"
+                className="relative overflow-hidden rounded-3xl border border-[#d8cab9] bg-[#d7d1c4]/55"
                 style={{ height: mobileTimelineHeight }}
               >
                 {mobileDay.enabled ? (
@@ -794,6 +867,55 @@ export default function CalendarWeekView({
             </div>
           </section>
         ) : null}
+
+        <button
+          type="button"
+          onClick={openMobileAddSheet}
+          aria-label="Add appointment"
+          className="fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-5 z-40 flex h-16 w-16 items-center justify-center rounded-full bg-[#111111] text-4xl font-light leading-none text-white shadow-2xl shadow-black/25"
+        >
+          +
+        </button>
+
+        <nav className="fixed inset-x-4 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 rounded-[28px] border border-[#d8cab9]/70 bg-white/95 px-2 py-2 shadow-2xl shadow-black/15 backdrop-blur">
+          <div className="grid grid-cols-5 gap-1 text-[11px] font-semibold text-[#6f7a70]">
+            <Link
+              href="/admin/calendar"
+              className="flex flex-col items-center gap-1 rounded-2xl bg-[#f0f3ef] px-1 py-2 text-[#23332b]"
+            >
+              <span className="text-sm leading-none">[ ]</span>
+              Calendar
+            </Link>
+            <Link
+              href="/admin/bookings"
+              className="flex flex-col items-center gap-1 rounded-2xl px-1 py-2"
+            >
+              <span className="text-sm leading-none">+</span>
+              Shoots
+            </Link>
+            <Link
+              href="/admin/settings/availability"
+              className="flex flex-col items-center gap-1 rounded-2xl px-1 py-2"
+            >
+              <span className="text-sm leading-none">O</span>
+              Hours
+            </Link>
+            <Link
+              href="/admin/realtors"
+              className="flex flex-col items-center gap-1 rounded-2xl px-1 py-2"
+            >
+              <span className="text-sm leading-none">ID</span>
+              Clients
+            </Link>
+            <Link
+              href="/admin/settings"
+              className="flex flex-col items-center gap-1 rounded-2xl px-1 py-2"
+            >
+              <span className="text-sm leading-none">=</span>
+              Menu
+            </Link>
+          </div>
+        </nav>
       </div>
 
       {selected ? (
@@ -1755,6 +1877,26 @@ function isWithinWorkingHours(day: DayColumn, minutes: number): boolean {
     day.enabled &&
     minutes >= day.workStartMinutes &&
     minutes < day.workEndMinutes
+  );
+}
+
+function defaultMobileAddMinutes(day: DayColumn): number {
+  const timelineStart = START_HOUR * 60;
+  const timelineEnd = END_HOUR * 60;
+  const firstWorking = Math.min(
+    Math.max(day.workStartMinutes, timelineStart),
+    timelineEnd - SLOT_MINUTES,
+  );
+  if (!day.enabled) return firstWorking;
+  if (day.dateInput !== dateInputForLocalDate()) return firstWorking;
+
+  const now = new Date();
+  const roundedNow =
+    Math.ceil((now.getHours() * 60 + now.getMinutes()) / SLOT_MINUTES) *
+    SLOT_MINUTES;
+  return Math.min(
+    Math.max(roundedNow, firstWorking),
+    Math.min(day.workEndMinutes, timelineEnd) - SLOT_MINUTES,
   );
 }
 
