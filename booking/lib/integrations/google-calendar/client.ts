@@ -26,7 +26,13 @@ export class GoogleCalendarError extends Error {
 }
 
 export interface GoogleCalendarClient {
+  connectionId: number;
   calendarId: string;
+  displayName: string;
+  sourceType: "primary" | "external";
+  showOnAdminCalendar: boolean;
+  blockAvailability: boolean;
+  writeBookings: boolean;
   /** ISO UTC timestamps where the connected calendar is BUSY within [from, to]. */
   getBusy(from: Date, to: Date): Promise<{ start: Date; end: Date }[]>;
   /** Calendar events in [from, to], used by the admin calendar display. */
@@ -66,6 +72,18 @@ export interface GoogleCalendarEvent {
   allDay: boolean;
 }
 
+export interface GoogleCalendarSource {
+  id: number;
+  calendarId: string;
+  displayName: string;
+  googleAccountEmail: string;
+  sourceType: "primary" | "external";
+  showOnAdminCalendar: boolean;
+  blockAvailability: boolean;
+  writeBookings: boolean;
+  connectedAt: string;
+}
+
 export interface CalendarConnectionScope {
   organizationId?: string;
 }
@@ -83,6 +101,19 @@ function isMissingOrganizationColumn(error: unknown): boolean {
   );
 }
 
+function isMissingCalendarSourceColumn(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: string; message?: string };
+  return (
+    candidate.code === "42703" &&
+    (candidate.message?.includes("write_bookings") === true ||
+      candidate.message?.includes("show_on_admin_calendar") === true ||
+      candidate.message?.includes("block_availability") === true ||
+      candidate.message?.includes("display_name") === true ||
+      candidate.message?.includes("source_type") === true)
+  );
+}
+
 export async function getGoogleCalendarConnection(
   scope?: CalendarConnectionScope,
 ): Promise<ConnectionRow | null> {
@@ -92,9 +123,26 @@ export async function getGoogleCalendarConnection(
     .from("google_calendar_connection")
     .select("*")
     .eq("organization_id", orgId)
+    .eq("write_bookings", true)
+    .order("connected_at", { ascending: true })
+    .limit(1)
     .maybeSingle<ConnectionRow>();
 
   if (!scoped.error) return scoped.data ?? null;
+
+  if (isMissingCalendarSourceColumn(scoped.error)) {
+    const single = await supabase
+      .from("google_calendar_connection")
+      .select("*")
+      .eq("organization_id", orgId)
+      .maybeSingle<ConnectionRow>();
+    if (single.error && !isMissingOrganizationColumn(single.error)) {
+      throw new Error(
+        `Load google calendar connection failed: ${single.error.message}`,
+      );
+    }
+    if (!single.error) return single.data ?? null;
+  }
 
   // Backward compatibility while production is between code deploy and the
   // SaaS calendar migration. Remove this fallback once 0024 is everywhere.
@@ -117,6 +165,71 @@ export async function getGoogleCalendarConnection(
   return legacy.data ?? null;
 }
 
+export async function getGoogleCalendarConnections(
+  scope?: CalendarConnectionScope & {
+    showOnAdminCalendar?: boolean;
+    blockAvailability?: boolean;
+  },
+): Promise<ConnectionRow[]> {
+  const supabase = getServiceSupabase();
+  const orgId = organizationId(scope);
+  let query = supabase
+    .from("google_calendar_connection")
+    .select("*")
+    .eq("organization_id", orgId)
+    .order("write_bookings", { ascending: false })
+    .order("connected_at", { ascending: true });
+
+  if (typeof scope?.showOnAdminCalendar === "boolean") {
+    query = query.eq("show_on_admin_calendar", scope.showOnAdminCalendar);
+  }
+  if (typeof scope?.blockAvailability === "boolean") {
+    query = query.eq("block_availability", scope.blockAvailability);
+  }
+
+  const result = await query.returns<ConnectionRow[]>();
+  if (!result.error) return result.data ?? [];
+
+  if (isMissingCalendarSourceColumn(result.error)) {
+    const fallback = await supabase
+      .from("google_calendar_connection")
+      .select("*")
+      .eq("organization_id", orgId)
+      .returns<ConnectionRow[]>();
+    if (!fallback.error) return fallback.data ?? [];
+    if (!isMissingOrganizationColumn(fallback.error)) {
+      throw new Error(
+        `Load google calendar connections failed: ${fallback.error.message}`,
+      );
+    }
+  }
+
+  if (!isMissingOrganizationColumn(result.error)) {
+    throw new Error(
+      `Load google calendar connections failed: ${result.error.message}`,
+    );
+  }
+
+  const legacy = await supabase
+    .from("google_calendar_connection")
+    .select("*")
+    .eq("id", 1)
+    .maybeSingle<ConnectionRow>();
+  if (legacy.error) {
+    throw new Error(
+      `Load google calendar connection failed: ${legacy.error.message}`,
+    );
+  }
+  return legacy.data ? [legacy.data] : [];
+}
+
+export async function getGoogleCalendarSources(
+  scope?: CalendarConnectionScope,
+): Promise<GoogleCalendarSource[]> {
+  const rows = await getGoogleCalendarConnections(scope);
+  return rows.map(calendarSourceFromRow);
+}
+
 /**
  * Load the connection row + (if needed) refresh the access token. Returns
  * null when the admin hasn't connected a calendar yet — availability code
@@ -132,11 +245,42 @@ export async function getGoogleCalendarClient(
   const conn = await getGoogleCalendarConnection(scope);
   if (!conn) return null;
 
+  return clientFromConnection(conn, clientId, clientSecret);
+}
+
+export async function getGoogleCalendarClients(
+  scope?: CalendarConnectionScope & {
+    showOnAdminCalendar?: boolean;
+    blockAvailability?: boolean;
+  },
+): Promise<GoogleCalendarClient[]> {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return [];
+
+  const rows = await getGoogleCalendarConnections(scope);
+  const clients = await Promise.all(
+    rows.map((row) => clientFromConnection(row, clientId, clientSecret)),
+  );
+  return clients;
+}
+
+async function clientFromConnection(
+  conn: ConnectionRow,
+  clientId: string,
+  clientSecret: string,
+): Promise<GoogleCalendarClient> {
   const accessToken = await ensureAccessToken(conn, clientId, clientSecret);
   const calendarId = conn.calendar_id || "primary";
 
   return {
+    connectionId: conn.id,
     calendarId,
+    displayName: calendarSourceName(conn),
+    sourceType: conn.source_type ?? "primary",
+    showOnAdminCalendar: conn.show_on_admin_calendar ?? true,
+    blockAvailability: conn.block_availability ?? true,
+    writeBookings: conn.write_bookings ?? true,
     async getBusy(from, to) {
       return queryFreeBusy(accessToken, calendarId, from, to);
     },
@@ -150,6 +294,30 @@ export async function getGoogleCalendarClient(
       await deleteEventBestEffort(accessToken, calendarId, eventId);
     },
   };
+}
+
+function calendarSourceFromRow(conn: ConnectionRow): GoogleCalendarSource {
+  return {
+    id: conn.id,
+    calendarId: conn.calendar_id || "primary",
+    displayName: calendarSourceName(conn),
+    googleAccountEmail: conn.google_account_email,
+    sourceType: conn.source_type ?? "primary",
+    showOnAdminCalendar: conn.show_on_admin_calendar ?? true,
+    blockAvailability: conn.block_availability ?? true,
+    writeBookings: conn.write_bookings ?? true,
+    connectedAt: conn.connected_at,
+  };
+}
+
+function calendarSourceName(conn: ConnectionRow): string {
+  return (
+    conn.display_name?.trim() ||
+    (conn.write_bookings ? "Main booking calendar" : null) ||
+    conn.calendar_id ||
+    conn.google_account_email ||
+    "Google Calendar"
+  );
 }
 
 async function ensureAccessToken(
@@ -396,24 +564,54 @@ export async function persistTokens(args: {
   const expiresAt = new Date(
     Date.now() + args.expiresInSeconds * 1000,
   ).toISOString();
-  const { error } = await supabase
+  const basePayload = {
+    google_account_email: args.googleAccountEmail,
+    refresh_token: args.refreshToken,
+    access_token: args.accessToken,
+    access_token_expires_at: expiresAt,
+    calendar_id: args.calendarId ?? "primary",
+    connected_by: args.connectedBy ?? null,
+  };
+  const sourcePayload = {
+    ...basePayload,
+    organization_id: organizationId(args),
+    display_name: "Main booking calendar",
+    source_type: "primary" as const,
+    show_on_admin_calendar: true,
+    block_availability: true,
+    write_bookings: true,
+  };
+
+  const existing = await getGoogleCalendarConnection({
+    organizationId: organizationId(args),
+  });
+  if (existing) {
+    const updated = await supabase
+      .from("google_calendar_connection")
+      .update(sourcePayload)
+      .eq("id", existing.id);
+    if (!updated.error) return;
+    if (isMissingCalendarSourceColumn(updated.error)) {
+      const legacyUpdate = await supabase
+        .from("google_calendar_connection")
+        .update(basePayload)
+        .eq("id", existing.id);
+      if (!legacyUpdate.error) return;
+      throw new Error(
+        `Save google connection failed: ${legacyUpdate.error.message}`,
+      );
+    }
+    throw new Error(`Save google connection failed: ${updated.error.message}`);
+  }
+
+  const inserted = await supabase
     .from("google_calendar_connection")
-    .upsert(
-      {
-        organization_id: organizationId(args),
-        google_account_email: args.googleAccountEmail,
-        refresh_token: args.refreshToken,
-        access_token: args.accessToken,
-        access_token_expires_at: expiresAt,
-        calendar_id: args.calendarId ?? "primary",
-        connected_by: args.connectedBy ?? null,
-      },
-      { onConflict: "organization_id" },
-    );
-  if (!error) return;
+    .insert(sourcePayload);
+  if (!inserted.error) return;
+  const error = inserted.error;
 
   // Backward compatibility before migration 0024 is applied.
-  if (!isMissingOrganizationColumn(error)) {
+  if (!isMissingOrganizationColumn(error) && !isMissingCalendarSourceColumn(error)) {
     throw new Error(`Save google connection failed: ${error.message}`);
   }
 

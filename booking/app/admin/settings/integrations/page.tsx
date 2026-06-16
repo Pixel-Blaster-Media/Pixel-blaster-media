@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { getGoogleCalendarConnection } from "@/lib/integrations/google-calendar/client";
+import {
+  getGoogleCalendarConnection,
+  getGoogleCalendarSources,
+} from "@/lib/integrations/google-calendar/client";
 import { getCredentialSource } from "@/lib/integrations/credentials";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getQBClient, QBOError } from "@/lib/integrations/quickbooks/client";
@@ -22,6 +25,11 @@ import GoogleCalendarTester from "./GoogleCalendarTester";
 import IGuideTester from "./IGuideTester";
 import ItemPicker from "./ItemPicker";
 import OpenAITester from "./OpenAITester";
+import {
+  addExternalGoogleCalendarSource,
+  deleteGoogleCalendarSource,
+  updateGoogleCalendarSource,
+} from "./actions";
 
 export const metadata: Metadata = { title: "Integrations" };
 export const dynamic = "force-dynamic";
@@ -60,6 +68,9 @@ export default async function IntegrationsPage({
     .eq("organization_id", admin.organizationId)
     .maybeSingle<ConnectionRow>();
   const googleConnection = await getGoogleCalendarConnection({
+    organizationId: admin.organizationId,
+  });
+  const googleSources = await getGoogleCalendarSources({
     organizationId: admin.organizationId,
   });
 
@@ -659,6 +670,190 @@ export default async function IntegrationsPage({
             </dl>
             <GoogleCalendarTester />
             <GoogleDisconnectButton />
+
+            <div className="rounded-2xl border border-realtor-primary/15 bg-white/70 p-4">
+              <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-realtor-text">
+                    Calendar sources
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-realtor-muted">
+                    Keep your main calendar as the booking write target. Add
+                    shared subcontractor or personal calendars here when you
+                    want them to show on the admin calendar or block public
+                    booking slots.
+                  </p>
+                </div>
+                <Link
+                  href="/admin/calendar"
+                  className="shrink-0 rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+                >
+                  Open calendar
+                </Link>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {googleSources.map((source) =>
+                  source.writeBookings ? (
+                    <div
+                      key={source.id}
+                      className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-emerald-950">
+                            {source.displayName}
+                          </p>
+                          <p className="mt-0.5 truncate text-xs text-emerald-800">
+                            {source.calendarId} · {source.googleAccountEmail}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+                          booking write target
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <form
+                      key={source.id}
+                      action={updateGoogleCalendarSource}
+                      className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/70 p-3"
+                    >
+                      <input type="hidden" name="source_id" value={source.id} />
+                      <div className="grid gap-3 md:grid-cols-[1fr_1.4fr_auto] md:items-end">
+                        <label className="block">
+                          <span className="text-xs text-realtor-muted">
+                            Label
+                          </span>
+                          <input
+                            name="display_name"
+                            defaultValue={source.displayName}
+                            className="admin-input mt-1"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs text-realtor-muted">
+                            Google calendar ID
+                          </span>
+                          <input
+                            name="calendar_id"
+                            defaultValue={source.calendarId}
+                            className="admin-input mt-1 font-mono text-xs"
+                          />
+                        </label>
+                        <button
+                          type="submit"
+                          className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-realtor-primary/90"
+                        >
+                          Save
+                        </button>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-realtor-muted">
+                        <label className="inline-flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            name="show_on_admin_calendar"
+                            defaultChecked={source.showOnAdminCalendar}
+                            className="h-4 w-4 rounded border-realtor-primary/25 text-realtor-primary"
+                          />
+                          Show on admin calendar
+                        </label>
+                        <label className="inline-flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            name="block_availability"
+                            defaultChecked={source.blockAvailability}
+                            className="h-4 w-4 rounded border-realtor-primary/25 text-realtor-primary"
+                          />
+                          Block online booking
+                        </label>
+                      </div>
+                    </form>
+                  ),
+                )}
+              </div>
+
+              <form
+                action={addExternalGoogleCalendarSource}
+                className="mt-4 rounded-2xl border border-dashed border-realtor-primary/25 bg-realtor-primary/5 p-3"
+              >
+                <p className="text-sm font-semibold text-realtor-text">
+                  Add external calendar
+                </p>
+                <div className="mt-3 grid gap-3 md:grid-cols-[1fr_1.4fr_auto] md:items-end">
+                  <label className="block">
+                    <span className="text-xs text-realtor-muted">Label</span>
+                    <input
+                      name="display_name"
+                      placeholder="Subcontractor shoots"
+                      className="admin-input mt-1"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs text-realtor-muted">
+                      Google calendar ID
+                    </span>
+                    <input
+                      name="calendar_id"
+                      required
+                      placeholder="example@gmail.com or calendar ID"
+                      className="admin-input mt-1 font-mono text-xs"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-realtor-primary/90"
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-realtor-muted">
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      name="show_on_admin_calendar"
+                      defaultChecked
+                      className="h-4 w-4 rounded border-realtor-primary/25 text-realtor-primary"
+                    />
+                    Show on admin calendar
+                  </label>
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      name="block_availability"
+                      defaultChecked
+                      className="h-4 w-4 rounded border-realtor-primary/25 text-realtor-primary"
+                    />
+                    Block online booking
+                  </label>
+                </div>
+              </form>
+
+              {googleSources.some((source) => !source.writeBookings) ? (
+                <div className="mt-3 space-y-2">
+                  {googleSources
+                    .filter((source) => !source.writeBookings)
+                    .map((source) => (
+                      <form
+                        key={`delete-${source.id}`}
+                        action={deleteGoogleCalendarSource}
+                      >
+                        <input
+                          type="hidden"
+                          name="source_id"
+                          value={source.id}
+                        />
+                        <button
+                          type="submit"
+                          className="text-xs font-semibold text-red-700 underline-offset-4 hover:underline"
+                        >
+                          Remove {source.displayName}
+                        </button>
+                      </form>
+                    ))}
+                </div>
+              ) : null}
+            </div>
           </div>
         ) : googleConfigured ? (
           <div className="mt-5 space-y-3">

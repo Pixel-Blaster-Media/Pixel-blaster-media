@@ -418,7 +418,7 @@ export default function CalendarWeekView({
   };
 
   return (
-    <div className="max-w-full space-y-3 overflow-hidden md:space-y-4">
+    <div className="max-w-full space-y-2 overflow-hidden">
       <div className="hidden text-realtor-muted md:flex md:flex-wrap md:items-center md:gap-3 md:text-xs">
         <span className="inline-flex min-w-0 items-center gap-1.5">
           <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#fffdf8] ring-1 ring-[#d8cab9]" />
@@ -451,7 +451,7 @@ export default function CalendarWeekView({
         ) : null}
       </div>
 
-      <div className="hidden max-h-[72dvh] overflow-auto rounded-2xl border border-[#d8cab9]/70 bg-[#fffdf8]/80 shadow-lg shadow-black/10 md:block">
+      <div className="hidden max-h-[calc(100dvh-190px)] overflow-auto rounded-xl border border-[#d8cab9]/70 bg-[#fffdf8]/80 shadow-lg shadow-black/10 md:block xl:max-h-[calc(100dvh-170px)]">
         <div
           className="grid"
           style={{

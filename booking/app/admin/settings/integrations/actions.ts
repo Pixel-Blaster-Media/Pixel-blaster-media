@@ -417,6 +417,87 @@ export async function disconnectGoogleCalendar(): Promise<void> {
   revalidatePath("/admin/settings/integrations");
 }
 
+export async function addExternalGoogleCalendarSource(
+  formData: FormData,
+): Promise<void> {
+  const admin = await requireAdmin();
+  const name = String(formData.get("display_name") ?? "").trim();
+  const calendarId = String(formData.get("calendar_id") ?? "").trim();
+  const showOnAdmin = formData.get("show_on_admin_calendar") === "on";
+  const blockAvailability = formData.get("block_availability") === "on";
+
+  if (!calendarId) return;
+
+  const primary = await getGoogleCalendarConnection({
+    organizationId: admin.organizationId,
+  });
+  if (!primary) return;
+
+  const supabase = getServiceSupabase();
+  await supabase.from("google_calendar_connection").upsert(
+    {
+      organization_id: admin.organizationId,
+      google_account_email: primary.google_account_email,
+      calendar_id: calendarId,
+      display_name: name || calendarId,
+      source_type: "external",
+      show_on_admin_calendar: showOnAdmin,
+      block_availability: blockAvailability,
+      write_bookings: false,
+      refresh_token: primary.refresh_token,
+      access_token: primary.access_token,
+      access_token_expires_at: primary.access_token_expires_at,
+      connected_by: admin.userId,
+    },
+    { onConflict: "organization_id,calendar_id" },
+  );
+  revalidatePath("/admin/settings/integrations");
+  revalidatePath("/admin/calendar");
+}
+
+export async function updateGoogleCalendarSource(
+  formData: FormData,
+): Promise<void> {
+  const admin = await requireAdmin();
+  const id = Number(formData.get("source_id"));
+  if (!Number.isInteger(id)) return;
+
+  const name = String(formData.get("display_name") ?? "").trim();
+  const calendarId = String(formData.get("calendar_id") ?? "").trim();
+  const supabase = getServiceSupabase();
+  await supabase
+    .from("google_calendar_connection")
+    .update({
+      display_name: name || null,
+      calendar_id: calendarId || "primary",
+      show_on_admin_calendar: formData.get("show_on_admin_calendar") === "on",
+      block_availability: formData.get("block_availability") === "on",
+    })
+    .eq("organization_id", admin.organizationId)
+    .eq("id", id)
+    .eq("write_bookings", false);
+  revalidatePath("/admin/settings/integrations");
+  revalidatePath("/admin/calendar");
+}
+
+export async function deleteGoogleCalendarSource(
+  formData: FormData,
+): Promise<void> {
+  const admin = await requireAdmin();
+  const id = Number(formData.get("source_id"));
+  if (!Number.isInteger(id)) return;
+
+  const supabase = getServiceSupabase();
+  await supabase
+    .from("google_calendar_connection")
+    .delete()
+    .eq("organization_id", admin.organizationId)
+    .eq("id", id)
+    .eq("write_bookings", false);
+  revalidatePath("/admin/settings/integrations");
+  revalidatePath("/admin/calendar");
+}
+
 export async function testGoogleCalendarConnection(): Promise<{
   ok: boolean;
   eventUrl?: string;

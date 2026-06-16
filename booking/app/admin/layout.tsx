@@ -28,7 +28,7 @@ export default async function AdminLayout({
         ...(brand ? organizationThemeStyle(brand) : {}),
       }}
     >
-      <section className="mx-auto min-w-0 max-w-6xl space-y-6 overflow-hidden py-4 md:py-6">
+      <section className="mx-auto min-w-0 max-w-none space-y-4 overflow-hidden py-3 md:py-4">
         <AdminAssistant />
         {children}
       </section>

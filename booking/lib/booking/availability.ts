@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
+import { getGoogleCalendarClients } from "@/lib/integrations/google-calendar/client";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { totalDurationMinutes } from "./services";
@@ -223,9 +223,14 @@ async function fetchGoogleBusy(
   scope?: AvailabilityScope,
 ): Promise<{ start: Date; end: Date }[]> {
   try {
-    const client = await getGoogleCalendarClient(scope);
-    if (!client) return [];
-    return await client.getBusy(from, to);
+    const clients = await getGoogleCalendarClients({
+      organizationId: scope?.organizationId,
+      blockAvailability: true,
+    });
+    const windows = await Promise.all(
+      clients.map((client) => client.getBusy(from, to)),
+    );
+    return windows.flat();
   } catch (err) {
     console.warn("[availability] google freeBusy failed", err);
     return [];

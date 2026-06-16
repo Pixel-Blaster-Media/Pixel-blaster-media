@@ -198,6 +198,11 @@ interface GoogleCalendarConnectionTable {
     organization_id: string;
     google_account_email: string;
     calendar_id: string;
+    display_name: string | null;
+    source_type: "primary" | "external";
+    show_on_admin_calendar: boolean;
+    block_availability: boolean;
+    write_bookings: boolean;
     refresh_token: string;
     access_token: string | null;
     access_token_expires_at: string | null;
@@ -210,6 +215,11 @@ interface GoogleCalendarConnectionTable {
     organization_id?: string;
     google_account_email: string;
     calendar_id?: string;
+    display_name?: string | null;
+    source_type?: "primary" | "external";
+    show_on_admin_calendar?: boolean;
+    block_availability?: boolean;
+    write_bookings?: boolean;
     refresh_token: string;
     access_token?: string | null;
     access_token_expires_at?: string | null;

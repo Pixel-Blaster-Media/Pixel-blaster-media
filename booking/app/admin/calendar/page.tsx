@@ -13,7 +13,7 @@ import {
   totalDurationMinutes,
 } from "@/lib/booking/services";
 import {
-  getGoogleCalendarClient,
+  getGoogleCalendarClients,
   type GoogleCalendarEvent,
 } from "@/lib/integrations/google-calendar/client";
 import { getServerSupabase } from "@/lib/supabase/server";
@@ -63,6 +63,7 @@ interface CalendarItem {
   href?: string;
   statusLabel?: string;
   statusClass?: string;
+  sourceName?: string;
 }
 
 interface CatalogItemOption {
@@ -129,7 +130,9 @@ export default async function AdminCalendarPage({
     to: rangeEnd,
   });
   const googleEventsById = new Map(
-    googleEvents.map((event) => [event.id, event]),
+    googleEvents
+      .filter((event) => event.writeBookings)
+      .map((event) => [event.id, event]),
   );
   const bookingGoogleEventIds = new Set<string>();
 
@@ -233,17 +236,21 @@ export default async function AdminCalendarPage({
     if (!weekKeys.has(localDate)) continue;
 
     items.push({
-      id: event.id,
+      id: `${event.sourceId}:${event.id}`,
       kind: "google",
       title: event.summary,
-      subtitle: [event.location, event.allDay ? "All-day" : "Google Calendar"]
+      subtitle: [
+        event.location,
+        event.allDay ? "All-day" : event.sourceName,
+      ]
         .filter(Boolean)
         .join(" · "),
       startsAt: startsAt.toISOString(),
       endsAt: endsAt.toISOString(),
       localDate,
       href: event.htmlLink,
-      statusLabel: "Google",
+      sourceName: event.sourceName,
+      statusLabel: event.sourceName,
       statusClass: "border-sky-200 bg-sky-100 text-sky-800",
     });
   }
@@ -252,12 +259,12 @@ export default async function AdminCalendarPage({
     .length;
 
   return (
-    <div className="max-w-full space-y-4 overflow-hidden md:space-y-6">
-      <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-3 shadow-lg shadow-realtor-text/10 md:p-4">
+    <div className="max-w-full space-y-3 overflow-hidden">
+      <header className="rounded-xl border border-realtor-primary/15 bg-realtor-surface/85 p-3 shadow-lg shadow-realtor-text/10">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h1 className="text-2xl font-bold text-realtor-text md:text-3xl">
+              <h1 className="text-xl font-bold text-realtor-text md:text-2xl">
                 Week of {formatHeaderDate(weekStart)}
               </h1>
               {isCurrentWeek ? (
@@ -273,7 +280,7 @@ export default async function AdminCalendarPage({
         </div>
       </header>
 
-      <section className="sticky top-2 z-20 rounded-2xl border border-realtor-primary/15 bg-realtor-surface/95 p-2 shadow-lg shadow-realtor-text/10 backdrop-blur md:static">
+      <section className="sticky top-2 z-20 rounded-xl border border-realtor-primary/15 bg-realtor-surface/95 p-2 shadow-lg shadow-realtor-text/10 backdrop-blur md:static">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <nav className="grid grid-cols-[44px_minmax(0,1fr)_44px] gap-2 text-xs sm:flex sm:w-fit sm:items-center">
             <Link
@@ -429,11 +436,32 @@ async function fetchGoogleEventsBestEffort({
   organizationId: string;
   from: Date;
   to: Date;
-}): Promise<GoogleCalendarEvent[]> {
+}): Promise<
+  Array<
+    GoogleCalendarEvent & {
+      sourceId: number;
+      sourceName: string;
+      writeBookings: boolean;
+    }
+  >
+> {
   try {
-    const client = await getGoogleCalendarClient({ organizationId });
-    if (!client) return [];
-    return await client.getEvents(from, to);
+    const clients = await getGoogleCalendarClients({
+      organizationId,
+      showOnAdminCalendar: true,
+    });
+    const eventGroups = await Promise.all(
+      clients.map(async (client) => {
+        const events = await client.getEvents(from, to);
+        return events.map((event) => ({
+          ...event,
+          sourceId: client.connectionId,
+          sourceName: client.displayName,
+          writeBookings: client.writeBookings,
+        }));
+      }),
+    );
+    return eventGroups.flat();
   } catch (err) {
     console.warn("[admin-calendar] google events fetch failed", err);
     return [];
