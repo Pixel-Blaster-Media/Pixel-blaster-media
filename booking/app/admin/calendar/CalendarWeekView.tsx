@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { InputHTMLAttributes, PointerEvent, ReactNode } from "react";
+import type {
+  CSSProperties,
+  InputHTMLAttributes,
+  PointerEvent,
+  ReactNode,
+} from "react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import AddressAutocomplete, {
@@ -32,6 +37,15 @@ interface CalendarItem {
   href?: string;
   statusLabel?: string;
   statusClass?: string;
+}
+
+interface PositionedCalendarItem extends CalendarItem {
+  layout: CalendarItemLayout;
+}
+
+interface CalendarItemLayout {
+  lane: number;
+  laneCount: number;
 }
 
 interface DayColumn {
@@ -142,6 +156,10 @@ export default function CalendarWeekView({
     }
     return map;
   }, [items]);
+  const positionedItemsByDay = useMemo(
+    () => buildPositionedItemsByDay(items),
+    [items],
+  );
 
   const gridHeight = (END_HOUR - START_HOUR) * HOUR_HEIGHT;
   const selectedSlot = selected
@@ -153,7 +171,7 @@ export default function CalendarWeekView({
   const mobileDay =
     days.find((day) => day.dateInput === mobileDayKey) ?? days[0] ?? null;
   const mobileDayItems = mobileDay
-    ? itemsByDay.get(mobileDay.dateInput) ?? []
+    ? positionedItemsByDay.get(mobileDay.dateInput) ?? []
     : [];
   const mobileTimelineStart = START_HOUR * 60;
   const mobileTimelineEnd = END_HOUR * 60;
@@ -499,7 +517,7 @@ export default function CalendarWeekView({
                 },
               )}
 
-              {(itemsByDay.get(day.dateInput) ?? []).map((item) => (
+              {(positionedItemsByDay.get(day.dateInput) ?? []).map((item) => (
                 <CalendarEvent
                   key={`${item.kind}-${item.id}`}
                   item={item}
@@ -1292,7 +1310,7 @@ function MobileTimelineEvent({
   onPointerMove,
   onPointerUp,
 }: {
-  item: CalendarItem;
+  item: PositionedCalendarItem;
   rangeStart: number;
   rangeEnd: number;
   isDragging: boolean;
@@ -1320,8 +1338,8 @@ function MobileTimelineEvent({
   const canMove = item.kind === "booking" || item.kind === "block";
   const content = (
     <div
-      className={`absolute left-12 right-1.5 z-10 overflow-hidden rounded-xl border px-2.5 py-1.5 text-left shadow-sm ${classes}`}
-      style={{ top, height }}
+      className={`absolute z-10 overflow-hidden rounded-xl border px-2.5 py-1.5 text-left shadow-sm ${classes}`}
+      style={eventLayoutStyle({ top, height, layout: item.layout, mobile: true })}
     >
       <div className="flex h-full min-w-0 flex-col justify-between gap-1">
         <div className="min-w-0">
@@ -1362,7 +1380,7 @@ function MobileTimelineEvent({
             ? "scale-[0.98] opacity-35"
             : "cursor-grab active:cursor-grabbing"
         } ${classes}`}
-        style={{ top, height }}
+        style={eventLayoutStyle({ top, height, layout: item.layout, mobile: true })}
       >
         <div className="flex h-full min-w-0 flex-col justify-between gap-1">
           <div className="min-w-0">
@@ -1395,7 +1413,7 @@ function CalendarEvent({
   onPointerMove,
   onPointerUp,
 }: {
-  item: CalendarItem;
+  item: PositionedCalendarItem;
   isDragging: boolean;
   onOpen: (item: CalendarItem) => void;
   onPointerDown: (event: PointerEvent<HTMLElement>, item: CalendarItem) => void;
@@ -1417,10 +1435,14 @@ function CalendarEvent({
         : "border-[#a69d8d]/45 bg-[#c9c3b6]/80 text-[#36423a] hover:bg-[#beb7aa]";
   const content = (
     <div
-      className={`absolute left-1 right-1 z-10 overflow-hidden rounded-xl border px-2 py-1 text-left shadow-sm transition ${classes} ${
+      className={`absolute z-10 overflow-hidden rounded-xl border px-2 py-1 text-left shadow-sm transition ${classes} ${
         isDragging ? "opacity-60 ring-2 ring-[#3f7356]/45" : ""
       }`}
-      style={{ top: Math.max(top, 0), height }}
+      style={eventLayoutStyle({
+        top: Math.max(top, 0),
+        height,
+        layout: item.layout,
+      })}
     >
       <div className="flex min-w-0 items-start justify-between gap-1.5">
         <div className="min-w-0">
@@ -1465,12 +1487,16 @@ function CalendarEvent({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        className={`absolute left-1 right-1 z-10 block touch-none select-none overflow-hidden rounded-xl border px-2 py-1 text-left shadow-sm transition ${
+        className={`absolute z-10 block touch-none select-none overflow-hidden rounded-xl border px-2 py-1 text-left shadow-sm transition ${
           isDragging
             ? "scale-[0.98] opacity-35"
             : "cursor-grab hover:bg-[#d2e1d2] active:cursor-grabbing"
         } ${classes}`}
-        style={{ top: Math.max(top, 0), height }}
+        style={eventLayoutStyle({
+          top: Math.max(top, 0),
+          height,
+          layout: item.layout,
+        })}
       >
         <p className="truncate text-xs font-semibold">{item.title}</p>
         <p className="truncate text-[10px] opacity-80">{item.subtitle}</p>
@@ -1514,6 +1540,105 @@ function CalendarDragPreview({
       <p className="truncate text-[10px] text-[#526258]">{item.subtitle}</p>
     </div>
   );
+}
+
+function buildPositionedItemsByDay(
+  items: CalendarItem[],
+): Map<string, PositionedCalendarItem[]> {
+  const byDay = new Map<string, CalendarItem[]>();
+  for (const item of items) {
+    byDay.set(item.localDate, [...(byDay.get(item.localDate) ?? []), item]);
+  }
+
+  const result = new Map<string, PositionedCalendarItem[]>();
+  for (const [day, dayItems] of byDay) {
+    const sorted = [...dayItems].sort((a, b) => {
+      const startDelta =
+        localMinutesFromIso(a.startsAt) - localMinutesFromIso(b.startsAt);
+      if (startDelta !== 0) return startDelta;
+      return localMinutesFromIso(a.endsAt) - localMinutesFromIso(b.endsAt);
+    });
+    const positioned: PositionedCalendarItem[] = [];
+    let cluster: CalendarItem[] = [];
+    let clusterEnd = -1;
+
+    const flushCluster = () => {
+      if (cluster.length === 0) return;
+      const lanes: number[] = [];
+      const clusterPositioned: PositionedCalendarItem[] = [];
+
+      for (const item of cluster) {
+        const start = localMinutesFromIso(item.startsAt);
+        const end = Math.max(localMinutesFromIso(item.endsAt), start + 1);
+        let lane = lanes.findIndex((laneEnd) => laneEnd <= start);
+        if (lane === -1) {
+          lane = lanes.length;
+          lanes.push(end);
+        } else {
+          lanes[lane] = end;
+        }
+        clusterPositioned.push({
+          ...item,
+          layout: { lane, laneCount: 1 },
+        });
+      }
+
+      const laneCount = Math.max(lanes.length, 1);
+      for (const item of clusterPositioned) {
+        positioned.push({
+          ...item,
+          layout: { ...item.layout, laneCount },
+        });
+      }
+      cluster = [];
+      clusterEnd = -1;
+    };
+
+    for (const item of sorted) {
+      const start = localMinutesFromIso(item.startsAt);
+      const end = Math.max(localMinutesFromIso(item.endsAt), start + 1);
+      if (cluster.length > 0 && start >= clusterEnd) {
+        flushCluster();
+      }
+      cluster.push(item);
+      clusterEnd = Math.max(clusterEnd, end);
+    }
+    flushCluster();
+
+    result.set(day, positioned);
+  }
+
+  return result;
+}
+
+function eventLayoutStyle({
+  top,
+  height,
+  layout,
+  mobile = false,
+}: {
+  top: number;
+  height: number;
+  layout: CalendarItemLayout;
+  mobile?: boolean;
+}): CSSProperties {
+  const laneCount = Math.max(layout.laneCount, 1);
+  const lane = Math.min(Math.max(layout.lane, 0), laneCount - 1);
+  if (mobile) {
+    return {
+      top,
+      height,
+      left: `calc(3rem + (${lane} * (100% - 3.375rem) / ${laneCount}) + 0.125rem)`,
+      width: `calc((100% - 3.375rem) / ${laneCount} - 0.25rem)`,
+    };
+  }
+
+  return {
+    top,
+    height,
+    left: `calc((${lane} * 100%) / ${laneCount} + 0.25rem)`,
+    width: `calc(100% / ${laneCount} - 0.5rem)`,
+  };
 }
 
 function parseLocalParts(iso: string): { hour: number; minute: number } {
