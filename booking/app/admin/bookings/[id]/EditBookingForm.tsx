@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 
 import AddressAutocomplete, {
   type PlaceParts,
@@ -43,8 +44,9 @@ export default function EditBookingForm({
   catalogItems: EditCatalogItem[];
 }) {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [property, setProperty] = useState({
     street_address: initial.streetAddress,
     unit_number: initial.unitNumber,
@@ -65,14 +67,19 @@ export default function EditBookingForm({
 
   function onSubmit(formData: FormData) {
     setError(null);
-    setSaved(false);
+    setSavedMessage(null);
     startTransition(async () => {
       const result = await updateBookingDetails(bookingId, formData);
       if (!result.ok) {
         setError(result.error ?? "Could not save booking.");
         return;
       }
-      setSaved(true);
+      setSavedMessage(
+        result.confirmationSent
+          ? "Booking saved and confirmation email sent."
+          : "Booking saved.",
+      );
+      router.refresh();
     });
   }
 
@@ -239,14 +246,30 @@ export default function EditBookingForm({
         </Field>
       </div>
 
+      <label className="flex items-start gap-3 rounded-xl border border-realtor-primary/15 bg-white/70 p-3 text-sm text-realtor-text">
+        <input
+          name="send_confirmation"
+          type="checkbox"
+          className="mt-1"
+        />
+        <span>
+          <span className="block font-semibold">
+            Send booking confirmation email again
+          </span>
+          <span className="block text-xs text-realtor-muted">
+            Leave this off for quiet admin fixes like address/name cleanup.
+          </span>
+        </span>
+      </label>
+
       {error ? (
         <p className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </p>
       ) : null}
-      {saved ? (
+      {savedMessage ? (
         <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          Booking saved.
+          {savedMessage}
         </p>
       ) : null}
 

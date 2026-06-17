@@ -24,7 +24,7 @@ import {
 import { buildDeliveryLinks } from "@/lib/booking/delivery-links";
 import { sendEmail } from "@/lib/email/resend";
 import { getOrganizationEmailSettings } from "@/lib/email/settings";
-import { deliveryReadyEmail } from "@/lib/email/templates";
+import { deliveryReadyEmail, shootConfirmedEmail } from "@/lib/email/templates";
 import {
   createEnhance,
   createListing,
@@ -189,6 +189,8 @@ interface BookingForManualEditRow {
   } | null;
   profiles: {
     email: string;
+    full_name: string | null;
+    delivery_cc_emails: string[] | null;
   } | null;
 }
 
@@ -203,6 +205,7 @@ const VALID_DELIVERABLE_TYPES: DeliverableType[] = [
 export interface ActionResult {
   ok: boolean;
   error?: string;
+  confirmationSent?: boolean;
 }
 
 const LISTING_WEBSITE_TEMPLATES: ListingWebsiteTemplate[] = [
@@ -327,6 +330,7 @@ export async function updateBookingDetails(
   const contactName = str(formData, "contact_name");
   const contactPhone = str(formData, "contact_phone") || null;
   const brokerage = str(formData, "brokerage") || null;
+  const shouldSendConfirmation = formData.get("send_confirmation") === "on";
   const selectedCatalogIds = formData
     .getAll("catalog_item_id")
     .map((value) => String(value).trim())
@@ -346,7 +350,7 @@ export async function updateBookingDetails(
   const { data: booking, error: bookingError } = await service
     .from("bookings")
     .select(
-      "id, organization_id, property_id, owner_id, scheduled_at, scheduled_ends_at, services, add_ons, google_calendar_event_id, properties(street_address, city, province, postal_code), profiles(email)",
+      "id, organization_id, property_id, owner_id, scheduled_at, scheduled_ends_at, services, add_ons, google_calendar_event_id, properties(street_address, city, province, postal_code), profiles(email, full_name, delivery_cc_emails)",
     )
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
@@ -511,6 +515,19 @@ export async function updateBookingDetails(
     scheduledEndsAt,
   });
 
+  if (shouldSendConfirmation && booking.profiles?.email) {
+    await sendBookingConfirmationEmailBestEffort({
+      bookingId: booking.id,
+      organizationId: admin.organizationId,
+      email: booking.profiles.email,
+      ccEmails: booking.profiles.delivery_cc_emails ?? [],
+      contactName,
+      streetAddress,
+      scheduledAt: scheduledAt?.toISOString() ?? null,
+      services: legacyServices,
+    });
+  }
+
   await service.from("assistant_action_logs").insert({
     organization_id: admin.organizationId,
     actor_profile_id: admin.userId,
@@ -539,7 +556,7 @@ export async function updateBookingDetails(
   revalidatePath("/admin/bookings");
   revalidatePath("/admin/calendar");
   revalidatePath(`/admin/bookings/${bookingId}`);
-  return { ok: true };
+  return { ok: true, confirmationSent: shouldSendConfirmation };
 }
 
 /**
@@ -552,6 +569,7 @@ export async function rescheduleBookingFromDetails(
   formData: FormData,
 ): Promise<ActionResult> {
   const scheduledRaw = str(formData, "scheduled_at");
+  const shouldSendConfirmation = formData.get("send_confirmation") === "on";
   if (!scheduledRaw) return { ok: false, error: "Pick a new date and time." };
 
   const scheduledAt = businessDateTimeLocalToUtc(scheduledRaw);
@@ -577,7 +595,12 @@ export async function rescheduleBookingFromDetails(
   );
 
   if (!result.ok) return { ok: false, error: result.error };
-  return { ok: true };
+
+  if (shouldSendConfirmation) {
+    await sendConfirmationForExistingBookingBestEffort(bookingId);
+  }
+
+  return { ok: true, confirmationSent: shouldSendConfirmation };
 }
 
 /**
@@ -1861,6 +1884,150 @@ function parseOptionalInt(value: string): number | null {
 
 function catalogRows(catalog: Catalog): CatalogItemRow[] {
   return [...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons];
+}
+
+async function sendConfirmationForExistingBookingBestEffort(
+  bookingId: string,
+): Promise<void> {
+  try {
+    const admin = await requireAdminForBooking(bookingId);
+    if (!admin) return;
+
+    const service = getServiceSupabase();
+    const { data: booking, error } = await service
+      .from("bookings")
+      .select(
+        "id, organization_id, scheduled_at, services, properties(street_address), profiles(email, full_name, delivery_cc_emails)",
+      )
+      .eq("id", bookingId)
+      .eq("organization_id", admin.organizationId)
+      .single<{
+        id: string;
+        organization_id: string;
+        scheduled_at: string | null;
+        services: string[];
+        properties: { street_address: string } | null;
+        profiles: {
+          email: string;
+          full_name: string | null;
+          delivery_cc_emails: string[] | null;
+        } | null;
+      }>();
+
+    if (error || !booking?.profiles?.email || !booking.properties) return;
+
+    await sendBookingConfirmationEmailBestEffort({
+      bookingId: booking.id,
+      organizationId: booking.organization_id,
+      email: booking.profiles.email,
+      ccEmails: booking.profiles.delivery_cc_emails ?? [],
+      contactName: booking.profiles.full_name ?? booking.profiles.email,
+      streetAddress: booking.properties.street_address,
+      scheduledAt: booking.scheduled_at,
+      services: booking.services,
+    });
+  } catch (err) {
+    console.warn("[booking-edit] confirmation resend failed", err);
+  }
+}
+
+async function sendBookingConfirmationEmailBestEffort(args: {
+  bookingId: string;
+  organizationId: string;
+  email: string;
+  ccEmails: string[];
+  contactName: string;
+  streetAddress: string;
+  scheduledAt: string | null;
+  services: string[];
+}): Promise<void> {
+  const service = getServiceSupabase();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  const emailSettings = await getOrganizationEmailSettings(args.organizationId);
+  let portalLink = appUrl ? `${appUrl}/portal` : "/portal";
+  let usedFallbackLink = false;
+
+  if (appUrl) {
+    const redirectTo = new URL("/auth/callback", appUrl);
+    redirectTo.searchParams.set("next", "/portal");
+    try {
+      const { data, error } = await service.auth.admin.generateLink({
+        type: "magiclink",
+        email: args.email,
+        options: { redirectTo: redirectTo.toString() },
+      });
+      if (error || !data?.properties?.action_link) {
+        const fallback = new URL("/auth/sign-in", appUrl);
+        fallback.searchParams.set("next", "/portal");
+        portalLink = fallback.toString();
+        usedFallbackLink = true;
+      } else {
+        portalLink = data.properties.action_link;
+      }
+    } catch (err) {
+      console.warn("[booking-edit] confirmation magic link failed", err);
+      const fallback = new URL("/auth/sign-in", appUrl);
+      fallback.searchParams.set("next", "/portal");
+      portalLink = fallback.toString();
+      usedFallbackLink = true;
+    }
+  }
+
+  const mail = shootConfirmedEmail({
+    contactName: args.contactName,
+    streetAddress: args.streetAddress,
+    scheduledAt: args.scheduledAt,
+    services: args.services,
+    portalLink,
+    companyName: emailSettings.organizationName,
+  });
+  const ccRecipients = uniqueEmails(args.ccEmails).filter(
+    (email) => email.toLowerCase() !== args.email.toLowerCase(),
+  );
+
+  const result = await sendEmail({
+    to: args.email,
+    ...(ccRecipients.length > 0 ? { cc: ccRecipients } : {}),
+    subject: mail.subject,
+    html: mail.html,
+    organizationId: args.organizationId,
+    replyTo: emailSettings.replyToEmail ?? undefined,
+  });
+
+  const sentAt = new Date().toISOString();
+  const status: "sent" | "skipped" | "failed" = result.ok
+    ? result.skipped
+      ? "skipped"
+      : "sent"
+    : "failed";
+  const notificationRows = [args.email, ...ccRecipients].map(
+    (recipientEmail) => ({
+      booking_id: args.bookingId,
+      kind: "shoot_confirmed",
+      recipient_email: recipientEmail,
+      status,
+      provider_message_id: result.id ?? null,
+      error: result.ok ? null : (result.error ?? "Email failed."),
+      metadata: {
+        resentFromAdminEdit: true,
+        usedFallbackLink,
+        emailSkipped: Boolean(result.skipped),
+      },
+      sent_at: sentAt,
+    }),
+  );
+
+  const { error } = await service
+    .from("booking_notifications")
+    .upsert(notificationRows, {
+      onConflict: "booking_id,kind,recipient_email",
+    });
+  if (error && error.code !== "23505") {
+    console.warn("[booking-edit] confirmation notification log failed", error);
+  }
+  if (!result.ok) {
+    console.warn("[booking-edit] confirmation send failed", result.error);
+  }
 }
 
 async function findOrCreatePropertyForBooking(args: {

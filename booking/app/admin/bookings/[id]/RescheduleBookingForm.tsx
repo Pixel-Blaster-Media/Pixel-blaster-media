@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import { rescheduleBookingFromDetails } from "./actions";
 
@@ -12,19 +13,25 @@ export default function RescheduleBookingForm({
   initialScheduledAtLocal: string;
 }) {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [savedMessage, setSavedMessage] = useState<string | null>(null);
 
   function onSubmit(formData: FormData) {
     setError(null);
-    setSaved(false);
+    setSavedMessage(null);
     startTransition(async () => {
       const result = await rescheduleBookingFromDetails(bookingId, formData);
       if (!result.ok) {
         setError(result.error ?? "Could not reschedule booking.");
         return;
       }
-      setSaved(true);
+      setSavedMessage(
+        result.confirmationSent
+          ? "Booking rescheduled and confirmation email sent."
+          : "Booking rescheduled.",
+      );
+      router.refresh();
     });
   }
 
@@ -36,7 +43,7 @@ export default function RescheduleBookingForm({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <label className="block min-w-[220px] flex-1">
           <span className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
-            Reschedule shoot
+            Quick reschedule time only
           </span>
           <input
             name="scheduled_at"
@@ -55,17 +62,28 @@ export default function RescheduleBookingForm({
         </button>
       </div>
       <p className="mt-2 text-xs text-realtor-muted">
-        Keeps the current shoot duration and replaces the linked Google Calendar
-        event. Admin reschedules can overlap existing calendar items.
+        This only changes the shoot time. Use Edit booking below for address,
+        realtor name, services, notes, or combined edits.
       </p>
+      <label className="mt-3 flex items-start gap-2 text-sm text-realtor-text">
+        <input name="send_confirmation" type="checkbox" className="mt-1" />
+        <span>
+          <span className="block font-semibold">
+            Send booking confirmation email again
+          </span>
+          <span className="block text-xs text-realtor-muted">
+            Leave unchecked when you are quietly holding or moving a slot.
+          </span>
+        </span>
+      </label>
       {error ? (
         <p className="mt-3 rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </p>
       ) : null}
-      {saved ? (
+      {savedMessage ? (
         <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          Booking rescheduled.
+          {savedMessage}
         </p>
       ) : null}
     </form>
