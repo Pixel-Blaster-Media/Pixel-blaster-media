@@ -12,6 +12,7 @@ import {
 import { rescheduleCalendarShoot } from "@/app/admin/calendar/actions";
 import { nextBookingStatuses } from "@/lib/booking/booking-status";
 import { cancelBooking } from "@/lib/booking/cancel";
+import { totalDurationMinutes } from "@/lib/booking/services";
 import {
   computeCartTotals,
   getActiveCatalog,
@@ -175,6 +176,10 @@ interface BookingForManualEditRow {
   organization_id: string;
   property_id: string;
   owner_id: string;
+  scheduled_at: string | null;
+  scheduled_ends_at: string | null;
+  services: string[];
+  add_ons: string[];
   google_calendar_event_id: string | null;
   properties: {
     street_address: string;
@@ -341,7 +346,7 @@ export async function updateBookingDetails(
   const { data: booking, error: bookingError } = await service
     .from("bookings")
     .select(
-      "id, organization_id, property_id, owner_id, google_calendar_event_id, properties(street_address, city, province, postal_code), profiles(email)",
+      "id, organization_id, property_id, owner_id, scheduled_at, scheduled_ends_at, services, add_ons, google_calendar_event_id, properties(street_address, city, province, postal_code), profiles(email)",
     )
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
@@ -354,17 +359,39 @@ export async function updateBookingDetails(
   const catalog = await getActiveCatalog({ organizationId: admin.organizationId });
   const catalogItems = catalogRows(catalog);
   const byId = new Map(catalogItems.map((item) => [item.id, item]));
+  const shouldReplaceCatalogItems = selectedCatalogIds.length > 0;
   const cart = selectedCatalogIds
     .map((catalogItemId) => ({ catalogItemId, quantity: 1 }))
     .filter((line) => byId.has(line.catalogItemId));
-  const cartError = validateCart(cart, catalog);
-  if (cartError) return { ok: false, error: cartError };
+  if (shouldReplaceCatalogItems) {
+    const cartError = validateCart(cart, catalog);
+    if (cartError) return { ok: false, error: cartError };
+  }
 
-  const selectedItems = cart
-    .map((line) => byId.get(line.catalogItemId))
-    .filter((item): item is CatalogItemRow => Boolean(item));
-  const totals = computeCartTotals(cart, catalog, squareFootage);
-  const duration = Math.max(totals.totalDurationMinutes, 60);
+  const selectedItems = shouldReplaceCatalogItems
+    ? cart
+        .map((line) => byId.get(line.catalogItemId))
+        .filter((item): item is CatalogItemRow => Boolean(item))
+    : catalogItems.filter((item) =>
+        [...booking.services, ...booking.add_ons].includes(item.slug),
+      );
+  const totals = shouldReplaceCatalogItems
+    ? computeCartTotals(cart, catalog, squareFootage)
+    : null;
+  const existingDuration =
+    booking.scheduled_at && booking.scheduled_ends_at
+      ? Math.max(
+          Math.round(
+            (new Date(booking.scheduled_ends_at).getTime() -
+              new Date(booking.scheduled_at).getTime()) /
+              60_000,
+          ),
+          30,
+        )
+      : Math.max(totalDurationMinutes(booking.services, booking.add_ons), 60);
+  const duration = shouldReplaceCatalogItems
+    ? Math.max(totals?.totalDurationMinutes ?? 0, 60)
+    : existingDuration;
   const scheduledEndsAt = scheduledAt
     ? new Date(scheduledAt.getTime() + duration * 60_000)
     : null;
@@ -384,12 +411,16 @@ export async function updateBookingDetails(
   });
   if (!propertyId) return { ok: false, error: "Could not save property." };
 
-  const legacyServices = selectedItems
-    .filter((item) => item.kind !== "addon")
-    .map((item) => item.slug);
-  const legacyAddons = selectedItems
-    .filter((item) => item.kind === "addon")
-    .map((item) => item.slug);
+  const legacyServices = shouldReplaceCatalogItems
+    ? selectedItems
+        .filter((item) => item.kind !== "addon")
+        .map((item) => item.slug)
+    : booking.services;
+  const legacyAddons = shouldReplaceCatalogItems
+    ? selectedItems
+        .filter((item) => item.kind === "addon")
+        .map((item) => item.slug)
+    : booking.add_ons;
 
   const { error: profileError } = await service
     .from("profiles")
@@ -429,34 +460,36 @@ export async function updateBookingDetails(
     return { ok: false, error: updateError.message };
   }
 
-  const lineItems = selectedItems.map((item) => ({
-    booking_id: booking.id,
-    catalog_item_id: item.id,
-    quantity: 1,
-    unit_price_cents: getCatalogItemPrice(item, squareFootage).totalPriceCents,
-    unit_duration_minutes: item.duration_minutes,
-  }));
+  if (shouldReplaceCatalogItems) {
+    const lineItems = selectedItems.map((item) => ({
+      booking_id: booking.id,
+      catalog_item_id: item.id,
+      quantity: 1,
+      unit_price_cents: getCatalogItemPrice(item, squareFootage).totalPriceCents,
+      unit_duration_minutes: item.duration_minutes,
+    }));
 
-  const { data: oldLineItems, error: oldLineItemsError } = await service
-    .from("booking_line_items")
-    .select("id")
-    .eq("booking_id", booking.id)
-    .returns<Array<{ id: string }>>();
-  if (oldLineItemsError) return { ok: false, error: oldLineItemsError.message };
-
-  const { error: lineItemError } = await service
-    .from("booking_line_items")
-    .insert(lineItems);
-  if (lineItemError) return { ok: false, error: lineItemError.message };
-
-  const oldLineItemIds = (oldLineItems ?? []).map((item) => item.id);
-  if (oldLineItemIds.length > 0) {
-    const { error: deleteLineItemsError } = await service
+    const { data: oldLineItems, error: oldLineItemsError } = await service
       .from("booking_line_items")
-      .delete()
-      .in("id", oldLineItemIds);
-    if (deleteLineItemsError) {
-      return { ok: false, error: deleteLineItemsError.message };
+      .select("id")
+      .eq("booking_id", booking.id)
+      .returns<Array<{ id: string }>>();
+    if (oldLineItemsError) return { ok: false, error: oldLineItemsError.message };
+
+    const { error: lineItemError } = await service
+      .from("booking_line_items")
+      .insert(lineItems);
+    if (lineItemError) return { ok: false, error: lineItemError.message };
+
+    const oldLineItemIds = (oldLineItems ?? []).map((item) => item.id);
+    if (oldLineItemIds.length > 0) {
+      const { error: deleteLineItemsError } = await service
+        .from("booking_line_items")
+        .delete()
+        .in("id", oldLineItemIds);
+      if (deleteLineItemsError) {
+        return { ok: false, error: deleteLineItemsError.message };
+      }
     }
   }
 
