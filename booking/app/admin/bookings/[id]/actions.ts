@@ -369,26 +369,10 @@ export async function updateBookingDetails(
     ? new Date(scheduledAt.getTime() + duration * 60_000)
     : null;
 
-  if (scheduledAt && scheduledEndsAt) {
-    const { data: conflicts, error: conflictError } = await service
-      .from("bookings")
-      .select("id")
-      .eq("organization_id", admin.organizationId)
-      .neq("id", bookingId)
-      .in("status", ["requested", "confirmed", "shot", "editing", "delivered"])
-      .not("scheduled_at", "is", null)
-      .lt("scheduled_at", scheduledEndsAt.toISOString())
-      .gt("scheduled_ends_at", scheduledAt.toISOString())
-      .limit(1);
-
-    if (conflictError) return { ok: false, error: conflictError.message };
-    if (conflicts && conflicts.length > 0) {
-      return {
-        ok: false,
-        error: "That time overlaps another active booking. Pick another slot.",
-      };
-    }
-  }
+  // Admin edits intentionally bypass availability checks so the photographer
+  // can double-book or override blocked/external calendar time. Public
+  // realtor-facing booking and self-serve reschedule flows still reject
+  // conflicts before they write.
 
   const propertyId = await findOrCreatePropertyForBooking({
     organizationId: admin.organizationId,
@@ -438,7 +422,8 @@ export async function updateBookingDetails(
     if (updateError.code === "23P01") {
       return {
         ok: false,
-        error: "That time overlaps another active booking. Pick another slot.",
+        error:
+          "The database still has the no-overlap guard. Apply migration 0037_allow_admin_overlap.sql to enable admin double-booking.",
       };
     }
     return { ok: false, error: updateError.message };

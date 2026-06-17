@@ -927,6 +927,7 @@ export default function CalendarWeekView({
               </p>
               <p className="mt-1 text-xs text-realtor-muted">
                 Add a confirmed shoot here, or block the time off privately.
+                Admin-created shoots can overlap existing calendar items.
               </p>
             </div>
             <button

@@ -6,7 +6,6 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import {
   BUSINESS_TZ,
   businessDateTimeLocalToUtc,
-  isSlotAvailable,
 } from "@/lib/booking/availability";
 import {
   computeCartTotals,
@@ -180,15 +179,9 @@ export async function createAdminShoot(
 
   const totals = computeCartTotals(cart, catalog);
   const duration = Math.max(totals.totalDurationMinutes, 60);
-  const stillFree = await isSlotAvailable(scheduledAt, duration, {
-    organizationId: admin.organizationId,
-  });
-  if (!stillFree) {
-    return {
-      ok: false,
-      error: "That time overlaps another booking or blocked time. Pick another slot.",
-    };
-  }
+  // Admin-created shoots intentionally bypass availability checks so the
+  // photographer can double-book or override blocked/external calendar time.
+  // Realtor-facing booking flows still call isSlotAvailable before insert.
 
   const selectedItems = cart
     .map((line) => byId.get(line.catalogItemId))
@@ -260,7 +253,8 @@ export async function createAdminShoot(
     if (bookingError?.code === "23P01") {
       return {
         ok: false,
-        error: "That time overlaps another active booking. Pick another slot.",
+        error:
+          "The database still has the no-overlap guard. Apply migration 0037_allow_admin_overlap.sql to enable admin double-booking.",
       };
     }
     return { ok: false, error: "Could not save booking." };

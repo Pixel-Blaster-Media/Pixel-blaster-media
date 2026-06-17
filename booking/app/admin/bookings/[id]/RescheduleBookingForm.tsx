@@ -56,7 +56,7 @@ export default function RescheduleBookingForm({
       </div>
       <p className="mt-2 text-xs text-realtor-muted">
         Keeps the current shoot duration and replaces the linked Google Calendar
-        event.
+        event. Admin reschedules can overlap existing calendar items.
       </p>
       {error ? (
         <p className="mt-3 rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
