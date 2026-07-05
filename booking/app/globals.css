@@ -680,6 +680,15 @@ body:has(.admin-earth) {
   color: var(--realtor-text);
 }
 
+/* The iOS rubber-band/overscroll area paints the <html> background, not
+   the body's — without this the light pages show black bands when you
+   bounce past the top or bottom of the page. */
+html:has(.realtor-theme),
+html:has(.auth-earth),
+html:has(.admin-earth) {
+  background: var(--realtor-bg);
+}
+
 body.page-backdrop:has(.realtor-theme),
 body.page-backdrop:has(.auth-earth),
 body.page-backdrop:has(.admin-earth) {

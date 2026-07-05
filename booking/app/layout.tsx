@@ -1,7 +1,13 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import AuthSessionHandler from "./AuthSessionHandler";
 import "./globals.css";
+
+export const viewport: Viewport = {
+  // Dark chrome for the dark root pages; light segments (book, admin,
+  // portal) override this in their own layouts.
+  themeColor: "#0b0f10",
+};
 
 export const metadata: Metadata = {
   title: {

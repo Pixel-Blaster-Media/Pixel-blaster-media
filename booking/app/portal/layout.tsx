@@ -1,5 +1,11 @@
+import type { Viewport } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+
+export const viewport: Viewport = {
+  // Light realtor theme — keeps mobile browser chrome and overscroll light.
+  themeColor: "#f2f6f0",
+};
 
 import { signOut } from "@/lib/auth/sign-out";
 import { requireUser } from "@/lib/auth/require-user";

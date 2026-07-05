@@ -1,6 +1,12 @@
+import type { Viewport } from "next";
 import Link from "next/link";
 
 import { signOut } from "@/lib/auth/sign-out";
+
+export const viewport: Viewport = {
+  // Light earth theme — keeps mobile browser chrome and overscroll light.
+  themeColor: "#f2f6f0",
+};
 import { requireAdmin } from "@/lib/auth/require-admin";
 import {
   initialsForOrganization,

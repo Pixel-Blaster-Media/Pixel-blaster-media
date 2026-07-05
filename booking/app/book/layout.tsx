@@ -1,5 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+
+export const viewport: Viewport = {
+  // Match the light realtor theme so mobile browser chrome and the
+  // overscroll area blend instead of going black.
+  themeColor: "#f2f6f0",
+};
 
 export const metadata: Metadata = {
   title: "Book Real Estate Media",
