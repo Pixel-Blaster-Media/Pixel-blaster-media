@@ -79,16 +79,32 @@ export async function listAvailableSlots({
   to,
   durationMinutes,
   organizationId,
+  excludeBookingId,
 }: {
   from: Date;
   to: Date;
   durationMinutes: number;
   organizationId?: string;
+  /** Ignore this booking's own time when computing busy windows —
+   *  used when rescheduling so a shoot doesn't block itself. */
+  excludeBookingId?: string;
 }): Promise<Slot[]> {
   if (durationMinutes <= 0) return [];
 
   const supabase = getServiceSupabase();
   const orgId = availabilityOrganizationId({ organizationId });
+
+  let bookingsQuery = supabase
+    .from("bookings")
+    .select("scheduled_at, scheduled_ends_at, services, add_ons, status")
+    .eq("organization_id", orgId)
+    .in("status", ["requested", "confirmed", "shot", "editing", "delivered"])
+    .not("scheduled_at", "is", null)
+    .gte("scheduled_at", addMinutes(from, -6 * 60).toISOString())
+    .lt("scheduled_at", to.toISOString());
+  if (excludeBookingId) {
+    bookingsQuery = bookingsQuery.neq("id", excludeBookingId);
+  }
 
   // Pull the three inputs in parallel. These are all small datasets so we
   // can afford to fetch the full rows; the filtering happens in memory.
@@ -105,15 +121,7 @@ export async function listAvailableSlots({
       .lte("starts_at", to.toISOString())
       .gte("ends_at", from.toISOString())
       .returns<CalendarBlockRow[]>(),
-    supabase
-      .from("bookings")
-      .select("scheduled_at, scheduled_ends_at, services, add_ons, status")
-      .eq("organization_id", orgId)
-      .in("status", ["requested", "confirmed", "shot", "editing", "delivered"])
-      .not("scheduled_at", "is", null)
-      .gte("scheduled_at", addMinutes(from, -6 * 60).toISOString())
-      .lt("scheduled_at", to.toISOString())
-      .returns<BookingRow[]>(),
+    bookingsQuery.returns<BookingRow[]>(),
     // Optional Google Calendar free/busy union. If no calendar is
     // connected, returns [] so slot computation is unaffected.
     fetchGoogleBusy(from, to, { organizationId: orgId }),
@@ -187,13 +195,14 @@ export async function listAvailableSlots({
 export async function isSlotAvailable(
   start: Date,
   durationMinutes: number,
-  scope?: AvailabilityScope,
+  scope?: AvailabilityScope & { excludeBookingId?: string },
 ): Promise<boolean> {
   const slots = await listAvailableSlots({
     from: addMinutes(start, -1),
     to: addMinutes(start, durationMinutes + 1),
     durationMinutes,
     organizationId: scope?.organizationId,
+    excludeBookingId: scope?.excludeBookingId,
   });
   return slots.some((s) => new Date(s.start).getTime() === start.getTime());
 }

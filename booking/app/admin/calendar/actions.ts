@@ -314,6 +314,7 @@ export async function createAdminShoot(
 interface BookingForRescheduleRow {
   id: string;
   status: string;
+  services: string[] | null;
   scheduled_at: string | null;
   scheduled_ends_at: string | null;
   owner_id: string;
@@ -374,7 +375,7 @@ export async function rescheduleCalendarShoot(
   const { data: booking, error: bookingError } = await supabase
     .from("bookings")
     .select(
-      "id, status, scheduled_at, scheduled_ends_at, owner_id, unit_number, client_notes, google_calendar_event_id, properties(street_address, city, postal_code), profiles(email, full_name, phone, brokerage)",
+      "id, status, services, scheduled_at, scheduled_ends_at, owner_id, unit_number, client_notes, google_calendar_event_id, properties(street_address, city, postal_code), profiles(email, full_name, phone, brokerage)",
     )
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
@@ -444,7 +445,10 @@ export async function rescheduleCalendarShoot(
       const event = await gcal.createEvent({
         summary: calendarShootTitle({
           realtor: booking.profiles?.full_name ?? booking.profiles?.email ?? "",
-          services: "",
+          services: await serviceNamesForSlugs(
+            booking.services ?? [],
+            admin.organizationId,
+          ),
           address: streetLine,
         }),
         location: [
@@ -762,6 +766,30 @@ async function createGoogleEventBestEffort(args: {
       .eq("id", args.bookingId);
   } catch (err) {
     console.warn("[admin-calendar] google calendar event create failed", err);
+  }
+}
+
+/**
+ * Map legacy service slugs to their display names so a re-created
+ * Google Calendar event keeps the same title as the original.
+ * Falls back to prettified slugs if a catalog item was removed.
+ */
+async function serviceNamesForSlugs(
+  slugs: string[],
+  organizationId: string,
+): Promise<string> {
+  if (slugs.length === 0) return "";
+  try {
+    const catalog = await getActiveCatalog({ organizationId });
+    const bySlug = new Map<string, string>();
+    for (const item of [...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons]) {
+      bySlug.set(item.slug, item.name);
+    }
+    return slugs
+      .map((slug) => bySlug.get(slug) ?? slug.replace(/-/g, " "))
+      .join(", ");
+  } catch {
+    return slugs.map((slug) => slug.replace(/-/g, " ")).join(", ");
   }
 }
 
