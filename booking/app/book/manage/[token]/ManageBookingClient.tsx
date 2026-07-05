@@ -172,7 +172,7 @@ export default function ManageBookingClient({
                   type="button"
                   onClick={handleReschedule}
                   disabled={pending}
-                  className="tap-target w-full rounded-full bg-brand-light px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+                  className="tap-target w-full rounded-full bg-realtor-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-realtor-primary-light disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
                 >
                   {pending ? "Rescheduling…" : "Confirm new time"}
                 </button>

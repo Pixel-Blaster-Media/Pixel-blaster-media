@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { getServerSupabase } from "@/lib/supabase/server";
 import type { UserRole } from "@/lib/supabase/database.types";
 
@@ -20,7 +22,14 @@ interface ProfileRow {
   archived_at: string | null;
 }
 
-export async function getCurrentUser(): Promise<CurrentUserContext | null> {
+/**
+ * Per-request memoized: the root layout calls this on every page, and
+ * authed pages look the profile up again — cache() collapses those into
+ * one query per request.
+ */
+export const getCurrentUser = cache(async function getCurrentUser(): Promise<
+  CurrentUserContext | null
+> {
   try {
     const supabase = await getServerSupabase();
     const {
@@ -52,7 +61,7 @@ export async function getCurrentUser(): Promise<CurrentUserContext | null> {
   } catch {
     return null;
   }
-}
+});
 
 function decodeUserIdFromJwt(token: string): string | null {
   try {

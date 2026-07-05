@@ -95,7 +95,7 @@ export default async function ManageBookingPage({
 
   if (!manageable) {
     return (
-      <main className="realtor-elevated-panel rounded-3xl p-5 md:p-8">
+      <main className="realtor-theme realtor-elevated-panel rounded-3xl p-5 md:p-8">
         <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
           Manage booking
         </p>
@@ -148,7 +148,7 @@ export default async function ManageBookingPage({
   );
 
   return (
-    <main className="space-y-6">
+    <main className="realtor-theme space-y-6">
       <header className="realtor-elevated-panel rounded-3xl p-5 md:p-8">
         <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
           Manage booking
@@ -223,7 +223,7 @@ function BookingSummary({
 
 function InvalidLinkPanel() {
   return (
-    <main className="realtor-elevated-panel rounded-3xl p-5 md:p-8">
+    <main className="realtor-theme realtor-elevated-panel rounded-3xl p-5 md:p-8">
       <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
         Manage booking
       </p>

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { BUSINESS_TZ } from "@/lib/booking/availability";
+import { BUSINESS_TZ, isSlotAvailable } from "@/lib/booking/availability";
 import { isCancellable } from "@/lib/booking/booking-status";
 import { cancelBooking } from "@/lib/booking/cancel";
 import { verifyManageToken } from "@/lib/booking/manage-token";
@@ -138,21 +138,16 @@ export async function rescheduleManagedBooking(
 
   const service = getServiceSupabase();
 
-  // Conflict check against other active bookings in the same company
-  // (same overlap pattern as the admin edit action).
-  const { data: conflicts, error: conflictError } = await service
-    .from("bookings")
-    .select("id")
-    .eq("organization_id", booking.organization_id)
-    .neq("id", booking.id)
-    .in("status", ["requested", "confirmed", "shot", "editing", "delivered"])
-    .not("scheduled_at", "is", null)
-    .lt("scheduled_at", newEnd.toISOString())
-    .gt("scheduled_ends_at", newStart.toISOString())
-    .limit(1);
-
-  if (conflictError) return { ok: false, error: conflictError.message };
-  if (conflicts && conflicts.length > 0) {
+  // Full availability check — same engine as the public booking flow, so
+  // this also enforces business hours, calendar blocks, and Google-busy
+  // windows (the slot list shown client-side is only a convenience; the
+  // server must not trust the submitted time). The booking being moved is
+  // excluded so it can shift within its own current window.
+  const stillFree = await isSlotAvailable(newStart, durationMinutes, {
+    organizationId: booking.organization_id,
+    excludeBookingId: booking.id,
+  });
+  if (!stillFree) {
     return {
       ok: false,
       error: "That time was just taken. Please pick another slot.",
