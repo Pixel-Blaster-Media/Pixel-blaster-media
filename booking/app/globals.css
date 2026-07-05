@@ -649,6 +649,7 @@ body:has(.admin-earth) {
   color: var(--realtor-text);
 }
 
+
 body.page-backdrop:has(.realtor-theme),
 body.page-backdrop:has(.auth-earth),
 body.page-backdrop:has(.admin-earth) {
