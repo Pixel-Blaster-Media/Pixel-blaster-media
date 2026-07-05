@@ -929,8 +929,14 @@ body:has(.admin-earth) .site-footer {
   background: rgba(255, 255, 255, 0.88) !important;
 }
 
+/* Solid-color CTAs keep white text — the .text-white clobber above is
+   only meant for white-on-dark leftovers sitting on light panels. */
 .admin-earth .bg-brand.text-white,
-.admin-earth .bg-brand-light.text-white {
+.admin-earth .bg-brand-light.text-white,
+.admin-earth .bg-realtor-primary.text-white,
+.admin-earth .bg-realtor-primary-light.text-white,
+.admin-earth .bg-\[\#3f7356\].text-white,
+.admin-earth .bg-red-600.text-white {
   color: #fff !important;
 }
 
