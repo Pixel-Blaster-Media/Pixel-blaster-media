@@ -9,8 +9,10 @@ import {
 import {
   businessDateTimeLocalToUtc,
 } from "@/lib/booking/availability";
+import { rescheduleCalendarShoot } from "@/app/admin/calendar/actions";
 import { nextBookingStatuses } from "@/lib/booking/booking-status";
 import { cancelBooking } from "@/lib/booking/cancel";
+import { totalDurationMinutes } from "@/lib/booking/services";
 import {
   computeCartTotals,
   getActiveCatalog,
@@ -22,7 +24,7 @@ import {
 import { buildDeliveryLinks } from "@/lib/booking/delivery-links";
 import { sendEmail } from "@/lib/email/resend";
 import { getOrganizationEmailSettings } from "@/lib/email/settings";
-import { deliveryReadyEmail } from "@/lib/email/templates";
+import { deliveryReadyEmail, shootConfirmedEmail } from "@/lib/email/templates";
 import {
   createEnhance,
   createListing,
@@ -174,6 +176,10 @@ interface BookingForManualEditRow {
   organization_id: string;
   property_id: string;
   owner_id: string;
+  scheduled_at: string | null;
+  scheduled_ends_at: string | null;
+  services: string[];
+  add_ons: string[];
   google_calendar_event_id: string | null;
   properties: {
     street_address: string;
@@ -183,6 +189,8 @@ interface BookingForManualEditRow {
   } | null;
   profiles: {
     email: string;
+    full_name: string | null;
+    delivery_cc_emails: string[] | null;
   } | null;
 }
 
@@ -197,6 +205,7 @@ const VALID_DELIVERABLE_TYPES: DeliverableType[] = [
 export interface ActionResult {
   ok: boolean;
   error?: string;
+  confirmationSent?: boolean;
 }
 
 const LISTING_WEBSITE_TEMPLATES: ListingWebsiteTemplate[] = [
@@ -321,6 +330,7 @@ export async function updateBookingDetails(
   const contactName = str(formData, "contact_name");
   const contactPhone = str(formData, "contact_phone") || null;
   const brokerage = str(formData, "brokerage") || null;
+  const shouldSendConfirmation = formData.get("send_confirmation") === "on";
   const selectedCatalogIds = formData
     .getAll("catalog_item_id")
     .map((value) => String(value).trim())
@@ -340,7 +350,7 @@ export async function updateBookingDetails(
   const { data: booking, error: bookingError } = await service
     .from("bookings")
     .select(
-      "id, organization_id, property_id, owner_id, google_calendar_event_id, properties(street_address, city, province, postal_code), profiles(email)",
+      "id, organization_id, property_id, owner_id, scheduled_at, scheduled_ends_at, services, add_ons, google_calendar_event_id, properties(street_address, city, province, postal_code), profiles(email, full_name, delivery_cc_emails)",
     )
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
@@ -353,41 +363,47 @@ export async function updateBookingDetails(
   const catalog = await getActiveCatalog({ organizationId: admin.organizationId });
   const catalogItems = catalogRows(catalog);
   const byId = new Map(catalogItems.map((item) => [item.id, item]));
+  const shouldReplaceCatalogItems = selectedCatalogIds.length > 0;
   const cart = selectedCatalogIds
     .map((catalogItemId) => ({ catalogItemId, quantity: 1 }))
     .filter((line) => byId.has(line.catalogItemId));
-  const cartError = validateCart(cart, catalog);
-  if (cartError) return { ok: false, error: cartError };
+  if (shouldReplaceCatalogItems) {
+    const cartError = validateCart(cart, catalog);
+    if (cartError) return { ok: false, error: cartError };
+  }
 
-  const selectedItems = cart
-    .map((line) => byId.get(line.catalogItemId))
-    .filter((item): item is CatalogItemRow => Boolean(item));
-  const totals = computeCartTotals(cart, catalog, squareFootage);
-  const duration = Math.max(totals.totalDurationMinutes, 60);
+  const selectedItems = shouldReplaceCatalogItems
+    ? cart
+        .map((line) => byId.get(line.catalogItemId))
+        .filter((item): item is CatalogItemRow => Boolean(item))
+    : catalogItems.filter((item) =>
+        [...booking.services, ...booking.add_ons].includes(item.slug),
+      );
+  const totals = shouldReplaceCatalogItems
+    ? computeCartTotals(cart, catalog, squareFootage)
+    : null;
+  const existingDuration =
+    booking.scheduled_at && booking.scheduled_ends_at
+      ? Math.max(
+          Math.round(
+            (new Date(booking.scheduled_ends_at).getTime() -
+              new Date(booking.scheduled_at).getTime()) /
+              60_000,
+          ),
+          30,
+        )
+      : Math.max(totalDurationMinutes(booking.services, booking.add_ons), 60);
+  const duration = shouldReplaceCatalogItems
+    ? Math.max(totals?.totalDurationMinutes ?? 0, 60)
+    : existingDuration;
   const scheduledEndsAt = scheduledAt
     ? new Date(scheduledAt.getTime() + duration * 60_000)
     : null;
 
-  if (scheduledAt && scheduledEndsAt) {
-    const { data: conflicts, error: conflictError } = await service
-      .from("bookings")
-      .select("id")
-      .eq("organization_id", admin.organizationId)
-      .neq("id", bookingId)
-      .in("status", ["requested", "confirmed", "shot", "editing", "delivered"])
-      .not("scheduled_at", "is", null)
-      .lt("scheduled_at", scheduledEndsAt.toISOString())
-      .gt("scheduled_ends_at", scheduledAt.toISOString())
-      .limit(1);
-
-    if (conflictError) return { ok: false, error: conflictError.message };
-    if (conflicts && conflicts.length > 0) {
-      return {
-        ok: false,
-        error: "That time overlaps another active booking. Pick another slot.",
-      };
-    }
-  }
+  // Admin edits intentionally bypass availability checks so the photographer
+  // can double-book or override blocked/external calendar time. Public
+  // realtor-facing booking and self-serve reschedule flows still reject
+  // conflicts before they write.
 
   const propertyId = await findOrCreatePropertyForBooking({
     organizationId: admin.organizationId,
@@ -399,12 +415,16 @@ export async function updateBookingDetails(
   });
   if (!propertyId) return { ok: false, error: "Could not save property." };
 
-  const legacyServices = selectedItems
-    .filter((item) => item.kind !== "addon")
-    .map((item) => item.slug);
-  const legacyAddons = selectedItems
-    .filter((item) => item.kind === "addon")
-    .map((item) => item.slug);
+  const legacyServices = shouldReplaceCatalogItems
+    ? selectedItems
+        .filter((item) => item.kind !== "addon")
+        .map((item) => item.slug)
+    : booking.services;
+  const legacyAddons = shouldReplaceCatalogItems
+    ? selectedItems
+        .filter((item) => item.kind === "addon")
+        .map((item) => item.slug)
+    : booking.add_ons;
 
   const { error: profileError } = await service
     .from("profiles")
@@ -437,40 +457,43 @@ export async function updateBookingDetails(
     if (updateError.code === "23P01") {
       return {
         ok: false,
-        error: "That time overlaps another active booking. Pick another slot.",
+        error:
+          "The database still has the no-overlap guard. Apply migration 0037_allow_admin_overlap.sql to enable admin double-booking.",
       };
     }
     return { ok: false, error: updateError.message };
   }
 
-  const lineItems = selectedItems.map((item) => ({
-    booking_id: booking.id,
-    catalog_item_id: item.id,
-    quantity: 1,
-    unit_price_cents: getCatalogItemPrice(item, squareFootage).totalPriceCents,
-    unit_duration_minutes: item.duration_minutes,
-  }));
+  if (shouldReplaceCatalogItems) {
+    const lineItems = selectedItems.map((item) => ({
+      booking_id: booking.id,
+      catalog_item_id: item.id,
+      quantity: 1,
+      unit_price_cents: getCatalogItemPrice(item, squareFootage).totalPriceCents,
+      unit_duration_minutes: item.duration_minutes,
+    }));
 
-  const { data: oldLineItems, error: oldLineItemsError } = await service
-    .from("booking_line_items")
-    .select("id")
-    .eq("booking_id", booking.id)
-    .returns<Array<{ id: string }>>();
-  if (oldLineItemsError) return { ok: false, error: oldLineItemsError.message };
-
-  const { error: lineItemError } = await service
-    .from("booking_line_items")
-    .insert(lineItems);
-  if (lineItemError) return { ok: false, error: lineItemError.message };
-
-  const oldLineItemIds = (oldLineItems ?? []).map((item) => item.id);
-  if (oldLineItemIds.length > 0) {
-    const { error: deleteLineItemsError } = await service
+    const { data: oldLineItems, error: oldLineItemsError } = await service
       .from("booking_line_items")
-      .delete()
-      .in("id", oldLineItemIds);
-    if (deleteLineItemsError) {
-      return { ok: false, error: deleteLineItemsError.message };
+      .select("id")
+      .eq("booking_id", booking.id)
+      .returns<Array<{ id: string }>>();
+    if (oldLineItemsError) return { ok: false, error: oldLineItemsError.message };
+
+    const { error: lineItemError } = await service
+      .from("booking_line_items")
+      .insert(lineItems);
+    if (lineItemError) return { ok: false, error: lineItemError.message };
+
+    const oldLineItemIds = (oldLineItems ?? []).map((item) => item.id);
+    if (oldLineItemIds.length > 0) {
+      const { error: deleteLineItemsError } = await service
+        .from("booking_line_items")
+        .delete()
+        .in("id", oldLineItemIds);
+      if (deleteLineItemsError) {
+        return { ok: false, error: deleteLineItemsError.message };
+      }
     }
   }
 
@@ -491,6 +514,19 @@ export async function updateBookingDetails(
     scheduledAt,
     scheduledEndsAt,
   });
+
+  if (shouldSendConfirmation && booking.profiles?.email) {
+    await sendBookingConfirmationEmailBestEffort({
+      bookingId: booking.id,
+      organizationId: admin.organizationId,
+      email: booking.profiles.email,
+      ccEmails: booking.profiles.delivery_cc_emails ?? [],
+      contactName,
+      streetAddress,
+      scheduledAt: scheduledAt?.toISOString() ?? null,
+      services: legacyServices,
+    });
+  }
 
   await service.from("assistant_action_logs").insert({
     organization_id: admin.organizationId,
@@ -520,7 +556,51 @@ export async function updateBookingDetails(
   revalidatePath("/admin/bookings");
   revalidatePath("/admin/calendar");
   revalidatePath(`/admin/bookings/${bookingId}`);
-  return { ok: true };
+  return { ok: true, confirmationSent: shouldSendConfirmation };
+}
+
+/**
+ * Explicit reschedule action for the booking detail screen. This reuses the
+ * calendar move flow so duration, Google Calendar replacement, cache refresh,
+ * and audit logging stay identical to drag-to-reschedule.
+ */
+export async function rescheduleBookingFromDetails(
+  bookingId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  const scheduledRaw = str(formData, "scheduled_at");
+  const shouldSendConfirmation = formData.get("send_confirmation") === "on";
+  if (!scheduledRaw) return { ok: false, error: "Pick a new date and time." };
+
+  const scheduledAt = businessDateTimeLocalToUtc(scheduledRaw);
+  if (!scheduledAt) return { ok: false, error: "Pick a valid date and time." };
+
+  const dateInput = scheduledRaw.slice(0, 10);
+  const timeInput = scheduledRaw.slice(11, 16);
+  const [hourRaw, minuteRaw] = timeInput.split(":");
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(dateInput) ||
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute)
+  ) {
+    return { ok: false, error: "Pick a valid date and time." };
+  }
+
+  const result = await rescheduleCalendarShoot(
+    bookingId,
+    dateInput,
+    hour * 60 + minute,
+  );
+
+  if (!result.ok) return { ok: false, error: result.error };
+
+  if (shouldSendConfirmation) {
+    await sendConfirmationForExistingBookingBestEffort(bookingId);
+  }
+
+  return { ok: true, confirmationSent: shouldSendConfirmation };
 }
 
 /**
@@ -1804,6 +1884,150 @@ function parseOptionalInt(value: string): number | null {
 
 function catalogRows(catalog: Catalog): CatalogItemRow[] {
   return [...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons];
+}
+
+async function sendConfirmationForExistingBookingBestEffort(
+  bookingId: string,
+): Promise<void> {
+  try {
+    const admin = await requireAdminForBooking(bookingId);
+    if (!admin) return;
+
+    const service = getServiceSupabase();
+    const { data: booking, error } = await service
+      .from("bookings")
+      .select(
+        "id, organization_id, scheduled_at, services, properties(street_address), profiles(email, full_name, delivery_cc_emails)",
+      )
+      .eq("id", bookingId)
+      .eq("organization_id", admin.organizationId)
+      .single<{
+        id: string;
+        organization_id: string;
+        scheduled_at: string | null;
+        services: string[];
+        properties: { street_address: string } | null;
+        profiles: {
+          email: string;
+          full_name: string | null;
+          delivery_cc_emails: string[] | null;
+        } | null;
+      }>();
+
+    if (error || !booking?.profiles?.email || !booking.properties) return;
+
+    await sendBookingConfirmationEmailBestEffort({
+      bookingId: booking.id,
+      organizationId: booking.organization_id,
+      email: booking.profiles.email,
+      ccEmails: booking.profiles.delivery_cc_emails ?? [],
+      contactName: booking.profiles.full_name ?? booking.profiles.email,
+      streetAddress: booking.properties.street_address,
+      scheduledAt: booking.scheduled_at,
+      services: booking.services,
+    });
+  } catch (err) {
+    console.warn("[booking-edit] confirmation resend failed", err);
+  }
+}
+
+async function sendBookingConfirmationEmailBestEffort(args: {
+  bookingId: string;
+  organizationId: string;
+  email: string;
+  ccEmails: string[];
+  contactName: string;
+  streetAddress: string;
+  scheduledAt: string | null;
+  services: string[];
+}): Promise<void> {
+  const service = getServiceSupabase();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  const emailSettings = await getOrganizationEmailSettings(args.organizationId);
+  let portalLink = appUrl ? `${appUrl}/portal` : "/portal";
+  let usedFallbackLink = false;
+
+  if (appUrl) {
+    const redirectTo = new URL("/auth/callback", appUrl);
+    redirectTo.searchParams.set("next", "/portal");
+    try {
+      const { data, error } = await service.auth.admin.generateLink({
+        type: "magiclink",
+        email: args.email,
+        options: { redirectTo: redirectTo.toString() },
+      });
+      if (error || !data?.properties?.action_link) {
+        const fallback = new URL("/auth/sign-in", appUrl);
+        fallback.searchParams.set("next", "/portal");
+        portalLink = fallback.toString();
+        usedFallbackLink = true;
+      } else {
+        portalLink = data.properties.action_link;
+      }
+    } catch (err) {
+      console.warn("[booking-edit] confirmation magic link failed", err);
+      const fallback = new URL("/auth/sign-in", appUrl);
+      fallback.searchParams.set("next", "/portal");
+      portalLink = fallback.toString();
+      usedFallbackLink = true;
+    }
+  }
+
+  const mail = shootConfirmedEmail({
+    contactName: args.contactName,
+    streetAddress: args.streetAddress,
+    scheduledAt: args.scheduledAt,
+    services: args.services,
+    portalLink,
+    companyName: emailSettings.organizationName,
+  });
+  const ccRecipients = uniqueEmails(args.ccEmails).filter(
+    (email) => email.toLowerCase() !== args.email.toLowerCase(),
+  );
+
+  const result = await sendEmail({
+    to: args.email,
+    ...(ccRecipients.length > 0 ? { cc: ccRecipients } : {}),
+    subject: mail.subject,
+    html: mail.html,
+    organizationId: args.organizationId,
+    replyTo: emailSettings.replyToEmail ?? undefined,
+  });
+
+  const sentAt = new Date().toISOString();
+  const status: "sent" | "skipped" | "failed" = result.ok
+    ? result.skipped
+      ? "skipped"
+      : "sent"
+    : "failed";
+  const notificationRows = [args.email, ...ccRecipients].map(
+    (recipientEmail) => ({
+      booking_id: args.bookingId,
+      kind: "shoot_confirmed",
+      recipient_email: recipientEmail,
+      status,
+      provider_message_id: result.id ?? null,
+      error: result.ok ? null : (result.error ?? "Email failed."),
+      metadata: {
+        resentFromAdminEdit: true,
+        usedFallbackLink,
+        emailSkipped: Boolean(result.skipped),
+      },
+      sent_at: sentAt,
+    }),
+  );
+
+  const { error } = await service
+    .from("booking_notifications")
+    .upsert(notificationRows, {
+      onConflict: "booking_id,kind,recipient_email",
+    });
+  if (error && error.code !== "23505") {
+    console.warn("[booking-edit] confirmation notification log failed", error);
+  }
+  if (!result.ok) {
+    console.warn("[booking-edit] confirmation send failed", result.error);
+  }
 }
 
 async function findOrCreatePropertyForBooking(args: {

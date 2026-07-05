@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useState, useTransition } from "react";
 
 import {
@@ -7,23 +8,25 @@ import {
   type TodayAIBrief,
 } from "./actions";
 
-export default function DailyAIBriefPanel() {
+export default function DailyAIBriefPanel({ actions }: { actions?: ReactNode }) {
   const [brief, setBrief] = useState<TodayAIBrief | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   return (
-    <div className="mt-4 rounded-2xl border border-realtor-primary/20 bg-realtor-primary/10 p-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
-            AI daily brief
-          </p>
-          <p className="mt-1 text-sm text-realtor-muted">
-            Generate a practical shoot-day plan from today&apos;s schedule,
-            notes, route spacing, and realtor memory.
-          </p>
-        </div>
+    <div className="mt-4 space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {actions}
+        {brief ? (
+          <button
+            type="button"
+            onClick={() => setIsCollapsed((value) => !value)}
+            className="rounded-full border border-realtor-primary/20 bg-white px-4 py-2 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+          >
+            {isCollapsed ? "Show brief" : "Hide brief"}
+          </button>
+        ) : null}
         <button
           type="button"
           disabled={isPending}
@@ -33,6 +36,7 @@ export default function DailyAIBriefPanel() {
               const result = await generateTodayAIBrief();
               if (result.ok) {
                 setBrief(result.brief);
+                setIsCollapsed(false);
               } else {
                 setBrief(null);
                 setError(result.error);
@@ -41,7 +45,7 @@ export default function DailyAIBriefPanel() {
           }}
           className="rounded-full bg-realtor-primary px-4 py-2 text-xs font-semibold text-white transition hover:bg-realtor-primary/90 disabled:opacity-60"
         >
-          {isPending ? "Building brief..." : brief ? "Refresh brief" : "Generate brief"}
+          {isPending ? "Building..." : brief ? "Refresh" : "Generate brief"}
         </button>
       </div>
 
@@ -51,8 +55,8 @@ export default function DailyAIBriefPanel() {
         </p>
       ) : null}
 
-      {brief ? (
-        <div className="mt-4 space-y-3">
+      {brief && !isCollapsed ? (
+        <div className="space-y-3">
           <p className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3 text-sm leading-6 text-realtor-text">
             {brief.overview}
           </p>

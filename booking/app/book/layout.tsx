@@ -1,12 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 
-export const viewport: Viewport = {
-  // Match the light realtor theme so mobile browser chrome and the
-  // overscroll area blend instead of going black.
-  themeColor: "#f2f6f0",
-};
-
 export const metadata: Metadata = {
   title: "Book Real Estate Media",
   description:
@@ -18,6 +12,11 @@ export const metadata: Metadata = {
   // via the root layout.
   robots: { index: true, follow: true },
   alternates: { canonical: "https://www.pixelblastermedia.com/book" },
+};
+
+export const viewport: Viewport = {
+  colorScheme: "light",
+  themeColor: "#fbfcfa",
 };
 
 export default function BookLayout({ children }: { children: ReactNode }) {

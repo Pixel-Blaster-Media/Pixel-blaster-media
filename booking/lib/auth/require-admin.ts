@@ -1,5 +1,6 @@
 import "server-only";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { getServerSupabase } from "@/lib/supabase/server";
@@ -39,6 +40,7 @@ interface ProfileLookupRow {
  */
 export async function requireAdmin(): Promise<AdminContext> {
   const supabase = await getServerSupabase();
+  const signInPath = await adminSignInPath();
 
   // getSession() reads the stored cookie locally. It still *may* call
   // the network if the token is about to expire (auto-refresh) — but
@@ -48,12 +50,12 @@ export async function requireAdmin(): Promise<AdminContext> {
   } = await supabase.auth.getSession();
 
   if (!session?.access_token) {
-    redirect("/auth/sign-in?next=/admin");
+    redirect(signInPath);
   }
 
   const userId = decodeUserIdFromJwt(session.access_token);
   if (!userId) {
-    redirect("/auth/sign-in?next=/admin");
+    redirect(signInPath);
   }
 
   const { data: profile, error } = await supabase
@@ -64,7 +66,7 @@ export async function requireAdmin(): Promise<AdminContext> {
 
   if (error || !profile) {
     console.warn("[auth] no profile for authed user", userId, error?.message);
-    redirect("/auth/sign-in");
+    redirect(signInPath);
   }
 
   if (profile.role !== "admin") {
@@ -77,6 +79,23 @@ export async function requireAdmin(): Promise<AdminContext> {
     email: profile.email,
     fullName: profile.full_name,
   };
+}
+
+async function adminSignInPath(): Promise<string> {
+  const headerStore = await headers();
+  const currentPath = headerStore.get("x-current-path") ?? "/admin";
+  const next = safeNextPath(currentPath);
+  return `/auth/sign-in?next=${encodeURIComponent(next)}`;
+}
+
+function safeNextPath(next: string): string {
+  if (!next.startsWith("/") || next.startsWith("//") || next.includes("\\")) {
+    return "/admin";
+  }
+  if (next.startsWith("/auth/") || next.startsWith("/start/oauth/")) {
+    return "/admin";
+  }
+  return next;
 }
 
 /** Extract the `sub` (user id) claim from a Supabase access token JWT. */

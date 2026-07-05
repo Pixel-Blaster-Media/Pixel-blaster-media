@@ -106,7 +106,7 @@ export default async function BookingsPage({
       </header>
 
       <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/60 p-3 shadow-lg shadow-realtor-text/10">
-        <form className="flex flex-col gap-2 sm:flex-row" action="/admin/bookings">
+        <form className="flex min-w-0 gap-2" action="/admin/bookings">
           <input type="hidden" name="filter" value={filter} />
           <label className="sr-only" htmlFor="booking-search">
             Search bookings
@@ -116,9 +116,9 @@ export default async function BookingsPage({
             name="q"
             defaultValue={search}
             placeholder="Search by address, realtor, city, email, or service..."
-            className="min-h-11 flex-1 rounded-full border border-realtor-primary/15 bg-white/65 px-4 text-sm text-realtor-text outline-none transition placeholder:text-realtor-muted focus:border-realtor-primary/45"
+            className="min-h-11 min-w-0 flex-1 rounded-full border border-realtor-primary/15 bg-white/65 px-4 text-sm text-realtor-text outline-none transition placeholder:text-realtor-muted focus:border-realtor-primary/45"
           />
-          <div className="flex gap-2">
+          <div className="flex shrink-0 gap-2">
             <button
               type="submit"
               className="min-h-11 rounded-full bg-realtor-primary px-5 text-sm font-semibold text-white transition hover:bg-realtor-primary/90"

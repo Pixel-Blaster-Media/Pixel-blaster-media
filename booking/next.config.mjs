@@ -5,7 +5,7 @@ const nextConfig = {
   devIndicators: false,
   experimental: {
     serverActions: {
-      bodySizeLimit: "6mb",
+      bodySizeLimit: "25mb",
     },
   },
   // typedRoutes is intentionally disabled — it's overly strict with

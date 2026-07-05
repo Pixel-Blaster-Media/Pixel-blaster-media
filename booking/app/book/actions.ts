@@ -13,6 +13,7 @@ import {
 } from "@/lib/booking/availability";
 import { getActiveCatalog, getCatalogItemPrice } from "@/lib/booking/catalog";
 import { createManageToken } from "@/lib/booking/manage-token";
+import { ccRecipientsFor } from "@/lib/email/recipients";
 import { sendEmail } from "@/lib/email/resend";
 import {
   getAdminNotificationEmail,
@@ -487,10 +488,21 @@ export async function createPublicBooking(
   const manageUrl = manageToken
     ? `${appUrl}/book/manage/${manageToken}`
     : null;
+  const { data: notificationProfile } = await supabase
+    .from("profiles")
+    .select("delivery_cc_emails")
+    .eq("id", userId)
+    .eq("organization_id", organizationId)
+    .maybeSingle<{ delivery_cc_emails: string[] | null }>();
+  const ccRecipients = ccRecipientsFor(
+    userEmail,
+    notificationProfile?.delivery_cc_emails,
+  );
 
   await Promise.all([
     sendEmail({
       to: userEmail,
+      ...(ccRecipients.length > 0 ? { cc: ccRecipients } : {}),
       subject: `Booking confirmed — ${emailAddressLine}`,
       organizationId,
       html: `

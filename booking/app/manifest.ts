@@ -8,8 +8,8 @@ import type { MetadataRoute } from "next";
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Pixel Booking",
-    short_name: "Pixel Booking",
+    name: "Pixel Blaster Booking",
+    short_name: "PB Booking",
     description:
       "Real estate media booking, delivery, and client portals.",
     start_url: "/admin",

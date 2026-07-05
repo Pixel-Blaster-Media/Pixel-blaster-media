@@ -71,7 +71,6 @@ export default function BookingBrandHeader({
                 className="booking-media-photo"
               />
             ) : null}
-            <span>{mainImageUrl ? "Featured work" : "Photos"}</span>
           </div>
           <div
             className={`booking-media-tile booking-media-tile-small ${
@@ -86,7 +85,6 @@ export default function BookingBrandHeader({
                 className="booking-media-photo"
               />
             ) : null}
-            <span>Media</span>
           </div>
           <div className="booking-media-panel">
             <div>

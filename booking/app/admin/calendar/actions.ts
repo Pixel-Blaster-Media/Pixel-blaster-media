@@ -6,7 +6,6 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import {
   BUSINESS_TZ,
   businessDateTimeLocalToUtc,
-  isSlotAvailable,
 } from "@/lib/booking/availability";
 import {
   computeCartTotals,
@@ -14,6 +13,7 @@ import {
   validateCart,
   type CatalogItemRow,
 } from "@/lib/booking/catalog";
+import { ccRecipientsFor } from "@/lib/email/recipients";
 import { sendEmail } from "@/lib/email/resend";
 import { getOrganizationEmailSettings } from "@/lib/email/settings";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
@@ -49,6 +49,27 @@ interface ProfileSearchRow {
 
 interface InsertedRow {
   id: string;
+}
+
+export async function updateCalendarSourcePreferences(
+  formData: FormData,
+): Promise<void> {
+  const admin = await requireAdmin();
+  const sourceId = Number(formData.get("source_id"));
+  if (!Number.isInteger(sourceId)) return;
+
+  const color = normalizeHexColor(str(formData, "source_color"));
+  const supabase = getServiceSupabase();
+  await supabase
+    .from("google_calendar_connection")
+    .update({
+      source_color: color,
+    })
+    .eq("organization_id", admin.organizationId)
+    .eq("id", sourceId);
+
+  revalidatePath("/admin/calendar");
+  revalidatePath("/admin/settings/integrations");
 }
 
 export async function searchRealtors(
@@ -158,15 +179,9 @@ export async function createAdminShoot(
 
   const totals = computeCartTotals(cart, catalog);
   const duration = Math.max(totals.totalDurationMinutes, 60);
-  const stillFree = await isSlotAvailable(scheduledAt, duration, {
-    organizationId: admin.organizationId,
-  });
-  if (!stillFree) {
-    return {
-      ok: false,
-      error: "That time overlaps another booking or blocked time. Pick another slot.",
-    };
-  }
+  // Admin-created shoots intentionally bypass availability checks so the
+  // photographer can double-book or override blocked/external calendar time.
+  // Realtor-facing booking flows still call isSlotAvailable before insert.
 
   const selectedItems = cart
     .map((line) => byId.get(line.catalogItemId))
@@ -195,6 +210,12 @@ export async function createAdminShoot(
     })
     .eq("organization_id", admin.organizationId)
     .eq("id", userId);
+  const { data: notificationProfile } = await supabase
+    .from("profiles")
+    .select("delivery_cc_emails")
+    .eq("organization_id", admin.organizationId)
+    .eq("id", userId)
+    .maybeSingle<{ delivery_cc_emails: string[] | null }>();
 
   const propertyId = await findOrCreateProperty({
     organizationId: admin.organizationId,
@@ -232,7 +253,8 @@ export async function createAdminShoot(
     if (bookingError?.code === "23P01") {
       return {
         ok: false,
-        error: "That time overlaps another active booking. Pick another slot.",
+        error:
+          "The database still has the no-overlap guard. Apply migration 0037_allow_admin_overlap.sql to enable admin double-booking.",
       };
     }
     return { ok: false, error: "Could not save booking." };
@@ -271,6 +293,10 @@ export async function createAdminShoot(
 
   await sendConfirmationBestEffort({
     email: contactEmail,
+    ccEmails: ccRecipientsFor(
+      contactEmail,
+      notificationProfile?.delivery_cc_emails,
+    ),
     organizationId: admin.organizationId,
     name: contactName,
     streetAddress: unitNumber
@@ -305,6 +331,13 @@ interface BookingForRescheduleRow {
     phone: string | null;
     brokerage: string | null;
   } | null;
+}
+
+interface CalendarBlockForMoveRow {
+  id: string;
+  starts_at: string;
+  ends_at: string;
+  label: string | null;
 }
 
 /**
@@ -471,6 +504,91 @@ export async function rescheduleCalendarShoot(
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${booking.id}`);
   return { ok: true, bookingId: booking.id };
+}
+
+/**
+ * Drag-to-move a private blocked-time item. The block keeps its original
+ * duration; only the start/end timestamps shift.
+ */
+export async function moveCalendarBlock(
+  blockId: string,
+  dateInput: string,
+  startMinutes: number,
+): Promise<ActionResult> {
+  const admin = await requireAdmin();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+    return { ok: false, error: "Invalid day." };
+  }
+  if (
+    !Number.isInteger(startMinutes) ||
+    startMinutes < 0 ||
+    startMinutes >= 24 * 60
+  ) {
+    return { ok: false, error: "Invalid time." };
+  }
+
+  const hour = String(Math.floor(startMinutes / 60)).padStart(2, "0");
+  const minute = String(startMinutes % 60).padStart(2, "0");
+  const startsAt = businessDateTimeLocalToUtc(`${dateInput}T${hour}:${minute}`);
+  if (!startsAt) return { ok: false, error: "Invalid time." };
+
+  const supabase = getServiceSupabase();
+  const { data: block, error: blockError } = await supabase
+    .from("calendar_blocks")
+    .select("id, starts_at, ends_at, label")
+    .eq("id", blockId)
+    .eq("organization_id", admin.organizationId)
+    .single<CalendarBlockForMoveRow>();
+
+  if (blockError || !block) {
+    return { ok: false, error: "Blocked time not found." };
+  }
+
+  const oldStart = new Date(block.starts_at);
+  const oldEnd = new Date(block.ends_at);
+  const durationMinutes = Math.max(
+    Math.round((oldEnd.getTime() - oldStart.getTime()) / 60_000),
+    5,
+  );
+  const endsAt = new Date(startsAt.getTime() + durationMinutes * 60_000);
+
+  const { error: updateError } = await supabase
+    .from("calendar_blocks")
+    .update({
+      starts_at: startsAt.toISOString(),
+      ends_at: endsAt.toISOString(),
+    })
+    .eq("id", block.id)
+    .eq("organization_id", admin.organizationId);
+
+  if (updateError) return { ok: false, error: updateError.message };
+
+  await supabase.from("assistant_action_logs").insert({
+    organization_id: admin.organizationId,
+    actor_profile_id: admin.userId,
+    action_type: "calendar_block_drag_move",
+    label: "Calendar block drag move",
+    details: `Moved ${block.label ?? "blocked time"} to ${dateInput} ${hour}:${minute}.`,
+    payload: {
+      block_id: block.id,
+      old_starts_at: block.starts_at,
+      old_ends_at: block.ends_at,
+      new_starts_at: startsAt.toISOString(),
+      new_ends_at: endsAt.toISOString(),
+    },
+    result_status: "success",
+    result_message: "Blocked time moved from the calendar week view.",
+    undo_payload: {
+      block_id: block.id,
+      starts_at: block.starts_at,
+      ends_at: block.ends_at,
+    },
+  });
+
+  revalidatePath("/admin/settings/availability");
+  revalidatePath("/admin/calendar");
+  return { ok: true };
 }
 
 async function findOrCreateRealtor(args: {
@@ -660,6 +778,7 @@ function calendarShootTitle(args: {
 
 async function sendConfirmationBestEffort(args: {
   email: string;
+  ccEmails: string[];
   organizationId: string;
   name: string;
   streetAddress: string;
@@ -676,6 +795,7 @@ async function sendConfirmationBestEffort(args: {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
     await sendEmail({
       to: args.email,
+      ...(args.ccEmails.length > 0 ? { cc: args.ccEmails } : {}),
       subject: `Booking confirmed - ${args.streetAddress}`,
       organizationId: args.organizationId,
       html: `
@@ -701,6 +821,11 @@ async function sendConfirmationBestEffort(args: {
 
 function str(formData: FormData, key: string): string {
   return ((formData.get(key) as string | null) ?? "").trim();
+}
+
+function normalizeHexColor(value: string): string {
+  const trimmed = value.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed : "#2f80b7";
 }
 
 function parseOptionalInt(value: string): number | null {

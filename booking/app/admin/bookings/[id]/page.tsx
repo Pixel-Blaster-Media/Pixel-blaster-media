@@ -29,6 +29,7 @@ import {
   type IGuidePhotoZipKind,
 } from "@/lib/integrations/iguide/photo-downloads";
 import { hasPortalCredentials } from "@/lib/integrations/iguide/portal-client";
+import { listBookingAutoenhanceBatches } from "@/lib/integrations/autoenhance/workflow";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type {
   BookingStatus,
@@ -46,6 +47,7 @@ import BookingActions, {
 import BookingWorkspaceTabs, {
   type WorkspaceTabId,
 } from "./BookingWorkspaceTabs";
+import AutoenhanceSection from "./AutoenhanceSection";
 import EditBookingForm, {
   type EditableBookingInitial,
   type EditCatalogItem,
@@ -53,6 +55,7 @@ import EditBookingForm, {
 import IGuideSection from "./IGuideSection";
 import InvoiceSection from "./InvoiceSection";
 import ListingWebsiteSection from "./ListingWebsiteSection";
+import RescheduleBookingForm from "./RescheduleBookingForm";
 import VideoLinksSection from "./VideoLinksSection";
 
 export const dynamic = "force-dynamic";
@@ -163,6 +166,7 @@ export default async function BookingDetailPage({
     { data: deliveryNotification },
     { data: listingWebsite },
     { data: bookingLineItems },
+    autoenhanceBatches,
     catalog,
   ] =
     await Promise.all([
@@ -208,6 +212,7 @@ export default async function BookingDetailPage({
         .select("catalog_item_id")
         .eq("booking_id", id)
         .returns<BookingLineItemSelectionRow[]>(),
+      listBookingAutoenhanceBatches({ admin, bookingId: id }),
       getActiveCatalog({ organizationId: admin.organizationId }),
     ]);
 
@@ -344,6 +349,12 @@ export default async function BookingDetailPage({
               <CancelBookingButton bookingId={booking.id} />
             ) : null}
             <Link
+              href={`/admin/bookings/${booking.id}?tab=details#reschedule`}
+              className="tap-target rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+            >
+              Reschedule
+            </Link>
+            <Link
               href="/admin/today"
               className="tap-target rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
             >
@@ -353,13 +364,11 @@ export default async function BookingDetailPage({
         </div>
         <div className="mt-4 grid gap-2 md:grid-cols-3">
           <SummaryStat label="Ready links" value={`${readyDeliverables.length}`} />
-          <SummaryStat
-            label="Realtor"
-            value={profile?.full_name ?? profile?.email ?? "Unknown"}
-          />
-          <SummaryStat
-            label="Services"
-            value={booking.services.map(labelForService).join(", ") || "—"}
+          <ContactSummary profile={profile} />
+          <ServicesSummary
+            services={booking.services.map(labelForService)}
+            bookingId={booking.id}
+            fullAddress={fullAddress}
           />
         </div>
       </header>
@@ -381,6 +390,11 @@ export default async function BookingDetailPage({
               portalApiConfigured={portalApiConfigured}
               job={iguideJob ?? null}
               initialPhotoDownloads={iguidePhotoDownloads}
+            />
+            <AutoenhanceSection
+              bookingId={booking.id}
+              iguidePortalId={booking.iguide_portal_id}
+              initialBatches={autoenhanceBatches}
             />
             <VideoLinksSection bookingId={booking.id} />
             <ManualLinksPanel
@@ -528,6 +542,12 @@ function DetailsTab({
         title="Edit and reference"
         body="Fix the schedule, address, selected services, realtor info, or notes without leaving this booking."
       />
+      <div id="reschedule">
+        <RescheduleBookingForm
+          bookingId={booking.id}
+          initialScheduledAtLocal={editableInitial.scheduledAtLocal}
+        />
+      </div>
       <Panel title="Edit booking">
         <EditBookingForm
           bookingId={booking.id}
@@ -765,6 +785,89 @@ function SummaryStat({ label, value }: { label: string; value: string }) {
         {label}
       </p>
       <p className="mt-1 truncate text-sm font-semibold text-realtor-text">{value}</p>
+    </div>
+  );
+}
+
+function ContactSummary({ profile }: { profile: BookingDetail["profiles"] }) {
+  return (
+    <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+      <p className="text-[10px] uppercase tracking-wider text-realtor-muted">
+        Realtor
+      </p>
+      <div className="mt-1 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-realtor-text">
+            {profile?.full_name ?? profile?.email ?? "Unknown"}
+          </p>
+          {profile?.brokerage ? (
+            <p className="truncate text-xs text-realtor-muted">
+              {profile.brokerage}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 gap-1.5">
+          {profile?.phone ? (
+            <a
+              href={`tel:${profile.phone}`}
+              className="rounded-full bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-realtor-primary/90"
+            >
+              Call
+            </a>
+          ) : null}
+          {profile?.email ? (
+            <a
+              href={`mailto:${profile.email}`}
+              className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+            >
+              Email
+            </a>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ServicesSummary({
+  services,
+  bookingId,
+  fullAddress,
+}: {
+  services: string[];
+  bookingId: string;
+  fullAddress: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+      <p className="text-[10px] uppercase tracking-wider text-realtor-muted">
+        Services
+      </p>
+      <div className="mt-1 flex items-start justify-between gap-3">
+        <p className="min-w-0 text-sm font-semibold text-realtor-text">
+          {services.join(", ") || "—"}
+        </p>
+        <div className="flex shrink-0 gap-1.5">
+          {fullAddress ? (
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                fullAddress,
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-realtor-primary/90"
+            >
+              Map
+            </a>
+          ) : null}
+          <Link
+            href={`/admin/bookings/${bookingId}?tab=details`}
+            className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+          >
+            Open
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }
