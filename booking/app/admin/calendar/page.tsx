@@ -361,6 +361,21 @@ export default async function AdminCalendarPage({
       </section>
 
       <div className="grid min-h-0 max-w-full gap-3 md:grid-cols-[280px_minmax(0,1fr)]">
+        <details className="rounded-xl border border-realtor-primary/15 bg-realtor-surface/90 shadow-lg shadow-realtor-text/10 md:hidden">
+          <summary className="tap-target flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-realtor-primary/80 [&::-webkit-details-marker]:hidden">
+            Calendars + month
+            <span aria-hidden="true">▾</span>
+          </summary>
+          <div className="border-t border-realtor-primary/10">
+            <CalendarSidebar
+              sources={calendarSources}
+              weekStart={weekStart}
+              todayKey={todayKey}
+              visibleItems={visibleItems}
+              mobile
+            />
+          </div>
+        </details>
         <CalendarSidebar
           sources={calendarSources}
           weekStart={weekStart}
@@ -382,11 +397,15 @@ function CalendarSidebar({
   weekStart,
   todayKey,
   visibleItems,
+  mobile = false,
 }: {
   sources: GoogleCalendarSource[];
   weekStart: string;
   todayKey: string;
   visibleItems: CalendarItem[];
+  /** Render without the desktop-only wrapper so the same controls can
+   *  live inside the phone-sized "Calendars" disclosure. */
+  mobile?: boolean;
 }) {
   const monthDate = dateFromKey(weekStart);
   const monthLabel = new Intl.DateTimeFormat("en-US", {
@@ -399,7 +418,13 @@ function CalendarSidebar({
   const blockItems = visibleItems.filter((item) => item.kind === "block");
 
   return (
-    <aside className="hidden min-h-[calc(100dvh-190px)] rounded-xl border border-realtor-primary/15 bg-realtor-surface/90 p-3 shadow-lg shadow-realtor-text/10 md:flex md:flex-col">
+    <aside
+      className={
+        mobile
+          ? "flex flex-col p-3"
+          : "hidden min-h-[calc(100dvh-190px)] rounded-xl border border-realtor-primary/15 bg-realtor-surface/90 p-3 shadow-lg shadow-realtor-text/10 md:flex md:flex-col"
+      }
+    >
       <section>
         <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary/80">
           Calendars
