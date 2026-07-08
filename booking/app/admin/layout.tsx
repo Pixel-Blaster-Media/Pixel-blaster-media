@@ -7,6 +7,7 @@ import {
 } from "@/lib/organizations/branding";
 
 import AdminAssistant from "./AdminAssistant";
+import AdminBottomNav from "./AdminBottomNav";
 
 export const viewport: Viewport = {
   colorScheme: "light",
@@ -32,6 +33,7 @@ export default async function AdminLayout({
         <AdminAssistant />
         {children}
       </section>
+      <AdminBottomNav />
     </div>
   );
 }

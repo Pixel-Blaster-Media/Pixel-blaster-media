@@ -437,12 +437,23 @@ export async function updateBookingDetails(
     .eq("organization_id", admin.organizationId);
   if (profileError) return { ok: false, error: profileError.message };
 
+  // Guard: an empty time field means "leave the schedule alone", not
+  // "clear it" — otherwise a form variant that omits the field would
+  // silently wipe the booking's time.
+  const scheduleUpdate = scheduledAt
+    ? {
+        scheduled_at: scheduledAt.toISOString(),
+        scheduled_ends_at: scheduledEndsAt
+          ? scheduledEndsAt.toISOString()
+          : null,
+      }
+    : {};
+
   const { error: updateError } = await service
     .from("bookings")
     .update({
       property_id: propertyId,
-      scheduled_at: scheduledAt ? scheduledAt.toISOString() : null,
-      scheduled_ends_at: scheduledEndsAt ? scheduledEndsAt.toISOString() : null,
+      ...scheduleUpdate,
       services: legacyServices,
       add_ons: legacyAddons,
       square_footage: squareFootage,
