@@ -39,10 +39,7 @@ export interface BookResult {
 
 export interface RealtorLookupResult {
   found: boolean;
-  email?: string;
   fullName?: string | null;
-  phone?: string | null;
-  brokerage?: string | null;
 }
 
 interface RealtorPhoneMatch {
@@ -70,9 +67,10 @@ export async function checkEmailAction(email: string): Promise<boolean> {
 /**
  * Public booking helper: recognize a returning realtor by exact phone number.
  *
- * This intentionally returns only lightweight contact fields, scoped to the
- * requested booking organization, so the form can feel personal without opening
- * a broad profile-search surface.
+ * Returns only the realtor's display name (or null) so the form can greet a
+ * returning user without exposing email/phone/brokerage to anyone who can
+ * guess a phone number. The actual email/brokerage match is still resolved
+ * server-side from the phone digits during `createPublicBooking`.
  */
 export async function lookupRealtorByPhoneAction(
   organizationSlug: string | null,
@@ -93,13 +91,7 @@ export async function lookupRealtorByPhoneAction(
   );
   if (!match) return { found: false };
 
-  return {
-    found: true,
-    email: match.email,
-    fullName: match.full_name,
-    phone: match.phone,
-    brokerage: match.brokerage,
-  };
+  return { found: true, fullName: match.full_name };
 }
 
 /**

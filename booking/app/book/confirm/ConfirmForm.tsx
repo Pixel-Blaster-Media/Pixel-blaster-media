@@ -68,16 +68,10 @@ export default function ConfirmForm({
           state.organizationSlug ?? null,
           phone,
         );
-        if (!match.found) return;
+        if (!match.found || !match.fullName) return;
 
-        setReturningName(firstName(match.fullName ?? match.email ?? ""));
-        if (match.fullName) setContactName(match.fullName);
-        if (match.email) {
-          setEmail(match.email);
-          setMode("existing");
-        }
-        if (match.phone) setPhone(match.phone);
-        if (match.brokerage) setBrokerage(match.brokerage);
+        setReturningName(firstName(match.fullName));
+        setContactName(match.fullName);
       } catch {
         // Keep the normal first-time form if recognition is unavailable.
       }
