@@ -1,14 +1,14 @@
 import "server-only";
 
+import "server-only";
+
 import { getServiceSupabase } from "@/lib/supabase/server";
 
 /**
  * Check whether an email address already has a profile / auth user.
  *
- * Used by the public booking form to decide whether to show "Sign in"
- * vs "Create a password". Not a security boundary — anyone could probe
- * this by trying to book — but we still keep the surface minimal:
- * bool in, bool out, no PII leaked.
+ * Used internally to choose the sign-in or create-account path after a public
+ * booking form is submitted. It must never be exported directly to the client.
  */
 export async function emailHasAccount(rawEmail: string): Promise<boolean> {
   const email = rawEmail.trim().toLowerCase();

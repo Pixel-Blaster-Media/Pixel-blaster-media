@@ -64,6 +64,21 @@ export default function AdminAssistant() {
     };
   }, [assistantOpen]);
 
+  useEffect(() => {
+    const openAssistant = () => setAssistantOpen(true);
+    window.addEventListener("pixel-assistant:open", openAssistant);
+    return () =>
+      window.removeEventListener("pixel-assistant:open", openAssistant);
+  }, []);
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("pixel-assistant:state", {
+        detail: { open: assistantOpen },
+      }),
+    );
+  }, [assistantOpen]);
+
   function ask(input = prompt) {
     const value = input.trim();
     if (!value) return;
@@ -326,7 +341,7 @@ export default function AdminAssistant() {
     <>
       {assistantOpen ? (
         <section
-          className="fixed inset-x-3 z-[80] max-h-[78vh] overflow-y-auto rounded-2xl border border-realtor-primary/20 bg-[#fffdf8] p-4 text-realtor-text shadow-2xl shadow-realtor-text/25 md:inset-x-auto md:right-6 md:w-[440px]"
+          className="fixed inset-x-3 z-[180] max-h-[78vh] overflow-y-auto rounded-2xl border border-realtor-primary/20 bg-[#fffdf8] p-4 text-realtor-text shadow-2xl shadow-realtor-text/25 md:inset-x-auto md:right-6 md:w-[440px]"
           style={{
             bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.75rem)",
           }}

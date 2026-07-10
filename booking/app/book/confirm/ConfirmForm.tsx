@@ -1,15 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
-import {
-  checkEmailAction,
-  createPublicBooking,
-  lookupRealtorByPhoneAction,
-  type BookResult,
-} from "../actions";
+import { createPublicBooking, type BookResult } from "../actions";
 import {
   serializeWizardState,
   type WizardState,
@@ -30,8 +25,8 @@ interface ProfileLite {
 
 /**
  * Step 4 form — hidden inputs carry forward the wizard state (services,
- * property details, slot), plus the auth section that toggles between
- * sign-in and create-account based on email existence.
+ * property details, slot), plus a neutral account section. The browser is
+ * deliberately not told whether an email already exists.
  */
 export default function ConfirmForm({
   state,
@@ -48,70 +43,6 @@ export default function ConfirmForm({
   const [email, setEmail] = useState(profile?.email ?? "");
   const [phone, setPhone] = useState(profile?.phone ?? "");
   const [brokerage, setBrokerage] = useState(profile?.brokerage ?? "");
-  const [returningName, setReturningName] = useState<string | null>(null);
-  const [mode, setMode] = useState<"unknown" | "new" | "existing">("unknown");
-  const [, startTransition] = useTransition();
-  const [lookupPending, startLookupTransition] = useTransition();
-
-  function handlePhoneChange(value: string) {
-    setPhone(value);
-    setReturningName(null);
-  }
-
-  async function handlePhoneBlur() {
-    const digits = phone.replace(/\D/g, "");
-    if (digits.length < 10) return;
-
-    startLookupTransition(async () => {
-      try {
-        const match = await lookupRealtorByPhoneAction(
-          state.organizationSlug ?? null,
-          phone,
-        );
-        if (!match.found) return;
-
-        setReturningName(firstName(match.fullName ?? match.email ?? ""));
-        if (match.fullName) setContactName(match.fullName);
-        if (match.email) {
-          setEmail(match.email);
-          setMode("existing");
-        }
-        if (match.phone) setPhone(match.phone);
-        if (match.brokerage) setBrokerage(match.brokerage);
-      } catch {
-        // Keep the normal first-time form if recognition is unavailable.
-      }
-    });
-  }
-
-  function handleEmailChange(value: string) {
-    setEmail(value);
-    setMode("unknown");
-  }
-
-  async function handleEmailBlur() {
-    const trimmed = email.trim().toLowerCase();
-    if (!trimmed || !trimmed.includes("@")) {
-      setMode("unknown");
-      return;
-    }
-    startTransition(async () => {
-      try {
-        const exists = await checkEmailAction(trimmed);
-        setMode(exists ? "existing" : "new");
-      } catch {
-        setMode("unknown");
-      }
-    });
-  }
-
-  useEffect(() => {
-    if (!profile) return;
-    setContactName(profile.fullName ?? "");
-    setEmail(profile.email);
-    setPhone(profile.phone ?? "");
-    setBrokerage(profile.brokerage ?? "");
-  }, [profile]);
 
   return (
     <form action={formAction} className="space-y-5">
@@ -153,12 +84,11 @@ export default function ConfirmForm({
           <legend className="sr-only">Your contact info</legend>
           <div className="mb-4">
             <p className="text-sm font-semibold text-realtor-text">
-              {returningName ? `Welcome back, ${returningName}` : "Your details"}
+              Your details
             </p>
             <p className="mt-1 text-xs text-realtor-muted">
-              {returningName
-                ? "We found your profile and filled in the details we already have. You can confirm this booking without signing into the portal."
-                : "Start with your phone number. If you have booked with us before, we will fill in the rest."}
+              Use your existing portal password, or choose one now if this is
+              your first booking.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
@@ -166,18 +96,11 @@ export default function ConfirmForm({
               label="Phone"
               name="contact_phone"
               type="tel"
+              required
               autoComplete="tel"
               placeholder="(905) 555-0123"
               value={phone}
-              onChange={(e) => handlePhoneChange(e.currentTarget.value)}
-              onBlur={handlePhoneBlur}
-              helper={
-                lookupPending
-                  ? "Checking for your profile..."
-                  : returningName
-                    ? "Profile matched by phone."
-                    : undefined
-              }
+              onChange={(e) => setPhone(e.currentTarget.value)}
               error={formState?.errors?.contact_phone}
             />
             <Field
@@ -204,74 +127,50 @@ export default function ConfirmForm({
               required
               autoComplete="email"
               value={email}
-              onChange={(e) => handleEmailChange(e.currentTarget.value)}
-              onBlur={handleEmailBlur}
+              onChange={(e) => setEmail(e.currentTarget.value)}
               error={formState?.errors?.contact_email}
             />
-            {returningName ? (
-              <div className="md:col-span-2 rounded-2xl border border-brand-light/25 bg-brand-light/10 p-3 text-xs text-realtor-muted">
-                <p className="font-semibold text-realtor-text">
-                  Fast booking enabled
-                </p>
-                <p className="mt-1">
-                  No password needed right now. We will attach this booking to
-                  your existing profile, email the confirmation, and you can sign
-                  into the portal later only when you need media, invoices, or
-                  booking history.
-                </p>
-              </div>
-            ) : (
-              <div className="md:col-span-2">
-                <label className="block">
-                  <span className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-realtor-muted">
-                    <span>
-                      {mode === "existing" ? "Password" : "Create a password"}
-                      <span className="text-brand-light"> *</span>
-                    </span>
-                    {mode === "existing" ? (
-                      <Link
-                        href="/auth/reset"
-                        className="text-[11px] normal-case tracking-normal text-brand-light hover:underline"
-                      >
-                        Forgot password?
-                      </Link>
-                    ) : null}
+            <div className="md:col-span-2">
+              <label className="block">
+                <span className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-realtor-muted">
+                  <span>
+                    Password<span className="text-realtor-primary"> *</span>
                   </span>
-                  <input
-                    name="password"
-                    type="password"
-                    required
-                    autoComplete={
-                      mode === "existing" ? "current-password" : "new-password"
-                    }
-                    minLength={8}
-                    className={
-                      "realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
-                      (formState?.errors?.password
-                        ? "border-red-400/60"
-                        : "border-realtor-primary/15")
-                    }
-                  />
-                  <span className="mt-1 block text-[11px] text-realtor-muted">
-                    {mode === "existing"
-                      ? "We found your account. Enter your password to finish this booking."
-                      : mode === "new"
-                        ? "Save this password. You'll use it to return for photos, tours, invoices, and future bookings."
-                        : "8+ characters. If this email is new, we'll create your portal account. If it exists, we'll sign you in."}
+                  <Link
+                    href="/auth/reset"
+                    className="text-[11px] normal-case tracking-normal text-realtor-primary hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                </span>
+                <input
+                  name="password"
+                  type="password"
+                  required
+                  autoComplete="current-password"
+                  minLength={8}
+                  className={
+                    "realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
+                    (formState?.errors?.password
+                      ? "border-red-600"
+                      : "border-realtor-primary/15")
+                  }
+                />
+                <span className="mt-1 block text-[11px] text-realtor-muted">
+                  At least 8 characters. If the email is new, this creates your
+                  portal. If it already exists, this signs you in securely.
+                </span>
+                {formState?.errors?.password ? (
+                  <span className="mt-1 block text-xs text-red-700">
+                    {formState.errors.password}
                   </span>
-                  {formState?.errors?.password ? (
-                    <span className="mt-1 block text-xs text-red-300">
-                      {formState.errors.password}
-                    </span>
-                  ) : null}
-                </label>
-                <div className="mt-3 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/10 p-3 text-xs text-realtor-muted">
-                  After you confirm, you can always come back through{" "}
-                  <span className="font-semibold text-realtor-text">Sign in</span>{" "}
-                  using this email and password. No magic link required.
-                </div>
+                ) : null}
+              </label>
+              <div className="mt-3 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-3 text-xs text-realtor-muted">
+                Your portal keeps this booking, delivered media, invoices, and
+                future shoots together.
               </div>
-            )}
+            </div>
           </div>
         </fieldset>
       )}
@@ -285,12 +184,12 @@ export default function ConfirmForm({
           name="notes"
           rows={3}
           placeholder="Pets, gate code, lockbox, etc."
-          className="realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
+          className="realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-realtor-primary/35"
         />
       </label>
 
       {formState?.errors?._form ? (
-        <p role="alert" className="text-sm text-red-300">
+        <p role="alert" className="text-sm font-medium text-red-700">
           {formState.errors._form}
         </p>
       ) : null}
@@ -349,8 +248,6 @@ function Field({
   autoComplete,
   value,
   onChange,
-  onBlur,
-  helper,
   error,
 }: {
   label: string;
@@ -361,8 +258,6 @@ function Field({
   autoComplete?: string;
   value?: string;
   onChange?: React.ChangeEventHandler<HTMLInputElement>;
-  onBlur?: React.FocusEventHandler<HTMLInputElement>;
-  helper?: string;
   error?: string;
 }) {
   return (
@@ -379,30 +274,16 @@ function Field({
         autoComplete={autoComplete}
         value={value}
         onChange={onChange}
-        onBlur={onBlur}
         className={
-          "realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
+          "realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
           (error ? "border-red-400/60" : "border-realtor-primary/15")
         }
       />
-      {helper ? (
-        <span className="mt-1 block text-[11px] text-realtor-muted">
-          {helper}
-        </span>
-      ) : null}
       {error ? (
-        <span className="mt-1 block text-xs text-red-300">{error}</span>
+        <span className="mt-1 block text-xs text-red-700">{error}</span>
       ) : null}
     </label>
   );
-}
-
-function firstName(nameOrEmail: string): string {
-  const local = nameOrEmail.includes("@")
-    ? nameOrEmail.split("@")[0]?.replace(/[._-]+/g, " ")
-    : nameOrEmail;
-  const first = local?.trim().split(/\s+/)[0];
-  return first || "there";
 }
 
 function buildQuery(state: WizardState): string {

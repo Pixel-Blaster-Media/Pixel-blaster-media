@@ -1,7 +1,7 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 
 import {
+  initialsForOrganization,
   organizationThemeStyle,
   type OrganizationBrand,
 } from "@/lib/organizations/branding";
@@ -22,12 +22,33 @@ export function BookingBrandFrame({
 
 export default function BookingBrandHeader({
   organization,
+  compact = false,
 }: {
   organization: OrganizationBrand;
+  compact?: boolean;
 }) {
   const mainImageUrl = organization.bookingHeroImageUrl;
   const secondaryImageUrl = organization.bookingHeroSecondaryImageUrl;
   const logoUrl = organization.logoUrl;
+
+  if (compact) {
+    return (
+      <header className="booking-compact-header">
+        <div className="booking-hero-brand">
+          <span className="booking-hero-brand-logo" aria-hidden={!logoUrl}>
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoUrl} alt={`${organization.name} logo`} />
+            ) : (
+              <span>{initialsForOrganization(organization.name)}</span>
+            )}
+          </span>
+          <span className="booking-hero-brand-name">{organization.name}</span>
+        </div>
+        <p>Booking in progress</p>
+      </header>
+    );
+  }
 
   return (
     <header className="booking-hero">
@@ -37,7 +58,7 @@ export default function BookingBrandHeader({
             {logoUrl ? (
               <span className="booking-hero-brand-logo">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={logoUrl} alt="" />
+                <img src={logoUrl} alt={`${organization.name} logo`} />
               </span>
             ) : null}
             <span className="booking-hero-brand-name">{organization.name}</span>
@@ -47,13 +68,6 @@ export default function BookingBrandHeader({
           <p>
             Pick a package, add the property details, choose a time, and your
             shoot is ready to go.
-          </p>
-          <p className="booking-hero-login">
-            Already have a profile?{" "}
-            <Link href="/auth/sign-in?next=/portal">
-              Log in to view your media and bookings
-            </Link>
-            .
           </p>
         </div>
 

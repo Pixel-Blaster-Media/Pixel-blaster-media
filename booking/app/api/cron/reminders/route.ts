@@ -8,6 +8,7 @@ import { createManageToken } from "@/lib/booking/manage-token";
 import { sendEmail } from "@/lib/email/resend";
 import { getOrganizationEmailSettings } from "@/lib/email/settings";
 import { shootReminderEmail } from "@/lib/email/templates";
+import { sendPushBestEffort } from "@/lib/notifications/push";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
 /**
@@ -101,7 +102,29 @@ export async function GET(request: Request) {
 
   for (const booking of bookings ?? []) {
     try {
-      if (!booking.profiles?.email || !booking.properties) {
+      if (!booking.properties) {
+        skipped += 1;
+        continue;
+      }
+
+      const timeLabel = new Date(booking.scheduled_at).toLocaleTimeString(
+        "en-CA",
+        { timeZone: BUSINESS_TZ, hour: "numeric", minute: "2-digit" },
+      );
+      const addressLine = [
+        booking.properties.street_address,
+        booking.properties.city,
+      ]
+        .filter(Boolean)
+        .join(", ");
+      await sendPushBestEffort(booking.organization_id, {
+        title: "Shoot tomorrow",
+        body: `${timeLabel} · ${addressLine}`,
+        url: `/admin/bookings/${booking.id}`,
+        tag: `shoot-tomorrow-${booking.id}`,
+      });
+
+      if (!booking.profiles?.email) {
         skipped += 1;
         continue;
       }
@@ -112,10 +135,6 @@ export async function GET(request: Request) {
         settingsCache.set(booking.organization_id, settings);
       }
 
-      const timeLabel = new Date(booking.scheduled_at).toLocaleTimeString(
-        "en-CA",
-        { timeZone: BUSINESS_TZ, hour: "numeric", minute: "2-digit" },
-      );
       const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
       const manageLink = `${appUrl}/book/manage/${createManageToken(booking.id)}`;
 

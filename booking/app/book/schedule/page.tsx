@@ -14,7 +14,6 @@ import BookingTotalBar from "../_components/BookingTotalBar";
 import BookingBrandHeader, {
   BookingBrandFrame,
 } from "../_components/BookingBrandHeader";
-import AwayNotice from "../_components/AwayNotice";
 import Stepper from "../_components/Stepper";
 import CalendarPicker from "./CalendarPicker";
 
@@ -64,7 +63,7 @@ export default async function BookStep3Page({
 
   return (
     <BookingBrandFrame organization={organization}>
-      <BookingBrandHeader organization={organization} />
+      <BookingBrandHeader organization={organization} compact />
       <Stepper current={3} state={scopedState} />
 
       <section>
@@ -76,8 +75,6 @@ export default async function BookStep3Page({
           times, then pick a time to move on.
         </p>
       </section>
-
-      <AwayNotice />
 
       <CalendarPicker
         daysOfSlots={daysOfSlots}

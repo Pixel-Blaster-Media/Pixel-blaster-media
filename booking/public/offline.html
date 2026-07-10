@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#fbfcfa" />
+    <title>Today · Offline</title>
+    <style>
+      :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #f4f7f2; color: #23332b; }
+      main { max-width: 44rem; margin: 0 auto; padding: max(1.25rem, env(safe-area-inset-top)) 1rem calc(2rem + env(safe-area-inset-bottom)); }
+      .eyebrow { color: #3f7356; font-size: .72rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+      h1 { margin: .35rem 0 0; font-size: 1.8rem; }
+      .notice { margin-top: 1rem; border: 1px solid #c7b17a66; background: #fff9e9; border-radius: 8px; padding: .8rem; font-size: .86rem; line-height: 1.45; }
+      #shoots { display: grid; gap: .75rem; margin-top: 1rem; }
+      .shoot { border: 1px solid #3f735629; background: #fff; border-radius: 8px; padding: 1rem; box-shadow: 0 8px 24px #23332b0d; }
+      .time { color: #3f7356; font-size: .75rem; font-weight: 700; text-transform: uppercase; }
+      .address { margin: .35rem 0 0; font-size: 1rem; font-weight: 700; }
+      .meta { margin: .35rem 0 0; color: #6f7a70; font-size: .82rem; line-height: 1.45; }
+      button { margin-top: 1rem; border: 0; border-radius: 999px; background: #3f7356; color: #fff; padding: .7rem 1rem; font: inherit; font-weight: 700; }
+      .updated { color: #6f7a70; font-size: .72rem; margin-top: 1rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">Offline · read only</p>
+      <h1 id="date">Today</h1>
+      <div class="notice">Your last saved shoot-day snapshot is shown below. Reconnect before changing bookings, blocks, or delivery details.</div>
+      <div id="shoots"></div>
+      <p class="updated" id="updated"></p>
+      <button type="button" onclick="location.reload()">Try reconnecting</button>
+    </main>
+    <script>
+      (() => {
+        const userId = localStorage.getItem("pixel-booking:current-user");
+        const raw = userId && localStorage.getItem(`pixel-booking:offline-today:${userId}`);
+        const container = document.getElementById("shoots");
+        if (!raw) {
+          const empty = document.createElement("div");
+          empty.className = "shoot";
+          empty.textContent = "No Today snapshot has been saved on this phone yet.";
+          container.appendChild(empty);
+          return;
+        }
+        try {
+          const data = JSON.parse(raw);
+          document.getElementById("date").textContent = data.dateLabel || "Today";
+          for (const shoot of data.shoots || []) {
+            const card = document.createElement("section");
+            card.className = "shoot";
+            for (const [className, value] of [
+              ["time", shoot.time],
+              ["address", shoot.address],
+              ["meta", [shoot.city, shoot.packageName, shoot.status].filter(Boolean).join(" · ")],
+            ]) {
+              const line = document.createElement("p");
+              line.className = className;
+              line.textContent = value || "";
+              card.appendChild(line);
+            }
+            container.appendChild(card);
+          }
+          if (!data.shoots?.length) {
+            const empty = document.createElement("div");
+            empty.className = "shoot";
+            empty.textContent = "No shoots were scheduled when this snapshot was saved.";
+            container.appendChild(empty);
+          }
+          document.getElementById("updated").textContent = data.updatedAt
+            ? `Last updated ${new Date(data.updatedAt).toLocaleString()}`
+            : "";
+        } catch {
+          container.textContent = "The saved schedule could not be read. Reconnect to refresh it.";
+        }
+      })();
+    </script>
+  </body>
+</html>

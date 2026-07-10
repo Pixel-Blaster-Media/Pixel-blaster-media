@@ -9,6 +9,11 @@ import {
   saveTodayCommandPreferences,
 } from "../today/actions";
 import type { TodayCommandPreferences } from "../today/preferences";
+import {
+  publicVapidKey,
+  pushNotificationsConfigured,
+} from "@/lib/notifications/push";
+import InstallAppCard from "./InstallAppCard";
 
 const SETTINGS_SECTIONS = [
   {
@@ -97,6 +102,11 @@ export default async function SettingsPage() {
       </header>
 
       <LaunchReadinessCard readiness={readiness} />
+
+      <InstallAppCard
+        publicKey={publicVapidKey()}
+        configured={pushNotificationsConfigured()}
+      />
 
       <TodayPreferencesCard preferences={todayPreferences} />
 

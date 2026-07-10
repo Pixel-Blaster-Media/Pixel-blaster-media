@@ -5,10 +5,6 @@ import { redirect } from "next/navigation";
 
 import { getServerSupabase } from "@/lib/supabase/server";
 
-type HeaderStore = {
-  get(name: string): string | null;
-};
-
 export interface SignInState {
   error?: string;
 }
@@ -37,7 +33,7 @@ export async function sendMagicLink(
   }
 
   const supabase = await getServerSupabase();
-  const headerStore = headers() as unknown as HeaderStore;
+  const headerStore = await headers();
   const origin =
     process.env.NEXT_PUBLIC_APP_URL ??
     headerStore.get("origin") ??

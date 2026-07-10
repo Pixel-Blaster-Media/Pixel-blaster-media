@@ -92,7 +92,7 @@ export default async function BookStep4Page({
 
   return (
     <BookingBrandFrame organization={organization}>
-      <BookingBrandHeader organization={organization} />
+      <BookingBrandHeader organization={organization} compact />
       <Stepper current={4} state={scopedState} />
 
       <section>
@@ -109,8 +109,8 @@ export default async function BookStep4Page({
           </p>
         ) : (
           <p className="mt-1 text-sm text-realtor-muted">
-            Start with your phone number. If you have booked before, we will
-            fill in what we already know and get the request confirmed.
+            Add your contact details and portal password, then confirm the
+            booking.
           </p>
         )}
       </section>

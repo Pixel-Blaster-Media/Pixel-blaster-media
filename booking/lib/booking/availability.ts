@@ -40,6 +40,8 @@ export interface Slot {
 
 export interface AvailabilityScope {
   organizationId?: string;
+  /** Ignore the booking's own linked Google event during rescheduling. */
+  excludeGoogleEventId?: string;
 }
 
 function availabilityOrganizationId(scope?: AvailabilityScope): string {
@@ -80,6 +82,7 @@ export async function listAvailableSlots({
   durationMinutes,
   organizationId,
   excludeBookingId,
+  excludeGoogleEventId,
 }: {
   from: Date;
   to: Date;
@@ -88,6 +91,7 @@ export async function listAvailableSlots({
   /** Ignore this booking's own time when computing busy windows —
    *  used when rescheduling so a shoot doesn't block itself. */
   excludeBookingId?: string;
+  excludeGoogleEventId?: string;
 }): Promise<Slot[]> {
   if (durationMinutes <= 0) return [];
 
@@ -124,7 +128,10 @@ export async function listAvailableSlots({
     bookingsQuery.returns<BookingRow[]>(),
     // Optional Google Calendar free/busy union. If no calendar is
     // connected, returns [] so slot computation is unaffected.
-    fetchGoogleBusy(from, to, { organizationId: orgId }),
+    fetchGoogleBusy(from, to, {
+      organizationId: orgId,
+      excludeGoogleEventId,
+    }),
   ]);
 
   const hoursByDow = new Map<number, BusinessHoursRow>();
@@ -203,6 +210,7 @@ export async function isSlotAvailable(
     durationMinutes,
     organizationId: scope?.organizationId,
     excludeBookingId: scope?.excludeBookingId,
+    excludeGoogleEventId: scope?.excludeGoogleEventId,
   });
   return slots.some((s) => new Date(s.start).getTime() === start.getTime());
 }
@@ -237,7 +245,18 @@ async function fetchGoogleBusy(
       blockAvailability: true,
     });
     const windows = await Promise.all(
-      clients.map((client) => client.getBusy(from, to)),
+      clients.map(async (client) => {
+        if (scope?.excludeGoogleEventId) {
+          const events = await client.getEvents(from, to);
+          return events
+            .filter(
+              (event) =>
+                event.id !== scope.excludeGoogleEventId && !event.transparent,
+            )
+            .map((event) => ({ start: event.start, end: event.end }));
+        }
+        return client.getBusy(from, to);
+      }),
     );
     return windows.flat();
   } catch (err) {
@@ -324,12 +343,14 @@ function tzParts(d: Date): DateParts {
 /**
  * Convert "YYYY-MM-DDThh:mm:ss" interpreted in BUSINESS_TZ to a UTC Date.
  *
- * The trick: format the naive timestamp as UTC, then ask Intl what that
- * instant's wall-clock looks like in the business zone — the difference
- * is the offset we need to subtract. Handles DST correctly.
+ * We iteratively compare the desired wall clock with the wall clock produced
+ * by Intl. A single offset pass is not enough on the day DST changes because
+ * the first guess can be on the opposite side of the transition.
  */
 function localToUtc(isoNaive: string): Date {
   const naiveUtc = new Date(`${isoNaive}Z`);
+  if (Number.isNaN(naiveUtc.getTime())) return new Date(Number.NaN);
+
   const fmt = new Intl.DateTimeFormat("en-US", {
     timeZone: BUSINESS_TZ,
     year: "numeric",
@@ -338,18 +359,34 @@ function localToUtc(isoNaive: string): Date {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    hour12: false,
+    hourCycle: "h23",
   });
-  const parts = fmt.formatToParts(naiveUtc);
-  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
-  const asUtcAgain = Date.UTC(
+  const desiredWallClock = naiveUtc.getTime();
+  let candidate = desiredWallClock;
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const actualWallClock = wallClockAsUtc(fmt, new Date(candidate));
+    const adjustment = desiredWallClock - actualWallClock;
+    if (adjustment === 0) return new Date(candidate);
+    candidate += adjustment;
+  }
+
+  // A local time inside the skipped spring-forward hour does not exist.
+  return wallClockAsUtc(fmt, new Date(candidate)) === desiredWallClock
+    ? new Date(candidate)
+    : new Date(Number.NaN);
+}
+
+function wallClockAsUtc(fmt: Intl.DateTimeFormat, instant: Date): number {
+  const parts = fmt.formatToParts(instant);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value ?? 0);
+  return Date.UTC(
     get("year"),
     get("month") - 1,
     get("day"),
-    get("hour") === 24 ? 0 : get("hour"),
+    get("hour"),
     get("minute"),
     get("second"),
   );
-  const offsetMs = asUtcAgain - naiveUtc.getTime();
-  return new Date(naiveUtc.getTime() - offsetMs);
 }

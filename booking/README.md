@@ -79,6 +79,19 @@ App runs at <http://localhost:3000>. Health check: <http://localhost:3000/api/he
 | `/api/fotello/embed/[deliverableId]`   | Auth-gated proxy for Fotello gallery iframe src    |
 | `/api/health`           | Liveness probe — JSON `{ ok: true, ... }`                     |
 
+### Mobile app and notifications
+
+Admins can install the site from **Settings → Mobile app**. The installed app
+opens on the calendar, uses a five-item mobile navigation bar, and keeps a
+minimal read-only copy of Today available if the phone briefly loses service.
+Booking changes remain disabled while offline.
+
+To enable device notifications, apply the `push_notifications` migration and
+configure `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and
+`VAPID_SUBJECT`. Generate one VAPID key pair with
+`npx web-push generate-vapid-keys`; do not regenerate it after users subscribe
+or their existing device subscriptions will stop working.
+
 ## Provisioning Supabase
 
 1. Create a new project at <https://supabase.com>.

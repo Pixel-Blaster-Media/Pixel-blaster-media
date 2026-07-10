@@ -10,6 +10,7 @@ import {
 } from "@/lib/booking/availability";
 import { getActiveCatalog } from "@/lib/booking/catalog";
 import {
+  labelForAddOn,
   labelForService,
   totalDurationMinutes,
 } from "@/lib/booking/services";
@@ -38,8 +39,26 @@ interface BookingRow {
   google_calendar_event_id: string | null;
   services: string[];
   add_ons: string[];
-  properties: { street_address: string } | null;
-  profiles: { full_name: string | null; email: string } | null;
+  square_footage: number | null;
+  unit_number: string | null;
+  is_vacant: "vacant" | "occupied" | "partial" | null;
+  include_basement: boolean | null;
+  client_notes: string | null;
+  internal_notes: string | null;
+  properties: {
+    street_address: string;
+    city: string | null;
+    province: string | null;
+    postal_code: string | null;
+    notes: string | null;
+  } | null;
+  profiles: {
+    full_name: string | null;
+    email: string;
+    phone: string | null;
+    brokerage: string | null;
+    internal_notes: string | null;
+  } | null;
 }
 
 interface BlockRow {
@@ -69,7 +88,30 @@ interface CalendarItem {
   statusClass?: string;
   sourceName?: string;
   sourceColor?: string;
+  bookingDetails?: {
+    fullAddress: string;
+    services: string[];
+    addOns: string[];
+    realtorName: string;
+    realtorEmail: string;
+    realtorPhone: string | null;
+    brokerage: string | null;
+    realtorNotes: string | null;
+    clientNotes: string | null;
+    internalNotes: string | null;
+    propertyNotes: string | null;
+    squareFootage: number | null;
+    occupancy: string | null;
+    includeBasement: boolean | null;
+  };
 }
+
+type DisplayGoogleEvent = GoogleCalendarEvent & {
+  sourceId: number;
+  sourceName: string;
+  sourceColor: string;
+  writeBookings: boolean;
+};
 
 interface CatalogItemOption {
   id: string;
@@ -105,7 +147,7 @@ export default async function AdminCalendarPage({
     supabase
       .from("bookings")
       .select(
-        "id, status, scheduled_at, scheduled_ends_at, google_calendar_event_id, services, add_ons, properties(street_address), profiles(full_name, email)",
+        "id, status, scheduled_at, scheduled_ends_at, google_calendar_event_id, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, internal_notes, properties(street_address, city, province, postal_code, notes), profiles(full_name, email, phone, brokerage, internal_notes)",
       )
       .eq("organization_id", admin.organizationId)
       .not("scheduled_at", "is", null)
@@ -129,14 +171,25 @@ export default async function AdminCalendarPage({
       .returns<BusinessHoursRow[]>(),
     getActiveCatalog({ organizationId: admin.organizationId }),
   ]);
+  const databaseLoadFailed = Boolean(
+    bookingsRes.error || blocksRes.error || hoursRes.error,
+  );
+  if (databaseLoadFailed) {
+    console.error("[admin-calendar] database load failed", {
+      bookings: bookingsRes.error?.message,
+      blocks: blocksRes.error?.message,
+      hours: hoursRes.error?.message,
+    });
+  }
   const calendarSources = await getGoogleCalendarSources({
     organizationId: admin.organizationId,
   });
-  const googleEvents = await fetchGoogleEventsBestEffort({
+  const googleResult = await fetchGoogleEventsBestEffort({
     organizationId: admin.organizationId,
     from: rangeStart,
     to: rangeEnd,
   });
+  const googleEvents = googleResult.events;
   const googleEventsById = new Map(
     googleEvents
       .filter((event) => event.writeBookings)
@@ -179,29 +232,55 @@ export default async function AdminCalendarPage({
     const linkedGoogleEvent = booking.google_calendar_event_id
       ? googleEventsById.get(booking.google_calendar_event_id)
       : null;
-    const startsAt = linkedGoogleEvent?.start ?? new Date(booking.scheduled_at);
+    // The booking row is the schedule's source of truth. A stale Google event
+    // must never move a booking into another week or make it disappear from
+    // this calendar; we surface drift as a warning instead.
+    const startsAt = new Date(booking.scheduled_at);
     const localDate = localDateKey(startsAt);
     if (!weekKeys.has(localDate)) continue;
     const minutes = Math.max(
       totalDurationMinutes(booking.services, booking.add_ons),
       60,
     );
-    const endsAt =
-      linkedGoogleEvent?.end ??
-      (booking.scheduled_ends_at
-        ? new Date(booking.scheduled_ends_at)
-        : new Date(startsAt.getTime() + minutes * 60_000));
+    const endsAt = booking.scheduled_ends_at
+      ? new Date(booking.scheduled_ends_at)
+      : new Date(startsAt.getTime() + minutes * 60_000);
     const meta = BOOKING_STATUSES[booking.status];
-    const dbStartsAt = new Date(booking.scheduled_at);
+    const services = booking.services.map(labelForService);
+    const addOns = booking.add_ons.map(labelForAddOn);
+    const realtorName =
+      booking.profiles?.full_name ?? booking.profiles?.email ?? "Unknown";
+    const fullAddress = [
+      booking.properties?.street_address,
+      booking.unit_number ? `Unit ${booking.unit_number}` : null,
+      booking.properties?.city,
+      booking.properties?.province,
+      booking.properties?.postal_code,
+    ]
+      .filter(Boolean)
+      .join(", ");
+    const occupancy =
+      booking.is_vacant === "vacant"
+        ? "Vacant"
+        : booking.is_vacant === "partial"
+          ? "Partially occupied"
+          : booking.is_vacant === "occupied"
+            ? "Occupied"
+            : null;
+    const googleOutOfSync = Boolean(
+      linkedGoogleEvent &&
+        (linkedGoogleEvent.start.getTime() !== startsAt.getTime() ||
+          linkedGoogleEvent.end.getTime() !== endsAt.getTime()),
+    );
     items.push({
       id: booking.id,
       kind: "booking",
       title: booking.properties?.street_address ?? "Shoot",
       subtitle: [
-        booking.profiles?.full_name ?? booking.profiles?.email ?? "Unknown",
-        booking.services.map(labelForService).join(", "),
-        linkedGoogleEvent && linkedGoogleEvent.start.getTime() !== dbStartsAt.getTime()
-          ? "Google Calendar time"
+        realtorName,
+        services.join(", "),
+        googleOutOfSync
+          ? "Google Calendar out of sync"
           : null,
       ]
         .filter(Boolean)
@@ -212,6 +291,22 @@ export default async function AdminCalendarPage({
       href: `/admin/bookings/${booking.id}`,
       statusLabel: meta.label,
       statusClass: meta.pill,
+      bookingDetails: {
+        fullAddress,
+        services,
+        addOns,
+        realtorName,
+        realtorEmail: booking.profiles?.email ?? "",
+        realtorPhone: booking.profiles?.phone ?? null,
+        brokerage: booking.profiles?.brokerage ?? null,
+        realtorNotes: booking.profiles?.internal_notes ?? null,
+        clientNotes: booking.client_notes,
+        internalNotes: booking.internal_notes,
+        propertyNotes: booking.properties?.notes ?? null,
+        squareFootage: booking.square_footage,
+        occupancy,
+        includeBasement: booking.include_basement,
+      },
     });
   }
 
@@ -268,124 +363,73 @@ export default async function AdminCalendarPage({
     .length;
 
   return (
-    <div className="max-w-full space-y-3 px-0.5">
-      <header className="rounded-xl border border-realtor-primary/15 bg-realtor-surface/85 p-3 shadow-lg shadow-realtor-text/10">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+    <div className="max-w-full space-y-4 px-0.5">
+      <header className="px-1 py-1 md:py-2">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h1 className="text-xl font-bold text-realtor-text md:text-2xl">
-                Week of {formatHeaderDate(weekStart)}
+            <div className="md:hidden">
+              <h1 className="text-2xl font-bold tracking-tight text-realtor-text">
+                Calendar
+              </h1>
+              <p className="mt-1 text-sm text-realtor-muted">
+                {formatWeekRange(weekStart)} · {appointmentCount} appointment
+                {appointmentCount === 1 ? "" : "s"}
+              </p>
+            </div>
+            <div className="hidden flex-wrap items-center gap-2 md:flex">
+              <h1 className="text-3xl font-bold tracking-tight text-realtor-text">
+                {formatWeekRange(weekStart)}
               </h1>
               {isCurrentWeek ? (
-                <span className="text-sm font-semibold text-realtor-muted">
-                  current week
+                <span className="rounded-full bg-realtor-primary/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">
+                  Current week
                 </span>
               ) : null}
             </div>
-            <p className="mt-1 text-sm font-semibold text-realtor-muted">
+            <p className="mt-1 hidden text-sm text-realtor-muted md:block">
               {appointmentCount} appointment{appointmentCount === 1 ? "" : "s"}
             </p>
           </div>
         </div>
       </header>
 
-      <section className="sticky top-2 z-20 rounded-xl border border-realtor-primary/15 bg-realtor-surface/95 p-2 shadow-lg shadow-realtor-text/10 backdrop-blur md:static">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <nav className="grid grid-cols-[44px_minmax(0,1fr)_44px] gap-2 text-xs sm:flex sm:w-fit sm:items-center">
-            <Link
-              href={calendarHref({ week: prevWeek, q: search })}
-              aria-label="Previous week"
-              className="rounded-full border border-realtor-primary/15 bg-white/45 px-3 py-2 text-center text-lg font-semibold leading-none text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
-            >
-              &lt;
-            </Link>
-            <Link
-              href={calendarHref({ q: search })}
-              className="rounded-full border border-realtor-primary/25 bg-white px-4 py-2 text-center text-sm font-semibold text-realtor-primary transition hover:border-realtor-primary/45"
-            >
-              Today
-            </Link>
-            <Link
-              href={calendarHref({ week: nextWeek, q: search })}
-              aria-label="Next week"
-              className="rounded-full border border-realtor-primary/15 bg-white/45 px-3 py-2 text-center text-lg font-semibold leading-none text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
-            >
-              &gt;
-            </Link>
-          </nav>
-
-          <form
-            action="/admin/calendar"
-            className="flex min-w-0 gap-2 lg:min-w-[420px]"
-          >
-            {params.week ? (
-              <input type="hidden" name="week" value={weekStart} />
-            ) : null}
-            <label className="sr-only" htmlFor="calendar-search">
-              Search calendar
-            </label>
-            <input
-              id="calendar-search"
-              name="q"
-              defaultValue={search}
-              placeholder="Search calendar"
-              className="min-h-10 min-w-0 flex-1 rounded-full border border-realtor-primary/15 bg-white px-4 text-sm text-realtor-text outline-none transition placeholder:text-realtor-muted/70 focus:border-realtor-primary/45 focus:ring-2 focus:ring-realtor-primary/10"
-            />
-            <div className="flex shrink-0 gap-2">
-              <button
-                type="submit"
-                className="min-h-10 rounded-full bg-realtor-primary px-4 text-sm font-semibold text-white transition hover:bg-realtor-primary/90"
-              >
-                Search
-              </button>
-              {search ? (
-                <Link
-                  href={calendarHref({
-                    week: params.week ? weekStart : undefined,
-                  })}
-                  className="inline-flex min-h-10 items-center rounded-full border border-realtor-primary/15 px-4 text-sm font-semibold text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
-                >
-                  Clear
-                </Link>
-              ) : null}
-            </div>
-          </form>
-
-          <Link
-            href="/admin/settings/availability"
-            className="inline-flex min-h-10 items-center justify-center rounded-full border border-realtor-primary/15 bg-white/55 px-4 text-sm font-semibold text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
-          >
-            Hours + blocks
-          </Link>
+      {databaseLoadFailed || googleResult.hadError ? (
+        <div
+          role="alert"
+          className="rounded-xl border border-amber-700/30 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm"
+        >
+          <p className="font-semibold">Calendar data needs attention.</p>
+          <p className="mt-1 leading-5">
+            {databaseLoadFailed
+              ? "Some booking or availability data could not be loaded. Refresh before relying on this schedule."
+              : "One Google Calendar could not be loaded. Pixel Blaster bookings are still shown from the booking database."}
+          </p>
         </div>
-      </section>
+      ) : null}
 
-      <div className="grid min-h-0 max-w-full gap-3 md:grid-cols-[280px_minmax(0,1fr)]">
-        <details className="rounded-xl border border-realtor-primary/15 bg-realtor-surface/90 shadow-lg shadow-realtor-text/10 md:hidden">
-          <summary className="tap-target flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-realtor-primary/80 [&::-webkit-details-marker]:hidden">
-            Calendars + month
-            <span aria-hidden="true">▾</span>
-          </summary>
-          <div className="border-t border-realtor-primary/10">
+      <div className="min-h-0 max-w-full">
+        <CalendarWeekView
+          days={days}
+          items={visibleItems}
+          catalogItems={catalogToOptions(catalog)}
+          navigation={{
+            previousHref: calendarHref({ week: prevWeek, q: search }),
+            todayHref: calendarHref({ q: search }),
+            nextHref: calendarHref({ week: nextWeek, q: search }),
+            search,
+            weekValue: params.week ? weekStart : null,
+            clearSearchHref: search
+              ? calendarHref({ week: params.week ? weekStart : undefined })
+              : null,
+          }}
+          calendarMenu={
             <CalendarSidebar
               sources={calendarSources}
               weekStart={weekStart}
               todayKey={todayKey}
               visibleItems={visibleItems}
-              mobile
             />
-          </div>
-        </details>
-        <CalendarSidebar
-          sources={calendarSources}
-          weekStart={weekStart}
-          todayKey={todayKey}
-          visibleItems={visibleItems}
-        />
-        <CalendarWeekView
-          days={days}
-          items={visibleItems}
-          catalogItems={catalogToOptions(catalog)}
+          }
         />
       </div>
     </div>
@@ -397,15 +441,11 @@ function CalendarSidebar({
   weekStart,
   todayKey,
   visibleItems,
-  mobile = false,
 }: {
   sources: GoogleCalendarSource[];
   weekStart: string;
   todayKey: string;
   visibleItems: CalendarItem[];
-  /** Render without the desktop-only wrapper so the same controls can
-   *  live inside the phone-sized "Calendars" disclosure. */
-  mobile?: boolean;
 }) {
   const monthDate = dateFromKey(weekStart);
   const monthLabel = new Intl.DateTimeFormat("en-US", {
@@ -418,23 +458,17 @@ function CalendarSidebar({
   const blockItems = visibleItems.filter((item) => item.kind === "block");
 
   return (
-    <aside
-      className={
-        mobile
-          ? "flex flex-col p-3"
-          : "hidden min-h-[calc(100dvh-190px)] rounded-xl border border-realtor-primary/15 bg-realtor-surface/90 p-3 shadow-lg shadow-realtor-text/10 md:flex md:flex-col"
-      }
-    >
+    <aside className="flex flex-col p-3">
       <section>
         <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary/80">
           Calendars
         </p>
         <div className="mt-3 space-y-2">
           <CalendarSourceSummary
-            label="Pixel Blaster shoots"
+            label="Bookings"
             color="#3f7356"
             items={bookingItems}
-            detail="Bookings created in Pixel Blaster"
+            detail="Bookings created in this workspace"
             defaultOpen
           />
           <CalendarSourceSummary
@@ -721,22 +755,13 @@ async function fetchGoogleEventsBestEffort({
   organizationId: string;
   from: Date;
   to: Date;
-}): Promise<
-  Array<
-    GoogleCalendarEvent & {
-      sourceId: number;
-      sourceName: string;
-      sourceColor: string;
-      writeBookings: boolean;
-    }
-  >
-> {
+}): Promise<{ events: DisplayGoogleEvent[]; hadError: boolean }> {
   try {
     const clients = await getGoogleCalendarClients({
       organizationId,
       showOnAdminCalendar: true,
     });
-    const eventGroups = await Promise.all(
+    const settledGroups = await Promise.allSettled(
       clients.map(async (client) => {
         const events = await client.getEvents(from, to);
         return events.map((event) => ({
@@ -748,10 +773,23 @@ async function fetchGoogleEventsBestEffort({
         }));
       }),
     );
-    return eventGroups.flat();
+    const events: DisplayGoogleEvent[] = [];
+    let hadError = false;
+    for (const group of settledGroups) {
+      if (group.status === "fulfilled") {
+        events.push(...group.value);
+      } else {
+        hadError = true;
+        console.warn(
+          "[admin-calendar] google calendar source failed",
+          group.reason,
+        );
+      }
+    }
+    return { events, hadError };
   } catch (err) {
     console.warn("[admin-calendar] google events fetch failed", err);
-    return [];
+    return { events: [], hadError: true };
   }
 }
 
@@ -781,13 +819,21 @@ function broadUtcDate(key: string, offsetDays: number): Date {
   return date;
 }
 
-function formatHeaderDate(key: string): string {
-  return new Intl.DateTimeFormat("en-US", {
+function formatWeekRange(key: string): string {
+  const start = dateFromKey(key);
+  const end = new Date(start);
+  end.setUTCDate(start.getUTCDate() + 6);
+  const month = new Intl.DateTimeFormat("en-US", {
     timeZone: "UTC",
     month: "long",
-    day: "numeric",
-    year: "numeric",
-  }).format(dateFromKey(key));
+  });
+  const startMonth = month.format(start);
+  const endMonth = month.format(end);
+  const year = end.getUTCFullYear();
+
+  return startMonth === endMonth
+    ? `${startMonth} ${start.getUTCDate()}-${end.getUTCDate()}, ${year}`
+    : `${startMonth} ${start.getUTCDate()}-${endMonth} ${end.getUTCDate()}, ${year}`;
 }
 
 function timeToMinutes(value: string): number {

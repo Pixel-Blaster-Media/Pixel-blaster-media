@@ -24,6 +24,9 @@ import {
   loadTodayCommandPreferences,
 } from "./actions";
 import DailyAIBriefPanel from "./DailyAIBriefPanel";
+import OfflineTodaySnapshot, {
+  type OfflineTodayData,
+} from "./OfflineTodaySnapshot";
 import type { TodayCommandPreferences } from "./preferences";
 
 export const metadata: Metadata = { title: "Today" };
@@ -134,9 +137,23 @@ export default async function AdminTodayPage() {
     ] as const),
   );
   const weatherByBooking = new Map(weatherEntries);
+  const offlineTodayData: OfflineTodayData = {
+    dateLabel: formatFullDate(start),
+    updatedAt: new Date().toISOString(),
+    shoots: (bookings ?? []).map((booking) => ({
+      id: booking.id,
+      time: booking.scheduled_at ? formatTime(booking.scheduled_at) : "Time TBD",
+      address: booking.properties?.street_address ?? "Address not set",
+      city: booking.properties?.city ?? "",
+      packageName:
+        booking.services.map(labelForService).join(", ") || "Package not set",
+      status: BOOKING_STATUSES[booking.status].label,
+    })),
+  };
 
   return (
     <div className="space-y-6">
+      <OfflineTodaySnapshot userId={admin.userId} data={offlineTodayData} />
       <TodayOverview
         date={start}
         bookings={bookings ?? []}

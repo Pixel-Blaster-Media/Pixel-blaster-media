@@ -5,18 +5,14 @@ export const dynamic = "force-dynamic";
 
 /**
  * Diagnostic endpoint — returns everything the server can see about
- * the current request's auth cookies. Disabled outside local/dev unless
- * explicitly enabled with ENABLE_DEBUG_SESSION=1.
+ * the current request's auth cookies. It is never available in production.
  *
  * Exposes the access_token JWT payload (NOT the signature) which is
  * already visible in the `#access_token=` fragment during sign-in, so
  * this endpoint reveals no more info than a signed-in user already has.
  */
 export async function GET(request: NextRequest) {
-  if (
-    process.env.NODE_ENV !== "development" &&
-    process.env.ENABLE_DEBUG_SESSION !== "1"
-  ) {
+  if (process.env.NODE_ENV !== "development") {
     return new NextResponse("Not found", { status: 404 });
   }
 

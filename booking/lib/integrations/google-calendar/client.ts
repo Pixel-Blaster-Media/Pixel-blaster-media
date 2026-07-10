@@ -40,6 +40,14 @@ export interface GoogleCalendarClient {
   getEvents(from: Date, to: Date): Promise<GoogleCalendarEvent[]>;
   /** Create an event, returning Google's event id + html link for storage on the booking. */
   createEvent(input: CreateEventInput): Promise<CreatedEvent>;
+  /** Update an existing event's booking details in place. */
+  updateEvent(eventId: string, input: CreateEventInput): Promise<CreatedEvent>;
+  /** Move an existing event without replacing its title, notes, or guests. */
+  updateEventTime(
+    eventId: string,
+    startISO: string,
+    endISO: string,
+  ): Promise<CreatedEvent>;
   /** Delete an event — best-effort, safe to call if the event was already deleted. */
   deleteEvent(eventId: string): Promise<void>;
 }
@@ -71,6 +79,7 @@ export interface GoogleCalendarEvent {
   start: Date;
   end: Date;
   allDay: boolean;
+  transparent: boolean;
 }
 
 export interface GoogleCalendarSource {
@@ -294,6 +303,23 @@ async function clientFromConnection(
     async createEvent(input) {
       return insertEvent(accessToken, calendarId, input);
     },
+    async updateEvent(eventId, input) {
+      return patchEvent(
+        accessToken,
+        calendarId,
+        eventId,
+        calendarEventBody(input),
+      );
+    },
+    async updateEventTime(eventId, startISO, endISO) {
+      return patchEventTime(
+        accessToken,
+        calendarId,
+        eventId,
+        startISO,
+        endISO,
+      );
+    },
     async deleteEvent(eventId) {
       await deleteEventBestEffort(accessToken, calendarId, eventId);
     },
@@ -445,6 +471,7 @@ async function listEvents(
       htmlLink?: string;
       start?: { dateTime?: string; date?: string };
       end?: { dateTime?: string; date?: string };
+      transparency?: string;
     }>;
   };
 
@@ -461,6 +488,7 @@ function normalizeListedEvent(event: {
   htmlLink?: string;
   start?: { dateTime?: string; date?: string };
   end?: { dateTime?: string; date?: string };
+  transparency?: string;
 }): GoogleCalendarEvent | null {
   if (!event.id) return null;
   const startRaw = event.start?.dateTime ?? event.start?.date;
@@ -477,6 +505,7 @@ function normalizeListedEvent(event: {
     start: allDay ? dateOnlyToUtc(event.start?.date ?? startRaw) : new Date(startRaw),
     end: allDay ? dateOnlyToUtc(event.end?.date ?? endRaw) : new Date(endRaw),
     allDay,
+    transparent: event.transparency === "transparent",
   };
 }
 
@@ -489,21 +518,7 @@ async function insertEvent(
   calendarId: string,
   input: CreateEventInput,
 ): Promise<CreatedEvent> {
-  const body: Record<string, unknown> = {
-    summary: input.summary,
-    description: input.description,
-    location: input.location,
-    start: { dateTime: input.startISO },
-    end: { dateTime: input.endISO },
-  };
-  if (input.attendeeEmail) {
-    body.attendees = [
-      {
-        email: input.attendeeEmail,
-        displayName: input.attendeeName,
-      },
-    ];
-  }
+  const body = calendarEventBody(input);
 
   const res = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=all`,
@@ -536,6 +551,71 @@ async function insertEvent(
     id: json.id,
     htmlLink: json.htmlLink ?? "",
   };
+}
+
+async function patchEventTime(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+  startISO: string,
+  endISO: string,
+): Promise<CreatedEvent> {
+  return patchEvent(accessToken, calendarId, eventId, {
+    start: { dateTime: startISO },
+    end: { dateTime: endISO },
+  });
+}
+
+function calendarEventBody(input: CreateEventInput): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    summary: input.summary,
+    description: input.description,
+    location: input.location,
+    start: { dateTime: input.startISO },
+    end: { dateTime: input.endISO },
+  };
+  if (input.attendeeEmail) {
+    body.attendees = [
+      {
+        email: input.attendeeEmail,
+        displayName: input.attendeeName,
+      },
+    ];
+  }
+  return body;
+}
+
+async function patchEvent(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+  body: Record<string, unknown>,
+): Promise<CreatedEvent> {
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    },
+  );
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new GoogleCalendarError(
+      `events.patch failed: ${errText.slice(0, 500)}`,
+      res.status,
+    );
+  }
+
+  const json = (await res.json()) as { id?: string; htmlLink?: string };
+  if (!json.id) {
+    throw new GoogleCalendarError("events.patch returned no id", res.status);
+  }
+  return { id: json.id, htmlLink: json.htmlLink ?? "" };
 }
 
 async function deleteEventBestEffort(

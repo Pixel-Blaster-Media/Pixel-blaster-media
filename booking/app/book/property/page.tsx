@@ -43,7 +43,7 @@ export default async function BookStep2Page({
 
   return (
     <BookingBrandFrame organization={organization}>
-      <BookingBrandHeader organization={organization} />
+      <BookingBrandHeader organization={organization} compact />
       <Stepper current={2} state={scopedState} />
 
       <section>

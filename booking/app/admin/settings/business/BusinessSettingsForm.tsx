@@ -167,6 +167,11 @@ export default function BusinessSettingsForm({
               defaultValue={accentColor}
             />
           </div>
+          <p className="mt-3 text-xs leading-5 text-realtor-muted">
+            Very light colors are automatically darkened on buttons and links
+            so text stays readable. Your selected color is still kept as the
+            brand reference.
+          </p>
         </section>
       </div>
 

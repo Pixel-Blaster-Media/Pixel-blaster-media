@@ -6,11 +6,17 @@ import { BUSINESS_TZ, isSlotAvailable } from "@/lib/booking/availability";
 import { isCancellable } from "@/lib/booking/booking-status";
 import { cancelBooking } from "@/lib/booking/cancel";
 import { verifyManageToken } from "@/lib/booking/manage-token";
+import { labelForService } from "@/lib/booking/services";
 import { sendEmail } from "@/lib/email/resend";
 import {
   getAdminNotificationEmail,
   getOrganizationEmailSettings,
 } from "@/lib/email/settings";
+import {
+  getGoogleCalendarClient,
+  GoogleCalendarError,
+} from "@/lib/integrations/google-calendar/client";
+import { sendPushBestEffort } from "@/lib/notifications/push";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { BookingStatus } from "@/lib/supabase/database.types";
 
@@ -35,6 +41,9 @@ interface ManagedBookingRow {
   status: BookingStatus;
   scheduled_at: string | null;
   scheduled_ends_at: string | null;
+  services: string[];
+  client_notes: string | null;
+  google_calendar_event_id: string | null;
   unit_number: string | null;
   properties: {
     street_address: string;
@@ -44,6 +53,7 @@ interface ManagedBookingRow {
   profiles: {
     email: string;
     full_name: string | null;
+    phone: string | null;
   } | null;
 }
 
@@ -59,7 +69,7 @@ async function loadManagedBooking(
   const { data: booking, error } = await service
     .from("bookings")
     .select(
-      "id, organization_id, status, scheduled_at, scheduled_ends_at, unit_number, properties(street_address, city, postal_code), profiles(email, full_name)",
+      "id, organization_id, status, scheduled_at, scheduled_ends_at, services, client_notes, google_calendar_event_id, unit_number, properties(street_address, city, postal_code), profiles(email, full_name, phone)",
     )
     .eq("id", bookingId)
     .maybeSingle<ManagedBookingRow>();
@@ -146,6 +156,7 @@ export async function rescheduleManagedBooking(
   const stillFree = await isSlotAvailable(newStart, durationMinutes, {
     organizationId: booking.organization_id,
     excludeBookingId: booking.id,
+    excludeGoogleEventId: booking.google_calendar_event_id ?? undefined,
   });
   if (!stillFree) {
     return {
@@ -159,6 +170,7 @@ export async function rescheduleManagedBooking(
     .update({
       scheduled_at: newStart.toISOString(),
       scheduled_ends_at: newEnd.toISOString(),
+      allow_schedule_overlap: false,
     })
     .eq("id", booking.id)
     .eq("organization_id", booking.organization_id);
@@ -173,8 +185,11 @@ export async function rescheduleManagedBooking(
     return { ok: false, error: updateError.message };
   }
 
-  // NOTE: we intentionally do NOT update the Google Calendar event here —
-  // the admin is notified by email below and can adjust their calendar.
+  const calendarSynced = await syncManagedBookingGoogleEvent(
+    booking,
+    newStart,
+    newEnd,
+  );
 
   const oldWhenLabel = formatWhen(currentStart);
   const newWhenLabel = formatWhen(newStart);
@@ -227,21 +242,95 @@ export async function rescheduleManagedBooking(
               <strong>New time:</strong> ${escapeHtml(newWhenLabel)}<br>
               <strong>Previous time:</strong> ${escapeHtml(oldWhenLabel)}
             </p>
-            <p>
-              The Google Calendar event was not moved automatically — adjust
-              it if needed.
-            </p>
+            ${
+              calendarSynced
+                ? ""
+                : `<p><strong>Calendar sync needs attention:</strong> the booking moved in the app, but Google Calendar could not be updated automatically.</p>`
+            }
             <p>Open in admin: ${appUrl}/admin/bookings/${booking.id}</p>
           `,
           replyTo: booking.profiles?.email ?? undefined,
         })
       : Promise.resolve(null),
+    sendPushBestEffort(booking.organization_id, {
+      title: "Booking rescheduled by realtor",
+      body: `${addressLine} · ${newWhenLabel}`,
+      url: `/admin/bookings/${booking.id}`,
+      tag: `booking-rescheduled-${booking.id}`,
+    }),
   ]);
 
   revalidatePath("/admin/calendar");
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${booking.id}`);
   return { ok: true, whenLabel: newWhenLabel };
+}
+
+async function syncManagedBookingGoogleEvent(
+  booking: ManagedBookingRow,
+  newStart: Date,
+  newEnd: Date,
+): Promise<boolean> {
+  try {
+    const gcal = await getGoogleCalendarClient({
+      organizationId: booking.organization_id,
+    });
+    if (!gcal) return true;
+
+    if (booking.google_calendar_event_id) {
+      try {
+        await gcal.updateEventTime(
+          booking.google_calendar_event_id,
+          newStart.toISOString(),
+          newEnd.toISOString(),
+        );
+        return true;
+      } catch (error) {
+        const missingEvent =
+          error instanceof GoogleCalendarError &&
+          (error.status === 404 || error.status === 410);
+        if (!missingEvent) throw error;
+      }
+    }
+
+    const address = bookingAddressLine(booking);
+    const realtorName =
+      booking.profiles?.full_name ?? booking.profiles?.email ?? "Realtor";
+    const services = booking.services.map(labelForService).join(", ");
+    const event = await gcal.createEvent({
+      summary: [realtorName, services, booking.properties?.street_address]
+        .filter(Boolean)
+        .join(" - "),
+      location: address,
+      description:
+        `Realtor: ${realtorName}\n` +
+        (booking.profiles?.email
+          ? `Email: ${booking.profiles.email}\n`
+          : "") +
+        (booking.profiles?.phone
+          ? `Phone: ${booking.profiles.phone}\n`
+          : "") +
+        (services ? `Services: ${services}\n` : "") +
+        (booking.client_notes ? `\nNotes:\n${booking.client_notes}\n` : ""),
+      startISO: newStart.toISOString(),
+      endISO: newEnd.toISOString(),
+      attendeeEmail: booking.profiles?.email,
+      attendeeName: booking.profiles?.full_name ?? undefined,
+    });
+
+    const { error } = await getServiceSupabase()
+      .from("bookings")
+      .update({
+        google_calendar_event_id: event.id,
+        google_calendar_event_url: event.htmlLink,
+      })
+      .eq("id", booking.id)
+      .eq("organization_id", booking.organization_id);
+    return !error;
+  } catch (error) {
+    console.warn("[manage-booking] google calendar reschedule failed", error);
+    return false;
+  }
 }
 
 export async function cancelManagedBooking(

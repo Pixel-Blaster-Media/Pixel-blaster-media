@@ -177,6 +177,7 @@ export async function createSelfBooking(
       scheduled_ends_at: new Date(
         slotStart.getTime() + duration * 60_000,
       ).toISOString(),
+      allow_schedule_overlap: false,
       services: legacyServices,
       add_ons: legacyAddons,
       client_notes: notes || null,

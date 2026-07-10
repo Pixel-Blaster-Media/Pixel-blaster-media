@@ -185,7 +185,9 @@ export async function signInWithPassword(
 }
 
 function safeNextPath(next: string): string {
-  if (!next.startsWith("/") || next.startsWith("//")) return "/admin";
+  if (!next.startsWith("/") || next.startsWith("//") || next.includes("\\")) {
+    return "/admin";
+  }
   if (next.startsWith("/auth/")) return "/admin";
   return next;
 }

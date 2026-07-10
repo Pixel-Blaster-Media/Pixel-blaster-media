@@ -35,13 +35,7 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
   const slotsByKey = useMemo<SlotsByDayKey>(() => {
     const map: SlotsByDayKey = {};
     for (const day of daysOfSlots) {
-      for (const s of day.slots) {
-        const iso = s.start;
-        const key = iso.slice(0, 10); // YYYY-MM-DD in UTC; close enough for
-        // bucketing since our slots are already in business-tz days
-        map[key] ??= [];
-        map[key].push(s);
-      }
+      map[day.dateKey] = day.slots;
     }
     return map;
   }, [daysOfSlots]);
@@ -52,12 +46,14 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
   // a revisit lands on the picked date.
   const initialCursor = useMemo(() => {
     if (selectedSlot) {
-      const d = new Date(selectedSlot);
-      if (!Number.isNaN(d.getTime())) return firstOfMonth(d);
+      const selectedDay = daysOfSlots.find((day) =>
+        day.slots.some((slot) => slot.start === selectedSlot),
+      );
+      if (selectedDay) return firstOfMonth(dateFromKey(selectedDay.dateKey));
     }
     for (const day of daysOfSlots) {
       if (day.slots.length > 0) {
-        return firstOfMonth(new Date(day.slots[0].start));
+        return firstOfMonth(dateFromKey(day.dateKey));
       }
     }
     return firstOfMonth(new Date());
@@ -65,10 +61,16 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
 
   const [cursor, setCursor] = useState(initialCursor);
   const selectedDayKey = useMemo(() => {
-    if (selectedSlot) return selectedSlot.slice(0, 10);
+    if (selectedSlot) {
+      return (
+        daysOfSlots.find((day) =>
+          day.slots.some((slot) => slot.start === selectedSlot),
+        )?.dateKey ?? null
+      );
+    }
     // Default the revealed slots to the first available day in the view.
     return null;
-  }, [selectedSlot]);
+  }, [daysOfSlots, selectedSlot]);
   const [openDayKey, setOpenDayKey] = useState<string | null>(selectedDayKey);
 
   const grid = useMemo(() => buildMonthGrid(cursor), [cursor]);
@@ -78,11 +80,10 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
     let first: Date | null = null;
     let last: Date | null = null;
     for (const day of daysOfSlots) {
-      for (const s of day.slots) {
-        const d = new Date(s.start);
-        if (!first || d < first) first = d;
-        if (!last || d > last) last = d;
-      }
+      if (day.slots.length === 0) continue;
+      const d = dateFromKey(day.dateKey);
+      if (!first || d < first) first = d;
+      if (!last || d > last) last = d;
     }
     return {
       firstAvailableMonth: first ? firstOfMonth(first) : firstOfMonth(new Date()),
@@ -239,6 +240,11 @@ function ymd(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function dateFromKey(key: string): Date {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(year, (month ?? 1) - 1, day ?? 1, 12);
 }
 
 interface Cell {

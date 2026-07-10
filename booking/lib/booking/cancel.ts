@@ -8,6 +8,7 @@ import {
   getOrganizationEmailSettings,
 } from "@/lib/email/settings";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
+import { sendPushBestEffort } from "@/lib/notifications/push";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { BookingStatus } from "@/lib/supabase/database.types";
 
@@ -152,6 +153,15 @@ export async function cancelBooking(
     addressLine,
     whenLabel,
     organizationId: booking.organization_id,
+  });
+  await sendPushBestEffort(booking.organization_id, {
+    title:
+      initiator === "realtor"
+        ? "Booking cancelled by realtor"
+        : "Booking cancelled",
+    body: `${addressLine} · ${whenLabel}`,
+    url: `/admin/bookings/${booking.id}`,
+    tag: `booking-cancelled-${booking.id}`,
   });
 
   return {

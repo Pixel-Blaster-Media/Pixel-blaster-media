@@ -115,7 +115,7 @@ export default async function BookingsPage({
             id="booking-search"
             name="q"
             defaultValue={search}
-            placeholder="Search by address, realtor, city, email, or service..."
+            placeholder="Search bookings..."
             className="min-h-11 min-w-0 flex-1 rounded-full border border-realtor-primary/15 bg-white/65 px-4 text-sm text-realtor-text outline-none transition placeholder:text-realtor-muted focus:border-realtor-primary/45"
           />
           <div className="flex shrink-0 gap-2">
@@ -219,7 +219,7 @@ function BookingListItem({ booking }: { booking: BookingRow }) {
           </span>
           <span className="text-[10px] text-realtor-muted">
             {booking.scheduled_at
-              ? new Date(booking.scheduled_at).toLocaleString()
+              ? formatBookingDate(booking.scheduled_at)
               : "no date"}
           </span>
           <div className="flex flex-wrap justify-end gap-2">
@@ -284,4 +284,12 @@ function localDateKey(date: Date): string {
     month: "2-digit",
     day: "2-digit",
   }).format(date);
+}
+
+function formatBookingDate(iso: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: BUSINESS_TZ,
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(iso));
 }

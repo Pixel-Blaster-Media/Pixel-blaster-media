@@ -58,14 +58,18 @@ export async function loadOrganizationBrand(
 export function organizationThemeStyle(
   brand: Pick<OrganizationBrand, "primaryColor" | "accentColor">,
 ): ThemeStyle {
-  const primary = sanitizeHex(brand.primaryColor) ?? DEFAULT_PRIMARY;
+  const requestedPrimary = sanitizeHex(brand.primaryColor) ?? DEFAULT_PRIMARY;
+  const primary = ensureWhiteTextContrast(requestedPrimary);
   const accent = sanitizeHex(brand.accentColor) ?? DEFAULT_ACCENT;
   const primaryRgb = hexToRgb(primary);
   const accentRgb = hexToRgb(accent);
-  const primaryLight = mixHex(primary, "#ffffff", 0.34);
+  const primaryLight = ensureWhiteTextContrast(
+    mixHex(primary, "#ffffff", 0.18),
+  );
   const primaryDark = mixHex(primary, "#000000", 0.2);
 
   return {
+    "--realtor-brand-color": requestedPrimary,
     "--realtor-primary": primary,
     "--realtor-primary-rgb": rgbString(primaryRgb),
     "--realtor-primary-light": primaryLight,
@@ -110,4 +114,29 @@ function mixHex(from: string, to: string, amount: number): string {
 
 function rgbString(rgb: [number, number, number]): string {
   return `${rgb[0]} ${rgb[1]} ${rgb[2]}`;
+}
+
+function ensureWhiteTextContrast(hex: string): string {
+  let adjusted = hex;
+  for (let i = 0; i < 12 && contrastRatio(adjusted, "#ffffff") < 4.5; i++) {
+    adjusted = mixHex(adjusted, "#000000", 0.1);
+  }
+  return adjusted;
+}
+
+function contrastRatio(a: string, b: string): number {
+  const lighter = Math.max(relativeLuminance(a), relativeLuminance(b));
+  const darker = Math.min(relativeLuminance(a), relativeLuminance(b));
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function relativeLuminance(hex: string): number {
+  const channels = hexToRgb(hex).map((channel) => {
+    const normalized = channel / 255;
+    return normalized <= 0.04045
+      ? normalized / 12.92
+      : ((normalized + 0.055) / 1.055) ** 2.4;
+  });
+  const [red = 0, green = 0, blue = 0] = channels;
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 }

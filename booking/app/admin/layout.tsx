@@ -12,6 +12,7 @@ import AdminBottomNav from "./AdminBottomNav";
 export const viewport: Viewport = {
   colorScheme: "light",
   themeColor: "#fbfcfa",
+  viewportFit: "cover",
 };
 
 export default async function AdminLayout({
@@ -24,7 +25,7 @@ export default async function AdminLayout({
 
   return (
     <div
-      className="admin-earth realtor-theme realtor-backdrop min-h-screen w-full max-w-full overflow-x-hidden px-3 pb-32 sm:px-6 md:px-4 lg:px-6"
+      className="admin-earth realtor-theme realtor-backdrop min-h-screen w-full max-w-full overflow-x-hidden px-3 pb-[calc(6.5rem+env(safe-area-inset-bottom))] sm:px-6 md:px-4 md:pb-8 lg:px-6"
       style={{
         ...(brand ? organizationThemeStyle(brand) : {}),
       }}

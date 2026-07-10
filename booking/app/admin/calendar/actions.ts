@@ -16,7 +16,11 @@ import {
 import { ccRecipientsFor } from "@/lib/email/recipients";
 import { sendEmail } from "@/lib/email/resend";
 import { getOrganizationEmailSettings } from "@/lib/email/settings";
-import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
+import {
+  getGoogleCalendarClient,
+  GoogleCalendarError,
+} from "@/lib/integrations/google-calendar/client";
+import { sendPushBestEffort } from "@/lib/notifications/push";
 import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
 
 interface ActionResult {
@@ -239,6 +243,7 @@ export async function createAdminShoot(
       status: "confirmed",
       scheduled_at: scheduledAt.toISOString(),
       scheduled_ends_at: scheduledEndsAt,
+      allow_schedule_overlap: true,
       services: legacyServices,
       add_ons: legacyAddons,
       square_footage: squareFootage,
@@ -406,15 +411,15 @@ export async function rescheduleCalendarShoot(
     scheduledAt.getTime() + durationMinutes * 60_000,
   );
 
-  // Deliberately NO overlap check here: the admin drags with the full
-  // calendar in view and intentionally double-books (e.g. over the tail
-  // of a shoot that won't run long). Realtor-facing flows still enforce
-  // conflicts. Requires migration 0037 (drops the DB exclusion guard).
+  // Admin calendar moves may intentionally overlap (for example, over the
+  // tail of a shoot that will finish early). Realtor-facing writes keep this
+  // flag false and remain protected by the database overlap trigger.
   const { error: updateError } = await supabase
     .from("bookings")
     .update({
       scheduled_at: scheduledAt.toISOString(),
       scheduled_ends_at: scheduledEndsAt.toISOString(),
+      allow_schedule_overlap: true,
     })
     .eq("id", booking.id)
     .eq("organization_id", admin.organizationId);
@@ -429,45 +434,65 @@ export async function rescheduleCalendarShoot(
     return { ok: false, error: updateError.message };
   }
 
-  // Google Calendar: the client has create/delete only, so move the
-  // event by replacing it (best-effort, same as other admin paths).
+  // Move the existing Google event in place so guests do not receive a
+  // cancellation followed by a brand-new invitation. If the event was deleted
+  // in Google, recreate it and repair the stored event id.
   try {
     const gcal = await getGoogleCalendarClient({
       organizationId: admin.organizationId,
     });
     if (gcal) {
+      let event: { id: string; htmlLink: string } | null = null;
       if (booking.google_calendar_event_id) {
-        await gcal.deleteEvent(booking.google_calendar_event_id);
+        try {
+          event = await gcal.updateEventTime(
+            booking.google_calendar_event_id,
+            scheduledAt.toISOString(),
+            scheduledEndsAt.toISOString(),
+          );
+        } catch (error) {
+          const missingEvent =
+            error instanceof GoogleCalendarError &&
+            (error.status === 404 || error.status === 410);
+          if (!missingEvent) throw error;
+        }
       }
-      const streetLine = booking.unit_number
-        ? `${booking.properties?.street_address ?? ""}, Unit ${booking.unit_number}`
-        : (booking.properties?.street_address ?? "");
-      const event = await gcal.createEvent({
-        summary: calendarShootTitle({
-          realtor: booking.profiles?.full_name ?? booking.profiles?.email ?? "",
-          services: await serviceNamesForSlugs(
-            booking.services ?? [],
-            admin.organizationId,
-          ),
-          address: streetLine,
-        }),
-        location: [
-          streetLine,
-          booking.properties?.city,
-          booking.properties?.postal_code,
-        ]
-          .filter(Boolean)
-          .join(", "),
-        description:
-          `Realtor: ${booking.profiles?.full_name ?? ""}\n` +
-          `Email: ${booking.profiles?.email ?? ""}\n` +
-          (booking.profiles?.phone ? `Phone: ${booking.profiles.phone}\n` : "") +
-          (booking.client_notes ? `\nNotes:\n${booking.client_notes}\n` : ""),
-        startISO: scheduledAt.toISOString(),
-        endISO: scheduledEndsAt.toISOString(),
-        attendeeEmail: booking.profiles?.email ?? "",
-        attendeeName: booking.profiles?.full_name ?? "",
-      });
+
+      if (!event) {
+        const streetLine = booking.unit_number
+          ? `${booking.properties?.street_address ?? ""}, Unit ${booking.unit_number}`
+          : (booking.properties?.street_address ?? "");
+        event = await gcal.createEvent({
+          summary: calendarShootTitle({
+            realtor: booking.profiles?.full_name ?? booking.profiles?.email ?? "",
+            services: await serviceNamesForSlugs(
+              booking.services ?? [],
+              admin.organizationId,
+            ),
+            address: streetLine,
+          }),
+          location: [
+            streetLine,
+            booking.properties?.city,
+            booking.properties?.postal_code,
+          ]
+            .filter(Boolean)
+            .join(", "),
+          description:
+            `Realtor: ${booking.profiles?.full_name ?? ""}\n` +
+            `Email: ${booking.profiles?.email ?? ""}\n` +
+            (booking.profiles?.phone
+              ? `Phone: ${booking.profiles.phone}\n`
+              : "") +
+            (booking.client_notes
+              ? `\nNotes:\n${booking.client_notes}\n`
+              : ""),
+          startISO: scheduledAt.toISOString(),
+          endISO: scheduledEndsAt.toISOString(),
+          attendeeEmail: booking.profiles?.email ?? undefined,
+          attendeeName: booking.profiles?.full_name ?? undefined,
+        });
+      }
       await supabase
         .from("bookings")
         .update({
@@ -502,6 +527,18 @@ export async function rescheduleCalendarShoot(
       scheduled_at: booking.scheduled_at,
       scheduled_ends_at: booking.scheduled_ends_at,
     },
+  });
+
+  const whenLabel = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TZ,
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(scheduledAt);
+  await sendPushBestEffort(admin.organizationId, {
+    title: "Booking rescheduled",
+    body: `${booking.properties?.street_address ?? "Booking"} · ${whenLabel}`,
+    url: `/admin/bookings/${booking.id}`,
+    tag: `booking-rescheduled-${booking.id}`,
   });
 
   revalidatePath("/admin/calendar");

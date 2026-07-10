@@ -21,6 +21,7 @@ import {
 } from "@/lib/email/settings";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
 import { createInvoiceForBooking } from "@/lib/integrations/quickbooks/invoice";
+import { sendPushBestEffort } from "@/lib/notifications/push";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
 import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
@@ -37,81 +38,14 @@ export interface BookResult {
   errors?: Record<string, string>;
 }
 
-export interface RealtorLookupResult {
-  found: boolean;
-  email?: string;
-  fullName?: string | null;
-  phone?: string | null;
-  brokerage?: string | null;
-}
-
-interface RealtorPhoneMatch {
-  id: string;
-  email: string;
-  full_name: string | null;
-  phone: string | null;
-  alternate_phones: string[] | null;
-  brokerage: string | null;
-  organization_id: string | null;
-}
-
-/**
- * Server action exposed to the client form for email-existence checks.
- * Returns true if an account already exists for this email.
- *
- * "use server" functions are callable from Client Components — we call
- * this on email blur to decide whether to label the password field
- * "Password" (sign in) or "Create a password" (sign up).
- */
-export async function checkEmailAction(email: string): Promise<boolean> {
-  return emailHasAccount(email);
-}
-
-/**
- * Public booking helper: recognize a returning realtor by exact phone number.
- *
- * This intentionally returns only lightweight contact fields, scoped to the
- * requested booking organization, so the form can feel personal without opening
- * a broad profile-search surface.
- */
-export async function lookupRealtorByPhoneAction(
-  organizationSlug: string | null,
-  rawPhone: string,
-): Promise<RealtorLookupResult> {
-  const phoneDigits = normalizePhone(rawPhone);
-  if (phoneDigits.length < 10) return { found: false };
-
-  const organization = await resolvePublicBookingOrganization(
-    organizationSlug ?? "",
-  );
-  if (!organization) return { found: false };
-
-  const match = await findRealtorByPhone(
-    getServiceSupabase(),
-    organization.id,
-    phoneDigits,
-  );
-  if (!match) return { found: false };
-
-  return {
-    found: true,
-    email: match.email,
-    fullName: match.full_name,
-    phone: match.phone,
-    brokerage: match.brokerage,
-  };
-}
-
 /**
  * Instant booking — replaces the old "request booking" flow.
  *
- * Four auth paths, chosen based on session state:
+ * Three auth paths, chosen based on session state:
  *
  *   1. Already signed in → use session.user directly.
- *   2. Returning realtor phone match → attach booking to that profile without
- *      forcing portal sign-in.
- *   3. Not signed in, email has an account → sign in with password.
- *   4. Not signed in, email is new → create the auth user (pre-confirmed
+ *   2. Not signed in, email has an account → sign in with password.
+ *   3. Not signed in, email is new → create the auth user (pre-confirmed
  *      via admin API so there's no verification email click-through),
  *      sign them in, move on.
  *
@@ -121,8 +55,7 @@ export async function lookupRealtorByPhoneAction(
  *   - Upsert property, insert booking (status=confirmed)
  *   - Push Google Calendar event (best-effort)
  *   - Send client confirmation + admin notification emails (best-effort)
- *   - Redirect signed-in clients to /portal, or passwordless returning clients
- *     to a public success screen
+ *   - Redirect the signed-in client to /portal
  */
 export async function createPublicBooking(
   _prev: BookResult | null,
@@ -320,6 +253,7 @@ export async function createPublicBooking(
       scheduled_ends_at: new Date(
         slotStart.getTime() + duration * 60_000,
       ).toISOString(),
+      allow_schedule_overlap: false,
       services: legacyServices,
       add_ons: legacyAddons,
       client_notes: combinedNotes || null,
@@ -556,6 +490,12 @@ export async function createPublicBooking(
       },
       organizationId,
     }),
+    sendPushBestEffort(organizationId, {
+      title: "New booking",
+      body: `${userDisplayName} · ${emailAddressLine} · ${whenLabel}`,
+      url: `/admin/bookings/${booking.id}`,
+      tag: `booking-new-${booking.id}`,
+    }),
   ]);
 
   if (!signedInToPortal) {
@@ -660,33 +600,9 @@ async function resolveUser(params: {
     }
   }
 
-  const service = getServiceSupabase();
-
-  // 2) Returning realtor phone match → allow a fast booking without portal sign-in.
-  const returningRealtor = await findRealtorByPhone(
-    service,
-    params.organizationId,
-    params.contactPhone,
-  );
-  if (returningRealtor) {
-    await maybeFillProfile(service, returningRealtor.id, {
-      organizationId: params.organizationId,
-      full_name: params.contactName,
-      phone: params.contactPhone,
-      brokerage: params.brokerage,
-    });
-    return {
-      ok: true,
-      userId: returningRealtor.id,
-      email: returningRealtor.email,
-      fullName: returningRealtor.full_name ?? params.contactName,
-      organizationId:
-        returningRealtor.organization_id ?? DEFAULT_ORGANIZATION_ID,
-      signedInToPortal: false,
-    };
-  }
-
-  // From here on, every anonymous path needs contact + password.
+  // Every anonymous path needs contact details and a password. Public phone
+  // matching and email-existence checks exposed client information and could
+  // attach a booking to a profile without proving account ownership.
   const errors: Record<string, string> = {};
   if (!params.contactName) errors.contact_name = "Required.";
   if (!params.contactPhone) errors.contact_phone = "Required.";
@@ -702,6 +618,7 @@ async function resolveUser(params: {
   }
 
   const exists = await emailHasAccount(params.contactEmail);
+  const service = getServiceSupabase();
 
   if (exists) {
     // 2) Existing account → sign in.
@@ -719,15 +636,14 @@ async function resolveUser(params: {
           ok: false,
           errors: {
             password: isBadCreds
-              ? "That password doesn't match the account on file. Use the reset link if you forgot it."
-              : `Sign in failed: ${signIn.error}`,
+              ? "We couldn't confirm those account details. Check the email and password, or use the reset link."
+              : "We couldn't sign you in right now. Please try again.",
           },
         },
       };
     }
     await setSupabaseSessionCookie(signIn.tokens, params.contactEmail);
 
-    const service = getServiceSupabase();
     const userId = decodeUserId(signIn.tokens.access_token);
     if (!userId) {
       return {
@@ -799,7 +715,7 @@ async function resolveUser(params: {
           ok: false,
           errors: {
             contact_email:
-              "An account already exists for this email. Enter your password (or reset it) to continue.",
+              "We couldn't confirm those account details. Check the email and password, or use the reset link.",
           },
         },
       };
@@ -809,9 +725,7 @@ async function resolveUser(params: {
       result: {
         ok: false,
         errors: {
-          _form:
-            "Could not create your account: " +
-            (createErr?.message ?? "unknown error"),
+          _form: "We couldn't create or sign in to the account. Please try again.",
         },
       },
     };
@@ -929,40 +843,6 @@ async function maybeFillProfile(
   if (error) console.warn("[book] profile top-up failed", error);
 }
 
-async function findRealtorByPhone(
-  supabase: ReturnType<typeof getServiceSupabase>,
-  organizationId: string,
-  rawPhone: string,
-): Promise<RealtorPhoneMatch | null> {
-  const phoneDigits = normalizePhone(rawPhone);
-  if (phoneDigits.length < 10) return null;
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select(
-      "id, email, full_name, phone, alternate_phones, brokerage, organization_id",
-    )
-    .eq("organization_id", organizationId)
-    .eq("role", "realtor")
-    .is("archived_at", null)
-    .limit(500)
-    .returns<RealtorPhoneMatch[]>();
-
-  if (error) {
-    console.warn("[book] realtor phone lookup failed", error.message);
-    return null;
-  }
-
-  return (
-    (data ?? []).find(
-      (profile) =>
-        [profile.phone, ...(profile.alternate_phones ?? [])].some(
-          (phone) => normalizePhone(phone ?? "") === phoneDigits,
-        ),
-    ) ?? null
-  );
-}
-
 function calendarShootTitle(args: {
   realtor: string;
   services: string;
@@ -1023,12 +903,6 @@ function decodeUserId(token: string): string | null {
 
 function str(fd: FormData, key: string): string {
   return ((fd.get(key) as string | null) ?? "").trim();
-}
-
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
-  return digits;
 }
 
 function buildBookingNotes({

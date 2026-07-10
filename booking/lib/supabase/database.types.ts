@@ -136,6 +136,7 @@ interface BookingsTable {
     status: BookingStatus;
     scheduled_at: string | null;
     scheduled_ends_at: string | null;
+    allow_schedule_overlap: boolean;
     services: string[];
     add_ons: string[];
     square_footage: number | null;
@@ -167,6 +168,7 @@ interface BookingsTable {
     status?: BookingStatus;
     scheduled_at?: string | null;
     scheduled_ends_at?: string | null;
+    allow_schedule_overlap?: boolean;
     services?: string[];
     add_ons?: string[];
     square_footage?: number | null;
@@ -650,6 +652,33 @@ interface BookingNotificationsTable {
   Relationships: [];
 }
 
+interface PushSubscriptionsTable {
+  Row: {
+    id: string;
+    organization_id: string;
+    profile_id: string;
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+    user_agent: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  Insert: {
+    id?: string;
+    organization_id: string;
+    profile_id: string;
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+    user_agent?: string | null;
+    created_at?: string;
+    updated_at?: string;
+  };
+  Update: Partial<PushSubscriptionsTable["Insert"]>;
+  Relationships: [];
+}
+
 interface AutoenhanceBatchesTable {
   Row: {
     id: string;
@@ -881,6 +910,7 @@ export interface Database {
       catalog_items: CatalogItemsTable;
       booking_line_items: BookingLineItemsTable;
       booking_notifications: BookingNotificationsTable;
+      push_subscriptions: PushSubscriptionsTable;
       autoenhance_batches: AutoenhanceBatchesTable;
       autoenhance_iguide_uploads: AutoenhanceIGuideUploadsTable;
       telegram_connections: TelegramConnectionsTable;

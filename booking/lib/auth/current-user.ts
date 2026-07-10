@@ -10,6 +10,7 @@ export interface CurrentUserContext {
   organizationId: string;
   email: string;
   fullName: string | null;
+  profilePhotoUrl: string | null;
   role: UserRole;
 }
 
@@ -18,6 +19,7 @@ interface ProfileRow {
   organization_id: string;
   email: string;
   full_name: string | null;
+  profile_photo_url: string | null;
   role: UserRole;
   archived_at: string | null;
 }
@@ -44,7 +46,9 @@ export const getCurrentUser = cache(async function getCurrentUser(): Promise<
 
     const { data: profile, error } = await supabase
       .from("profiles")
-      .select("id, organization_id, email, full_name, role, archived_at")
+      .select(
+        "id, organization_id, email, full_name, profile_photo_url, role, archived_at",
+      )
       .eq("id", userId)
       .single<ProfileRow>();
 
@@ -56,6 +60,7 @@ export const getCurrentUser = cache(async function getCurrentUser(): Promise<
       organizationId: profile.organization_id,
       email: profile.email,
       fullName: profile.full_name,
+      profilePhotoUrl: profile.profile_photo_url,
       role: profile.role,
     };
   } catch {

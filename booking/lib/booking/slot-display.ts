@@ -11,6 +11,8 @@ export interface DisplaySlot {
 }
 
 export interface SlotsByDay {
+  /** "2026-07-09" in BUSINESS_TZ — stable key for the calendar UI. */
+  dateKey: string;
   /** "Monday, Apr 15" — displayed as the group header. */
   dateLabel: string;
   slots: DisplaySlot[];
@@ -65,7 +67,7 @@ export async function loadSlotsForNextDays(
     d.setDate(d.getDate() + i);
     const key = dayKeyFmt.format(d);
     if (!buckets.has(key)) {
-      buckets.set(key, { dateLabel: dayFmt.format(d), slots: [] });
+      buckets.set(key, { dateKey: key, dateLabel: dayFmt.format(d), slots: [] });
     }
   }
 

@@ -2969,3 +2969,544 @@ create index if not exists bookings_reminder_pending_idx
 -- ============================================================================
 -- End supabase/migrations/0039_booking_reminders.sql
 -- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/0040_external_calendar_sources.sql
+-- ============================================================================
+
+-- ============================================================================
+-- External calendar sources
+-- ----------------------------------------------------------------------------
+-- Keep the existing Google Calendar OAuth connection as the write target for
+-- Pixel Blaster bookings, while allowing additional shared calendars to show
+-- in the admin calendar and/or block public booking availability.
+-- ============================================================================
+
+alter table public.google_calendar_connection
+  add column if not exists display_name text,
+  add column if not exists source_type text not null default 'primary'
+    check (source_type in ('primary', 'external')),
+  add column if not exists show_on_admin_calendar boolean not null default true,
+  add column if not exists block_availability boolean not null default true,
+  add column if not exists write_bookings boolean not null default true;
+
+update public.google_calendar_connection
+set
+  display_name = coalesce(display_name, 'Main booking calendar'),
+  source_type = coalesce(source_type, 'primary'),
+  show_on_admin_calendar = coalesce(show_on_admin_calendar, true),
+  block_availability = coalesce(block_availability, true),
+  write_bookings = coalesce(write_bookings, true);
+
+drop index if exists public.google_calendar_connection_org_idx;
+
+create unique index if not exists google_calendar_connection_org_calendar_idx
+  on public.google_calendar_connection(organization_id, calendar_id);
+
+create unique index if not exists google_calendar_connection_write_target_idx
+  on public.google_calendar_connection(organization_id)
+  where write_bookings is true;
+
+create index if not exists google_calendar_connection_admin_sources_idx
+  on public.google_calendar_connection(organization_id, show_on_admin_calendar);
+
+create index if not exists google_calendar_connection_block_sources_idx
+  on public.google_calendar_connection(organization_id, block_availability);
+
+comment on column public.google_calendar_connection.display_name is
+  'Human label for this calendar source in admin UI.';
+
+comment on column public.google_calendar_connection.show_on_admin_calendar is
+  'Whether events from this source are rendered in /admin/calendar.';
+
+comment on column public.google_calendar_connection.block_availability is
+  'Whether busy windows from this source remove public booking slots.';
+
+comment on column public.google_calendar_connection.write_bookings is
+  'The one source per organization where newly created Pixel Blaster bookings are written.';
+
+-- ============================================================================
+-- End supabase/migrations/0040_external_calendar_sources.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/0041_calendar_source_colours.sql
+-- ============================================================================
+
+-- Calendar source colours for the Apple Calendar-style admin sidebar.
+
+alter table public.google_calendar_connection
+  add column if not exists source_color text not null default '#2f80b7'
+    check (source_color ~ '^#[0-9A-Fa-f]{6}$');
+
+update public.google_calendar_connection
+set source_color = case
+  when write_bookings is true then '#3f7356'
+  else coalesce(source_color, '#2f80b7')
+end;
+
+comment on column public.google_calendar_connection.source_color is
+  'Hex colour used for this Google Calendar source in admin calendar views.';
+
+-- ============================================================================
+-- End supabase/migrations/0041_calendar_source_colours.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260611175858_autoenhance_booking_workflow.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Autoenhance booking workflow
+-- ----------------------------------------------------------------------------
+-- Tracks Autoenhance orders created from a booking, then records which finished
+-- images have been pushed into the linked iGUIDE gallery. This lets the admin
+-- page resume after a refresh and keeps the future background worker path
+-- idempotent.
+-- ============================================================================
+
+create table if not exists public.autoenhance_batches (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null
+    references public.organizations(id) on delete cascade,
+  booking_id uuid not null
+    references public.bookings(id) on delete cascade,
+  property_id uuid not null
+    references public.properties(id) on delete cascade,
+  order_id text not null,
+  order_name text not null,
+  upload_mode text not null default 'hdr'
+    check (upload_mode in ('hdr', 'single')),
+  status text not null default 'uploading',
+  process_status text,
+  brackets_per_image integer not null default 3,
+  settings jsonb not null default '{}'::jsonb,
+  bracket_ids text[] not null default '{}',
+  uploaded_image_ids text[] not null default '{}',
+  finished_image_ids text[] not null default '{}',
+  iguide_portal_id text,
+  iguide_uploaded_image_ids text[] not null default '{}',
+  iguide_failed_image_ids text[] not null default '{}',
+  last_iguide_push_at timestamptz,
+  last_error text,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists autoenhance_batches_org_order_key
+  on public.autoenhance_batches(organization_id, order_id);
+
+create index if not exists autoenhance_batches_booking_idx
+  on public.autoenhance_batches(booking_id, created_at desc);
+
+create index if not exists autoenhance_batches_org_status_idx
+  on public.autoenhance_batches(organization_id, status);
+
+drop trigger if exists autoenhance_batches_set_updated_at
+  on public.autoenhance_batches;
+create trigger autoenhance_batches_set_updated_at
+  before update on public.autoenhance_batches
+  for each row execute function public.set_updated_at();
+
+alter table public.autoenhance_batches enable row level security;
+
+drop policy if exists "autoenhance_batches: org admin read"
+  on public.autoenhance_batches;
+create policy "autoenhance_batches: org admin read"
+  on public.autoenhance_batches for select
+  using (public.is_organization_admin(organization_id));
+
+drop policy if exists "autoenhance_batches: org admin write"
+  on public.autoenhance_batches;
+create policy "autoenhance_batches: org admin write"
+  on public.autoenhance_batches for all
+  using (public.is_organization_admin(organization_id))
+  with check (public.is_organization_admin(organization_id));
+
+create table if not exists public.autoenhance_iguide_uploads (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null
+    references public.organizations(id) on delete cascade,
+  batch_id uuid not null
+    references public.autoenhance_batches(id) on delete cascade,
+  booking_id uuid not null
+    references public.bookings(id) on delete cascade,
+  iguide_portal_id text not null,
+  autoenhance_image_id text not null,
+  filename text not null,
+  status text not null default 'pending'
+    check (status in ('pending', 'uploaded', 'failed')),
+  iguide_asset_name text,
+  iguide_job_id text,
+  process_complete boolean,
+  warning text,
+  error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists autoenhance_iguide_uploads_image_key
+  on public.autoenhance_iguide_uploads(
+    organization_id,
+    batch_id,
+    iguide_portal_id,
+    autoenhance_image_id
+  );
+
+create index if not exists autoenhance_iguide_uploads_booking_idx
+  on public.autoenhance_iguide_uploads(booking_id, created_at desc);
+
+drop trigger if exists autoenhance_iguide_uploads_set_updated_at
+  on public.autoenhance_iguide_uploads;
+create trigger autoenhance_iguide_uploads_set_updated_at
+  before update on public.autoenhance_iguide_uploads
+  for each row execute function public.set_updated_at();
+
+alter table public.autoenhance_iguide_uploads enable row level security;
+
+drop policy if exists "autoenhance_iguide_uploads: org admin read"
+  on public.autoenhance_iguide_uploads;
+create policy "autoenhance_iguide_uploads: org admin read"
+  on public.autoenhance_iguide_uploads for select
+  using (public.is_organization_admin(organization_id));
+
+drop policy if exists "autoenhance_iguide_uploads: org admin write"
+  on public.autoenhance_iguide_uploads;
+create policy "autoenhance_iguide_uploads: org admin write"
+  on public.autoenhance_iguide_uploads for all
+  using (public.is_organization_admin(organization_id))
+  with check (public.is_organization_admin(organization_id));
+
+comment on table public.autoenhance_batches is
+  'Autoenhance orders created from booking media uploads.';
+
+comment on table public.autoenhance_iguide_uploads is
+  'Per-photo Autoenhance-to-iGUIDE upload attempts for idempotency and diagnostics.';
+
+-- ============================================================================
+-- End supabase/migrations/20260611175858_autoenhance_booking_workflow.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260709193816_booking_schedule_race_guard.sql
+-- ============================================================================
+
+-- Keep public/realtor booking writes race-safe while preserving the admin's
+-- deliberate ability to overlap shoots. Migration 0037 removed the exclusion
+-- constraint globally, which also removed the atomic protection from two
+-- simultaneous public submissions.
+
+alter table public.bookings
+  add column if not exists allow_schedule_overlap boolean not null default false;
+
+-- Preserve any deliberate overlaps that already exist, so ordinary status
+-- changes on those bookings do not fail after the trigger is installed.
+update public.bookings booking
+set allow_schedule_overlap = true
+where booking.status in ('requested', 'confirmed', 'shot', 'editing', 'delivered')
+  and booking.scheduled_at is not null
+  and booking.scheduled_ends_at is not null
+  and exists (
+    select 1
+    from public.bookings other
+    where other.organization_id = booking.organization_id
+      and other.id <> booking.id
+      and other.status in (
+        'requested', 'confirmed', 'shot', 'editing', 'delivered'
+      )
+      and other.scheduled_at is not null
+      and other.scheduled_ends_at is not null
+      and pg_catalog.tstzrange(
+        other.scheduled_at,
+        other.scheduled_ends_at,
+        '[)'
+      ) && pg_catalog.tstzrange(
+        booking.scheduled_at,
+        booking.scheduled_ends_at,
+        '[)'
+      )
+  );
+
+create or replace function public.guard_booking_schedule_overlap()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.status in ('requested', 'confirmed', 'shot', 'editing', 'delivered')
+     and new.scheduled_at is not null
+     and new.scheduled_ends_at is not null then
+    -- Serialize schedule writes per tenant so the check and write are atomic,
+    -- including across separate Vercel/serverless invocations.
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended(new.organization_id::text, 0)
+    );
+
+    if not new.allow_schedule_overlap and exists (
+      select 1
+      from public.bookings existing
+      where existing.organization_id = new.organization_id
+        and existing.id <> new.id
+        and existing.status in (
+          'requested', 'confirmed', 'shot', 'editing', 'delivered'
+        )
+        and existing.scheduled_at is not null
+        and existing.scheduled_ends_at is not null
+        and pg_catalog.tstzrange(
+          existing.scheduled_at,
+          existing.scheduled_ends_at,
+          '[)'
+        ) && pg_catalog.tstzrange(
+          new.scheduled_at,
+          new.scheduled_ends_at,
+          '[)'
+        )
+    ) then
+      raise exception 'Booking overlaps an active booking'
+        using errcode = '23P01';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists bookings_schedule_overlap_guard on public.bookings;
+create trigger bookings_schedule_overlap_guard
+before insert or update of
+  organization_id,
+  status,
+  scheduled_at,
+  scheduled_ends_at,
+  allow_schedule_overlap
+on public.bookings
+for each row execute function public.guard_booking_schedule_overlap();
+
+revoke all on function public.guard_booking_schedule_overlap()
+  from public, anon, authenticated;
+
+-- A realtor writing through the authenticated API can never opt into the
+-- admin-only overlap escape hatch. Organization admins retain that ability.
+drop policy if exists "bookings: owner or org admin insert" on public.bookings;
+create policy "bookings: owner or org admin insert"
+  on public.bookings for insert
+  to authenticated
+  with check (
+    (
+      owner_id = (select auth.uid())
+      and organization_id = public.current_organization_id()
+      and allow_schedule_overlap = false
+    )
+    or public.is_organization_admin(organization_id)
+  );
+
+comment on column public.bookings.allow_schedule_overlap is
+  'Admin-only escape hatch for an intentional overlap. Public writes remain serialized and overlap-checked by trigger.';
+
+comment on function public.guard_booking_schedule_overlap() is
+  'Serializes schedule writes per organization and rejects overlapping non-admin bookings atomically.';
+
+-- ============================================================================
+-- End supabase/migrations/20260709193816_booking_schedule_race_guard.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260709200031_database_security_and_indexes.sql
+-- ============================================================================
+
+-- Security-advisor cleanup for helper functions. Every referenced relation is
+-- schema-qualified, so an empty search_path removes object-shadowing risk.
+alter function public.set_updated_at() set search_path = '';
+alter function public.handle_new_auth_user() set search_path = '';
+alter function public.is_admin() set search_path = '';
+alter function public.current_organization_id() set search_path = '';
+alter function public.is_organization_admin(uuid) set search_path = '';
+alter function public.create_booking_from_request(
+  uuid,
+  uuid,
+  uuid,
+  timestamptz,
+  timestamptz
+) set search_path = '';
+
+-- The old exclusion constraint installed btree_gist in the public API schema.
+-- Keep the extension available, but move its objects out of the exposed schema.
+create schema if not exists extensions;
+do $$
+declare
+  extension_schema name;
+begin
+  select ns.nspname
+    into extension_schema
+    from pg_catalog.pg_extension ext
+    join pg_catalog.pg_namespace ns
+      on ns.oid = ext.extnamespace
+    where ext.extname = 'btree_gist';
+
+  if extension_schema is not null and extension_schema <> 'extensions' then
+    alter extension btree_gist set schema extensions;
+  end if;
+end;
+$$;
+
+-- Trigger helpers do not need to be callable through PostgREST. The legacy
+-- is_admin helper remains available only to authenticated users because a few
+-- older RLS policies still reference it.
+revoke all on function public.set_updated_at()
+  from public, anon, authenticated;
+revoke all on function public.handle_new_auth_user()
+  from public, anon, authenticated;
+revoke all on function public.is_admin()
+  from public, anon, authenticated;
+grant execute on function public.is_admin() to authenticated;
+
+-- Index foreign-key columns used by tenant dashboards and cleanup jobs. These
+-- are small, mechanical indexes identified by the database performance advisor.
+create index if not exists assistant_action_logs_target_realtor_idx
+  on public.assistant_action_logs(target_realtor_id);
+create index if not exists assistant_action_logs_undone_by_idx
+  on public.assistant_action_logs(undone_by);
+create index if not exists autoenhance_batches_created_by_idx
+  on public.autoenhance_batches(created_by);
+create index if not exists autoenhance_batches_property_idx
+  on public.autoenhance_batches(property_id);
+create index if not exists autoenhance_iguide_uploads_batch_idx
+  on public.autoenhance_iguide_uploads(batch_id);
+create index if not exists booking_line_items_catalog_item_idx
+  on public.booking_line_items(catalog_item_id);
+create index if not exists booking_requests_booking_idx
+  on public.booking_requests(booking_id);
+create index if not exists google_calendar_connection_connected_by_idx
+  on public.google_calendar_connection(connected_by);
+create index if not exists iguide_jobs_property_idx
+  on public.iguide_jobs(property_id);
+create index if not exists iguide_webhook_events_matched_booking_idx
+  on public.iguide_webhook_events(matched_booking_id);
+create index if not exists integration_credentials_updated_by_idx
+  on public.integration_credentials(updated_by);
+create index if not exists listing_websites_booking_idx
+  on public.listing_websites(booking_id);
+create index if not exists organization_members_profile_idx
+  on public.organization_members(profile_id);
+create index if not exists quickbooks_connection_connected_by_idx
+  on public.quickbooks_connection(connected_by);
+create index if not exists service_prices_updated_by_idx
+  on public.service_prices(updated_by);
+create index if not exists telegram_connections_profile_idx
+  on public.telegram_connections(profile_id);
+
+-- ============================================================================
+-- End supabase/migrations/20260709200031_database_security_and_indexes.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260710142242_push_notifications.sql
+-- ============================================================================
+
+-- One row per browser/device that an authenticated admin explicitly allows to
+-- receive app notifications. Endpoints and encryption keys are secrets: the
+-- browser may manage only its own rows, and the service role handles sends.
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  user_agent text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists push_subscriptions_organization_idx
+  on public.push_subscriptions(organization_id);
+create index if not exists push_subscriptions_profile_idx
+  on public.push_subscriptions(profile_id);
+
+drop trigger if exists push_subscriptions_set_updated_at
+  on public.push_subscriptions;
+create trigger push_subscriptions_set_updated_at
+  before update on public.push_subscriptions
+  for each row execute function public.set_updated_at();
+
+alter table public.push_subscriptions enable row level security;
+
+revoke all on table public.push_subscriptions
+  from public, anon, authenticated;
+grant select, insert, update, delete on table public.push_subscriptions
+  to authenticated;
+grant all on table public.push_subscriptions to service_role;
+
+drop policy if exists "push_subscriptions: owner read"
+  on public.push_subscriptions;
+create policy "push_subscriptions: owner read"
+  on public.push_subscriptions
+  for select
+  to authenticated
+  using (
+    (select auth.uid()) is not null
+    and profile_id = (select auth.uid())
+    and organization_id = public.current_organization_id()
+  );
+
+drop policy if exists "push_subscriptions: owner insert"
+  on public.push_subscriptions;
+create policy "push_subscriptions: owner insert"
+  on public.push_subscriptions
+  for insert
+  to authenticated
+  with check (
+    (select auth.uid()) is not null
+    and profile_id = (select auth.uid())
+    and organization_id = public.current_organization_id()
+    and public.is_organization_admin(organization_id)
+  );
+
+drop policy if exists "push_subscriptions: owner update"
+  on public.push_subscriptions;
+create policy "push_subscriptions: owner update"
+  on public.push_subscriptions
+  for update
+  to authenticated
+  using (
+    profile_id = (select auth.uid())
+    and organization_id = public.current_organization_id()
+  )
+  with check (
+    profile_id = (select auth.uid())
+    and organization_id = public.current_organization_id()
+    and public.is_organization_admin(organization_id)
+  );
+
+drop policy if exists "push_subscriptions: owner delete"
+  on public.push_subscriptions;
+create policy "push_subscriptions: owner delete"
+  on public.push_subscriptions
+  for delete
+  to authenticated
+  using (
+    profile_id = (select auth.uid())
+    and organization_id = public.current_organization_id()
+  );
+
+comment on table public.push_subscriptions is
+  'Tenant-scoped Web Push endpoints for admins who enabled app notifications.';
+
+-- ============================================================================
+-- End supabase/migrations/20260710142242_push_notifications.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260710153500_harden_push_subscription_grants.sql
+-- ============================================================================
+
+-- Supabase projects can grant broad table privileges through default
+-- privileges. Keep browser clients to the four operations covered by RLS.
+revoke all on table public.push_subscriptions from authenticated;
+grant select, insert, update, delete on table public.push_subscriptions
+  to authenticated;
+
+-- ============================================================================
+-- End supabase/migrations/20260710153500_harden_push_subscription_grants.sql
+-- ============================================================================

@@ -4,9 +4,11 @@ import AuthSessionHandler from "./AuthSessionHandler";
 import SiteHeaderMobileMenu, {
   type SiteNavItem,
 } from "./_components/SiteHeaderMobileMenu";
+import PwaClient from "./PwaClient";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { signOut } from "@/lib/auth/sign-out";
 import {
+  initialsForOrganization,
   loadOrganizationBrand,
   organizationThemeStyle,
 } from "@/lib/organizations/branding";
@@ -28,8 +30,9 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  colorScheme: "light dark",
-  themeColor: "#0b0f10",
+  colorScheme: "light",
+  themeColor: "#fbfcfa",
+  viewportFit: "cover",
 };
 
 export default async function RootLayout({
@@ -49,11 +52,20 @@ export default async function RootLayout({
         style={brand ? organizationThemeStyle(brand) : undefined}
       >
         <AuthSessionHandler />
+        <PwaClient userId={user?.userId ?? null} />
         <header className="site-header border-b border-white/5">
           <div className="site-header-inner mx-auto flex max-w-6xl items-center justify-between gap-3 px-6 py-4">
+            {user?.role === "admin" ? (
+              <MobileAdminBrand
+                name={brand?.name ?? "Pixel Blaster Booking"}
+                logoUrl={brand?.logoUrl ?? null}
+              />
+            ) : null}
             <Link
               href={homeHrefForUser(user)}
-              className="site-brand-link flex min-w-0 shrink items-center gap-2 font-semibold"
+              className={`site-brand-link min-w-0 shrink items-center gap-2 font-semibold ${
+                user?.role === "admin" ? "hidden md:flex" : "flex"
+              }`}
             >
               <span className="site-brand-primary text-white">
                 Pixel Blaster
@@ -100,6 +112,7 @@ export default async function RootLayout({
                 label={userLabel ?? "Site"}
                 items={nav}
                 signOutAction={user ? signOut : undefined}
+                avatarUrl={user?.profilePhotoUrl ?? null}
               />
             </div>
           </div>
@@ -123,6 +136,32 @@ export default async function RootLayout({
         </footer>
       </body>
     </html>
+  );
+}
+
+function MobileAdminBrand({
+  name,
+  logoUrl,
+}: {
+  name: string;
+  logoUrl: string | null;
+}) {
+  return (
+    <Link
+      href="/admin/calendar"
+      className="flex min-w-0 items-center gap-2.5 md:hidden"
+    >
+      <span
+        aria-hidden="true"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-realtor-primary/15 bg-white bg-contain bg-center bg-no-repeat text-[11px] font-bold text-realtor-primary shadow-sm"
+        style={logoUrl ? { backgroundImage: `url(${logoUrl})` } : undefined}
+      >
+        {!logoUrl ? initialsForOrganization(name) : null}
+      </span>
+      <span className="truncate text-sm font-semibold text-realtor-text">
+        {name}
+      </span>
+    </Link>
   );
 }
 

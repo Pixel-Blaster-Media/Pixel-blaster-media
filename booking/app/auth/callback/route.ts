@@ -36,5 +36,8 @@ function safeNextPath(next: string): string {
   if (!next.startsWith("/") || next.startsWith("//") || next.includes("\\")) {
     return "/admin";
   }
+  if (next.startsWith("/auth/") || next.startsWith("/start/oauth/")) {
+    return "/admin";
+  }
   return next;
 }

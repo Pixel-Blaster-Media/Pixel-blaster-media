@@ -41,7 +41,10 @@ import {
   isIGuidePhotoZipUrl,
   type IGuidePhotoZipKind,
 } from "@/lib/integrations/iguide/photo-downloads";
-import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
+import {
+  getGoogleCalendarClient,
+  GoogleCalendarError,
+} from "@/lib/integrations/google-calendar/client";
 import { createIGuide as createIGuideInPortal } from "@/lib/integrations/iguide/portal-client";
 import {
   recordIGuideCreateJob,
@@ -51,6 +54,7 @@ import {
   createInvoiceForBooking,
   refreshInvoiceStatus as refreshInvoiceInQBO,
 } from "@/lib/integrations/quickbooks/invoice";
+import { sendPushBestEffort } from "@/lib/notifications/push";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type {
   BookingStatus,
@@ -441,12 +445,13 @@ export async function updateBookingDetails(
   // "clear it" — otherwise a form variant that omits the field would
   // silently wipe the booking's time.
   const scheduleUpdate = scheduledAt
-    ? {
-        scheduled_at: scheduledAt.toISOString(),
-        scheduled_ends_at: scheduledEndsAt
-          ? scheduledEndsAt.toISOString()
-          : null,
-      }
+      ? {
+          scheduled_at: scheduledAt.toISOString(),
+          scheduled_ends_at: scheduledEndsAt
+            ? scheduledEndsAt.toISOString()
+            : null,
+          allow_schedule_overlap: true,
+        }
     : {};
 
   const { error: updateError } = await service
@@ -946,6 +951,13 @@ export async function sendDeliveryReadyEmail(
   if (notificationError && notificationError.code !== "23505") {
     return { ok: false, error: notificationError.message };
   }
+
+  await sendPushBestEffort(admin.organizationId, {
+    title: existing ? "Media delivery resent" : "Media delivery sent",
+    body: booking.properties.street_address,
+    url: `/admin/bookings/${booking.id}`,
+    tag: `media-delivery-${booking.id}`,
+  });
 
   revalidatePath(`/admin/bookings/${bookingId}`);
   return {
@@ -2112,12 +2124,11 @@ async function syncGoogleCalendarEventBestEffort(args: {
     });
     if (!gcal) return;
 
-    if (args.previousEventId) {
-      await gcal.deleteEvent(args.previousEventId);
-    }
-
     const service = getServiceSupabase();
     if (!args.scheduledAt || !args.scheduledEndsAt) {
+      if (args.previousEventId) {
+        await gcal.deleteEvent(args.previousEventId);
+      }
       await service
         .from("bookings")
         .update({
@@ -2136,7 +2147,7 @@ async function syncGoogleCalendarEventBestEffort(args: {
       .filter(Boolean)
       .join(", ");
     const serviceLabels = args.selectedItems.map((item) => item.name).join(", ");
-    const event = await gcal.createEvent({
+    const eventInput = {
       summary: calendarShootTitle({
         realtor: args.contactName,
         services: serviceLabels,
@@ -2153,7 +2164,19 @@ async function syncGoogleCalendarEventBestEffort(args: {
       endISO: args.scheduledEndsAt.toISOString(),
       attendeeEmail: args.contactEmail || undefined,
       attendeeName: args.contactName,
-    });
+    };
+    let event: { id: string; htmlLink: string } | null = null;
+    if (args.previousEventId) {
+      try {
+        event = await gcal.updateEvent(args.previousEventId, eventInput);
+      } catch (error) {
+        const missingEvent =
+          error instanceof GoogleCalendarError &&
+          (error.status === 404 || error.status === 410);
+        if (!missingEvent) throw error;
+      }
+    }
+    event ??= await gcal.createEvent(eventInput);
 
     await service
       .from("bookings")
