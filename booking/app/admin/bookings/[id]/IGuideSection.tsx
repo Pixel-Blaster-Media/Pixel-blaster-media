@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 
 import {
   createIGuideForBooking,
+  listExistingIGuides,
   saveIGuideId,
   saveIGuidePhotoDownloads,
   syncIGuide,
+  type ExistingIGuideOption,
 } from "./actions";
 
 export default function IGuideSection({
@@ -42,10 +44,16 @@ export default function IGuideSection({
   const [syncing, startSyncing] = useTransition();
   const [creating, startCreating] = useTransition();
   const [photoSaving, startPhotoSaving] = useTransition();
+  const [tourLoading, startTourLoading] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [okMessage, setOkMessage] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [photoMessage, setPhotoMessage] = useState<string | null>(null);
+  const [tourPickerOpen, setTourPickerOpen] = useState(false);
+  const [tourSearch, setTourSearch] = useState("");
+  const [portalTours, setPortalTours] = useState<
+    ExistingIGuideOption[] | null
+  >(null);
 
   function onSave() {
     setError(null);
@@ -133,9 +141,77 @@ export default function IGuideSection({
     });
   }
 
+  function openTourPicker() {
+    setTourPickerOpen((open) => !open);
+    if (portalTours || tourLoading) return;
+    setError(null);
+    startTourLoading(async () => {
+      const result = await listExistingIGuides(bookingId);
+      if (!result.ok) {
+        setError(result.error);
+        setTourPickerOpen(false);
+        return;
+      }
+      setPortalTours(result.tours);
+    });
+  }
+
+  function selectPortalTour(tour: ExistingIGuideOption) {
+    setError(null);
+    setOkMessage(null);
+    startSaving(async () => {
+      const saved = await saveIGuideId(bookingId, tour.id);
+      if (!saved.ok) {
+        setError(saved.error ?? "Could not link that iGUIDE.");
+        return;
+      }
+
+      setPortalId(saved.portalId ?? tour.id);
+      if (tour.alias) {
+        const aliasSaved = await saveIGuideId(bookingId, tour.alias);
+        if (!aliasSaved.ok) {
+          setError(
+            `The Portal ID was linked, but its public alias could not be saved: ${
+              aliasSaved.error ?? "save failed"
+            }`,
+          );
+          return;
+        }
+        if (aliasSaved.iguideId) setSavedId(aliasSaved.iguideId);
+      }
+      setTourPickerOpen(false);
+      setTourSearch("");
+
+      const synced = await syncIGuide(bookingId);
+      if (!synced.ok) {
+        setError(
+          `iGUIDE linked, but its media did not sync yet: ${
+            synced.error ?? "sync failed"
+          }`,
+        );
+        return;
+      }
+      if (synced.portalId) setPortalId(synced.portalId);
+      setOkMessage(
+        `Linked${tour.address ? ` ${tour.address}` : " the selected iGUIDE"} and synced ${
+          synced.upserts ?? 0
+        } deliverable(s).`,
+      );
+    });
+  }
+
   const hasLink = Boolean(savedId || portalId);
   const canSave = inputValue.trim() !== "";
   const canCreate = portalApiConfigured && !portalId && !creating;
+  const filteredPortalTours = useMemo(() => {
+    const query = tourSearch.trim().toLowerCase();
+    if (!query) return portalTours ?? [];
+    return (portalTours ?? []).filter((tour) =>
+      [tour.address, tour.alias, tour.id, tour.status]
+        .filter(Boolean)
+        .some((value) => value!.toLowerCase().includes(query)),
+    );
+  }, [portalTours, tourSearch]);
 
   return (
     <div
@@ -147,10 +223,9 @@ export default function IGuideSection({
           iGuide
         </h2>
         <p className="mt-1 text-xs text-realtor-muted">
-          Create an iGuide from this booking for exact webhook matching, or
-          paste any of: tour URL, alias, Portal ID (e.g. igYGFV5GG6V8DD1), or a
-          manage.youriguide.com edit URL. Sync refreshes the tour, floor plans,
-          previews, and available photo downloads.{" "}
+          Create an iGUIDE from this booking, choose an existing tour from your
+          portal, or paste a tour URL as a fallback. Sync refreshes the tour,
+          floor plans, previews, and available photo downloads.{" "}
           {portalApiConfigured
             ? "Portal API is configured — sync uses the authenticated API when a portal ID is known."
             : "Portal API not configured — sync can only use the limited public fallback. Connect iGUIDE in Settings → Integrations to enable the full workflow."}{" "}
@@ -168,6 +243,18 @@ export default function IGuideSection({
         >
           {creating ? "Creating…" : "Create iGUIDE"}
         </button>
+        <button
+          type="button"
+          disabled={!portalApiConfigured || tourLoading || saving}
+          onClick={openTourPicker}
+          className="rounded-full border border-realtor-primary/25 bg-white px-3 py-2 text-sm font-semibold text-realtor-primary transition hover:border-realtor-primary/45 hover:bg-realtor-primary/5 disabled:opacity-50"
+        >
+          {tourLoading
+            ? "Loading iGUIDEs..."
+            : tourPickerOpen
+              ? "Close iGUIDE list"
+              : "Choose existing iGUIDE"}
+        </button>
         {!portalApiConfigured ? (
           <p className="text-xs text-amber-700">
             Add iGuide API credentials before creating tours from here.
@@ -178,6 +265,59 @@ export default function IGuideSection({
           </p>
         ) : null}
       </div>
+
+      {tourPickerOpen ? (
+        <div className="rounded-2xl border border-realtor-primary/15 bg-white/80 p-3 shadow-sm">
+          <label className="block">
+            <span className="text-xs font-semibold text-realtor-muted">
+              Search your iGUIDEs
+            </span>
+            <input
+              type="search"
+              value={tourSearch}
+              onChange={(event) => setTourSearch(event.target.value)}
+              placeholder="Search by address, alias, or Portal ID"
+              className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2.5 text-sm text-realtor-text placeholder-realtor-muted/60 outline-none focus:border-realtor-primary/45"
+            />
+          </label>
+          <div className="mt-3 max-h-72 space-y-1.5 overflow-y-auto overscroll-contain pr-1">
+            {filteredPortalTours.length ? (
+              filteredPortalTours.map((tour) => {
+                const isLinked = portalId === tour.id;
+                return (
+                  <button
+                    key={tour.id}
+                    type="button"
+                    disabled={saving || isLinked}
+                    onClick={() => selectPortalTour(tour)}
+                    className="flex min-h-14 w-full items-center justify-between gap-3 rounded-xl border border-realtor-primary/10 bg-realtor-surface px-3 py-2 text-left transition hover:border-realtor-primary/30 hover:bg-realtor-primary/5 disabled:opacity-60"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-realtor-text">
+                        {tour.address || tour.alias || tour.id}
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs text-realtor-muted">
+                        {[tour.alias, tour.status, tour.id]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </span>
+                    <span className="shrink-0 rounded-full border border-realtor-primary/15 px-2.5 py-1 text-[10px] font-semibold text-realtor-primary">
+                      {isLinked ? "Linked" : "Choose"}
+                    </span>
+                  </button>
+                );
+              })
+            ) : (
+              <p className="rounded-xl border border-dashed border-realtor-primary/15 px-3 py-4 text-center text-xs text-realtor-muted">
+                {portalTours?.length === 0
+                  ? "No iGUIDEs were returned by this portal account."
+                  : "No iGUIDEs match that search."}
+              </p>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
         <input
@@ -205,9 +345,8 @@ export default function IGuideSection({
         </button>
       </div>
       <p className="text-xs text-realtor-muted">
-        Paste the iGUIDE link or Portal ID, click Save, then click Sync from
-        iGUIDE. If sync complains about asset links, paste the public
-        youriguide.com tour URL as well.
+        Choose from your portal above, or paste a link/Portal ID as a fallback.
+        Pasted references still need Save, then Sync from iGUIDE.
       </p>
 
       {savedId || portalId ? (

@@ -106,3 +106,46 @@ export async function deleteCalendarBlock(
   revalidatePath("/admin/calendar");
   return { ok: true };
 }
+
+export async function updateCalendarBlock(
+  blockId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  const starts = ((formData.get("starts_at") as string | null) ?? "").trim();
+  const ends = ((formData.get("ends_at") as string | null) ?? "").trim();
+  const label =
+    ((formData.get("label") as string | null) ?? "").trim() || null;
+
+  if (!blockId || !starts || !ends) {
+    return { ok: false, error: "Start and end are required." };
+  }
+
+  const startsDate = businessDateTimeLocalToUtc(starts);
+  const endsDate = businessDateTimeLocalToUtc(ends);
+  if (!startsDate || !endsDate) {
+    return { ok: false, error: "Invalid dates." };
+  }
+  if (endsDate <= startsDate) {
+    return { ok: false, error: "End must be after start." };
+  }
+
+  const { data, error } = await getServiceSupabase()
+    .from("calendar_blocks")
+    .update({
+      starts_at: startsDate.toISOString(),
+      ends_at: endsDate.toISOString(),
+      label,
+    })
+    .eq("organization_id", admin.organizationId)
+    .eq("id", blockId)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "Blocked time not found." };
+
+  revalidatePath("/admin/settings/availability");
+  revalidatePath("/admin/calendar");
+  return { ok: true };
+}

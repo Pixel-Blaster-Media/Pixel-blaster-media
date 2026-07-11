@@ -45,7 +45,10 @@ import {
   getGoogleCalendarClient,
   GoogleCalendarError,
 } from "@/lib/integrations/google-calendar/client";
-import { createIGuide as createIGuideInPortal } from "@/lib/integrations/iguide/portal-client";
+import {
+  createIGuide as createIGuideInPortal,
+  listIGuides,
+} from "@/lib/integrations/iguide/portal-client";
 import {
   recordIGuideCreateJob,
   syncIGuideForBooking,
@@ -1141,6 +1144,51 @@ export async function saveIGuideId(
 
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true, iguideId: alias, portalId };
+}
+
+export interface ExistingIGuideOption {
+  id: string;
+  alias: string | null;
+  address: string | null;
+  status: string | null;
+  updatedAt: string | null;
+}
+
+export async function listExistingIGuides(
+  bookingId: string,
+): Promise<
+  | { ok: true; tours: ExistingIGuideOption[] }
+  | { ok: false; error: string }
+> {
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
+
+  const result = await listIGuides({ organizationId: admin.organizationId });
+  if (!result.ok) {
+    return {
+      ok: false,
+      error:
+        result.status === 401 || result.status === 403
+          ? "Your iGUIDE token needs the iguide.list permission before tours can be selected here."
+          : result.error ?? "Could not load iGUIDEs from the portal.",
+    };
+  }
+
+  const tours = (result.data ?? [])
+    .map((tour) => ({
+      id: tour.id,
+      alias: tour.alias ?? null,
+      address: tour.address ?? null,
+      status: tour.status ?? null,
+      updatedAt: tour.updatedAt ?? tour.createdAt ?? null,
+    }))
+    .sort((a, b) => {
+      const aTime = a.updatedAt ? Date.parse(a.updatedAt) : 0;
+      const bTime = b.updatedAt ? Date.parse(b.updatedAt) : 0;
+      return bTime - aTime;
+    });
+
+  return { ok: true, tours };
 }
 
 type BookingUpdatePayload = {

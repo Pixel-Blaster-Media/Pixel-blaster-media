@@ -23,7 +23,11 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import AddressAutocomplete, {
   type PlaceParts,
 } from "@/app/_components/AddressAutocomplete";
-import { addCalendarBlock } from "@/app/admin/settings/availability/actions";
+import {
+  addCalendarBlock,
+  deleteCalendarBlock,
+  updateCalendarBlock,
+} from "@/app/admin/settings/availability/actions";
 import {
   createAdminShoot,
   moveCalendarBlock,
@@ -142,7 +146,7 @@ const START_HOUR = 6;
 const END_HOUR = 22;
 const SLOT_MINUTES = 30;
 const HOUR_HEIGHT = 96;
-const MOBILE_HOUR_HEIGHT = 72;
+const MOBILE_HOUR_HEIGHT = 84;
 const DESKTOP_DAY_BASE_WIDTH = 128;
 const DESKTOP_LANE_WIDTH = 120;
 // TODO(SaaS): pass this from the organization once company timezones are
@@ -502,7 +506,7 @@ export default function CalendarWeekView({
     item: CalendarItem,
   ) => {
     if (movePending) return;
-    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (event.pointerType !== "mouse" || event.button !== 0) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const durationMinutes = Math.max(
       localMinutesFromIso(item.endsAt) - localMinutesFromIso(item.startsAt),
@@ -582,7 +586,12 @@ export default function CalendarWeekView({
   };
 
   const openCalendarItem = (item: CalendarItem) => {
-    if (!item.href || Date.now() < suppressOpenUntilRef.current) return;
+    if (
+      (item.kind !== "block" && !item.href) ||
+      Date.now() < suppressOpenUntilRef.current
+    ) {
+      return;
+    }
     setPreviewItem(item);
   };
 
@@ -1310,7 +1319,7 @@ export default function CalendarWeekView({
             <div className="mt-3 border-t border-[#d8cab9]/70 px-3 pb-3 pt-3">
               <div
                 ref={mobileTimelineScrollRef}
-                className="max-h-[calc(100dvh-330px)] min-h-[390px] overflow-y-auto overscroll-contain rounded-3xl [-webkit-overflow-scrolling:touch]"
+                className="h-[68dvh] min-h-[520px] max-h-[720px] overflow-y-auto overscroll-contain rounded-3xl [-webkit-overflow-scrolling:touch]"
               >
               <div
                 data-calendar-drop-day={mobileDay.dateInput}
@@ -1410,24 +1419,9 @@ export default function CalendarWeekView({
                     item={item}
                     rangeStart={mobileTimelineStart}
                     rangeEnd={mobileTimelineEnd}
-                    isDragging={dragState?.item.id === item.id}
                     onOpen={openCalendarItem}
-                    onPointerDown={beginBookingDrag}
-                    onPointerMove={updateBookingDrag}
-                    onPointerUp={finishBookingDrag}
                   />
                 ))}
-
-                {dragState?.hasMoved &&
-                dragState.target?.mode === "mobile" &&
-                dragState.target.day.dateInput === mobileDay.dateInput ? (
-                  <CalendarDragPreview
-                    item={dragState.item}
-                    top={dragState.target.top}
-                    height={dragState.target.height}
-                    mobile
-                  />
-                ) : null}
               </div>
               </div>
             </div>
@@ -1448,6 +1442,10 @@ export default function CalendarWeekView({
         <CalendarQuickView
           item={previewItem}
           onClose={() => setPreviewItem(null)}
+          onBlockChanged={() => {
+            setPreviewItem(null);
+            router.refresh();
+          }}
         />
       ) : null}
 
@@ -2032,7 +2030,7 @@ function AgendaItemRow({
     </div>
   );
 
-  return item.href ? (
+  return item.href || item.kind === "block" ? (
     <button
       type="button"
       onClick={() => onOpen(item)}
@@ -2048,9 +2046,11 @@ function AgendaItemRow({
 function CalendarQuickView({
   item,
   onClose,
+  onBlockChanged,
 }: {
   item: CalendarItem;
   onClose: () => void;
+  onBlockChanged: () => void;
 }) {
   const external = item.href?.startsWith("http");
   const details = item.bookingDetails;
@@ -2059,6 +2059,47 @@ function CalendarQuickView({
         details.fullAddress,
       )}`
     : null;
+  const [blockLabel, setBlockLabel] = useState(
+    item.kind === "block" && item.title !== "Busy" ? item.title : "",
+  );
+  const [blockStartsAt, setBlockStartsAt] = useState(() =>
+    dateTimeLocalForIso(item.startsAt),
+  );
+  const [blockEndsAt, setQuickViewBlockEndsAt] = useState(() =>
+    dateTimeLocalForIso(item.endsAt),
+  );
+  const [blockError, setBlockError] = useState<string | null>(null);
+  const [blockPending, startBlockTransition] = useTransition();
+
+  const saveBlock = () => {
+    setBlockError(null);
+    startBlockTransition(async () => {
+      const formData = new FormData();
+      formData.set("starts_at", blockStartsAt);
+      formData.set("ends_at", blockEndsAt);
+      formData.set("label", blockLabel);
+      const result = await updateCalendarBlock(item.id, formData);
+      if (!result.ok) {
+        setBlockError(result.error ?? "Could not update blocked time.");
+        return;
+      }
+      onBlockChanged();
+    });
+  };
+
+  const removeBlock = () => {
+    if (!window.confirm("Remove this blocked time from the calendar?")) return;
+    setBlockError(null);
+    startBlockTransition(async () => {
+      const result = await deleteCalendarBlock(item.id);
+      if (!result.ok) {
+        setBlockError(result.error ?? "Could not remove blocked time.");
+        return;
+      }
+      onBlockChanged();
+    });
+  };
+
   return (
     <>
       <button
@@ -2105,6 +2146,81 @@ function CalendarQuickView({
         <p className="mt-3 break-words text-sm leading-6 text-realtor-muted">
           {item.subtitle}
         </p>
+
+        {item.kind === "block" ? (
+          <section className="mt-5 space-y-3 border-t border-realtor-primary/10 pt-4">
+            <div>
+              <p className="text-sm font-semibold text-realtor-text">
+                Edit blocked time
+              </p>
+              <p className="mt-1 text-xs leading-5 text-realtor-muted">
+                On mobile, blocked time opens here instead of moving when you
+                scroll over it.
+              </p>
+            </div>
+            <label className="block">
+              <span className="text-xs font-semibold text-realtor-muted">
+                Label
+              </span>
+              <input
+                type="text"
+                value={blockLabel}
+                onChange={(event) => setBlockLabel(event.target.value)}
+                placeholder="Personal appointment"
+                className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-white px-3 py-2.5 text-sm text-realtor-text outline-none focus:border-realtor-primary/45"
+              />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-xs font-semibold text-realtor-muted">
+                  Starts
+                </span>
+                <input
+                  type="datetime-local"
+                  value={blockStartsAt}
+                  onChange={(event) => setBlockStartsAt(event.target.value)}
+                  className="mt-1 box-border w-full min-w-0 rounded-xl border border-realtor-primary/15 bg-white px-3 py-2.5 text-sm text-realtor-text outline-none focus:border-realtor-primary/45"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-semibold text-realtor-muted">
+                  Ends
+                </span>
+                <input
+                  type="datetime-local"
+                  value={blockEndsAt}
+                  onChange={(event) =>
+                    setQuickViewBlockEndsAt(event.target.value)
+                  }
+                  className="mt-1 box-border w-full min-w-0 rounded-xl border border-realtor-primary/15 bg-white px-3 py-2.5 text-sm text-realtor-text outline-none focus:border-realtor-primary/45"
+                />
+              </label>
+            </div>
+            {blockError ? (
+              <p role="alert" className="text-xs text-red-700">
+                {blockError}
+              </p>
+            ) : null}
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <button
+                type="button"
+                disabled={blockPending}
+                onClick={saveBlock}
+                className="inline-flex min-h-11 items-center justify-center rounded-full bg-realtor-primary px-4 text-sm font-semibold text-white transition hover:bg-realtor-primary-light disabled:opacity-60"
+              >
+                {blockPending ? "Saving..." : "Save changes"}
+              </button>
+              <button
+                type="button"
+                disabled={blockPending}
+                onClick={removeBlock}
+                className="inline-flex min-h-11 items-center justify-center rounded-full border border-red-200 bg-white px-4 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-60"
+              >
+                Remove
+              </button>
+            </div>
+          </section>
+        ) : null}
 
         {details ? (
           <div className="mt-5 space-y-4 border-t border-realtor-primary/10 pt-4">
@@ -2424,20 +2540,12 @@ function MobileTimelineEvent({
   item,
   rangeStart,
   rangeEnd,
-  isDragging,
   onOpen,
-  onPointerDown,
-  onPointerMove,
-  onPointerUp,
 }: {
   item: PositionedCalendarItem;
   rangeStart: number;
   rangeEnd: number;
-  isDragging: boolean;
   onOpen: (item: CalendarItem) => void;
-  onPointerDown: (event: PointerEvent<HTMLElement>, item: CalendarItem) => void;
-  onPointerMove: (event: PointerEvent<HTMLElement>) => void;
-  onPointerUp: (event: PointerEvent<HTMLElement>) => void;
 }) {
   const startMinutes = localMinutesFromIso(item.startsAt);
   const endMinutes = localMinutesFromIso(item.endsAt);
@@ -2456,89 +2564,59 @@ function MobileTimelineEvent({
         ? "text-[#17465b]"
         : "border-[#a69d8d]/50 bg-[#d7d1c4] text-[#36423a]";
   const sourceStyle = calendarSourceEventStyle(item);
-  const canMove = item.kind === "booking" || item.kind === "block";
-  const content = (
-    <div
-      className={`absolute z-10 overflow-hidden rounded-xl border px-2.5 py-1.5 text-left shadow-sm ${classes}`}
-      style={{
-        ...eventLayoutStyle({ top, height, layout: item.layout, mobile: true }),
-        ...sourceStyle,
-      }}
-    >
-      <div className="flex h-full min-w-0 flex-col justify-between gap-1">
-        <div className="min-w-0">
-          <p className="text-[9px] font-semibold uppercase tracking-wider opacity-70">
-            {formatDateTimeRange(item.startsAt, item.endsAt)}
-          </p>
-          <p className="mt-0.5 line-clamp-2 break-words text-xs font-semibold leading-tight">
-            {item.title}
-          </p>
-          <p className="mt-0.5 line-clamp-1 break-words text-[10px] leading-snug opacity-75">
-            {item.subtitle}
-          </p>
-        </div>
-        <span className="w-fit rounded-full border border-current/25 bg-white/40 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
-          {item.statusLabel ??
-            (item.kind === "block"
-              ? "Blocked"
-              : item.kind === "google"
-                ? "Google"
-                : "Shoot")}
-        </span>
+  const canOpen = item.kind === "block" || Boolean(item.href);
+  const body = (
+    <div className="flex h-full min-w-0 flex-col justify-between gap-1">
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70">
+          {formatDateTimeRange(item.startsAt, item.endsAt)}
+        </p>
+        <p className="mt-1 line-clamp-2 break-words text-[13px] font-semibold leading-tight">
+          {item.title}
+        </p>
+        <p className="mt-1 line-clamp-1 break-words text-[11px] leading-snug opacity-75">
+          {item.subtitle}
+        </p>
       </div>
+      <span className="w-fit rounded-full border border-current/25 bg-white/40 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
+        {item.statusLabel ??
+          (item.kind === "block"
+            ? "Blocked"
+            : item.kind === "google"
+              ? "Google"
+              : "Shoot")}
+      </span>
     </div>
   );
+  const layoutStyle = {
+    ...eventLayoutStyle({ top, height, layout: item.layout, mobile: true }),
+    ...sourceStyle,
+  };
+  const eventClass = `absolute z-10 overflow-hidden rounded-xl border px-2.5 py-1.5 text-left shadow-sm ${classes}`;
 
-  if (canMove || item.href) {
+  if (canOpen) {
     return (
       <button
         type="button"
-        aria-label={canMove ? `Open or drag ${item.title}` : `Open ${item.title}`}
-        onClick={() => onOpen(item)}
-        onPointerDown={
-          canMove ? (event) => onPointerDown(event, item) : undefined
+        aria-label={
+          item.kind === "block"
+            ? `Edit blocked time: ${item.title}`
+            : `Open ${item.title}`
         }
-        onPointerMove={canMove ? onPointerMove : undefined}
-        onPointerUp={canMove ? onPointerUp : undefined}
-        onPointerCancel={canMove ? onPointerUp : undefined}
-        className={`absolute left-12 right-1.5 z-10 block select-none overflow-hidden rounded-xl border px-2.5 py-1.5 text-left shadow-sm transition ${
-          isDragging
-            ? "scale-[0.98] opacity-35"
-            : canMove
-              ? "touch-none cursor-grab active:cursor-grabbing"
-              : "active:scale-[0.99]"
-        } ${classes}`}
-        style={{
-          ...eventLayoutStyle({ top, height, layout: item.layout, mobile: true }),
-          ...sourceStyle,
-        }}
+        onClick={() => onOpen(item)}
+        className={`${eventClass} touch-pan-y transition active:scale-[0.99]`}
+        style={layoutStyle}
       >
-        <div className="flex h-full min-w-0 flex-col justify-between gap-1">
-          <div className="min-w-0">
-            <p className="text-[9px] font-semibold uppercase tracking-wider opacity-70">
-              {formatDateTimeRange(item.startsAt, item.endsAt)}
-            </p>
-            <p className="mt-0.5 line-clamp-2 break-words text-xs font-semibold leading-tight">
-              {item.title}
-            </p>
-            <p className="mt-0.5 line-clamp-1 break-words text-[10px] leading-snug opacity-75">
-              {item.subtitle}
-            </p>
-          </div>
-          <span className="w-fit rounded-full border border-current/25 bg-white/40 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
-            {item.statusLabel ??
-              (item.kind === "block"
-                ? "Blocked"
-                : item.kind === "google"
-                  ? "Google"
-                  : "Shoot")}
-          </span>
-        </div>
+        {body}
       </button>
     );
   }
 
-  return content;
+  return (
+    <div className={eventClass} style={layoutStyle}>
+      {body}
+    </div>
+  );
 }
 
 function CalendarEvent({
@@ -2623,7 +2701,7 @@ function CalendarEvent({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        className={`${baseClass} touch-none select-none ${
+        className={`${baseClass} select-none ${
           isDragging
             ? "scale-[0.98] opacity-35"
             : "cursor-grab active:cursor-grabbing"
@@ -2942,6 +3020,17 @@ function toDateTimeLocalFromMinutes(date: string, totalMinutes: number): string 
     date,
     Math.floor(normalized / 60),
     normalized % 60,
+  );
+}
+
+function dateTimeLocalForIso(iso: string): string {
+  const parts = calendarDateParts(new Date(iso));
+  return toDateTimeLocal(
+    `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(
+      parts.day,
+    ).padStart(2, "0")}`,
+    parts.hour,
+    parts.minute,
   );
 }
 
