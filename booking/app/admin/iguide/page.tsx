@@ -160,7 +160,7 @@ export default async function IGuideReviewPage({
         />
         <InfoBox
           title="Portal list status"
-          body="iGUIDE confirmed their list-all-iGUIDEs endpoint is not public yet. Manual linking is the supported path for existing tours."
+          body="iGUIDE now documents portal listing publicly. Tokens need iguide.list; manual linking remains available."
         />
       </div>
 
@@ -275,13 +275,12 @@ export default async function IGuideReviewPage({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-realtor-text">
-              Portal search is not available yet
+              Portal search requires the new list permission
             </h2>
             <p className="mt-1 text-xs text-realtor-muted">
-              iGUIDE support confirmed that the endpoint for listing all tours
-              is not exposed for external/customer use yet, even though the
-              permission appears in API settings. They added this use case to
-              their development backlog.
+              iGUIDE added the list endpoint to its public API documentation in
+              July 2026. Update the saved API token with iguide.list, then test it
+              under Integrations. Manual linking still works without that scope.
             </p>
           </div>
           <Link

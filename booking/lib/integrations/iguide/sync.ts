@@ -16,11 +16,11 @@ import {
   iguideUnbrandedUrl,
   iguideViewerUrl,
   parseIGuideAlias,
+  parseIGuidePortalId,
 } from "./parse-id";
 import { isIGuidePhotoZipUrl, type IGuidePhotoZipKind } from "./photo-downloads";
 import {
   getAssetUrls,
-  getReadyEventObject,
   hasPortalCredentials,
   type IGuideMediaUrls,
   type IGuideReadyEvent,
@@ -28,7 +28,6 @@ import {
 
 type BookingUpdate = Database["public"]["Tables"]["bookings"]["Update"];
 type IGuideJobInsert = Database["public"]["Tables"]["iguide_jobs"]["Insert"];
-type IGuideJobUpdate = Database["public"]["Tables"]["iguide_jobs"]["Update"];
 type IGuideWebhookEventInsert =
   Database["public"]["Tables"]["iguide_webhook_events"]["Insert"];
 
@@ -44,6 +43,8 @@ export interface SyncIGuideResult {
   address?: string;
   /** Portal ID we discovered during sync (if the booking only knew the alias). */
   portalId?: string;
+  /** Webhook events that were deliberately acknowledged without syncing. */
+  skipped?: "unmatched" | "not_owned";
 }
 
 interface BookingTarget {
@@ -57,6 +58,7 @@ interface BookingTarget {
 interface PropertyMatchBooking extends BookingTarget {
   scheduled_at: string | null;
   status: string;
+  unit_number: string | null;
   properties: {
     street_address: string;
     city: string | null;
@@ -70,6 +72,12 @@ interface WebhookRecord {
 
 interface IGuideOrganizationScope {
   organizationId?: string;
+}
+
+interface ReadyEventMatch {
+  booking: BookingTarget | null;
+  source: string;
+  error?: string;
 }
 
 /**
@@ -109,7 +117,7 @@ export async function syncIGuideForBooking(
         booking,
         organizationId,
         portalId,
-        fallbackAlias: alias ?? portalId,
+        fallbackAlias: alias,
         data: res.data,
       });
     }
@@ -163,8 +171,24 @@ export async function syncIGuideFromReadyEvent(
   const supabase = getServiceSupabase();
   const organizationId = resolveOrganizationId(booking, scope);
 
-  const portalId = event.iguideId;
-  const alias = event.iguideAlias ?? booking.iguide_id ?? portalId;
+  const portalId = parseIGuidePortalId(event.iguideId);
+  if (!portalId) {
+    return {
+      ok: false,
+      upserts: 0,
+      error: "iGUIDE sent an invalid Portal ID.",
+    };
+  }
+  const alias = readyEventAlias(event, booking.iguide_id);
+  if (!alias) {
+    return {
+      ok: false,
+      upserts: 0,
+      error:
+        "iGUIDE did not provide a usable public tour alias yet. Wait until publishing finishes, then sync again.",
+      portalId,
+    };
+  }
 
   // Backfill portal id / alias onto the booking row when we learn them.
   const updates: BookingUpdate = {};
@@ -254,11 +278,20 @@ async function persistFromAssetUrls({
   booking: BookingTarget;
   organizationId: string;
   portalId: string;
-  fallbackAlias: string;
+  fallbackAlias: string | null;
   data: { languages?: Record<string, IGuideMediaUrls | undefined> };
 }): Promise<SyncIGuideResult> {
   const media = pickPreferredLanguage(data.languages);
   const alias = deriveAliasFromMedia(media) ?? fallbackAlias;
+  if (!alias) {
+    return {
+      ok: false,
+      upserts: 0,
+      portalId,
+      error:
+        "iGUIDE returned the asset list, but it did not include a public tour alias yet. Wait until the ready event arrives or paste the public tour URL.",
+    };
+  }
   if (alias !== fallbackAlias && booking.iguide_id !== alias) {
     const { error } = await getServiceSupabase()
       .from("bookings")
@@ -289,7 +322,11 @@ function pickPreferredLanguage(
 ): IGuideMediaUrls {
   if (!languages) return {};
   // English when available; otherwise any first entry we find.
-  return languages.en ?? Object.values(languages).find((v): v is IGuideMediaUrls => !!v) ?? {};
+  const media =
+    languages.en ??
+    Object.values(languages).find((v): v is IGuideMediaUrls => !!v) ??
+    {};
+  return sanitizeMediaUrls(media);
 }
 
 function deriveAliasFromMedia(media: IGuideMediaUrls): string | null {
@@ -343,7 +380,7 @@ function buildDeliverableRowsFromMedia({
     property_id: propertyId,
     type: "virtual_tour",
     source: "iguide",
-    external_id: `${portalId}/tour`,
+    external_id: `${bookingId}:iguide-tour`,
     url: iguideViewerUrl(alias),
     embed_html: iguideEmbedHtml(alias),
     thumbnail_url: media.galleryFrontImage ?? media.embedImage ?? null,
@@ -362,7 +399,7 @@ function buildDeliverableRowsFromMedia({
     property_id: propertyId,
     type: "floor_plan",
     source: "iguide",
-    external_id: `${portalId}/floorplan`,
+    external_id: `${bookingId}:iguide-floorplan`,
     url: floorPlanUrl,
     thumbnail_url: media.galleryFrontImage ?? null,
     metadata: {
@@ -381,7 +418,7 @@ function buildDeliverableRowsFromMedia({
       property_id: propertyId,
       type: "photo_gallery",
       source: "iguide",
-      external_id: `${portalId}/photos`,
+      external_id: `${bookingId}:iguide-photos`,
       url: galleryPhotoUrls[0] ?? photoDownloads.mls ?? photoDownloads.highRes ?? iguideViewerUrl(alias),
       thumbnail_url: galleryPhotoUrls[0] ?? media.galleryFrontImage ?? media.embedImage ?? null,
       metadata: {
@@ -412,9 +449,10 @@ function buildDeliverableRowsFromReady(
   const media = pickPreferredLanguage(event.urls?.mediaUrls);
   const portalId = event.iguideId;
 
-  const publicUrl = event.urls?.publicUrl ?? iguideViewerUrl(alias);
-  const unbrandedUrl = event.urls?.unbrandedUrl ?? iguideUnbrandedUrl(alias);
-  const embedUrl = event.urls?.embeddedUrl ?? null;
+  const publicUrl = safeIGuideUrl(event.urls?.publicUrl) ?? iguideViewerUrl(alias);
+  const unbrandedUrl =
+    safeIGuideUrl(event.urls?.unbrandedUrl) ?? iguideUnbrandedUrl(alias);
+  const embedUrl = safeIGuideUrl(event.urls?.embeddedUrl);
   const thumbnail = media.galleryFrontImage ?? media.embedImage ?? null;
   const galleryPhotoUrls = uniqueStrings([media.galleryFrontImage, media.embedImage]);
   const photoDownloads = photoDownloadUrlsFromMedia(media, event.authtoken);
@@ -424,7 +462,7 @@ function buildDeliverableRowsFromReady(
     property_id: booking.property_id,
     type: "virtual_tour",
     source: "iguide",
-    external_id: `${portalId}/tour`,
+    external_id: `${booking.id}:iguide-tour`,
     url: publicUrl,
     embed_html: iguideEmbedHtml(alias),
     thumbnail_url: thumbnail,
@@ -450,7 +488,7 @@ function buildDeliverableRowsFromReady(
     property_id: booking.property_id,
     type: "floor_plan",
     source: "iguide",
-    external_id: `${portalId}/floorplan`,
+    external_id: `${booking.id}:iguide-floorplan`,
     url: floorPlanUrl,
     thumbnail_url: thumbnail,
     metadata: {
@@ -469,7 +507,7 @@ function buildDeliverableRowsFromReady(
       property_id: booking.property_id,
       type: "photo_gallery",
       source: "iguide",
-      external_id: `${portalId}/photos`,
+      external_id: `${booking.id}:iguide-photos`,
       url: galleryPhotoUrls[0] ?? photoDownloads.mls ?? photoDownloads.highRes ?? publicUrl,
       thumbnail_url: thumbnail,
       metadata: {
@@ -520,11 +558,6 @@ function buildDeliverableRowsFromRESO(
   const photoUrls = photoUrlsFromRESO(reso);
   const thumbnailUrl = photoUrls[0] ?? pickPreferredPhotoUrl(reso);
 
-  const tourMedia =
-    findMediaByCategory(reso.Media, "virtual tour") ??
-    findMediaByCategory(reso.Media, "tour");
-  const tourUrl = tourMedia?.MediaURL ?? iguideViewerUrl(alias);
-
   const floorPlanMedia = findMediaByCategory(reso.Media, "floor plan");
   const floorPlanUrl =
     floorPlanMedia?.MediaURL ?? iguideFloorplanPdfUrl(alias);
@@ -535,10 +568,8 @@ function buildDeliverableRowsFromRESO(
       property_id: booking.property_id,
       type: "virtual_tour",
       source: "iguide",
-      // No portal_id here — key off the alias, which is at least stable
-      // within the lifetime of the tour.
-      external_id: `alias:${alias}/tour`,
-      url: tourUrl,
+      external_id: `${booking.id}:iguide-tour`,
+      url: iguideViewerUrl(alias),
       embed_html: iguideEmbedHtml(alias),
       thumbnail_url: thumbnailUrl,
       metadata: {
@@ -555,7 +586,7 @@ function buildDeliverableRowsFromRESO(
       property_id: booking.property_id,
       type: "floor_plan",
       source: "iguide",
-      external_id: `alias:${alias}/floorplan`,
+      external_id: `${booking.id}:iguide-floorplan`,
       url: floorPlanUrl,
       thumbnail_url: thumbnailUrl,
       metadata: {
@@ -572,7 +603,7 @@ function buildDeliverableRowsFromRESO(
       property_id: booking.property_id,
       type: "photo_gallery",
       source: "iguide",
-      external_id: `alias:${alias}/photos`,
+      external_id: `${booking.id}:iguide-photos`,
       url: photoUrls[0],
       thumbnail_url: thumbnailUrl,
       metadata: {
@@ -634,7 +665,11 @@ function usableIGuidePhotoZipUrl(
   try {
     const parsed = new URL(url);
     if (!isIGuidePhotoZipUrl(url, kind)) return null;
-    if (accessToken && !parsed.searchParams.has("accessToken")) {
+    if (
+      accessToken &&
+      accessToken !== "[redacted]" &&
+      !parsed.searchParams.has("accessToken")
+    ) {
       parsed.searchParams.set("accessToken", accessToken);
     }
     return parsed.toString();
@@ -647,6 +682,72 @@ async function fetchRESOPhotoUrls(alias: string): Promise<string[]> {
   const fetched = await fetchIGuideRESO(alias);
   if (!fetched.ok || !fetched.data) return [];
   return photoUrlsFromRESO(fetched.data);
+}
+
+function readyEventAlias(
+  event: IGuideReadyEvent,
+  fallbackAlias: string | null | undefined,
+): string | null {
+  const candidates = [
+    event.iguideAlias,
+    event.urls?.publicUrl,
+    event.urls?.unbrandedUrl,
+    event.urls?.embeddedUrl,
+    fallbackAlias,
+  ];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const alias = parseIGuideAlias(candidate);
+    if (alias) return alias;
+  }
+  return null;
+}
+
+function sanitizeMediaUrls(media: IGuideMediaUrls): IGuideMediaUrls {
+  const sanitizeFloors = (
+    floors: Array<{ id: number; floorName: string; url: string }> | undefined,
+  ) =>
+    floors
+      ?.map((floor) => {
+        const url = safeIGuideUrl(floor.url);
+        return url ? { ...floor, url } : null;
+      })
+      .filter(
+        (floor): floor is { id: number; floorName: string; url: string } =>
+          floor !== null,
+      );
+
+  return {
+    galleryFrontImage: safeIGuideUrl(media.galleryFrontImage) ?? undefined,
+    pdfMetric: safeIGuideUrl(media.pdfMetric) ?? undefined,
+    pdfImperial: safeIGuideUrl(media.pdfImperial) ?? undefined,
+    galleryZip: safeIGuideUrl(media.galleryZip) ?? undefined,
+    galleryMlsZip: safeIGuideUrl(media.galleryMlsZip) ?? undefined,
+    galleryLowRes: safeIGuideUrl(media.galleryLowRes) ?? undefined,
+    galleryLowResZip: safeIGuideUrl(media.galleryLowResZip) ?? undefined,
+    sphereZip: safeIGuideUrl(media.sphereZip) ?? undefined,
+    offlineZip: safeIGuideUrl(media.offlineZip) ?? undefined,
+    svgZip: safeIGuideUrl(media.svgZip) ?? undefined,
+    dxfZip: safeIGuideUrl(media.dxfZip) ?? undefined,
+    embedImage: safeIGuideUrl(media.embedImage) ?? undefined,
+    jpgMetric: sanitizeFloors(media.jpgMetric),
+    jpgImperial: sanitizeFloors(media.jpgImperial),
+  };
+}
+
+function safeIGuideUrl(rawUrl: string | null | undefined): string | null {
+  if (!rawUrl) return null;
+  try {
+    const url = new URL(rawUrl);
+    const hostname = url.hostname.toLowerCase();
+    if (url.protocol !== "https:") return null;
+    if (hostname !== "youriguide.com" && !hostname.endsWith(".youriguide.com")) {
+      return null;
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 function isPhotoMedia(media: IGuideRESOMedia): boolean {
@@ -686,22 +787,80 @@ function formatAddressFromRESO(reso: IGuideRESOResponse): string {
 async function upsertDeliverables(
   rows: DeliverableInsert[],
 ): Promise<{ upserts: number; error?: string }> {
+  if (rows.length === 0) return { upserts: 0 };
   const supabase = getServiceSupabase();
-  let upserts = 0;
-  for (const row of rows) {
-    const { error } = await supabase
+  const bookingId = rows[0].booking_id;
+  if (!bookingId || rows.some((row) => row.booking_id !== bookingId)) {
+    return { upserts: 0, error: "iGUIDE sync produced inconsistent booking data." };
+  }
+
+  // PostgREST executes a multi-row upsert in one transaction. This prevents a
+  // failed floor-plan or gallery row from leaving only part of the delivery
+  // refreshed.
+  const { error: upsertError } = await supabase
+    .from("deliverables")
+    .upsert(rows, { onConflict: "source,external_id" });
+  if (upsertError) {
+    console.error("[iguide.sync] deliverable upsert failed", upsertError);
+    return {
+      upserts: 0,
+      error: `iGUIDE media could not be saved: ${upsertError.message}`,
+    };
+  }
+  const upserts = rows.length;
+
+  // Earlier versions keyed rows by alias or Portal ID. A relink or promotion
+  // from alias -> Portal ID could therefore leave two tours and two floor plans
+  // on one booking. Keep the manual photo-override row, but remove stale rows
+  // managed by this sync only after every current row saved successfully.
+  const activeExternalIds = new Set(rows.map((row) => row.external_id));
+  const { data: existing, error: existingError } = await supabase
+    .from("deliverables")
+    .select("id, external_id")
+    .eq("booking_id", bookingId)
+    .eq("source", "iguide")
+    .returns<Array<{ id: string; external_id: string }>>();
+  if (existingError) {
+    return {
+      upserts,
+      error: `iGUIDE media saved, but stale-link cleanup failed: ${existingError.message}`,
+    };
+  }
+
+  const staleIds = (existing ?? [])
+    .filter(
+      (row) =>
+        isManagedIGuideExternalId(row.external_id) &&
+        !activeExternalIds.has(row.external_id),
+    )
+    .map((row) => row.id);
+  if (staleIds.length > 0) {
+    const { error: cleanupError } = await supabase
       .from("deliverables")
-      .upsert(row, { onConflict: "source,external_id" });
-    if (error) {
-      console.error("[iguide.sync] upsert failed", row.type, error);
+      .delete()
+      .eq("booking_id", bookingId)
+      .eq("source", "iguide")
+      .in("id", staleIds);
+    if (cleanupError) {
       return {
         upserts,
-        error: `Saved ${upserts} of ${rows.length} (${row.type} failed: ${error.message}).`,
+        error: `iGUIDE media saved, but stale-link cleanup failed: ${cleanupError.message}`,
       };
     }
-    upserts += 1;
   }
+
   return { upserts };
+}
+
+function isManagedIGuideExternalId(externalId: string): boolean {
+  return (
+    externalId.endsWith("/tour") ||
+    externalId.endsWith("/floorplan") ||
+    externalId.endsWith("/photos") ||
+    externalId.endsWith(":iguide-tour") ||
+    externalId.endsWith(":iguide-floorplan") ||
+    externalId.endsWith(":iguide-photos")
+  );
 }
 
 /**
@@ -714,39 +873,45 @@ export async function syncIGuideFromWebhook(
 ): Promise<SyncIGuideResult & { bookingId?: string }> {
   const organizationId = scope?.organizationId ?? DEFAULT_ORGANIZATION_ID;
 
-  const portalId = event.iguideId?.trim();
-  const alias = event.iguideAlias?.trim();
-
-  if (!portalId && !alias) {
+  const portalId = parseIGuidePortalId(event.iguideId ?? "");
+  if (!portalId) {
     return {
-      ok: false,
+      ok: true,
       upserts: 0,
-      error: "Event carried neither iguideId nor iguideAlias.",
+      skipped: "not_owned",
     };
   }
 
-  const webhookRecord = await saveWebhookEvent(event, { organizationId });
   const matched = await findBookingForReadyEvent(event, { organizationId });
+  if (matched.error) {
+    return { ok: false, upserts: 0, error: matched.error };
+  }
   const booking = matched.booking;
 
   if (!booking) {
-    if (webhookRecord) {
-      await updateWebhookEvent(
-        webhookRecord.id,
-        {
-          match_status: "unmatched",
-          last_error: `No booking matched iGuide ${portalId ?? alias}.`,
-        },
-        { organizationId },
-      );
-    }
+    // This endpoint has historically received a global stream of unrelated
+    // iGUIDEs. Keeping every unmatched payload grew the inbox by hundreds of
+    // rows per day. A real booking still matches by a pre-recorded job, saved
+    // Portal ID/alias, or one exact address; everything else is acknowledged
+    // without retaining another company's property data.
     return {
-      ok: false,
+      ok: true,
       upserts: 0,
-      error: `No booking is tagged with iGuide ${portalId ?? alias} yet.`,
+      skipped: "unmatched",
     };
   }
 
+  if (matched.source === "exact_address") {
+    const ownership = await verifyWebhookTourOwnership(portalId, organizationId);
+    if (ownership.error) {
+      return { ok: false, upserts: 0, error: ownership.error };
+    }
+    if (!ownership.owned) {
+      return { ok: true, upserts: 0, skipped: "not_owned" };
+    }
+  }
+
+  const webhookRecord = await saveWebhookEvent(event, { organizationId });
   const result = await syncIGuideFromReadyEvent(booking, event, matched.source, {
     organizationId,
   });
@@ -764,6 +929,26 @@ export async function syncIGuideFromWebhook(
     );
   }
   return { ...result, bookingId: booking.id };
+}
+
+async function verifyWebhookTourOwnership(
+  portalId: string,
+  organizationId: string,
+): Promise<{ owned: boolean; error?: string }> {
+  if (!(await hasPortalCredentials({ organizationId }))) {
+    return { owned: false };
+  }
+
+  const result = await getAssetUrls(portalId, { organizationId });
+  if (result.ok) return { owned: true };
+  if (result.status === 404) return { owned: false };
+  return {
+    owned: false,
+    error:
+      result.status === 401
+        ? "iGUIDE could not verify tour ownership. Check that the saved token includes iguide.read."
+        : `iGUIDE ownership check failed (${result.status || "network"}).`,
+  };
 }
 
 async function saveWebhookEvent(
@@ -841,14 +1026,14 @@ async function updateWebhookEvent(
 async function findBookingForReadyEvent(
   event: IGuideReadyEvent,
   scope: Required<IGuideOrganizationScope>,
-): Promise<{ booking: BookingTarget | null; source: string }> {
+): Promise<ReadyEventMatch> {
   const supabase = getServiceSupabase();
-  const portalId = event.iguideId?.trim();
-  const alias = event.iguideAlias?.trim();
+  const portalId = parseIGuidePortalId(event.iguideId ?? "");
+  const alias = readyEventAlias(event, null);
   const { organizationId } = scope;
 
   if (portalId) {
-    const { data: job } = await supabase
+    const { data: job, error: jobError } = await supabase
       .from("iguide_jobs")
       .select(
         "booking_id, bookings(id, organization_id, property_id, iguide_id, iguide_portal_id)",
@@ -859,31 +1044,57 @@ async function findBookingForReadyEvent(
         booking_id: string;
         bookings: BookingTarget | null;
       }>();
+    if (jobError) {
+      return {
+        booking: null,
+        source: "lookup_failed",
+        error: `Could not look up the iGUIDE job: ${jobError.message}`,
+      };
+    }
     if (job?.bookings) return { booking: job.bookings, source: "job_iguide_id" };
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("bookings")
       .select("id, organization_id, property_id, iguide_id, iguide_portal_id")
       .eq("organization_id", organizationId)
       .eq("iguide_portal_id", portalId)
       .maybeSingle<BookingTarget>();
+    if (error) {
+      return {
+        booking: null,
+        source: "lookup_failed",
+        error: `Could not look up the booking by iGUIDE Portal ID: ${error.message}`,
+      };
+    }
     if (data) return { booking: data, source: "booking_portal_id" };
   }
 
   if (alias) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("bookings")
       .select("id, organization_id, property_id, iguide_id, iguide_portal_id")
       .eq("organization_id", organizationId)
       .eq("iguide_id", alias)
       .maybeSingle<BookingTarget>();
+    if (error) {
+      return {
+        booking: null,
+        source: "lookup_failed",
+        error: `Could not look up the booking by iGUIDE alias: ${error.message}`,
+      };
+    }
     if (data) return { booking: data, source: "booking_alias" };
   }
 
   const addressMatch = await findSingleBookingByAddress(event.property, {
     organizationId,
   });
-  if (addressMatch) return { booking: addressMatch, source: "exact_address" };
+  if (addressMatch.error) {
+    return { booking: null, source: "lookup_failed", error: addressMatch.error };
+  }
+  if (addressMatch.booking) {
+    return { booking: addressMatch.booking, source: "exact_address" };
+  }
 
   return { booking: null, source: "unmatched" };
 }
@@ -891,7 +1102,7 @@ async function findBookingForReadyEvent(
 async function findSingleBookingByAddress(
   property: IGuideReadyEvent["property"],
   scope: Required<IGuideOrganizationScope>,
-): Promise<BookingTarget | null> {
+): Promise<{ booking: BookingTarget | null; error?: string }> {
   const target = normalizeAddress(
     [
       property?.streetNumber,
@@ -904,20 +1115,24 @@ async function findSingleBookingByAddress(
       .join(" "),
   );
   const postal = normalizePostalCode(property?.postalCode);
-  if (!target || !postal) return null;
+  if (!target || !postal) return { booking: null };
 
   const { data, error } = await getServiceSupabase()
     .from("bookings")
     .select(
-      "id, organization_id, property_id, iguide_id, iguide_portal_id, scheduled_at, status, properties(street_address, city, postal_code)",
+      "id, organization_id, property_id, iguide_id, iguide_portal_id, scheduled_at, status, unit_number, properties(street_address, city, postal_code)",
     )
     .eq("organization_id", scope.organizationId)
     .in("status", ["requested", "confirmed", "shot", "editing", "delivered"])
     .returns<PropertyMatchBooking[]>();
 
   if (error || !data) {
-    if (error) console.warn("[iguide.sync] address match query failed", error);
-    return null;
+    return {
+      booking: null,
+      error: error
+        ? `Could not match the iGUIDE property address: ${error.message}`
+        : "Could not match the iGUIDE property address.",
+    };
   }
 
   const matches = data.filter((booking) => {
@@ -926,6 +1141,7 @@ async function findSingleBookingByAddress(
     const dbAddress = normalizeAddress(
       [
         booking.properties?.street_address,
+        booking.unit_number,
         booking.properties?.city,
         booking.properties?.postal_code,
       ]
@@ -935,14 +1151,16 @@ async function findSingleBookingByAddress(
     return dbAddress === target || dbAddress.includes(target) || target.includes(dbAddress);
   });
 
-  if (matches.length !== 1) return null;
+  if (matches.length !== 1) return { booking: null };
   const match = matches[0];
   return {
-    id: match.id,
-    organization_id: match.organization_id,
-    property_id: match.property_id,
-    iguide_id: match.iguide_id,
-    iguide_portal_id: match.iguide_portal_id,
+    booking: {
+      id: match.id,
+      organization_id: match.organization_id,
+      property_id: match.property_id,
+      iguide_id: match.iguide_id,
+      iguide_portal_id: match.iguide_portal_id,
+    },
   };
 }
 
@@ -958,8 +1176,8 @@ async function upsertIGuideJobFromReadyEvent(
     organization_id: organizationId,
     booking_id: booking.id,
     property_id: booking.property_id,
-    iguide_id: event.iguideId,
-    alias: event.iguideAlias ?? booking.iguide_id ?? null,
+    iguide_id: parseIGuidePortalId(event.iguideId) ?? event.iguideId.trim(),
+    alias: readyEventAlias(event, booking.iguide_id),
     work_order_id: event.workOrderId ?? null,
     default_view_id: event.defaultViewId ?? null,
     status: "ready",
@@ -1000,22 +1218,6 @@ export async function recordIGuideCreateJob(input: {
     .upsert(row, { onConflict: "organization_id,iguide_id" });
   if (error) return { ok: false, error: error.message };
   return { ok: true };
-}
-
-export async function updateIGuideJobStatus(
-  iguideId: string,
-  updates: IGuideJobUpdate,
-  scope?: IGuideOrganizationScope,
-) {
-  let query = getServiceSupabase()
-    .from("iguide_jobs")
-    .update(updates)
-    .eq("iguide_id", iguideId);
-  if (scope?.organizationId) {
-    query = query.eq("organization_id", scope.organizationId);
-  }
-  const { error } = await query;
-  if (error) console.warn("[iguide.sync] failed to update job status", error);
 }
 
 function resolveOrganizationId(

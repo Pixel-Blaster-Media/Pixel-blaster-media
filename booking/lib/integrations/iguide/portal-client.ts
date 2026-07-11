@@ -14,16 +14,14 @@ import { getCredential } from "@/lib/integrations/credentials";
  *   X-Plntr-App-Id:    your token ID or OAuth client ID
  *   X-Plntr-App-Token: your token value or OAuth access token
  *
- * For our single-tenant use (Pixel Blaster pulls from its own master
- * account) we use an API Token (Portal UI → Settings → API Management →
- * API Tokens tab). Scopes we need:
+ * Each organization supplies its own API Token (Portal UI → Settings → API
+ * Management → API Tokens tab). Scopes used by the full workflow:
  *
  *   - iguide.read   – asset URLs, editors, work-order status
  *   - iguide.events – re-fetch the ready event payload on demand
- *   - iguide.list   – visible in iGUIDE's permission UI, but iGUIDE
- *                     confirmed in May 2026 that GET /iguides is not
- *                     exposed for external/customer use yet.
- *   - user.account  – list subaccounts (the realtor sub-logins)
+ *   - iguide.write  – create an iGUIDE from a booking
+ *   - iguide.process – process supplementary gallery uploads
+ *   - iguide.list   – search the organization's portal tours
  *
  * All endpoints return JSON unless noted. 4xx/5xx surface as
  * `{ok:false, status, error}` rather than throwing — callers decide
@@ -31,6 +29,7 @@ import { getCredential } from "@/lib/integrations/credentials";
  */
 
 const DEFAULT_BASE_URL = "https://manage.youriguide.com/api/v1";
+const PORTAL_FETCH_TIMEOUT_MS = 15_000;
 
 interface PortalScope {
   organizationId?: string;
@@ -104,6 +103,8 @@ async function portalFetch<T>(
         ...(init.headers ?? {}),
       },
       cache: "no-store",
+      redirect: init.redirect ?? "manual",
+      signal: init.signal ?? AbortSignal.timeout(PORTAL_FETCH_TIMEOUT_MS),
     });
   } catch (err) {
     return {
@@ -185,7 +186,7 @@ function validateHeaderCredential(label: string, value: string): string | null {
 // actual responses carry optional/variable fields depending on tour type.
 // ===========================================================================
 
-export interface IGuideUrlObject {
+interface IGuideUrlObject {
   publicUrl?: string;
   unbrandedUrl?: string;
   embeddedUrl?: string;
@@ -212,7 +213,7 @@ export interface IGuideMediaUrls {
   jpgImperial?: Array<{ id: number; floorName: string; url: string }>;
 }
 
-export interface IGuideProperty {
+interface IGuideProperty {
   fullAddress?: string;
   country?: string;
   postalCode?: string;
@@ -224,7 +225,7 @@ export interface IGuideProperty {
   location?: { lat?: number; lng?: number };
 }
 
-export interface IGuideBillingInfo {
+interface IGuideBillingInfo {
   iguideType?: string;
   package?: string;
   addons?: string[];
@@ -232,7 +233,7 @@ export interface IGuideBillingInfo {
   billableAreaSqMeters?: number;
 }
 
-export interface IGuideBanner {
+interface IGuideBanner {
   fullName?: string;
   title?: string;
   company?: string;
@@ -263,13 +264,6 @@ export interface IGuideAssetUrlsResponse {
   ads?: Array<{ url?: string; [k: string]: unknown }>;
 }
 
-export interface IGuideSubaccount {
-  id: string;
-  firstname?: string;
-  lastname?: string;
-  emailHint?: string;
-}
-
 export interface IGuideListItem {
   id: string;
   alias?: string | null;
@@ -284,6 +278,7 @@ export interface IGuideListItem {
 export interface IGuideCreateInput {
   type: "standard" | string;
   industry: "residential" | string;
+  applyDefaults?: boolean;
   address: {
     country: string;
     provinceState: string;
@@ -291,7 +286,7 @@ export interface IGuideCreateInput {
     postalCode: string;
     streetName: string;
     streetNumber: string;
-    unit?: string;
+    unitNumber?: string;
   };
   webhooks?: Array<{
     event: "*" | "ready" | string;
@@ -304,15 +299,6 @@ export interface IGuideCreateResponse {
   alias?: string;
   workOrderId?: string;
   defaultViewId?: string;
-  [key: string]: unknown;
-}
-
-export interface IGuideWorkOrderResponse {
-  id?: string;
-  workOrderId?: string;
-  status?: string;
-  state?: string;
-  taskType?: string;
   [key: string]: unknown;
 }
 
@@ -380,21 +366,6 @@ export async function createIGuide(
   }, scope);
 }
 
-/** Read the current state of a work order we previously created. */
-export async function getWorkOrder(
-  iguideId: string,
-  workOrderId: string,
-  scope?: PortalScope,
-): Promise<PortalResult<IGuideWorkOrderResponse>> {
-  return portalFetch<IGuideWorkOrderResponse>(
-    `/iguides/${encodeURIComponent(iguideId)}/workOrders/${encodeURIComponent(
-      workOrderId,
-    )}`,
-    {},
-    scope,
-  );
-}
-
 /**
  * Fetch the on-demand `ready` event payload for an already-published tour.
  * This is the same shape the webhook delivers — safe to run through our
@@ -412,25 +383,6 @@ export async function getReadyEventObject(
   return portalFetch<IGuideReadyEvent>(
     `/iguides/${encodeURIComponent(iguideId)}/events/ready/object?${qs}`,
     {},
-    scope,
-  );
-}
-
-/**
- * Ask iGuide to re-dispatch the ready event to our webhook. Useful to
- * "replay" when we missed one (e.g. our server was down).
- *
- * Scope: iguide.events.
- */
-export async function dispatchReadyEvent(
-  iguideId: string,
-  taskId: string,
-  scope?: PortalScope,
-): Promise<PortalResult<void>> {
-  const qs = new URLSearchParams({ taskId }).toString();
-  return portalFetch<void>(
-    `/iguides/${encodeURIComponent(iguideId)}/events/ready/dispatch?${qs}`,
-    { method: "POST", body: JSON.stringify({}) },
     scope,
   );
 }
@@ -587,10 +539,8 @@ export async function uploadAssetToIGuide(
 /**
  * List iGUIDEs available to the configured Portal API credentials.
  *
- * iGUIDE support confirmed this endpoint is not publicly exposed for customer
- * use yet, even though the iguide.list scope appears in their Portal API UI.
- * Keep the normalizer below for the future roadmap item, but do not wire this
- * into product UI until iGUIDE announces the endpoint is available.
+ * This endpoint was added to the public July 2026 API documentation after being
+ * unavailable to customer integrations earlier in the project.
  */
 export async function listIGuides(
   scope?: PortalScope,
@@ -608,17 +558,6 @@ export async function listIGuides(
     status: result.status,
     data: normalizeIGuideList(result.data),
   };
-}
-
-/**
- * List the realtor sub-accounts (editors) on our master iGuide account.
- * We'll eventually use this to auto-match tours to Pixel Blaster profiles
- * by email.
- *
- * Scope: user.account.
- */
-export async function listSubaccounts(): Promise<PortalResult<IGuideSubaccount[]>> {
-  return portalFetch<IGuideSubaccount[]>("/userinfo/subaccounts");
 }
 
 function normalizeIGuideList(value: unknown): IGuideListItem[] {

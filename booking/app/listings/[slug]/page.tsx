@@ -619,40 +619,6 @@ function SelectedMediaSections({
   );
 }
 
-function MediaButtons({
-  links,
-  dark = false,
-  compact = false,
-}: {
-  links: DeliveryLink[];
-  dark?: boolean;
-  compact?: boolean;
-}) {
-  if (links.length === 0) return null;
-  const visible = compact ? links.slice(0, 6) : links.slice(0, 8);
-  return (
-    <section>
-      <div className={`grid gap-2 ${compact ? "" : "sm:grid-cols-2 lg:grid-cols-4"}`}>
-        {visible.map((link) => (
-          <a
-            key={`${link.label}:${link.url}`}
-            href={link.url}
-            target="_blank"
-            rel="noopener"
-            className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
-              dark
-                ? "border-white/15 bg-white/8 text-white hover:bg-white/14"
-                : "border-current/10 bg-white/65 text-current hover:bg-white"
-            }`}
-          >
-            {link.label} ↗
-          </a>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function AgentCard({
   listing,
   dark = false,

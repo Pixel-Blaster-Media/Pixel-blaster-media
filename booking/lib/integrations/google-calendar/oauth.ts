@@ -20,16 +20,16 @@ import "server-only";
  * don't ask for full calendar scope — principle of least privilege.
  */
 
-export const GOOGLE_AUTH_URL =
+const GOOGLE_AUTH_URL =
   "https://accounts.google.com/o/oauth2/v2/auth";
-export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
-export const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
+const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 
 /**
  * openid + email give us the connected account's email via the id_token.
  * calendar.events is read+write on events only. No settings, no sharing.
  */
-export const GOOGLE_SCOPES = [
+const GOOGLE_SCOPES = [
   "openid",
   "email",
   "https://www.googleapis.com/auth/calendar.events",

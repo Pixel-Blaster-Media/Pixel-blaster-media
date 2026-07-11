@@ -1,6 +1,6 @@
+import { createHash, timingSafeEqual } from "crypto";
 import { NextResponse, type NextRequest } from "next/server";
 
-import { iguideViewerUrl } from "@/lib/integrations/iguide/parse-id";
 import type { IGuideReadyEvent } from "@/lib/integrations/iguide/portal-client";
 import { syncIGuideFromWebhook } from "@/lib/integrations/iguide/sync";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
@@ -8,6 +8,8 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const MAX_WEBHOOK_BYTES = 512 * 1024;
 
 interface IGuideCredentialRow {
   organization_id: string;
@@ -31,8 +33,7 @@ interface IGuideCredentialRow {
  * (they'll try again every 10-15 min up to 5 times); any other status
  * silently drops the event. So we:
  *   - 200 for success
- *   - 200 for "unknown-to-us tour" (don't want infinite retries for
- *     tours that were never tagged to a booking)
+ *   - 200 for "unknown-to-us tour" (unrelated tours are not retained)
  *   - 200 for malformed payloads (same — retrying won't help)
  *   - 500 only for transient DB/network failures our side
  */
@@ -46,9 +47,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
+  const declaredLength = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_WEBHOOK_BYTES) {
+    return NextResponse.json({ ok: false, error: "payload_too_large" }, { status: 413 });
+  }
+
   let body: unknown;
   try {
-    body = await request.json();
+    const rawBody = await request.text();
+    if (Buffer.byteLength(rawBody, "utf8") > MAX_WEBHOOK_BYTES) {
+      return NextResponse.json(
+        { ok: false, error: "payload_too_large" },
+        { status: 413 },
+      );
+    }
+    body = JSON.parse(rawBody);
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
@@ -64,20 +77,15 @@ export async function POST(request: NextRequest) {
 
   const result = await syncIGuideFromWebhook(body, { organizationId });
 
+  if (result.skipped) {
+    return NextResponse.json({ ok: true, skipped: result.skipped });
+  }
+
   if (!result.ok) {
-    const untagged = result.error?.startsWith("No booking is tagged");
-    if (untagged) {
-      console.warn(
-        `[iguide.webhook] Received 'ready' for iGuide ${body.iguideId} (${iguideViewerUrl(
-          body.iguideAlias ?? body.iguideId,
-        )}) but no booking matched it confidently. Event was kept for admin review if the event inbox table exists.`,
-      );
-      return NextResponse.json({ ok: true, skipped: "unmatched_for_review" });
-    }
     console.error("[iguide.webhook] sync failed", result.error);
     // 500 triggers iGuide's retry — appropriate for transient failures.
     return NextResponse.json(
-      { ok: false, error: result.error },
+      { ok: false, error: "sync_failed" },
       { status: 500 },
     );
   }
@@ -94,7 +102,7 @@ async function resolveWebhookOrganizationId(
   provided: string,
 ): Promise<string | null> {
   const envSecret = process.env.IGUIDE_WEBHOOK_SECRET?.trim();
-  if (envSecret && timingSafeEqual(provided, normalizeWebhookSecret(envSecret))) {
+  if (envSecret && secretsMatch(provided, normalizeWebhookSecret(envSecret))) {
     return DEFAULT_ORGANIZATION_ID;
   }
 
@@ -111,7 +119,7 @@ async function resolveWebhookOrganizationId(
 
   for (const row of data ?? []) {
     const secret = row.credentials?.webhook_secret?.trim();
-    if (secret && timingSafeEqual(provided, normalizeWebhookSecret(secret))) {
+    if (secret && secretsMatch(provided, normalizeWebhookSecret(secret))) {
       return row.organization_id;
     }
   }
@@ -119,14 +127,11 @@ async function resolveWebhookOrganizationId(
   return null;
 }
 
-/** Constant-time string compare so an attacker can't bisect the secret. */
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) {
-    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return mismatch === 0;
+/** Compare fixed-size digests so secret length does not short-circuit. */
+function secretsMatch(a: string, b: string): boolean {
+  const left = createHash("sha256").update(a, "utf8").digest();
+  const right = createHash("sha256").update(b, "utf8").digest();
+  return timingSafeEqual(left, right);
 }
 
 function normalizeWebhookSecret(value: string): string {

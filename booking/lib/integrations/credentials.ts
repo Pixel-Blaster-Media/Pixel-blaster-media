@@ -194,7 +194,7 @@ export async function clearCredentialFields(
   return { ok: true };
 }
 
-export function clearCredentialsCache(
+function clearCredentialsCache(
   provider?: Provider,
   organizationId = DEFAULT_ORGANIZATION_ID,
 ): void {

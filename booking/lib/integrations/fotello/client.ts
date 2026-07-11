@@ -24,7 +24,7 @@ export const FOTELLO_BASE_URL =
   process.env.FOTELLO_API_BASE ??
   "https://us-central1-real-estate-firebase-4109e.cloudfunctions.net";
 
-export type FotelloStatus = "in_progress" | "completed" | "pending" | "failed";
+type FotelloStatus = "in_progress" | "completed" | "pending" | "failed";
 export type FotelloShotType = "interior" | "exterior";
 export type FotelloPhotoFormat = "mls" | "print" | "original";
 export type FotelloDownloadSection =

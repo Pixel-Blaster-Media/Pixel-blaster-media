@@ -2,7 +2,7 @@ import "server-only";
 
 import { getCredential } from "@/lib/integrations/credentials";
 
-export const AUTOENHANCE_BASE_URL =
+const AUTOENHANCE_BASE_URL =
   process.env.AUTOENHANCE_API_BASE ?? "https://api.autoenhance.ai";
 
 export type AutoenhanceEnhanceType =
@@ -12,7 +12,7 @@ export type AutoenhanceEnhanceType =
   | "neutral"
   | "modern";
 
-export type AutoenhanceImageStatus =
+type AutoenhanceImageStatus =
   | "pending"
   | "uploading"
   | "uploaded"
@@ -136,11 +136,15 @@ async function request<T>(
     method,
     headers: {
       Accept: "application/json",
-      "Content-Type": "application/json",
+      ...(init.body ? { "Content-Type": "application/json" } : {}),
       "x-api-key": await apiKey(init.organizationId),
+      ...(process.env.AUTOENHANCE_API_VERSION?.trim()
+        ? { "x-api-version": process.env.AUTOENHANCE_API_VERSION.trim() }
+        : {}),
     },
     body: init.body ? JSON.stringify(init.body) : undefined,
     cache: "no-store",
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!res.ok) {
@@ -152,25 +156,45 @@ async function request<T>(
     );
   }
 
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+  if (res.status === 204) return {} as T;
+  const text = await res.text();
+  if (!text.trim()) return {} as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new AutoenhanceError(
+      `Autoenhance ${method} ${path} returned invalid JSON`,
+      res.status,
+      text.slice(0, 600),
+    );
+  }
 }
 
-export function createOrder(
+export async function createOrder(
   name: string,
   organizationId?: string,
 ): Promise<AutoenhanceOrder> {
-  return request<AutoenhanceOrder>("POST", "/v3/orders/", {
+  const order = await request<AutoenhanceOrder & { id?: string }>("POST", "/v3/orders/", {
     organizationId,
     body: { name },
   });
+  return {
+    ...order,
+    order_id: order.order_id ?? order.id ?? "",
+  };
 }
 
-export function createImage(
+export async function createImage(
   input: CreateImageInput,
   organizationId?: string,
 ): Promise<AutoenhanceImage> {
-  return request<AutoenhanceImage>("POST", "/v3/images/", {
+  const image = await request<
+    AutoenhanceImage & {
+      id?: string;
+      s3PutObjectUrl?: string;
+      s3_put_object_url?: string;
+    }
+  >("POST", "/v3/images/", {
     organizationId,
     body: {
       order_id: input.orderId,
@@ -193,19 +217,50 @@ export function createImage(
       vertical_correction: true,
     },
   });
+  return {
+    ...image,
+    image_id: image.image_id ?? image.id ?? "",
+    upload_url:
+      image.upload_url ?? image.s3PutObjectUrl ?? image.s3_put_object_url,
+  };
 }
 
-export function createBracket(
+export async function createBracket(
   input: CreateBracketInput,
   organizationId?: string,
 ): Promise<AutoenhanceBracket> {
-  return request<AutoenhanceBracket>("POST", "/v3/brackets/", {
+  const bracket = await request<
+    AutoenhanceBracket & {
+      id?: string;
+      s3PutObjectUrl?: string;
+      s3_put_object_url?: string;
+    }
+  >("POST", "/v3/brackets/", {
     organizationId,
     body: {
       order_id: input.orderId,
       name: input.name,
     },
   });
+  return {
+    ...bracket,
+    bracket_id: bracket.bracket_id ?? bracket.id ?? "",
+    upload_url:
+      bracket.upload_url ??
+      bracket.s3PutObjectUrl ??
+      bracket.s3_put_object_url,
+  };
+}
+
+export function deleteOrder(
+  orderId: string,
+  organizationId?: string,
+): Promise<void> {
+  return request<void>(
+    "DELETE",
+    `/v3/orders/${encodeURIComponent(orderId)}`,
+    { organizationId },
+  );
 }
 
 export function getImage(
@@ -324,6 +379,7 @@ export async function fetchEnhancedImage(
       ...(options.devMode ? { "x-dev-mode": "true" } : {}),
     },
     cache: "no-store",
+    signal: AbortSignal.timeout(60_000),
   });
   if (!res.ok) {
     const body = await res.text();

@@ -34,7 +34,13 @@ export default function IGuideTester({
               kind: "ok",
               text: `iGUIDE accepted the saved credentials${
                 result.appIdLast4 ? ` ending in ${result.appIdLast4}` : ""
-              }.`,
+              }. ${
+                result.portalList === "available"
+                  ? `Portal tour search is available (${result.portalTourCount ?? 0} returned).`
+                  : result.portalList === "permission_needed"
+                    ? "Add the iguide.list permission to enable portal tour search."
+                    : "Linked-tour sync is ready; portal tour search could not be confirmed right now."
+              }`,
             });
           });
         }}

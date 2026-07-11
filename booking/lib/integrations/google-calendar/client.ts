@@ -52,7 +52,7 @@ export interface GoogleCalendarClient {
   deleteEvent(eventId: string): Promise<void>;
 }
 
-export interface CreateEventInput {
+interface CreateEventInput {
   summary: string;
   description?: string;
   location?: string;
@@ -65,7 +65,7 @@ export interface CreateEventInput {
   attendeeName?: string;
 }
 
-export interface CreatedEvent {
+interface CreatedEvent {
   id: string;
   htmlLink: string;
 }
@@ -103,29 +103,6 @@ function organizationId(scope?: CalendarConnectionScope): string {
   return scope?.organizationId ?? DEFAULT_ORGANIZATION_ID;
 }
 
-function isMissingOrganizationColumn(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const candidate = error as { code?: string; message?: string };
-  return (
-    candidate.code === "42703" ||
-    candidate.message?.includes("organization_id") === true
-  );
-}
-
-function isMissingCalendarSourceColumn(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const candidate = error as { code?: string; message?: string };
-  return (
-    candidate.code === "42703" &&
-    (candidate.message?.includes("write_bookings") === true ||
-      candidate.message?.includes("show_on_admin_calendar") === true ||
-      candidate.message?.includes("block_availability") === true ||
-      candidate.message?.includes("display_name") === true ||
-      candidate.message?.includes("source_color") === true ||
-      candidate.message?.includes("source_type") === true)
-  );
-}
-
 export async function getGoogleCalendarConnection(
   scope?: CalendarConnectionScope,
 ): Promise<ConnectionRow | null> {
@@ -140,44 +117,15 @@ export async function getGoogleCalendarConnection(
     .limit(1)
     .maybeSingle<ConnectionRow>();
 
-  if (!scoped.error) return scoped.data ?? null;
-
-  if (isMissingCalendarSourceColumn(scoped.error)) {
-    const single = await supabase
-      .from("google_calendar_connection")
-      .select("*")
-      .eq("organization_id", orgId)
-      .maybeSingle<ConnectionRow>();
-    if (single.error && !isMissingOrganizationColumn(single.error)) {
-      throw new Error(
-        `Load google calendar connection failed: ${single.error.message}`,
-      );
-    }
-    if (!single.error) return single.data ?? null;
-  }
-
-  // Backward compatibility while production is between code deploy and the
-  // SaaS calendar migration. Remove this fallback once 0024 is everywhere.
-  if (!isMissingOrganizationColumn(scoped.error)) {
+  if (scoped.error) {
     throw new Error(
       `Load google calendar connection failed: ${scoped.error.message}`,
     );
   }
-
-  const legacy = await supabase
-    .from("google_calendar_connection")
-    .select("*")
-    .eq("id", 1)
-    .maybeSingle<ConnectionRow>();
-  if (legacy.error) {
-    throw new Error(
-      `Load google calendar connection failed: ${legacy.error.message}`,
-    );
-  }
-  return legacy.data ?? null;
+  return scoped.data ?? null;
 }
 
-export async function getGoogleCalendarConnections(
+async function getGoogleCalendarConnections(
   scope?: CalendarConnectionScope & {
     showOnAdminCalendar?: boolean;
     blockAvailability?: boolean;
@@ -200,39 +148,12 @@ export async function getGoogleCalendarConnections(
   }
 
   const result = await query.returns<ConnectionRow[]>();
-  if (!result.error) return result.data ?? [];
-
-  if (isMissingCalendarSourceColumn(result.error)) {
-    const fallback = await supabase
-      .from("google_calendar_connection")
-      .select("*")
-      .eq("organization_id", orgId)
-      .returns<ConnectionRow[]>();
-    if (!fallback.error) return fallback.data ?? [];
-    if (!isMissingOrganizationColumn(fallback.error)) {
-      throw new Error(
-        `Load google calendar connections failed: ${fallback.error.message}`,
-      );
-    }
-  }
-
-  if (!isMissingOrganizationColumn(result.error)) {
+  if (result.error) {
     throw new Error(
       `Load google calendar connections failed: ${result.error.message}`,
     );
   }
-
-  const legacy = await supabase
-    .from("google_calendar_connection")
-    .select("*")
-    .eq("id", 1)
-    .maybeSingle<ConnectionRow>();
-  if (legacy.error) {
-    throw new Error(
-      `Load google calendar connection failed: ${legacy.error.message}`,
-    );
-  }
-  return legacy.data ? [legacy.data] : [];
+  return result.data ?? [];
 }
 
 export async function getGoogleCalendarSources(
@@ -680,47 +601,19 @@ export async function persistTokens(args: {
       .from("google_calendar_connection")
       .update(sourcePayload)
       .eq("id", existing.id);
-    if (!updated.error) return;
-    if (isMissingCalendarSourceColumn(updated.error)) {
-      const legacyUpdate = await supabase
-        .from("google_calendar_connection")
-        .update(basePayload)
-        .eq("id", existing.id);
-      if (!legacyUpdate.error) return;
+    if (updated.error) {
       throw new Error(
-        `Save google connection failed: ${legacyUpdate.error.message}`,
+        `Save google connection failed: ${updated.error.message}`,
       );
     }
-    throw new Error(`Save google connection failed: ${updated.error.message}`);
+    return;
   }
 
   const inserted = await supabase
     .from("google_calendar_connection")
     .insert(sourcePayload);
-  if (!inserted.error) return;
-  const error = inserted.error;
-
-  // Backward compatibility before migration 0024 is applied.
-  if (!isMissingOrganizationColumn(error) && !isMissingCalendarSourceColumn(error)) {
-    throw new Error(`Save google connection failed: ${error.message}`);
-  }
-
-  const legacy = await supabase
-    .from("google_calendar_connection")
-    .upsert(
-      {
-        id: 1,
-        google_account_email: args.googleAccountEmail,
-        refresh_token: args.refreshToken,
-        access_token: args.accessToken,
-        access_token_expires_at: expiresAt,
-        calendar_id: args.calendarId ?? "primary",
-        connected_by: args.connectedBy ?? null,
-      },
-      { onConflict: "id" },
-    );
-  if (legacy.error) {
-    throw new Error(`Save google connection failed: ${legacy.error.message}`);
+  if (inserted.error) {
+    throw new Error(`Save google connection failed: ${inserted.error.message}`);
   }
 }
 

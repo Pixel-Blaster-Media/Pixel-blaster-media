@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import type { CatalogItemDTO } from "@/app/_components/CartPicker";
+import type { CatalogItemDTO } from "@/lib/booking/catalog-dto";
 import {
   getActiveCatalog,
   type CatalogItemRow,

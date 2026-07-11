@@ -53,7 +53,7 @@ export default async function RootLayout({
       >
         <AuthSessionHandler />
         <PwaClient userId={user?.userId ?? null} />
-        <header className="site-header border-b border-white/5">
+        <header className="site-header relative z-[150] border-b border-white/5">
           <div className="site-header-inner mx-auto flex max-w-6xl items-center justify-between gap-3 px-6 py-4">
             {user?.role === "admin" ? (
               <MobileAdminBrand
@@ -107,7 +107,7 @@ export default async function RootLayout({
                 </form>
               ) : null}
             </nav>
-            <div className="relative shrink-0 md:hidden">
+            <div className="relative z-[160] shrink-0 md:hidden">
               <SiteHeaderMobileMenu
                 label={userLabel ?? "Site"}
                 items={nav}

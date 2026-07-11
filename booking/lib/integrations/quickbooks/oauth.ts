@@ -17,12 +17,12 @@ import "server-only";
  * token endpoint, not a JSON body client_id field — a common footgun.
  */
 
-export const QBO_AUTH_URL = "https://appcenter.intuit.com/connect/oauth2";
-export const QBO_TOKEN_URL =
+const QBO_AUTH_URL = "https://appcenter.intuit.com/connect/oauth2";
+const QBO_TOKEN_URL =
   "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
 
 // Minimum scope for reading/writing customers + invoices.
-export const QBO_SCOPE = "com.intuit.quickbooks.accounting";
+const QBO_SCOPE = "com.intuit.quickbooks.accounting";
 
 export type QBOEnvironment = "sandbox" | "production";
 

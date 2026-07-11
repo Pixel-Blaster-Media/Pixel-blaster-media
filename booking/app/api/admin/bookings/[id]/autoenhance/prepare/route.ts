@@ -7,6 +7,8 @@ import {
 } from "@/lib/integrations/autoenhance/workflow";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 300;
 
 export async function POST(
   request: NextRequest,

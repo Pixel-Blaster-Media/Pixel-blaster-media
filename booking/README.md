@@ -32,6 +32,7 @@ realtors, and delivery settings.
 | Admin dashboard, Today command center, calendar, and bookings | ✅ beta |
 | Realtor portal, media delivery, custom listing pages | ✅ beta |
 | iGUIDE delivery sync and download links | ✅ beta |
+| Autoenhance booking upload and iGUIDE gallery handoff | ✅ beta |
 | Google Calendar, Resend, QuickBooks integrations | ✅ beta |
 | OpenAI-powered assistant and booking recommendations | ✅ beta |
 | Fotello API delivery | ⏸ hidden while API details are confirmed |
@@ -60,16 +61,17 @@ App runs at <http://localhost:3000>. Health check: <http://localhost:3000/api/he
 | `/auth/sign-in`         | Password / magic-link sign-in                                 |
 | `/auth/check-email`     | "We sent you a link" page                                     |
 | `/auth/callback`        | Code → session exchange (set by Supabase magic link)          |
-| `/admin`                | Redirects to `/admin/inbox`                                   |
+| `/admin`                | Redirects to `/admin/today`                                   |
 | `/admin/today`          | Daily command center                                          |
 | `/admin/inbox`          | Booking-request inbox with status filters                     |
 | `/admin/inbox/[id]`     | Single request detail; accept (creates booking) / decline     |
 | `/admin/bookings`       | Job board: confirmed bookings with status filters             |
 | `/admin/bookings/[id]`  | Booking detail; status pipeline + manual + iGuide deliverable |
 | `/api/integrations/iguide/webhook` | Receives iGuide `ready` events and triggers sync   |
+| `/api/integrations/autoenhance/webhook` | Receives completed-photo events and resumes iGUIDE delivery |
 | `/portal`               | Realtor property list (gated on sign-in; admins bounce to /admin) |
 | `/portal/[propertyId]`  | Property detail: tour iframe, floor plan PDF, gallery + copy-link |
-| `/portal/book`          | Private calendar — realtor self-service booking                   |
+| `/portal/book`          | Sends signed-in realtors into their company-scoped booking wizard |
 | `/admin/calendar`       | 60-day agenda view of bookings + blocks                            |
 | `/admin/settings/availability` | Edit weekly hours + add / remove busy blocks                |
 | `/admin/settings/pricing`      | Edit per-service + add-on prices                            |
@@ -160,9 +162,9 @@ Other knobs:
 - **Service durations** live in `lib/booking/services.ts` (`durationMinutes`
   on each service / add-on). They bake in your drive + prep time per your
   preference — the calendar does not add a cross-shoot buffer.
-- **Auto-confirm** is on for realtor self-bookings. Change this by editing
-  the `status: "confirmed"` line in `app/portal/book/actions.ts` if you
-  decide you'd rather approve them manually.
+- **Auto-confirm** is on for public and signed-in realtor bookings. Change the
+  `status: "confirmed"` line in `app/book/actions.ts` if you decide you would
+  rather approve them manually.
 - **Block labels are private.** Only admins see the "Vacation — Hawaii"
   text on a block; realtors only see the slot as unavailable.
 
@@ -219,6 +221,19 @@ Fotello work is currently hidden from the main admin workflow while the API
 delivery shape is confirmed. The app still has a sandbox and server-side
 client code, but iGUIDE/manual delivery is the production path for now.
 
+### Setting up Autoenhance
+
+1. Open **Admin -> Settings -> Integrations -> Autoenhance.ai**.
+2. Save the company's Autoenhance API key.
+3. Copy the webhook URL shown in that section into Autoenhance's API settings.
+4. Create a long random webhook secret and save the exact same value in
+   Autoenhance's authentication field and the booking app's Webhook secret field.
+
+The booking page uploads camera files directly to Autoenhance&apos;s short-lived
+presigned URLs. The API key and webhook secret remain server-side. HDR grouping
+defaults to Autoenhance's automatic detection; when the whole order is finished,
+only full-resolution production JPEGs are sent to the booking&apos;s linked iGUIDE.
+
 **One-time setup:**
 
 1. Email Fotello support (`support@fotello.co`) asking for your API key.
@@ -237,22 +252,31 @@ temporary signed URLs to the browser longer than needed.
 
 ### Setting up iGuide (Phase 4 sync + webhook)
 
-The Phase 4 integration only uses iGuide's **public RESO autofill endpoint**
-(`https://youriguide.com/{id}/reso/autofill`), which doesn't require an
-API key — every published view exposes its data publicly. Your iGuide API
-key + OAuth credentials aren't needed for the current flow; we leave the
-env vars in place for later phases that may want to list account-owned
-views or read drafts.
+The production integration uses iGUIDE's Portal API plus the `ready` webhook.
+Create an API Token under **Settings → API Management → API Tokens** with:
+
+- `iguide.read` — refresh tour, floor-plan, and gallery download URLs
+- `iguide.write` — create an iGUIDE from a booking
+- `iguide.process` — process supplementary photos uploaded to its gallery
+- `iguide.events` — re-fetch ready events when needed
+- `iguide.list` — search the organization's existing portal tours
+
+Save the token's Client ID and Token in **Admin → Settings → Integrations**.
+The public RESO autofill endpoint remains a limited fallback when an admin only
+has an old public tour URL. The portal-list endpoint entered iGUIDE's public
+documentation in July 2026; the integration test reports whether the saved token
+has that optional search permission. Existing tours can always be linked manually.
 
 **To use it:**
 
-1. After publishing a tour in iGuide, copy either the URL
+1. After publishing a tour in iGUIDE, copy either the URL
    (`https://youriguide.com/1044_rest_acres_rd_brant_on/`) or the bare
-   ID (`1044_rest_acres_rd_brant_on`).
+   alias (`1044_rest_acres_rd_brant_on`). A Portal ID or manage URL also works.
 2. Open the matching booking in `/admin/bookings/[id]`, paste it into
-   the iGuide field, click **Save**, then **Sync from iGuide**.
-3. Two deliverables show up: a `virtual_tour` (with iframe embed snippet)
-   and a `floor_plan` (imperial PDF). Re-syncing is idempotent.
+   the iGUIDE field, click **Save**, then **Sync from iGUIDE**.
+3. The sync creates or refreshes the tour, floor plans, previews, and any
+   available MLS/high-resolution photo ZIPs. Re-syncing replaces stale links
+   instead of creating duplicates.
 
 **To wire up the webhook (so sync happens automatically on publish):**
 
@@ -260,17 +284,18 @@ views or read drafts.
    ```bash
    openssl rand -hex 32
    ```
-2. Set it as `IGUIDE_WEBHOOK_SECRET` in your env vars (Vercel + `.env.local`).
-3. In your iGuide portal, configure a webhook with URL:
+2. Save it as the iGUIDE Webhook secret in **Admin → Settings → Integrations**
+   (or use `IGUIDE_WEBHOOK_SECRET` as the platform fallback).
+3. Copy the webhook URL shown on that page into iGUIDE and subscribe to the
+   `ready` event. It has this shape:
    ```
-   https://book.pixelblastermedia.com/api/integrations/iguide/webhook?secret=<that-same-secret>
+   https://<NEXT_PUBLIC_APP_URL>/api/integrations/iguide/webhook?secret=<that-same-secret>
    ```
-4. Subscribe to the `ready` event.
-5. When you publish a tour that's already tagged on a booking, the
-   webhook fires, our handler runs the same sync, and the deliverables
-   appear without any clicking.
+4. When a tour publishes, the immutable Portal ID, alias, and deliverables are
+   matched to a pre-created job, a saved booking link, or one exact property
+   address. Unrelated global webhook traffic is acknowledged but not retained.
 
-If iGuide later documents HMAC signature signing on webhooks, swap
+If iGUIDE later documents HMAC signature signing on webhooks, swap
 `?secret=` for proper signature verification (the handler is small —
 about 100 lines).
 
@@ -346,10 +371,7 @@ booking/
 │   │   ├── [propertyId]/
 │   │   │   ├── page.tsx                 # Tour + floor plan + gallery
 │   │   │   └── CopyLinkButton.tsx
-│   │   └── book/                        # Self-serve calendar (Phase 8)
-│   │       ├── page.tsx                 # Service + slot picker + confirm
-│   │       ├── ServicePicker.tsx · SlotPicker.tsx · BookingConfirmForm.tsx
-│   │       ├── slot-types.ts · actions.ts
+│   │   └── book/page.tsx                # Redirect into company booking wizard
 │   └── api/health/route.ts              # Liveness check
 ├── lib/
 │   ├── auth/
@@ -358,7 +380,6 @@ booking/
 │   │   └── sign-out.ts                  # Server action
 │   ├── booking/
 │   │   ├── services.ts                  # Service / add-on catalog + durations
-│   │   ├── schema.ts                    # Form validation
 │   │   ├── booking-status.ts            # Status pipeline + visual meta
 │   │   └── availability.ts              # Slot computation (Phase 8)
 │   ├── email/

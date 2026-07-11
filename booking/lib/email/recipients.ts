@@ -1,8 +1,8 @@
-export function normalizeEmail(email: string): string {
+function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-export function uniqueEmails(emails: readonly string[]): string[] {
+function uniqueEmails(emails: readonly string[]): string[] {
   const seen = new Set<string>();
   const unique: string[] = [];
   for (const email of emails) {

@@ -12,7 +12,7 @@ export interface RealtorAIMemory {
   avoidReminders: string[];
 }
 
-export const EMPTY_REALTOR_AI_MEMORY: RealtorAIMemory = {
+const EMPTY_REALTOR_AI_MEMORY: RealtorAIMemory = {
   preferredServices: [],
   preferredAddOns: [],
   preferredCities: [],

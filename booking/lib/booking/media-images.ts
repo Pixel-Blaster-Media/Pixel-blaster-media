@@ -26,7 +26,7 @@ export function uniqueImageUrls(values: Array<string | null | undefined>): strin
   return unique;
 }
 
-export function isDisplayableImageUrl(rawUrl: string): boolean {
+function isDisplayableImageUrl(rawUrl: string): boolean {
   try {
     const parsed = new URL(rawUrl);
     const pathname = parsed.pathname.toLowerCase();

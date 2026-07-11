@@ -4,10 +4,16 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { startBookingAutoenhanceProcessing } from "@/lib/integrations/autoenhance/workflow";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 300;
 
-export async function POST(request: NextRequest) {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   try {
     const admin = await requireAdmin();
+    const { id } = await params;
     const body = (await request.json()) as {
       batchId?: string;
       uploadedBracketIds?: string[];
@@ -21,6 +27,7 @@ export async function POST(request: NextRequest) {
     }
     const result = await startBookingAutoenhanceProcessing({
       admin,
+      bookingId: id,
       batchId: body.batchId,
       uploadedBracketIds: body.uploadedBracketIds ?? [],
       uploadedImageIds: body.uploadedImageIds ?? [],

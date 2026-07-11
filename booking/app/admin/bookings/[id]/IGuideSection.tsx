@@ -149,11 +149,11 @@ export default function IGuideSection({
         <p className="mt-1 text-xs text-realtor-muted">
           Create an iGuide from this booking for exact webhook matching, or
           paste any of: tour URL, alias, Portal ID (e.g. igYGFV5GG6V8DD1), or a
-          manage.youriguide.com edit URL. Sync pulls the tour + floor plan into
-          deliverables.{" "}
+          manage.youriguide.com edit URL. Sync refreshes the tour, floor plans,
+          previews, and available photo downloads.{" "}
           {portalApiConfigured
             ? "Portal API is configured — sync uses the authenticated API when a portal ID is known."
-            : "Portal API not configured — falls back to the public RESO autofill endpoint. Add IGUIDE_APP_ID / IGUIDE_APP_TOKEN in Vercel to enable."}{" "}
+            : "Portal API not configured — sync can only use the limited public fallback. Connect iGUIDE in Settings → Integrations to enable the full workflow."}{" "}
           The webhook populates the portal ID automatically when a tour
           goes live.
         </p>
@@ -166,7 +166,7 @@ export default function IGuideSection({
           onClick={onCreate}
           className="rounded-full bg-realtor-primary px-3 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-50"
         >
-          {creating ? "Creating…" : "Create iGuide"}
+          {creating ? "Creating…" : "Create iGUIDE"}
         </button>
         {!portalApiConfigured ? (
           <p className="text-xs text-amber-700">
@@ -201,12 +201,12 @@ export default function IGuideSection({
           onClick={onSync}
           className="rounded-full bg-realtor-primary px-3 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-50"
         >
-          {syncing ? "Syncing…" : "Sync from iGuide"}
+          {syncing ? "Syncing…" : "Sync from iGUIDE"}
         </button>
       </div>
       <p className="text-xs text-realtor-muted">
         Paste the iGUIDE link or Portal ID, click Save, then click Sync from
-        iGuide. If sync complains about asset links, paste the public
+        iGUIDE. If sync complains about asset links, paste the public
         youriguide.com tour URL as well.
       </p>
 

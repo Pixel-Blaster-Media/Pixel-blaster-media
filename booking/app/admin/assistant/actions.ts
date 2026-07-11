@@ -95,7 +95,7 @@ type AssistantExecutionResult = AdminAssistantResult & {
   };
 };
 
-export interface AdminAssistantBookingDraft {
+interface AdminAssistantBookingDraft {
   sourceBookingId: string;
   scheduledLocal: string;
   contactName: string;
@@ -112,7 +112,7 @@ export interface AdminAssistantBookingDraft {
   catalogItemIds: string[];
 }
 
-export interface AdminAssistantPriceChange {
+interface AdminAssistantPriceChange {
   mode: "percent" | "fixed";
   value: number;
   scope: "active" | "all" | "bundles" | "a_la_carte" | "addons";
@@ -127,19 +127,19 @@ export interface AdminAssistantPriceChange {
   affectedCount: number;
 }
 
-export interface AdminAssistantCalendarBlock {
+interface AdminAssistantCalendarBlock {
   startsLocal: string;
   endsLocal: string;
   label: string;
 }
 
-export interface AdminAssistantTextUpdate {
+interface AdminAssistantTextUpdate {
   text: string;
   mode: "append" | "replace" | "clear" | "add" | "remove";
   emails: string[];
 }
 
-export interface AdminAssistantBusinessHour {
+interface AdminAssistantBusinessHour {
   dayOfWeek: number;
   startTime: string;
   endTime: string;

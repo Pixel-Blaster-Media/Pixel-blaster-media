@@ -6,6 +6,7 @@ import {
   createBracket,
   createImage,
   createOrder,
+  deleteOrder,
   fetchEnhancedImage,
   getImage,
   getOrder,
@@ -13,7 +14,6 @@ import {
   processOrder,
   type AutoenhanceCloudType,
   type AutoenhanceEnhanceType,
-  type AutoenhanceImage,
   type AutoenhanceRestageOptions,
   type AutoenhanceWindowPullType,
 } from "@/lib/integrations/autoenhance/client";
@@ -21,9 +21,9 @@ import { uploadAssetToIGuide } from "@/lib/integrations/iguide/portal-client";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
 
-export type AutoenhanceUploadMode = "hdr" | "single";
+type AutoenhanceUploadMode = "hdr" | "single";
 
-export type AutoenhanceWorkflowSettings = {
+type AutoenhanceWorkflowSettings = {
   uploadMode: AutoenhanceUploadMode;
   enhanceType: AutoenhanceEnhanceType;
   presetId?: string;
@@ -44,7 +44,7 @@ export type AutoenhanceWorkflowSettingsInput = Partial<
   Record<keyof AutoenhanceWorkflowSettings, unknown>
 >;
 
-export type AutoenhanceImageResult = {
+type AutoenhanceImageResult = {
   bracketId?: string;
   uploadKind?: "image" | "bracket";
   imageId: string;
@@ -84,7 +84,7 @@ export type AutoenhanceBatchSummary = {
   uploads: AutoenhanceIGuideUploadSummary[];
 };
 
-export type AutoenhanceIGuideUploadSummary = {
+type AutoenhanceIGuideUploadSummary = {
   imageId: string;
   filename: string;
   status: "pending" | "uploaded" | "failed";
@@ -130,12 +130,14 @@ type AutoenhanceBatchRow = {
 };
 
 type AutoenhanceUploadRow = {
+  id: string;
   autoenhance_image_id: string;
   filename: string;
   status: "pending" | "uploaded" | "failed";
   warning: string | null;
   error: string | null;
   process_complete: boolean | null;
+  updated_at: string;
 };
 
 type PendingAutoenhanceBatchRow = {
@@ -161,11 +163,16 @@ export async function createBookingAutoenhanceBatch({
     }
   | { ok: false; error: string }
 > {
+  if (fileNames.length > 160) {
+    return { ok: false, error: "Upload 160 files or fewer in one batch." };
+  }
   const cleanedFileNames = fileNames
     .map((name) => String(name).trim())
-    .filter(Boolean)
-    .slice(0, 160);
+    .filter(Boolean);
   if (!cleanedFileNames.length) return { ok: false, error: "Pick at least one image." };
+  if (cleanedFileNames.some((name) => name.length > 255)) {
+    return { ok: false, error: "One of the photo filenames is too long." };
+  }
 
   const service = getServiceSupabase();
   const booking = await loadBooking(service, bookingId, admin.organizationId);
@@ -178,62 +185,25 @@ export async function createBookingAutoenhanceBatch({
     return { ok: false, error: "Autoenhance did not return an order ID." };
   }
 
-  const uploads: AutoenhancePreparedUpload[] = [];
-  for (const fileName of cleanedFileNames) {
-    if (normalized.uploadMode === "single") {
-      const image = await createImage(
-        {
+  let uploads: AutoenhancePreparedUpload[];
+  try {
+    uploads = await mapWithConcurrency(
+      cleanedFileNames,
+      6,
+      async (fileName) =>
+        prepareAutoenhanceUpload({
+          fileName,
           orderId: order.order_id,
-          imageName: fileName,
-          enhanceType: normalized.enhanceType,
-          presetId: normalized.presetId,
-          skyReplacement: normalized.skyReplacement,
-          cloudType: normalized.cloudType,
-          windowPullType: normalized.windowPullType,
-          privacy: normalized.privacy,
-          upscale: normalized.upscale,
-          tripodHide: normalized.tripodHide,
-          restage: restageOptions(normalized),
-        },
-        admin.organizationId,
-      );
-      if (!image.image_id || !image.upload_url) {
-        return {
-          ok: false,
-          error: `Autoenhance did not return an upload URL for ${fileName}.`,
-        };
-      }
-      uploads.push({
-        ...formatImageResult(image, fileName),
-        uploadKind: "image",
-        uploadUrl: image.upload_url,
-      });
-      continue;
-    }
-
-    const bracket = await createBracket(
-      { orderId: order.order_id, name: fileName },
-      admin.organizationId,
+          organizationId: admin.organizationId,
+          settings: normalized,
+        }),
     );
-    if (!bracket.bracket_id || !bracket.upload_url) {
-      return {
-        ok: false,
-        error: `Autoenhance did not return a bracket upload URL for ${fileName}.`,
-      };
-    }
-    uploads.push({
-      ...formatImageResult(
-        {
-          image_id: bracket.image_id ?? `bracket:${bracket.bracket_id}`,
-          image_name: bracket.name ?? fileName,
-          status: bracket.is_uploaded ? "uploaded" : "registered",
-        },
-        fileName,
-      ),
-      uploadKind: "bracket",
-      bracketId: bracket.bracket_id,
-      uploadUrl: bracket.upload_url,
-    });
+  } catch (err) {
+    await deleteOrder(order.order_id, admin.organizationId).catch(() => undefined);
+    return {
+      ok: false,
+      error: `Could not prepare the Autoenhance uploads. ${errorMessage(err)}`,
+    };
   }
 
   const { data: batch, error } = await service
@@ -265,6 +235,7 @@ export async function createBookingAutoenhanceBatch({
     .single<AutoenhanceBatchRow>();
 
   if (error || !batch) {
+    await deleteOrder(order.order_id, admin.organizationId).catch(() => undefined);
     return { ok: false, error: error?.message ?? "Could not save Autoenhance batch." };
   }
 
@@ -275,24 +246,102 @@ export async function createBookingAutoenhanceBatch({
   };
 }
 
+async function prepareAutoenhanceUpload({
+  fileName,
+  orderId,
+  organizationId,
+  settings,
+}: {
+  fileName: string;
+  orderId: string;
+  organizationId: string;
+  settings: AutoenhanceWorkflowSettings;
+}): Promise<AutoenhancePreparedUpload> {
+  if (settings.uploadMode === "single") {
+    const image = await createImage(
+      {
+        orderId,
+        imageName: fileName,
+        enhanceType: settings.enhanceType,
+        presetId: settings.presetId,
+        skyReplacement: settings.skyReplacement,
+        cloudType: settings.cloudType,
+        windowPullType: settings.windowPullType,
+        privacy: settings.privacy,
+        upscale: settings.upscale,
+        tripodHide: settings.tripodHide,
+        restage: restageOptions(settings),
+      },
+      organizationId,
+    );
+    if (!image.image_id || !image.upload_url) {
+      throw new Error(
+        `Autoenhance did not return an upload URL for ${fileName}.`,
+      );
+    }
+    return {
+      ...formatImageResult(image, fileName),
+      uploadKind: "image",
+      uploadUrl: image.upload_url,
+    };
+  }
+
+  const bracket = await createBracket(
+    { orderId, name: fileName },
+    organizationId,
+  );
+  if (!bracket.bracket_id || !bracket.upload_url) {
+    throw new Error(
+      `Autoenhance did not return a bracket upload URL for ${fileName}.`,
+    );
+  }
+  return {
+    ...formatImageResult(
+      {
+        image_id: bracket.image_id ?? `bracket:${bracket.bracket_id}`,
+        image_name: bracket.name ?? fileName,
+        status: bracket.is_uploaded ? "uploaded" : "registered",
+      },
+      fileName,
+    ),
+    uploadKind: "bracket",
+    bracketId: bracket.bracket_id,
+    uploadUrl: bracket.upload_url,
+  };
+}
+
 export async function startBookingAutoenhanceProcessing({
   admin,
+  bookingId,
   batchId,
   uploadedBracketIds,
   uploadedImageIds,
 }: {
   admin: AdminContext;
+  bookingId?: string;
   batchId: string;
   uploadedBracketIds: string[];
   uploadedImageIds: string[];
 }): Promise<{ ok: true; batch: AutoenhanceBatchSummary } | { ok: false; error: string }> {
   const service = getServiceSupabase();
-  const batch = await loadBatch(service, batchId, admin.organizationId);
+  const batch = await loadBatch(
+    service,
+    batchId,
+    admin.organizationId,
+    bookingId,
+  );
   if (!batch) return { ok: false, error: "Autoenhance batch not found." };
 
   const settings = normalizeSettings(batch.settings);
-  const cleanBracketIds = uploadedBracketIds.map(String).filter(Boolean);
-  const cleanImageIds = uploadedImageIds.map(String).filter(Boolean);
+  const cleanBracketIds = [...new Set(uploadedBracketIds.map(String).filter(Boolean))];
+  const cleanImageIds = [...new Set(uploadedImageIds.map(String).filter(Boolean))];
+
+  if (
+    cleanBracketIds.some((id) => !batch.bracket_ids.includes(id)) ||
+    cleanImageIds.some((id) => !batch.uploaded_image_ids.includes(id))
+  ) {
+    return { ok: false, error: "The uploaded files do not match this Autoenhance batch." };
+  }
 
   let processStatus = batch.process_status;
   let lastError: string | null = null;
@@ -313,7 +362,7 @@ export async function startBookingAutoenhanceProcessing({
         tripodHide: settings.tripodHide,
         restage: restageOptions(settings),
       });
-      processStatus = processed.status ?? processStatus;
+      processStatus = orderProcessStatus(processed, processStatus);
     } catch (err) {
       lastError = errorMessage(err);
     }
@@ -339,21 +388,41 @@ export async function startBookingAutoenhanceProcessing({
     return { ok: false, error: error?.message ?? "Could not update Autoenhance batch." };
   }
 
+  if (lastError) {
+    const uploads = await loadUploadSummaries(
+      service,
+      updated.id,
+      admin.organizationId,
+      updated.iguide_portal_id ?? undefined,
+    );
+    return { ok: true, batch: summarizeBatch(updated, uploads, []) };
+  }
+
   return await refreshBookingAutoenhanceBatch({
     admin,
+    bookingId: updated.booking_id,
     batchId: updated.id,
   });
 }
 
 export async function refreshBookingAutoenhanceBatch({
   admin,
+  bookingId,
   batchId,
+  preferredImageId,
 }: {
   admin: AdminContext;
+  bookingId?: string;
   batchId: string;
+  preferredImageId?: string;
 }): Promise<{ ok: true; batch: AutoenhanceBatchSummary } | { ok: false; error: string }> {
   const service = getServiceSupabase();
-  const batch = await loadBatch(service, batchId, admin.organizationId);
+  const batch = await loadBatch(
+    service,
+    batchId,
+    admin.organizationId,
+    bookingId,
+  );
   if (!batch) return { ok: false, error: "Autoenhance batch not found." };
 
   const booking = await loadBooking(service, batch.booking_id, admin.organizationId);
@@ -361,36 +430,70 @@ export async function refreshBookingAutoenhanceBatch({
 
   let images: AutoenhanceImageResult[] = [];
   let processStatus = batch.process_status;
+  let orderComplete = false;
   let lastError: string | null = null;
   try {
     const order = await getOrder(batch.order_id, admin.organizationId);
-    processStatus = order.status ?? processStatus;
-    const rawImages = await rawImagesForOrder(batch.order_id, order, admin.organizationId);
-    images = await Promise.all(
-      rawImages.map(async (raw, index) => {
+    processStatus = orderProcessStatus(order, processStatus);
+    orderComplete = isOrderComplete(order);
+    const rawImages = await rawImagesForOrder(
+      batch.order_id,
+      order,
+      admin.organizationId,
+      [...batch.finished_image_ids, ...(preferredImageId ? [preferredImageId] : [])],
+    );
+    images = await mapWithConcurrency(
+      rawImages,
+      6,
+      async (raw, index) => {
         const imageId =
           stringField(raw, "image_id") ?? stringField(raw, "id") ?? `image-${index + 1}`;
         const image = await getImage(imageId, admin.organizationId).catch(() => raw);
         return formatImageResult(image, imageId);
-      }),
+      },
     );
   } catch (err) {
     lastError = errorMessage(err);
   }
 
   const finishedImages = images.filter(isFinishedImage);
+  const failedImages = images.filter(isFailedImage);
+  if (!lastError && failedImages.length) {
+    lastError = failedImages
+      .slice(0, 4)
+      .map(
+        (image) =>
+          `${image.imageName}: ${image.statusReason ?? image.status ?? "Autoenhance failed"}`,
+      )
+      .join("; ");
+  }
+  const imagesToPush =
+    preferredImageId && !orderComplete
+      ? finishedImages.filter((image) => image.imageId === preferredImageId)
+      : finishedImages;
   const push = iguidePortalId
     ? await pushFinishedImagesToIGuide({
         admin,
         batch,
         iguidePortalId,
-        images: finishedImages,
+        images: imagesToPush,
       })
-    : { uploadedImageIds: batch.iguide_uploaded_image_ids, failedImageIds: batch.iguide_failed_image_ids, lastError: null };
+    : {
+        uploadedImageIds: batch.iguide_uploaded_image_ids,
+        failedImageIds: batch.iguide_failed_image_ids,
+        lastError: null,
+      };
 
-  const finishedImageIds = finishedImages.map((image) => image.imageId);
+  const finishedImageIds = [
+    ...new Set([
+      ...batch.finished_image_ids,
+      ...finishedImages.map((image) => image.imageId),
+    ]),
+  ];
   const nextStatus = nextBatchStatus({
     hasError: Boolean(lastError || push.lastError),
+    hasProviderFailures: failedImages.length > 0,
+    orderComplete,
     hasFinishedImages: finishedImageIds.length > 0,
     hasIGuide: Boolean(iguidePortalId),
     finishedCount: finishedImageIds.length,
@@ -407,7 +510,10 @@ export async function refreshBookingAutoenhanceBatch({
       iguide_portal_id: iguidePortalId,
       iguide_uploaded_image_ids: push.uploadedImageIds,
       iguide_failed_image_ids: push.failedImageIds,
-      last_iguide_push_at: finishedImageIds.length && iguidePortalId ? new Date().toISOString() : batch.last_iguide_push_at,
+      last_iguide_push_at:
+        imagesToPush.length && iguidePortalId
+          ? new Date().toISOString()
+          : batch.last_iguide_push_at,
       last_error: lastError ?? push.lastError,
     })
     .eq("id", batch.id)
@@ -421,8 +527,56 @@ export async function refreshBookingAutoenhanceBatch({
     return { ok: false, error: error?.message ?? "Could not save Autoenhance status." };
   }
 
-  const uploads = await loadUploadSummaries(service, updated.id, admin.organizationId);
+  const uploads = await loadUploadSummaries(
+    service,
+    updated.id,
+    admin.organizationId,
+    updated.iguide_portal_id ?? undefined,
+  );
   return { ok: true, batch: summarizeBatch(updated, uploads, images) };
+}
+
+export async function markBookingAutoenhanceBatchAttention({
+  admin,
+  bookingId,
+  batchId,
+  message,
+}: {
+  admin: AdminContext;
+  bookingId: string;
+  batchId: string;
+  message: string;
+}): Promise<{ ok: true; batch: AutoenhanceBatchSummary } | { ok: false; error: string }> {
+  const service = getServiceSupabase();
+  const batch = await loadBatch(
+    service,
+    batchId,
+    admin.organizationId,
+    bookingId,
+  );
+  if (!batch) return { ok: false, error: "Autoenhance batch not found." };
+
+  const cleanMessage = message.trim().slice(0, 800) || "Photo upload did not finish.";
+  const { data: updated, error } = await service
+    .from("autoenhance_batches")
+    .update({ status: "attention", last_error: cleanMessage })
+    .eq("id", batch.id)
+    .eq("organization_id", admin.organizationId)
+    .eq("booking_id", bookingId)
+    .select(
+      "id, organization_id, booking_id, property_id, order_id, order_name, upload_mode, status, process_status, brackets_per_image, settings, bracket_ids, uploaded_image_ids, finished_image_ids, iguide_portal_id, iguide_uploaded_image_ids, iguide_failed_image_ids, last_iguide_push_at, last_error, created_by, created_at, updated_at",
+    )
+    .single<AutoenhanceBatchRow>();
+  if (error || !updated) {
+    return { ok: false, error: error?.message ?? "Could not save upload failure." };
+  }
+  const uploads = await loadUploadSummaries(
+    service,
+    updated.id,
+    admin.organizationId,
+    updated.iguide_portal_id ?? undefined,
+  );
+  return { ok: true, batch: summarizeBatch(updated, uploads, []) };
 }
 
 export async function listBookingAutoenhanceBatches({
@@ -447,7 +601,12 @@ export async function listBookingAutoenhanceBatches({
   const rows = batches ?? [];
   const summaries = await Promise.all(
     rows.map(async (batch) => {
-      const uploads = await loadUploadSummaries(service, batch.id, admin.organizationId);
+      const uploads = await loadUploadSummaries(
+        service,
+        batch.id,
+        admin.organizationId,
+        batch.iguide_portal_id ?? undefined,
+      );
       return summarizeBatch(batch, uploads, []);
     }),
   );
@@ -544,9 +703,16 @@ async function pushFinishedImagesToIGuide({
   images: AutoenhanceImageResult[];
 }): Promise<{ uploadedImageIds: string[]; failedImageIds: string[]; lastError: string | null }> {
   const service = getServiceSupabase();
-  const existing = await loadUploadSummaries(service, batch.id, admin.organizationId);
+  const existing = await loadUploadSummaries(
+    service,
+    batch.id,
+    admin.organizationId,
+    iguidePortalId,
+  );
   const uploaded = new Set([
-    ...batch.iguide_uploaded_image_ids,
+    ...(batch.iguide_portal_id === iguidePortalId
+      ? batch.iguide_uploaded_image_ids
+      : []),
     ...existing
       .filter((row) => row.status === "uploaded")
       .map((row) => row.imageId),
@@ -558,18 +724,22 @@ async function pushFinishedImagesToIGuide({
 
   for (const image of images) {
     if (uploaded.has(image.imageId)) continue;
+    const filename = safePhotoFilename(image.imageName, image.imageId);
     try {
-      const enhancedResult = await fetchEnhancedForIGuide(
+      const claimed = await claimIGuideUpload({
+        admin,
+        batch,
+        iguidePortalId,
+        imageId: image.imageId,
+        filename,
+      });
+      if (!claimed) continue;
+
+      const enhanced = await fetchEnhancedForIGuide(
         image.imageId,
         admin.organizationId,
       );
-      const enhanced = enhancedResult.response;
       const bytes = await enhanced.arrayBuffer();
-      const filename = safePhotoFilename(
-        image.imageName,
-        image.imageId,
-        enhancedResult.usedPreview,
-      );
       const result = await uploadAssetToIGuide(
         {
           iguideId: iguidePortalId,
@@ -609,9 +779,7 @@ async function pushFinishedImagesToIGuide({
         assetName: result.data.assetName,
         jobId: result.data.jid,
         processComplete: result.data.processComplete,
-        warning: [enhancedResult.warning, result.data.processWarning]
-          .filter(Boolean)
-          .join(" "),
+        warning: result.data.processWarning ?? undefined,
       });
     } catch (err) {
       failed.add(image.imageId);
@@ -622,9 +790,26 @@ async function pushFinishedImagesToIGuide({
         batch,
         iguidePortalId,
         imageId: image.imageId,
-        filename: safePhotoFilename(image.imageName, image.imageId, false),
+        filename,
         error: lastError,
+      }).catch((saveError) => {
+        lastError = `${lastError} Could not save retry state: ${errorMessage(saveError)}`;
       });
+    }
+  }
+
+  const latest = await loadUploadSummaries(
+    service,
+    batch.id,
+    admin.organizationId,
+    iguidePortalId,
+  );
+  for (const row of latest) {
+    if (row.status === "uploaded") {
+      uploaded.add(row.imageId);
+      failed.delete(row.imageId);
+    } else if (row.status === "failed") {
+      failed.add(row.imageId);
     }
   }
 
@@ -649,7 +834,7 @@ async function upsertIGuideUpload(input: {
   error?: string;
 }) {
   const service = getServiceSupabase();
-  await service.from("autoenhance_iguide_uploads").upsert(
+  const { error } = await service.from("autoenhance_iguide_uploads").upsert(
     {
       organization_id: input.admin.organizationId,
       batch_id: input.batch.id,
@@ -669,50 +854,96 @@ async function upsertIGuideUpload(input: {
         "organization_id,batch_id,iguide_portal_id,autoenhance_image_id",
     },
   );
+  if (error) throw new Error(`Could not save iGUIDE upload state: ${error.message}`);
+}
+
+async function claimIGuideUpload(input: {
+  admin: AdminContext;
+  batch: AutoenhanceBatchRow;
+  iguidePortalId: string;
+  imageId: string;
+  filename: string;
+}): Promise<boolean> {
+  const service = getServiceSupabase();
+  const inserted = await service
+    .from("autoenhance_iguide_uploads")
+    .insert({
+      organization_id: input.admin.organizationId,
+      batch_id: input.batch.id,
+      booking_id: input.batch.booking_id,
+      iguide_portal_id: input.iguidePortalId,
+      autoenhance_image_id: input.imageId,
+      filename: input.filename,
+      status: "pending",
+    })
+    .select("id")
+    .maybeSingle<{ id: string }>();
+  if (!inserted.error && inserted.data) return true;
+  if (inserted.error?.code !== "23505") {
+    throw new Error(
+      `Could not claim iGUIDE upload: ${inserted.error?.message ?? "Unknown database error"}`,
+    );
+  }
+
+  const { data: existing, error: readError } = await service
+    .from("autoenhance_iguide_uploads")
+    .select("id, status, updated_at")
+    .eq("organization_id", input.admin.organizationId)
+    .eq("batch_id", input.batch.id)
+    .eq("iguide_portal_id", input.iguidePortalId)
+    .eq("autoenhance_image_id", input.imageId)
+    .maybeSingle<{ id: string; status: string; updated_at: string }>();
+  if (readError || !existing) {
+    throw new Error(
+      `Could not inspect iGUIDE upload claim: ${readError?.message ?? "Claim disappeared"}`,
+    );
+  }
+  if (existing.status === "uploaded") return false;
+
+  const updatedAt = Date.parse(existing.updated_at);
+  const claimIsFresh =
+    existing.status === "pending" &&
+    Number.isFinite(updatedAt) &&
+    Date.now() - updatedAt < 15 * 60 * 1000;
+  if (claimIsFresh) return false;
+
+  const { data: reclaimed, error: reclaimError } = await service
+    .from("autoenhance_iguide_uploads")
+    .update({
+      filename: input.filename,
+      status: "pending",
+      warning: null,
+      error: null,
+      process_complete: null,
+    })
+    .eq("id", existing.id)
+    .eq("updated_at", existing.updated_at)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+  if (reclaimError) {
+    throw new Error(`Could not reclaim iGUIDE upload: ${reclaimError.message}`);
+  }
+  return Boolean(reclaimed);
 }
 
 async function fetchEnhancedForIGuide(
   imageId: string,
   organizationId: string,
-): Promise<{ response: Response; usedPreview: boolean; warning?: string }> {
+): Promise<Response> {
   try {
-    return {
-      response: await fetchEnhancedImage(imageId, {
-        organizationId,
-        format: "jpeg",
-        quality: 90,
-        preview: false,
-      }),
-      usedPreview: false,
-    };
+    return await fetchEnhancedImage(imageId, {
+      organizationId,
+      format: "jpeg",
+      quality: 90,
+      preview: false,
+    });
   } catch (err) {
-    if (!(err instanceof AutoenhanceError) || err.status !== 402) throw err;
-    try {
-      return {
-        response: await fetchEnhancedImage(imageId, {
-          organizationId,
-          format: "jpeg",
-          quality: 90,
-          preview: false,
-          devMode: true,
-        }),
-        usedPreview: false,
-        warning:
-          "Autoenhance full-resolution download returned 402/no plan, so development mode was used. Do not use this for client delivery until the Autoenhance plan allows full-resolution downloads.",
-      };
-    } catch {
-      return {
-        response: await fetchEnhancedImage(imageId, {
-          organizationId,
-          format: "jpeg",
-          quality: 85,
-          preview: true,
-        }),
-        usedPreview: true,
-        warning:
-          "Autoenhance full-resolution download returned 402/no plan, so a preview image was uploaded. Do not use this for client delivery until the Autoenhance plan allows full-resolution downloads.",
-      };
+    if (err instanceof AutoenhanceError && err.status === 402) {
+      throw new Error(
+        "Autoenhance did not allow a full-resolution download for this photo. Nothing was sent to iGUIDE; check the Autoenhance plan or credits, then refresh this batch.",
+      );
     }
+    throw err;
   }
 }
 
@@ -737,15 +968,17 @@ async function loadBatch(
   service: ReturnType<typeof getServiceSupabase>,
   batchId: string,
   organizationId: string,
+  bookingId?: string,
 ): Promise<AutoenhanceBatchRow | null> {
-  const { data, error } = await service
+  let query = service
     .from("autoenhance_batches")
     .select(
       "id, organization_id, booking_id, property_id, order_id, order_name, upload_mode, status, process_status, brackets_per_image, settings, bracket_ids, uploaded_image_ids, finished_image_ids, iguide_portal_id, iguide_uploaded_image_ids, iguide_failed_image_ids, last_iguide_push_at, last_error, created_by, created_at, updated_at",
     )
     .eq("id", batchId)
-    .eq("organization_id", organizationId)
-    .maybeSingle<AutoenhanceBatchRow>();
+    .eq("organization_id", organizationId);
+  if (bookingId) query = query.eq("booking_id", bookingId);
+  const { data, error } = await query.maybeSingle<AutoenhanceBatchRow>();
   if (error) return null;
   return data ?? null;
 }
@@ -754,16 +987,20 @@ async function loadUploadSummaries(
   service: ReturnType<typeof getServiceSupabase>,
   batchId: string,
   organizationId: string,
+  iguidePortalId?: string,
 ): Promise<AutoenhanceIGuideUploadSummary[]> {
-  const { data } = await service
+  let query = service
     .from("autoenhance_iguide_uploads")
     .select(
-      "autoenhance_image_id, filename, status, warning, error, process_complete",
+      "id, autoenhance_image_id, filename, status, warning, error, process_complete, updated_at",
     )
     .eq("batch_id", batchId)
-    .eq("organization_id", organizationId)
+    .eq("organization_id", organizationId);
+  if (iguidePortalId) query = query.eq("iguide_portal_id", iguidePortalId);
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .returns<AutoenhanceUploadRow[]>();
+  if (error) throw new Error(`Could not load iGUIDE upload history: ${error.message}`);
   return (data ?? []).map((row) => ({
     imageId: row.autoenhance_image_id,
     filename: row.filename,
@@ -778,19 +1015,27 @@ async function rawImagesForOrder(
   orderId: string,
   order: unknown,
   organizationId: string,
+  knownImageIds: string[] = [],
 ): Promise<Array<Record<string, unknown>>> {
   const primary = extractOrderImages(order);
   const brackets = await getOrderBrackets(orderId, organizationId).catch(() => null);
   return mergeImageRecords(
     primary,
-    brackets?.brackets
-      ?.filter((bracket) => bracket.image_id)
-      .map((bracket) => ({
-        image_id: bracket.image_id,
-        image_name: bracket.name,
-        bracket_id: bracket.bracket_id,
-        status: "processing",
-      })) ?? [],
+    [
+      ...(brackets?.brackets
+        ?.filter((bracket) => bracket.image_id)
+        .map((bracket) => ({
+          image_id: bracket.image_id,
+          image_name: bracket.name,
+          bracket_id: bracket.bracket_id,
+          status: "processing",
+        })) ?? []),
+      ...knownImageIds.map((imageId) => ({
+        image_id: imageId,
+        image_name: imageId,
+        status: "processed",
+      })),
+    ],
   );
 }
 
@@ -909,7 +1154,9 @@ function normalizeWindowPullType(
 function normalizeBracketsPerImage(value: unknown): number {
   const parsed = Number(value);
   if (parsed === 0) return 0;
-  return parsed === 1 || parsed === 5 || parsed === 7 ? parsed : 3;
+  return parsed === 1 || parsed === 3 || parsed === 5 || parsed === 7
+    ? parsed
+    : 0;
 }
 
 function formatImageResult(
@@ -943,16 +1190,44 @@ function isFinishedImage(image: AutoenhanceImageResult): boolean {
   );
 }
 
+function isFailedImage(image: AutoenhanceImageResult): boolean {
+  const status = image.status?.toLowerCase() ?? "";
+  return ["error", "failed", "expired"].some((word) => status.includes(word));
+}
+
+function orderProcessStatus(order: unknown, fallback: string | null): string | null {
+  if (!isRecord(order)) return fallback;
+  if (order.is_merging === true) return "merging";
+  if (order.is_processing === true) return "processing";
+  return stringField(order, "status") ?? fallback;
+}
+
+function isOrderComplete(order: unknown): boolean {
+  if (!isRecord(order)) return false;
+  if (order.is_merging === true || order.is_processing === true) return false;
+  if (order.is_merging === false && order.is_processing === false) return true;
+  const status = stringField(order, "status")?.toLowerCase() ?? "";
+  return ["complete", "completed", "processed", "done", "finished"].some(
+    (word) => status.includes(word),
+  );
+}
+
 function nextBatchStatus(input: {
   hasError: boolean;
+  hasProviderFailures: boolean;
+  orderComplete: boolean;
   hasFinishedImages: boolean;
   hasIGuide: boolean;
   finishedCount: number;
   uploadedCount: number;
   failedCount: number;
 }) {
-  if (input.hasError || input.failedCount > 0) return "attention";
-  if (!input.hasFinishedImages) return "processing";
+  if (input.hasProviderFailures || input.failedCount > 0) {
+    return "attention";
+  }
+  if (!input.orderComplete) return "processing";
+  if (input.hasError) return "attention";
+  if (!input.hasFinishedImages) return "attention";
   if (!input.hasIGuide) return "waiting_for_iguide";
   if (input.uploadedCount >= input.finishedCount) return "iguide_uploaded";
   return "processing";
@@ -971,7 +1246,6 @@ function buildOrderName(booking: BookingAutoenhanceRow) {
 function safePhotoFilename(
   name: string,
   imageId: string,
-  preview: boolean,
 ) {
   const cleaned = name
     .trim()
@@ -979,7 +1253,7 @@ function safePhotoFilename(
     .replace(/[^a-z0-9_-]+/gi, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
-  return `${cleaned || `autoenhance-${imageId}`}${preview ? "-preview" : ""}.jpg`;
+  return `${cleaned || `autoenhance-${imageId}`}.jpg`;
 }
 
 function extractOrderImages(value: unknown): Array<Record<string, unknown>> {
@@ -1004,7 +1278,11 @@ function visit(
   }
   if (!isRecord(value)) return;
 
-  const imageId = stringField(value, "image_id") ?? stringField(value, "id");
+  const imageId =
+    stringField(value, "image_id") ??
+    (parentKey && imageContainerKey(parentKey)
+      ? stringField(value, "id")
+      : null);
   if (imageId) found.push({ ...value, image_id: imageId });
 
   for (const key of ["images", "image_ids", "items", "results", "data", "brackets"]) {
@@ -1028,7 +1306,28 @@ function mergeImageRecords(
   primary: Array<Record<string, unknown>>,
   fallback: Array<Record<string, unknown>>,
 ) {
-  return dedupeImages([...primary, ...fallback]);
+  return dedupeImages([...fallback, ...primary]);
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (!items.length) return [];
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await mapper(items[index], index);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(Math.max(1, limit), items.length) }, worker),
+  );
+  return results;
 }
 
 function stringField(

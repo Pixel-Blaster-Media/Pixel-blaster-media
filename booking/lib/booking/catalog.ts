@@ -7,9 +7,6 @@ import type { Database } from "@/lib/supabase/database.types";
 export type CatalogItemRow =
   Database["public"]["Tables"]["catalog_items"]["Row"];
 
-export type BookingLineItemRow =
-  Database["public"]["Tables"]["booking_line_items"]["Row"];
-
 export interface Catalog {
   bundles: CatalogItemRow[];
   aLaCarte: CatalogItemRow[];
@@ -214,7 +211,7 @@ export function getCatalogItemPrice(
   };
 }
 
-export function formatSqftPricingRule(item: CatalogItemRow): string | null {
+function formatSqftPricingRule(item: CatalogItemRow): string | null {
   if (
     !item.sqft_pricing_enabled ||
     !item.included_sqft ||
@@ -228,13 +225,6 @@ export function formatSqftPricingRule(item: CatalogItemRow): string | null {
   )} per extra ${item.overage_increment_sqft.toLocaleString()} sq ft.`;
 }
 
-export function formatPrice(cents: number): string {
+function formatPrice(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
-}
-
-export function formatDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes} min`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m === 0 ? `${h} hr` : `${h} hr ${m} min`;
 }

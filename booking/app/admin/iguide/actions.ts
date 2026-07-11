@@ -7,7 +7,10 @@ import {
   parseIGuideAlias,
   parseIGuidePortalId,
 } from "@/lib/integrations/iguide/parse-id";
-import type { IGuideReadyEvent } from "@/lib/integrations/iguide/portal-client";
+import {
+  getReadyEventObject,
+  type IGuideReadyEvent,
+} from "@/lib/integrations/iguide/portal-client";
 import {
   syncIGuideForBooking,
   syncIGuideFromReadyEvent,
@@ -40,7 +43,7 @@ export async function linkIGuideWebhookEvent(
   }
 
   const supabase = getServiceSupabase();
-  const [{ data: event }, { data: booking }] = await Promise.all([
+  const [eventResult, bookingResult] = await Promise.all([
     supabase
       .from("iguide_webhook_events")
       .select("id, payload_json")
@@ -55,12 +58,32 @@ export async function linkIGuideWebhookEvent(
       .single<BookingRow>(),
   ]);
 
-  if (!event) return { ok: false, error: "iGUIDE event not found." };
-  if (!booking) return { ok: false, error: "Booking not found." };
-  const readyEvent = toReadyEvent(event.payload_json);
+  const { data: event, error: eventError } = eventResult;
+  const { data: booking, error: bookingError } = bookingResult;
+
+  if (eventError || !event) {
+    return { ok: false, error: eventError?.message ?? "iGUIDE event not found." };
+  }
+  if (bookingError || !booking) {
+    return { ok: false, error: bookingError?.message ?? "Booking not found." };
+  }
+  let readyEvent = toReadyEvent(event.payload_json);
   if (!readyEvent) {
     return { ok: false, error: "Stored iGUIDE event is not a ready event." };
   }
+
+  // Stored inbox payloads intentionally redact the three-week access token.
+  // Re-fetch the event when possible so a manual review can still save working
+  // private gallery ZIP links instead of literally appending "[redacted]".
+  if (readyEvent.workOrderId) {
+    const fresh = await getReadyEventObject(
+      readyEvent.iguideId,
+      readyEvent.workOrderId,
+      { organizationId: admin.organizationId },
+    );
+    if (fresh.ok && fresh.data) readyEvent = fresh.data;
+  }
+  readyEvent = withoutRedactedAccessToken(readyEvent);
 
   const result = await syncIGuideFromReadyEvent(
     booking,
@@ -149,50 +172,6 @@ export async function ignoreIGuideWebhookEvents(
   revalidatePath("/admin/iguide");
 }
 
-export async function linkIGuidePortalTour(
-  formData: FormData,
-): Promise<void> {
-  const admin = await requireAdmin();
-
-  const bookingId = String(formData.get("booking_id") ?? "");
-  const portalId = String(formData.get("portal_id") ?? "").trim();
-  const alias = String(formData.get("alias") ?? "").trim() || null;
-  if (!bookingId || !portalId) return;
-
-  const supabase = getServiceSupabase();
-  const { data: booking } = await supabase
-    .from("bookings")
-    .select("id, organization_id, property_id, iguide_id, iguide_portal_id")
-    .eq("id", bookingId)
-    .eq("organization_id", admin.organizationId)
-    .single<BookingRow>();
-
-  if (!booking) return;
-
-  const { error } = await supabase
-    .from("bookings")
-    .update({
-      iguide_portal_id: portalId,
-      ...(alias ? { iguide_id: alias } : {}),
-    })
-    .eq("id", booking.id)
-    .eq("organization_id", admin.organizationId);
-
-  if (!error) {
-    await syncIGuideForBooking(
-      {
-        ...booking,
-        iguide_portal_id: portalId,
-        iguide_id: alias ?? booking.iguide_id,
-      },
-      { organizationId: admin.organizationId },
-    );
-  }
-
-  revalidatePath("/admin/iguide");
-  revalidatePath(`/admin/bookings/${booking.id}`);
-}
-
 export async function linkManualIGuideToBooking(
   formData: FormData,
 ): Promise<void> {
@@ -248,4 +227,11 @@ function toReadyEvent(value: Json): IGuideReadyEvent | null {
     return null;
   }
   return obj as unknown as IGuideReadyEvent;
+}
+
+function withoutRedactedAccessToken(event: IGuideReadyEvent): IGuideReadyEvent {
+  if (event.authtoken !== "[redacted]") return event;
+  const copy = { ...event };
+  delete copy.authtoken;
+  return copy;
 }

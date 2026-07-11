@@ -81,7 +81,7 @@ export async function resolvePublicBookingOrganization(
   };
 }
 
-export function cleanOrganizationSlug(rawSlug?: string | null): string | null {
+function cleanOrganizationSlug(rawSlug?: string | null): string | null {
   const slug = (rawSlug ?? "").trim().toLowerCase();
   if (!slug) return null;
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return null;

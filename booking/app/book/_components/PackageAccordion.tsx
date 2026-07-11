@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import type { CatalogItemDTO } from "@/app/_components/CartPicker";
+import type { CatalogItemDTO } from "@/lib/booking/catalog-dto";
 import BookingTotalBar from "./BookingTotalBar";
 
 /**

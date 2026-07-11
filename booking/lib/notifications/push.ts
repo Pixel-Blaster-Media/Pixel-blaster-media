@@ -39,7 +39,7 @@ export function pushNotificationsConfigured(): boolean {
   );
 }
 
-export async function sendPushToOrganization(
+async function sendPushToOrganization(
   organizationId: string,
   message: PushMessage,
 ): Promise<PushSendResult> {

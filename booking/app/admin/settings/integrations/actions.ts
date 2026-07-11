@@ -14,7 +14,10 @@ import {
   saveCredentials,
 } from "@/lib/integrations/credentials";
 import { sendEmail } from "@/lib/email/resend";
-import { testPortalCredentials } from "@/lib/integrations/iguide/portal-client";
+import {
+  listIGuides,
+  testPortalCredentials,
+} from "@/lib/integrations/iguide/portal-client";
 import {
   buildAuthorizeUrl as buildGoogleAuthorizeUrl,
   revokeToken as revokeGoogleToken,
@@ -174,7 +177,7 @@ export async function sendTestEmail(
 
 const ALLOWED_FIELDS: Record<Provider, string[]> = {
   admin_settings: ["today_command_preferences"],
-  autoenhance: ["api_key"],
+  autoenhance: ["api_key", "webhook_secret"],
   fotello: ["api_key"],
   google_maps: ["api_key"],
   iguide: ["app_id", "app_token", "webhook_secret"],
@@ -256,11 +259,14 @@ export async function testIGuideCredentials(): Promise<{
   ok: boolean;
   error?: string;
   appIdLast4?: string;
+  portalList?: "available" | "permission_needed" | "unavailable";
+  portalTourCount?: number;
 }> {
   const admin = await requireAdmin();
-  const result = await testPortalCredentials({
+  const scope = {
     organizationId: admin.organizationId,
-  });
+  };
+  const result = await testPortalCredentials(scope);
   if (!result.ok || !result.data?.appId) {
     return {
       ok: false,
@@ -269,9 +275,16 @@ export async function testIGuideCredentials(): Promise<{
         "iGUIDE did not accept the saved App ID and App Token.",
     };
   }
+  const portalList = await listIGuides(scope);
   return {
     ok: true,
     appIdLast4: result.data.appId.slice(-4),
+    portalList: portalList.ok
+      ? "available"
+      : portalList.status === 401 || portalList.status === 403
+        ? "permission_needed"
+        : "unavailable",
+    portalTourCount: portalList.ok ? portalList.data?.length ?? 0 : undefined,
   };
 }
 

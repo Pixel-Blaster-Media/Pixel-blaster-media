@@ -127,10 +127,3 @@ export function findMediaByCategory(
       .some((s) => s.toLowerCase().includes(lc)),
   );
 }
-
-/** Format the address for display from the RESO autofill payload. */
-export function formatRESOAddress(data: IGuideRESOResponse): string {
-  const street = [data.StreetNumber, data.StreetName].filter(Boolean).join(" ");
-  const cityProv = [data.City, data.StateOrProvince].filter(Boolean).join(", ");
-  return [street, cityProv, data.PostalCode].filter(Boolean).join(" · ");
-}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ExternalLink } from "lucide-react";
 
 import type {
   AutoenhanceBatchSummary,
@@ -44,7 +45,7 @@ export default function AutoenhanceSection({
 }) {
   const [files, setFiles] = useState<File[]>([]);
   const [uploadMode, setUploadMode] = useState<"hdr" | "single">("hdr");
-  const [bracketsPerImage, setBracketsPerImage] = useState(3);
+  const [bracketsPerImage, setBracketsPerImage] = useState(0);
   const [enhanceType, setEnhanceType] = useState("warm");
   const [privacy, setPrivacy] = useState(true);
   const [skyReplacement, setSkyReplacement] = useState(false);
@@ -54,6 +55,10 @@ export default function AutoenhanceSection({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{
+    complete: number;
+    total: number;
+  } | null>(null);
   const pollingRef = useRef<string | null>(null);
 
   const activeBatch = useMemo(
@@ -68,7 +73,10 @@ export default function AutoenhanceSection({
 
   useEffect(() => {
     if (!activeBatch) return;
-    if (!["uploading", "processing"].includes(activeBatch.status)) return;
+    const shouldPoll =
+      activeBatch.status === "processing" ||
+      (activeBatch.status === "waiting_for_iguide" && Boolean(iguidePortalId));
+    if (!shouldPoll) return;
     pollingRef.current = activeBatch.id;
     const interval = window.setInterval(() => {
       if (pollingRef.current) {
@@ -80,7 +88,7 @@ export default function AutoenhanceSection({
       pollingRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeBatch?.id, activeBatch?.status]);
+  }, [activeBatch?.id, activeBatch?.status, iguidePortalId]);
 
   async function uploadAndEnhance() {
     if (!files.length) {
@@ -90,6 +98,8 @@ export default function AutoenhanceSection({
     setBusy(true);
     setError(null);
     setMessage("Creating Autoenhance order...");
+    setUploadProgress(null);
+    let preparedBatchId: string | null = null;
     try {
       const prepared = await apiJson<PrepareResponse>(
         `/api/admin/bookings/${bookingId}/autoenhance/prepare`,
@@ -112,30 +122,41 @@ export default function AutoenhanceSection({
         return;
       }
 
+      preparedBatchId = prepared.batch.id;
       setBatches((current) => upsertBatch(current, prepared.batch));
-      const uploadedBracketIds: string[] = [];
-      const uploadedImageIds: string[] = [];
-      for (const [index, upload] of prepared.uploads.entries()) {
-        const file = files[index];
-        if (!file) continue;
-        setMessage(`Uploading ${file.name} to Autoenhance...`);
-        const put = await fetch(upload.uploadUrl, {
-          method: "PUT",
-          headers: { "Content-Type": "application/octet-stream" },
-          body: file,
-        });
-        if (!put.ok) {
-          const body = await put.text().catch(() => "");
-          throw new Error(
-            `Upload failed for ${file.name}: ${put.status} ${body.slice(0, 160)}`,
+      setMessage("Uploading photos directly to Autoenhance...");
+      setUploadProgress({ complete: 0, total: prepared.uploads.length });
+      const uploaded = await mapWithConcurrency(
+        prepared.uploads,
+        4,
+        async (upload, index) => {
+          const file = files[index];
+          if (!file) throw new Error(`Could not match upload ${index + 1} to a file.`);
+          const put = await fetch(upload.uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": "application/octet-stream" },
+            body: file,
+          });
+          if (!put.ok) {
+            const body = await put.text().catch(() => "");
+            throw new Error(
+              `Upload failed for ${file.name}: ${put.status} ${body.slice(0, 160)}`,
+            );
+          }
+          setUploadProgress((current) =>
+            current
+              ? { ...current, complete: Math.min(current.complete + 1, current.total) }
+              : current,
           );
-        }
-        if (upload.uploadKind === "bracket" && upload.bracketId) {
-          uploadedBracketIds.push(upload.bracketId);
-        } else {
-          uploadedImageIds.push(upload.imageId);
-        }
-      }
+          return upload;
+        },
+      );
+      const uploadedBracketIds = uploaded
+        .filter((upload) => upload.uploadKind === "bracket" && upload.bracketId)
+        .map((upload) => upload.bracketId as string);
+      const uploadedImageIds = uploaded
+        .filter((upload) => upload.uploadKind === "image")
+        .map((upload) => upload.imageId);
 
       setMessage("Starting Autoenhance processing...");
       const processed = await apiJson<BatchResponse>(
@@ -155,15 +176,30 @@ export default function AutoenhanceSection({
       }
       setFiles([]);
       setBatches((current) => upsertBatch(current, processed.batch));
-      setMessage(
-        processed.batch.iguidePortalId
-          ? "Processing started. Finished photos will push to iGUIDE automatically."
-          : "Processing started. Link an iGUIDE Portal ID and refresh to push finished photos.",
-      );
+      if (processed.batch.status === "attention") {
+        setMessage(null);
+        setError(processed.batch.lastError ?? "Autoenhance could not start this batch.");
+      } else {
+        setMessage(statusMessage(processed.batch));
+      }
       pollingRef.current = processed.batch.id;
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError(errorMessage);
+      if (preparedBatchId) {
+        const failed = await apiJson<BatchResponse>(
+          `/api/admin/bookings/${bookingId}/autoenhance/fail`,
+          {
+            method: "POST",
+            body: JSON.stringify({ batchId: preparedBatchId, message: errorMessage }),
+          },
+        ).catch(() => null);
+        if (failed?.ok) {
+          setBatches((current) => upsertBatch(current, failed.batch));
+        }
+      }
     } finally {
+      setUploadProgress(null);
       setBusy(false);
     }
   }
@@ -273,8 +309,8 @@ export default function AutoenhanceSection({
             disabled={uploadMode !== "hdr"}
             className="admin-input mt-1"
           >
+            <option value={0}>Auto-detect (recommended)</option>
             <option value={3}>3 brackets = 1 photo</option>
-            <option value={0}>Auto-detect</option>
             <option value={5}>5 brackets = 1 photo</option>
             <option value={7}>7 brackets = 1 photo</option>
             <option value={1}>1 file = 1 photo</option>
@@ -321,7 +357,11 @@ export default function AutoenhanceSection({
         disabled={busy || !files.length}
         className="w-full rounded-full bg-realtor-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-realtor-primary/90 disabled:cursor-not-allowed disabled:opacity-55"
       >
-        {busy ? "Working..." : "Upload + enhance"}
+        {uploadProgress
+          ? `Uploading ${uploadProgress.complete} of ${uploadProgress.total}`
+          : busy
+            ? "Working..."
+            : "Upload + enhance"}
       </button>
 
       {message ? <p className="text-xs text-emerald-800">{message}</p> : null}
@@ -367,9 +407,15 @@ function BatchCard({
           <p className="text-sm font-semibold text-realtor-text">
             {batch.orderName}
           </p>
-          <p className="mt-1 break-all font-mono text-[11px] text-realtor-muted">
-            {batch.orderId}
-          </p>
+          <a
+            href={`https://app.autoenhance.ai/orders/${encodeURIComponent(batch.orderId)}`}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-realtor-primary hover:underline"
+          >
+            Open in Autoenhance
+            <ExternalLink className="h-3 w-3" aria-hidden="true" />
+          </a>
         </div>
         <button
           type="button"
@@ -380,8 +426,12 @@ function BatchCard({
           Refresh
         </button>
       </div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-4">
+      <div className="mt-3 grid gap-2 sm:grid-cols-5">
         <MiniStat label="Status" value={humanStatus(batch.status)} />
+        <MiniStat
+          label="Autoenhance"
+          value={batch.processStatus ? humanStatus(batch.processStatus) : "Waiting"}
+        />
         <MiniStat label="Finished" value={`${batch.finishedImageIds.length}`} />
         <MiniStat label="In iGUIDE" value={`${batch.uploadedCount}`} />
         <MiniStat label="Needs help" value={`${batch.failedCount}`} />
@@ -467,7 +517,9 @@ function statusMessage(batch: AutoenhanceBatchSummary) {
   if (batch.status === "attention") {
     return "This batch needs attention. Check the warning below.";
   }
-  return "Still processing. The page will keep checking while it stays open.";
+  return batch.iguidePortalId
+    ? "Autoenhance is working. The page checks while open, and the configured webhook can finish the iGUIDE handoff after you leave."
+    : "Autoenhance is working. Link an iGUIDE Portal ID before the photos finish.";
 }
 
 async function apiJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -484,4 +536,24 @@ async function apiJson<T>(url: string, init?: RequestInit): Promise<T> {
     } as T;
   }
   return body;
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await mapper(items[index], index);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(Math.max(1, limit), items.length) }, worker),
+  );
+  return results;
 }

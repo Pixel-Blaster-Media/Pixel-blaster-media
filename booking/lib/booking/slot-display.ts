@@ -1,9 +1,12 @@
 import "server-only";
 
 import { BUSINESS_TZ, listAvailableSlots } from "@/lib/booking/availability";
-import type { OrganizationScope } from "@/lib/organizations/context";
 
-export interface DisplaySlot {
+interface OrganizationScope {
+  organizationId: string;
+}
+
+interface DisplaySlot {
   /** ISO UTC string — what we round-trip through the URL / form. */
   start: string;
   /** "9:00 AM" — displayed to the realtor in BUSINESS_TZ. */
@@ -20,8 +23,8 @@ export interface SlotsByDay {
 
 /**
  * Fetch `days`-worth of available slots from now, grouped by business-tz
- * day. Used by both /book (public) and /portal/book (signed-in) — kept
- * here so the two flows can't drift on timezone / formatting.
+ * day. The signed-in portal redirects into the same public booking flow, so
+ * every entry point shares this timezone and formatting logic.
  */
 export async function loadSlotsForNextDays(
   durationMinutes: number,

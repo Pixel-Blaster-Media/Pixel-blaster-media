@@ -1335,6 +1335,7 @@ export async function createIGuideForBooking(
     {
       type: "standard",
       industry: "residential",
+      applyDefaults: true,
       address: {
         country: "CA",
         provinceState: booking.properties.province ?? "ON",
@@ -1342,7 +1343,7 @@ export async function createIGuideForBooking(
         postalCode: booking.properties.postal_code ?? "",
         streetNumber: address.streetNumber,
         streetName: address.streetName,
-        ...(booking.unit_number ? { unit: booking.unit_number } : {}),
+        ...(booking.unit_number ? { unitNumber: booking.unit_number } : {}),
       },
       webhooks: webhookConfig.webhooks,
     },

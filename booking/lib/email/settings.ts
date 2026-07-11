@@ -11,7 +11,7 @@ interface OrganizationEmailRow {
   invoice_timing: string | null;
 }
 
-export type InvoiceTiming = "on_delivery" | "at_booking";
+type InvoiceTiming = "on_delivery" | "at_booking";
 
 export interface OrganizationEmailSettings {
   organizationName: string;

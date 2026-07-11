@@ -101,6 +101,7 @@ export default async function IntegrationsPage({
   const [
     resendApiKeyStatus,
     autoenhanceApiKeyStatus,
+    autoenhanceWebhookStatus,
     openAiApiKeyStatus,
     openAiModelStatus,
     googleMapsApiKeyStatus,
@@ -120,6 +121,12 @@ export default async function IntegrationsPage({
       "autoenhance",
       "api_key",
       "AUTOENHANCE_API_KEY",
+      admin.organizationId,
+    ),
+    getCredentialSource(
+      "autoenhance",
+      "webhook_secret",
+      "AUTOENHANCE_WEBHOOK_SECRET",
       admin.organizationId,
     ),
     getCredentialSource(
@@ -162,6 +169,7 @@ export default async function IntegrationsPage({
   const iguideConfigured =
     iguideAppIdStatus.source !== "none" &&
     iguideAppTokenStatus.source !== "none";
+  const iguideWebhookConfigured = iguideWebhookStatus.source !== "none";
 
   const emailFrom = isDefaultOrganization ? process.env.EMAIL_FROM ?? null : null;
   const adminEmail = isDefaultOrganization
@@ -172,9 +180,10 @@ export default async function IntegrationsPage({
   );
   const googleReady = Boolean(googleConnection && googleConfigured);
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
-  const webhookUrlBase = appUrl
+  const iguideWebhookUrlBase = appUrl
     ? `${appUrl}/api/integrations/iguide/webhook?secret=`
     : "/api/integrations/iguide/webhook?secret=";
+  const autoenhanceWebhookUrl = `${appUrl || ""}/api/integrations/autoenhance/webhook?org=${admin.organizationId}`;
 
   return (
     <div className="space-y-10">
@@ -338,9 +347,8 @@ export default async function IntegrationsPage({
               Autoenhance.ai
             </h2>
             <p className="mt-1 text-sm text-realtor-muted">
-              Optional photo enhancement provider. Use the sandbox first to
-              test uploads, processing, and enhanced downloads before wiring it
-              into real bookings.
+              Enhance booking photos and send completed full-resolution JPEGs
+              into the linked iGUIDE gallery.
             </p>
           </div>
           {autoenhanceConfigured ? (
@@ -356,18 +364,39 @@ export default async function IntegrationsPage({
 
         <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
           <p className="text-sm font-semibold text-realtor-text">
-            Test before delivery
+            Automatic completion updates
           </p>
           <p className="mt-1 text-xs leading-relaxed text-realtor-muted">
-            Autoenhance uses an <code>x-api-key</code> header. The browser never
-            sees the key; the admin sandbox does all API calls from server code.
+            Add this URL as the webhook URL in Autoenhance&apos;s API settings.
+            Paste the same long random value into Autoenhance&apos;s authentication
+            field and the Webhook secret field below. The secret and API key
+            remain server-side.
           </p>
-          <Link
-            href="/admin/autoenhance-test"
-            className="mt-3 inline-flex rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
-          >
-            Open Autoenhance test
-          </Link>
+          <div className="mt-3 flex flex-col gap-2 rounded-xl border border-realtor-primary/15 bg-white/80 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <code className="min-w-0 break-all text-[11px] text-realtor-text">
+              {autoenhanceWebhookUrl}
+            </code>
+            <CopyTextButton value={autoenhanceWebhookUrl} />
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${
+                autoenhanceWebhookStatus.source === "none"
+                  ? "border-amber-200 bg-amber-50 text-amber-800"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-800"
+              }`}
+            >
+              {autoenhanceWebhookStatus.source === "none"
+                ? "Webhook secret needed"
+                : "Webhook authentication saved"}
+            </span>
+            <Link
+              href="/admin/autoenhance-test"
+              className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+            >
+              Open test sandbox
+            </Link>
+          </div>
         </div>
 
         <CredentialsForm
@@ -379,8 +408,17 @@ export default async function IntegrationsPage({
               helper:
                 "Create this in Autoenhance. For Vercel env fallback use AUTOENHANCE_API_KEY.",
             },
+            {
+              name: "webhook_secret",
+              label: "Webhook secret",
+              helper:
+                "Use the exact same random secret in Autoenhance's webhook authentication field. For Vercel fallback use AUTOENHANCE_WEBHOOK_SECRET.",
+            },
           ]}
-          statuses={{ api_key: autoenhanceApiKeyStatus }}
+          statuses={{
+            api_key: autoenhanceApiKeyStatus,
+            webhook_secret: autoenhanceWebhookStatus,
+          }}
         />
       </section>
 
@@ -502,32 +540,31 @@ export default async function IntegrationsPage({
             <h2 className="text-lg font-semibold text-realtor-text">iGUIDE</h2>
             <p className="mt-1 text-sm text-realtor-muted">
               Connect this once so new iGUIDEs from your phone can be matched
-              to bookings and synced into deliverables. iGUIDE has confirmed
-              that listing every iGUIDE in your portal is not publicly available
-              through their API yet, so existing tours are linked manually.
+              to bookings and synced into deliverables. The current API can also
+              search the company&apos;s portal tours when the token includes the
+              iguide.list permission.
             </p>
           </div>
-          {iguideConfigured ? (
+          {iguideConfigured && iguideWebhookConfigured ? (
             <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
-              Configured
+              Ready
             </span>
           ) : (
             <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
-              Not configured
+              Setup needed
             </span>
           )}
         </div>
 
-        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-          <p className="text-sm font-semibold text-amber-900">
-            Important iGUIDE limitation
+        <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
+          <p className="text-sm font-semibold text-realtor-text">
+            Portal search is now supported
           </p>
-          <p className="mt-1 text-xs leading-relaxed text-amber-800">
-            Your credentials can still be valid even though portal search does
-            not work. iGUIDE support confirmed the list-all-iGUIDEs endpoint is
-            not exposed for customer use yet. For now, use webhooks for new
-            iGUIDEs and paste an existing tour URL, manage URL, alias, or Portal
-            ID on the booking page.
+          <p className="mt-1 text-xs leading-relaxed text-realtor-muted">
+            iGUIDE added the list endpoint to its public documentation in July
+            2026. Include <strong>iguide.list</strong>, then use the test button
+            below to confirm this token can see portal tours. Manual paste and
+            ready webhooks remain available either way.
           </p>
         </div>
 
@@ -549,6 +586,12 @@ export default async function IntegrationsPage({
               <strong>iGUIDE Token</strong> below.
             </li>
             <li>
+              Give that token these permissions: <strong>iguide.read</strong>,{" "}
+              <strong>iguide.write</strong>, <strong>iguide.process</strong>, and{" "}
+              <strong>iguide.events</strong>. Add <strong>iguide.list</strong> for
+              portal tour search.
+            </li>
+            <li>
               Make up a long random <strong>Webhook secret</strong>, save it
               below, then add it to the end of the webhook URL in iGUIDE.
             </li>
@@ -565,9 +608,9 @@ export default async function IntegrationsPage({
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <code className="min-w-0 flex-1 overflow-x-auto rounded-xl border border-realtor-primary/15 bg-white px-3 py-2 text-xs text-realtor-text">
-              {webhookUrlBase}YOUR_SECRET_HERE
+              {iguideWebhookUrlBase}YOUR_SECRET_HERE
             </code>
-            <CopyTextButton value={`${webhookUrlBase}YOUR_SECRET_HERE`} />
+            <CopyTextButton value={`${iguideWebhookUrlBase}YOUR_SECRET_HERE`} />
           </div>
         </div>
 
@@ -601,6 +644,13 @@ export default async function IntegrationsPage({
           }}
         />
         <IGuideTester disabled={!iguideConfigured} />
+        {!iguideWebhookConfigured ? (
+          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+            The API credentials can be tested, but automatic ready-event syncing
+            stays off until a webhook secret is saved and the matching URL is
+            added in iGUIDE.
+          </p>
+        ) : null}
       </section>
 
       <section className="realtor-elevated-panel rounded-2xl p-5">

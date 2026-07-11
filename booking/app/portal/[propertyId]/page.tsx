@@ -290,13 +290,6 @@ export default async function PropertyDetailPage({
   );
 }
 
-interface QuickAction {
-  label: string;
-  detail: string;
-  href: string;
-  download?: boolean;
-}
-
 function PortalTabs({
   propertyId,
   activeTab,
@@ -345,106 +338,6 @@ function PortalTabs({
         );
       })}
     </nav>
-  );
-}
-
-function buildQuickActions({
-  gallery,
-  tour,
-  floorPlan,
-  videos,
-  invoiceUrl,
-  listingWebsite,
-}: {
-  gallery: DeliverableRow[];
-  tour: DeliverableRow | undefined;
-  floorPlan: DeliverableRow | undefined;
-  videos: DeliverableRow[];
-  invoiceUrl: string | null;
-  listingWebsite: ListingWebsiteRow | null;
-}): QuickAction[] {
-  const actions: QuickAction[] = [];
-  if (listingWebsite) {
-    actions.push({
-      label: "Open custom listing page",
-      detail: listingWebsite.headline ?? "Public marketing page",
-      href: `/listings/${listingWebsite.slug}`,
-    });
-  }
-  const photo = gallery[0];
-  if (photo) {
-    actions.push({
-      label: "Photos",
-      detail: photoDownloadDetail(photo),
-      href: "#photos",
-    });
-  }
-  if (tour) {
-    actions.push({
-      label: "Open virtual tour",
-      detail: "Branded tour link",
-      href: tour.url,
-    });
-  }
-  if (floorPlan) {
-    actions.push({
-      label: "Download floor plan",
-      detail: "PDF floor plan",
-      href: iGuideDownloadUrl(floorPlan.url),
-      download: true,
-    });
-  }
-  if (videos[0]) {
-    actions.push({
-      label: "Open video",
-      detail: videos.length > 1 ? `${videos.length} video links` : "Video link",
-      href: videos[0].url,
-      download: !isStreamingVideoUrl(videos[0].url),
-    });
-  }
-  if (invoiceUrl) {
-    actions.push({
-      label: "Open invoice",
-      detail: "Billing link",
-      href: invoiceUrl,
-    });
-  }
-  return actions;
-}
-
-function QuickActionGrid({ actions }: { actions: QuickAction[] }) {
-  return (
-    <section className="realtor-elevated-panel rounded-2xl p-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
-            Ready now
-          </p>
-          <h2 className="mt-1 text-xl font-semibold text-realtor-text">
-            Grab the media you need
-          </h2>
-        </div>
-      </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {actions.map((action) => (
-          <a
-            key={`${action.label}:${action.href}`}
-            href={action.href}
-            target="_blank"
-            rel="noopener"
-            download={action.download}
-            className="group rounded-2xl border border-realtor-primary/15 bg-realtor-surface-muted/70 p-4 transition hover:border-realtor-primary/40 hover:bg-realtor-surface"
-          >
-            <span className="block text-sm font-semibold text-realtor-text group-hover:text-realtor-primary">
-              {action.label} →
-            </span>
-            <span className="mt-1 block text-xs text-realtor-muted">
-              {action.detail}
-            </span>
-          </a>
-        ))}
-      </div>
-    </section>
   );
 }
 
@@ -1009,137 +902,11 @@ function SectionHeader({
   );
 }
 
-function EmptySection({
-  title,
-  message,
-}: {
-  title: string;
-  message: string;
-}) {
-  return (
-    <section>
-      <SectionHeader title={title} />
-      <p className="rounded-xl border border-dashed border-realtor-primary/15 bg-realtor-surface-muted/75 p-4 text-sm text-realtor-muted">
-        {message}
-      </p>
-    </section>
-  );
-}
-
-function IGuideGallery({ deliverable }: { deliverable: DeliverableRow }) {
-  const imageUrls = metadataImageUrls(deliverable.metadata);
-  const mlsZipUrl = photoDownloadUrl(deliverable.metadata, "mls_photo_zip_url");
-  const highResZipUrl = photoDownloadUrl(
-    deliverable.metadata,
-    "high_res_photo_zip_url",
-  );
-  const label =
-    metadataString(deliverable.metadata, "delivery_label") ?? "Photo gallery";
-  if (imageUrls.length > 0) {
-    return (
-      <div className="realtor-elevated-panel rounded-2xl p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-realtor-text">{label}</p>
-            <p className="mt-0.5 text-xs text-realtor-muted">
-              {imageUrls.length} iGUIDE gallery photos
-            </p>
-          </div>
-          <PhotoDownloadButtons mlsZipUrl={mlsZipUrl} highResZipUrl={highResZipUrl} />
-        </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {imageUrls.slice(0, 24).map((url, index) => (
-            <a key={url} href={url} target="_blank" rel="noopener">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={url}
-                alt={`Listing photo ${index + 1}`}
-                className="aspect-[4/3] w-full rounded-2xl object-cover"
-                loading="lazy"
-              />
-            </a>
-          ))}
-        </div>
-      </div>
-    );
-  }
-  if (!mlsZipUrl && !highResZipUrl) {
-    return (
-      <div className="realtor-elevated-panel rounded-2xl p-4">
-        <p className="text-sm font-semibold text-realtor-text">{label}</p>
-        <p className="mt-1 text-xs text-realtor-muted">
-          Photo downloads are still being prepared for this iGUIDE.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div className="realtor-elevated-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4">
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-realtor-text">{label}</p>
-        <p className="mt-0.5 truncate text-xs text-realtor-muted">
-          iGUIDE photo downloads
-        </p>
-      </div>
-      <div className="flex gap-2">
-        <PhotoDownloadButtons mlsZipUrl={mlsZipUrl} highResZipUrl={highResZipUrl} />
-      </div>
-    </div>
-  );
-}
-
 function hasPhotoAsset(deliverable: DeliverableRow): boolean {
   return (
     metadataImageUrls(deliverable.metadata).length > 0 ||
     Boolean(photoDownloadUrl(deliverable.metadata, "mls_photo_zip_url")) ||
     Boolean(photoDownloadUrl(deliverable.metadata, "high_res_photo_zip_url"))
-  );
-}
-
-function photoDownloadDetail(deliverable: DeliverableRow): string {
-  if (photoDownloadUrl(deliverable.metadata, "mls_photo_zip_url")) {
-    return "MLS download available";
-  }
-  if (photoDownloadUrl(deliverable.metadata, "high_res_photo_zip_url")) {
-    return "High-res download available";
-  }
-  const count = metadataImageUrls(deliverable.metadata).length;
-  return count > 1 ? `${count} iGUIDE gallery photos` : "iGUIDE gallery photo";
-}
-
-function PhotoDownloadButtons({
-  mlsZipUrl,
-  highResZipUrl,
-}: {
-  mlsZipUrl: string | null;
-  highResZipUrl: string | null;
-}) {
-  if (!mlsZipUrl && !highResZipUrl) return null;
-  return (
-    <div className="flex flex-wrap gap-2">
-      {mlsZipUrl ? (
-        <a
-          href={iGuideDownloadUrl(mlsZipUrl)}
-          target="_blank"
-          rel="noopener"
-          download
-          className="rounded-md bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-realtor-primary-light"
-        >
-          Download MLS photos
-        </a>
-      ) : null}
-      {highResZipUrl ? (
-        <a
-          href={iGuideDownloadUrl(highResZipUrl)}
-          target="_blank"
-          rel="noopener"
-          download
-          className="rounded-md border border-realtor-primary/20 px-3 py-1.5 text-xs font-semibold text-realtor-text hover:border-realtor-primary/40"
-        >
-          Download high-res
-        </a>
-      ) : null}
-    </div>
   );
 }
 

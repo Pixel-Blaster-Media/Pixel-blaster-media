@@ -1,37 +1,6 @@
 import "server-only";
 
-import {
-  labelForAddOn,
-  labelForService,
-  PREFERRED_TIMES,
-} from "@/lib/booking/services";
-
-/**
- * Subset of BookingRequestInput that email templates actually need.
- * Kept narrow so we don't widen its shape when the request schema evolves
- * (e.g. cart[] lives on the main input but templates only need rendered
- * service/add-on slug arrays).
- */
-interface TemplateRequest {
-  contact_name: string;
-  contact_email: string;
-  contact_phone?: string;
-  brokerage?: string;
-  street_address: string;
-  city?: string;
-  postal_code?: string;
-  square_footage?: number;
-  services: string[];
-  add_ons: string[];
-  preferred_date?: string;
-  preferred_time?: string;
-  notes?: string;
-}
-
-interface TemplateArgs {
-  request: TemplateRequest;
-  requestId: string;
-}
+import { labelForService } from "@/lib/booking/services";
 
 import type { DeliveryLinkCategory } from "@/lib/booking/delivery-links";
 
@@ -49,88 +18,6 @@ const baseStyles = `
   ul { padding-left:18px; color:#cfd6d8; line-height:1.55; font-size:15px; }
   .meta { color:#8a979c; font-size:12px; margin-top:24px; border-top:1px solid rgba(255,255,255,0.08); padding-top:16px; }
 `;
-
-function timeLabel(id?: string): string {
-  if (!id) return "—";
-  return PREFERRED_TIMES.find((t) => t.id === id)?.label ?? id;
-}
-
-function summary(request: TemplateRequest): string {
-  const services = request.services.map(labelForService).join(", ") || "—";
-  const addOns = request.add_ons.length
-    ? request.add_ons.map(labelForAddOn).join(", ")
-    : "—";
-  const address = [
-    request.street_address,
-    [request.city, request.postal_code].filter(Boolean).join(" "),
-  ]
-    .filter(Boolean)
-    .join(", ");
-
-  return `
-    <h2>Property</h2>
-    <p>${escape(address)}${
-      request.square_footage ? ` · ${request.square_footage} sq ft` : ""
-    }</p>
-
-    <h2>Services</h2>
-    <p>${escape(services)}</p>
-
-    <h2>Add-ons</h2>
-    <p>${escape(addOns)}</p>
-
-    <h2>Preferred timing</h2>
-    <p>${escape(request.preferred_date ?? "—")} · ${escape(timeLabel(request.preferred_time))}</p>
-
-    ${
-      request.notes
-        ? `<h2>Notes</h2><p>${escape(request.notes).replace(/\n/g, "<br>")}</p>`
-        : ""
-    }
-  `;
-}
-
-export function clientConfirmationEmail({ request, requestId }: TemplateArgs) {
-  const html = `
-    <!doctype html>
-    <html><head><meta charset="utf-8"><style>${baseStyles}</style></head>
-    <body><div class="wrap">
-      <p><span class="pill">Pixel Blaster Media</span></p>
-      <h1>Thanks ${escape(request.contact_name.split(" ")[0])}, we got your request.</h1>
-      <p>We'll get back to you within 24 hours to confirm the date and any details. Below is a copy of what you sent us — keep it for your records.</p>
-      ${summary(request)}
-      <p class="meta">Request ID: ${escape(requestId)}<br>
-        Reply to this email with anything you'd like to add or change.</p>
-    </div></body></html>
-  `;
-  return {
-    subject: "We got your booking request — Pixel Blaster Media",
-    html,
-  };
-}
-
-export function adminNotificationEmail({ request, requestId }: TemplateArgs) {
-  const html = `
-    <!doctype html>
-    <html><head><meta charset="utf-8"><style>${baseStyles}</style></head>
-    <body><div class="wrap">
-      <p><span class="pill">New booking request</span></p>
-      <h1>${escape(request.contact_name)}${
-        request.brokerage ? ` · ${escape(request.brokerage)}` : ""
-      }</h1>
-      <p>
-        <strong>Email:</strong> ${escape(request.contact_email)}<br>
-        ${request.contact_phone ? `<strong>Phone:</strong> ${escape(request.contact_phone)}<br>` : ""}
-      </p>
-      ${summary(request)}
-      <p class="meta">Request ID: ${escape(requestId)} · open in admin to accept or decline.</p>
-    </div></body></html>
-  `;
-  return {
-    subject: `New booking — ${request.street_address}`,
-    html,
-  };
-}
 
 /**
  * Sent to the realtor when an admin accepts their booking request.

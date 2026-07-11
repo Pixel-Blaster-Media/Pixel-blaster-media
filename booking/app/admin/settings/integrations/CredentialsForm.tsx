@@ -8,7 +8,7 @@ import {
   saveIntegrationCredentials,
 } from "./actions";
 
-export interface CredentialFieldDef {
+interface CredentialFieldDef {
   name: string;
   label: string;
   helper?: string;

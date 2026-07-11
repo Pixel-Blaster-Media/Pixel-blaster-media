@@ -7,19 +7,19 @@
  * UI-only.
  */
 
-export type ServiceId =
+type ServiceId =
   | "real_estate_photos"
   | "iguide_tour"
   | "floor_plan"
   | "drone"
   | "walkthrough_video";
 
-export type AddOnId =
+type AddOnId =
   | "twilight"
   | "virtual_staging"
   | "rush_24h";
 
-export interface ServiceOption {
+interface ServiceOption {
   id: ServiceId;
   label: string;
   blurb: string;
@@ -36,7 +36,7 @@ export interface ServiceOption {
   durationMinutes: number;
 }
 
-export interface AddOnOption {
+interface AddOnOption {
   id: AddOnId;
   label: string;
   blurb: string;
@@ -44,7 +44,7 @@ export interface AddOnOption {
   durationMinutes: number;
 }
 
-export const SERVICES: ServiceOption[] = [
+const SERVICES: ServiceOption[] = [
   {
     id: "real_estate_photos",
     label: "Real Estate Photography",
@@ -77,7 +77,7 @@ export const SERVICES: ServiceOption[] = [
   },
 ];
 
-export const ADD_ONS: AddOnOption[] = [
+const ADD_ONS: AddOnOption[] = [
   {
     id: "twilight",
     label: "Twilight exterior",
@@ -132,8 +132,6 @@ export const PREFERRED_TIMES = [
   { id: "flexible", label: "Flexible" },
 ] as const;
 
-export type PreferredTime = (typeof PREFERRED_TIMES)[number]["id"];
-
 /**
  * Slug → human label map for items seeded by migration 0008 (catalog_items).
  * Admin list views use the label-for-service/add-on helpers with fallback
@@ -169,12 +167,4 @@ export function labelForAddOn(id: string): string {
   return (
     ADDON_BY_ID[id as AddOnId]?.label ?? CATALOG_SLUG_LABELS[id] ?? id
   );
-}
-
-export function isValidServiceId(id: string): id is ServiceId {
-  return id in SERVICE_BY_ID;
-}
-
-export function isValidAddOnId(id: string): id is AddOnId {
-  return id in ADDON_BY_ID;
 }
