@@ -26,6 +26,7 @@ import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
 interface ActionResult {
   ok: boolean;
   error?: string;
+  warning?: string;
   bookingId?: string;
 }
 
@@ -437,12 +438,19 @@ export async function rescheduleCalendarShoot(
   // Move the existing Google event in place so guests do not receive a
   // cancellation followed by a brand-new invitation. If the event was deleted
   // in Google, recreate it and repair the stored event id.
+  let warning: string | undefined;
   try {
     const gcal = await getGoogleCalendarClient({
       organizationId: admin.organizationId,
     });
+    if (!gcal && booking.google_calendar_event_id) {
+      throw new Error(
+        "Google Calendar connection is unavailable for an existing booking event.",
+      );
+    }
     if (gcal) {
       let event: { id: string; htmlLink: string } | null = null;
+      let createdEventId: string | null = null;
       if (booking.google_calendar_event_id) {
         try {
           event = await gcal.updateEventTime(
@@ -492,8 +500,9 @@ export async function rescheduleCalendarShoot(
           attendeeEmail: booking.profiles?.email ?? undefined,
           attendeeName: booking.profiles?.full_name ?? undefined,
         });
+        createdEventId = event.id;
       }
-      await supabase
+      const { error: calendarLinkError } = await supabase
         .from("bookings")
         .update({
           google_calendar_event_id: event.id,
@@ -501,18 +510,28 @@ export async function rescheduleCalendarShoot(
         })
         .eq("id", booking.id)
         .eq("organization_id", admin.organizationId);
+      if (calendarLinkError) {
+        if (createdEventId) {
+          await gcal.deleteEvent(createdEventId);
+        }
+        throw new Error(
+          `Could not persist Google Calendar event link: ${calendarLinkError.message}`,
+        );
+      }
     }
   } catch (err) {
+    warning =
+      "The booking moved, but Google Calendar sync did not finish. Check the event in Google Calendar before trying again.";
     console.warn("[admin-calendar] google calendar reschedule failed", err);
   }
 
   await supabase.from("assistant_action_logs").insert({
     organization_id: admin.organizationId,
     actor_profile_id: admin.userId,
-    action_type: "calendar_drag_reschedule",
+    action_type: "calendar_reschedule",
     target_booking_id: booking.id,
     target_realtor_id: booking.owner_id,
-    label: "Calendar drag reschedule",
+    label: "Calendar reschedule",
     details: `Moved ${booking.properties?.street_address ?? "booking"} to ${dateInput} ${hour}:${minute}.`,
     payload: {
       old_scheduled_at: booking.scheduled_at,
@@ -521,7 +540,8 @@ export async function rescheduleCalendarShoot(
       new_scheduled_ends_at: scheduledEndsAt.toISOString(),
     },
     result_status: "success",
-    result_message: "Booking moved from the calendar week view.",
+    result_message:
+      warning ?? "Booking moved from the admin calendar.",
     undo_payload: {
       booking_id: booking.id,
       scheduled_at: booking.scheduled_at,
@@ -544,7 +564,7 @@ export async function rescheduleCalendarShoot(
   revalidatePath("/admin/calendar");
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${booking.id}`);
-  return { ok: true, bookingId: booking.id };
+  return { ok: true, warning, bookingId: booking.id };
 }
 
 /**

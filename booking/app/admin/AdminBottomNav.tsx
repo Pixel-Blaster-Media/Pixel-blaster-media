@@ -38,7 +38,7 @@ export default function AdminBottomNav() {
   return (
     <nav
       aria-label="Admin app navigation"
-      className="fixed bottom-[max(0.55rem,env(safe-area-inset-bottom))] left-3 right-3 z-[70] mx-auto max-w-md rounded-[24px] border border-realtor-primary/15 bg-white/95 px-2 py-1.5 shadow-[0_12px_38px_rgba(35,51,43,0.22)] backdrop-blur-xl md:hidden"
+      className="fixed bottom-[max(0.55rem,env(safe-area-inset-bottom))] left-3 right-3 z-[210] mx-auto max-w-md rounded-[24px] border border-realtor-primary/15 bg-white/95 px-2 py-1.5 shadow-[0_12px_38px_rgba(35,51,43,0.22)] backdrop-blur-xl md:hidden"
     >
       <div className="mx-auto grid max-w-lg grid-cols-5 items-end text-[10px] font-semibold text-realtor-muted">
         <NavTab tab={TABS[0]} pathname={pathname} />

@@ -569,19 +569,27 @@ export default function CalendarWeekView({
     const startMinutes = current.target.startMinutes;
     setMoveError(null);
     startMoveTransition(async () => {
-      const result =
-        current.item.kind === "block"
-          ? await moveCalendarBlock(bookingId, day.dateInput, startMinutes)
-          : await rescheduleCalendarShoot(
-              bookingId,
-              day.dateInput,
-              startMinutes,
-            );
-      if (!result.ok) {
-        setMoveError(result.error ?? "Could not move that calendar item.");
-        return;
+      try {
+        const result =
+          current.item.kind === "block"
+            ? await moveCalendarBlock(bookingId, day.dateInput, startMinutes)
+            : await rescheduleCalendarShoot(
+                bookingId,
+                day.dateInput,
+                startMinutes,
+              );
+        if (!result.ok) {
+          setMoveError(result.error ?? "Could not move that calendar item.");
+          return;
+        }
+        if ("warning" in result && result.warning) {
+          setMoveError(result.warning);
+        }
+        router.refresh();
+      } catch (error) {
+        console.error("[admin-calendar] calendar move request failed", error);
+        setMoveError("Could not move that calendar item. Please try again.");
       }
-      router.refresh();
     });
   };
 
@@ -1442,15 +1450,16 @@ export default function CalendarWeekView({
         <CalendarQuickView
           item={previewItem}
           onClose={() => setPreviewItem(null)}
-          onBlockChanged={() => {
+          onChanged={(warning) => {
             setPreviewItem(null);
+            setMoveError(warning ?? null);
             router.refresh();
           }}
         />
       ) : null}
 
       {selected ? (
-        <div className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[100] max-h-[85dvh] overflow-y-auto rounded-2xl border border-realtor-primary/30 bg-realtor-surface/95 p-4 shadow-2xl shadow-realtor-text/15 backdrop-blur-xl md:left-auto md:w-[560px]">
+        <div className="fixed inset-x-4 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-[100] max-h-[calc(100dvh-8rem-env(safe-area-inset-bottom))] overflow-y-auto rounded-2xl border border-realtor-primary/30 bg-realtor-surface/95 p-4 shadow-2xl shadow-realtor-text/15 backdrop-blur-xl md:bottom-[max(1rem,env(safe-area-inset-bottom))] md:left-auto md:max-h-[85dvh] md:w-[560px]">
           <div className="relative pr-16">
             <div>
               <p className="text-sm font-semibold text-realtor-text">
@@ -2046,11 +2055,11 @@ function AgendaItemRow({
 function CalendarQuickView({
   item,
   onClose,
-  onBlockChanged,
+  onChanged,
 }: {
   item: CalendarItem;
   onClose: () => void;
-  onBlockChanged: () => void;
+  onChanged: (warning?: string) => void;
 }) {
   const external = item.href?.startsWith("http");
   const details = item.bookingDetails;
@@ -2059,6 +2068,15 @@ function CalendarQuickView({
         details.fullAddress,
       )}`
     : null;
+  const initialBookingStart = dateTimeLocalForIso(item.startsAt);
+  const [rescheduleDate, setRescheduleDate] = useState(
+    initialBookingStart.slice(0, 10),
+  );
+  const [rescheduleTime, setRescheduleTime] = useState(
+    initialBookingStart.slice(11, 16),
+  );
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
+  const [reschedulePending, startRescheduleTransition] = useTransition();
   const [blockLabel, setBlockLabel] = useState(
     item.kind === "block" && item.title !== "Busy" ? item.title : "",
   );
@@ -2070,6 +2088,52 @@ function CalendarQuickView({
   );
   const [blockError, setBlockError] = useState<string | null>(null);
   const [blockPending, startBlockTransition] = useTransition();
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  const saveBookingReschedule = () => {
+    setRescheduleError(null);
+    const [hourRaw, minuteRaw] = rescheduleTime.split(":");
+    const hour = Number(hourRaw);
+    const minute = Number(minuteRaw);
+    if (
+      !rescheduleDate ||
+      !Number.isInteger(hour) ||
+      !Number.isInteger(minute) ||
+      hour < 0 ||
+      hour > 23 ||
+      minute < 0 ||
+      minute > 59
+    ) {
+      setRescheduleError("Choose a valid date and start time.");
+      return;
+    }
+
+    const startMinutes = hour * 60 + minute;
+    startRescheduleTransition(async () => {
+      try {
+        const result = await rescheduleCalendarShoot(
+          item.id,
+          rescheduleDate,
+          startMinutes,
+        );
+        if (!result.ok) {
+          setRescheduleError(result.error ?? "Could not reschedule this booking.");
+          return;
+        }
+        onChanged(result.warning);
+      } catch (error) {
+        console.error("[admin-calendar] reschedule request failed", error);
+        setRescheduleError("Could not reschedule this booking. Please try again.");
+      }
+    });
+  };
 
   const saveBlock = () => {
     setBlockError(null);
@@ -2083,7 +2147,7 @@ function CalendarQuickView({
         setBlockError(result.error ?? "Could not update blocked time.");
         return;
       }
-      onBlockChanged();
+      onChanged();
     });
   };
 
@@ -2096,7 +2160,7 @@ function CalendarQuickView({
         setBlockError(result.error ?? "Could not remove blocked time.");
         return;
       }
-      onBlockChanged();
+      onChanged();
     });
   };
 
@@ -2110,9 +2174,8 @@ function CalendarQuickView({
       />
       <aside
         role="dialog"
-        aria-modal="true"
         aria-labelledby="calendar-quick-view-title"
-        className="fixed inset-x-3 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[100] max-h-[86dvh] overflow-y-auto rounded-2xl border border-realtor-primary/20 bg-realtor-surface p-5 shadow-2xl shadow-realtor-text/20 md:bottom-auto md:left-auto md:right-5 md:top-20 md:w-[440px]"
+        className="fixed inset-x-3 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-[100] max-h-[calc(100dvh-8rem-env(safe-area-inset-bottom))] overflow-y-auto rounded-2xl border border-realtor-primary/20 bg-realtor-surface p-5 shadow-2xl shadow-realtor-text/20 md:bottom-auto md:left-auto md:right-5 md:top-20 md:max-h-[86dvh] md:w-[440px]"
       >
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -2135,6 +2198,7 @@ function CalendarQuickView({
           </div>
           <button
             type="button"
+            autoFocus
             onClick={onClose}
             title="Close"
             aria-label="Close"
@@ -2146,6 +2210,64 @@ function CalendarQuickView({
         <p className="mt-3 break-words text-sm leading-6 text-realtor-muted">
           {item.subtitle}
         </p>
+
+        {item.kind === "booking" ? (
+          <details className="mt-5 rounded-2xl border border-realtor-primary/15 bg-white/70 p-3">
+            <summary className="cursor-pointer list-none text-sm font-semibold text-realtor-primary marker:hidden">
+              <span className="flex items-center justify-between gap-3">
+                Change date & time
+                <span aria-hidden="true" className="text-lg leading-none">
+                  +
+                </span>
+              </span>
+            </summary>
+            <div className="mt-3 space-y-3 border-t border-realtor-primary/10 pt-3">
+              <p className="text-xs leading-5 text-realtor-muted">
+                The shoot duration stays the same. We’ll move the booking and
+                update its connected Google Calendar event; if Google cannot
+                sync, you’ll see a warning.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block min-w-0">
+                  <span className="text-xs font-semibold text-realtor-muted">
+                    New date
+                  </span>
+                  <input
+                    type="date"
+                    value={rescheduleDate}
+                    onChange={(event) => setRescheduleDate(event.target.value)}
+                    className="mt-1 box-border w-full min-w-0 rounded-xl border border-realtor-primary/15 bg-white px-3 py-2.5 text-sm text-realtor-text outline-none focus:border-realtor-primary/45"
+                  />
+                </label>
+                <label className="block min-w-0">
+                  <span className="text-xs font-semibold text-realtor-muted">
+                    Start time
+                  </span>
+                  <input
+                    type="time"
+                    step={300}
+                    value={rescheduleTime}
+                    onChange={(event) => setRescheduleTime(event.target.value)}
+                    className="mt-1 box-border w-full min-w-0 rounded-xl border border-realtor-primary/15 bg-white px-3 py-2.5 text-sm text-realtor-text outline-none focus:border-realtor-primary/45"
+                  />
+                </label>
+              </div>
+              {rescheduleError ? (
+                <p role="alert" className="text-xs text-red-700">
+                  {rescheduleError}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                disabled={reschedulePending || !rescheduleDate || !rescheduleTime}
+                onClick={saveBookingReschedule}
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-realtor-primary px-4 text-sm font-semibold text-white transition hover:bg-realtor-primary-light disabled:opacity-60"
+              >
+                {reschedulePending ? "Rescheduling..." : "Save new date & time"}
+              </button>
+            </div>
+          </details>
+        ) : null}
 
         {item.kind === "block" ? (
           <section className="mt-5 space-y-3 border-t border-realtor-primary/10 pt-4">
