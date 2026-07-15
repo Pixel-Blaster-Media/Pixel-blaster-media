@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 
 import AddressAutocomplete, {
   type PlaceParts,
@@ -65,6 +65,8 @@ export default function PropertyForm({
   const [shotRequests, setShotRequests] = useState<string[]>(initial.shotRequests);
   const [shootNotes, setShootNotes] = useState(initial.shootNotes);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const formRef = useRef<HTMLFormElement>(null);
+  const firstInvalidField = useRef<HTMLElement | null>(null);
   const parsedSqft = sqft.trim() ? Number(sqft) : null;
   const liveSquareFootage =
     parsedSqft != null && Number.isFinite(parsedSqft) && parsedSqft > 0
@@ -76,6 +78,22 @@ export default function PropertyForm({
     if (parts.unit_number && !unit) setUnit(parts.unit_number);
     if (parts.city) setCity(parts.city);
     if (parts.postal_code) setPostal(parts.postal_code);
+    setErrors((current) => {
+      const next = { ...current };
+      delete next.address;
+      if (parts.city) delete next.city;
+      return next;
+    });
+  }
+
+  function clearError(name: string, isValid: boolean) {
+    if (!isValid) return;
+    setErrors((current) => {
+      if (!current[name]) return current;
+      const next = { ...current };
+      delete next[name];
+      return next;
+    });
   }
 
   function onSubmit(e: FormEvent) {
@@ -83,10 +101,28 @@ export default function PropertyForm({
     const next: Record<string, string> = {};
     if (!address.trim()) next.address = "Required — autocomplete or type it in.";
     if (!city.trim()) next.city = "Required — can't book without a city.";
+    if (
+      sqft.trim() &&
+      (!Number.isFinite(Number(sqft)) || Number(sqft) <= 0)
+    ) {
+      next.sqft = "Enter a square footage greater than 0, or leave it blank.";
+    }
     if (Object.keys(next).length > 0) {
       setErrors(next);
+      const firstInvalidName = Object.keys(next)[0];
+      firstInvalidField.current = formRef.current?.querySelector<HTMLElement>(
+        `[name="${firstInvalidName}"]`,
+      ) ?? null;
+      requestAnimationFrame(() => {
+        firstInvalidField.current?.focus();
+        firstInvalidField.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      });
       return;
     }
+    setErrors({});
 
     // Carry forward all prior params (services, add_ons) + our new ones.
     const out = new URLSearchParams(params.toString());
@@ -114,7 +150,18 @@ export default function PropertyForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-5">
+    <form ref={formRef} onSubmit={onSubmit} noValidate className="space-y-5">
+      {Object.keys(errors).length > 0 ? (
+        <div
+          role="alert"
+          className="rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800"
+        >
+          <p className="font-semibold">Please fix the highlighted fields.</p>
+          <p className="mt-1 text-xs">
+            We moved you to the first field that needs attention.
+          </p>
+        </div>
+      ) : null}
       <section className="realtor-elevated-panel rounded-3xl p-4 md:p-5">
         <AddressAutocomplete
           name="address"
@@ -123,7 +170,10 @@ export default function PropertyForm({
           placeholder="Start typing an address…"
           defaultValue={address}
           onPlace={handlePlacePicked}
-          onChange={setAddress}
+          onChange={(value) => {
+            setAddress(value);
+            clearError("address", Boolean(value.trim()));
+          }}
           error={errors.address}
         />
 
@@ -140,7 +190,10 @@ export default function PropertyForm({
             name="city"
             required
             value={city}
-            onChange={setCity}
+            onChange={(value) => {
+              setCity(value);
+              clearError("city", Boolean(value.trim()));
+            }}
             error={errors.city}
           />
           <Field
@@ -155,10 +208,18 @@ export default function PropertyForm({
             name="sqft"
             type="number"
             inputMode="numeric"
-            min={0}
+            min={1}
             placeholder="e.g. 2000"
             value={sqft}
-            onChange={setSqft}
+            onChange={(value) => {
+              setSqft(value);
+              clearError(
+                "sqft",
+                !value.trim() ||
+                  (Number.isFinite(Number(value)) && Number(value) > 0),
+              );
+            }}
+            error={errors.sqft}
             helper="For iGUIDE measuring, include finished basement or lower-level space if it should be measured. This affects iGUIDE pricing."
           />
         </div>
@@ -222,8 +283,20 @@ export default function PropertyForm({
         </div>
       </fieldset>
 
-      <section className="realtor-green-panel rounded-3xl p-4 md:p-5">
-        <div className="max-w-2xl">
+      <details className="realtor-green-panel rounded-3xl p-4 md:p-5">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+          <span>
+            <span className="block text-xs font-semibold uppercase tracking-wider text-brand-light">
+              Optional shot requests
+            </span>
+            <span className="mt-1 block text-sm text-realtor-muted">
+              Add must-have angles, features, access notes, or special requests.
+            </span>
+          </span>
+          <span aria-hidden="true" className="text-realtor-primary">＋</span>
+        </summary>
+        <div className="mt-5 border-t border-realtor-primary/10 pt-4">
+          <div className="max-w-2xl">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-light">
             Must-have shots
           </p>
@@ -290,8 +363,9 @@ export default function PropertyForm({
             placeholder="Example: Please highlight the new kitchen, backyard pergola, and the view from the primary bedroom."
             className="realtor-field mt-1 w-full rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-light/60"
           />
-        </label>
-      </section>
+          </label>
+        </div>
+      </details>
 
       <div className="flex flex-wrap items-center justify-start gap-3 border-t border-realtor-primary/10 pt-5">
         <button
@@ -356,6 +430,8 @@ function Field({
         onChange={(e) => onChange(e.currentTarget.value)}
         inputMode={inputMode}
         min={min}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? `${name}-error` : undefined}
         className={
           "realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
           (error ? "border-red-400/60" : "border-realtor-primary/15")
@@ -367,7 +443,9 @@ function Field({
         </span>
       ) : null}
       {error ? (
-        <span className="mt-1 block text-xs text-red-300">{error}</span>
+        <span id={`${name}-error`} className="mt-1 block text-xs text-red-700">
+          {error}
+        </span>
       ) : null}
     </label>
   );

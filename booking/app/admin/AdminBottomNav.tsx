@@ -19,7 +19,7 @@ const TABS: Array<{
 }> = [
   { href: "/admin/today", label: "Today", icon: SunMedium },
   { href: "/admin/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/admin/bookings", label: "Bookings", icon: Camera },
+  { href: "/admin/bookings", label: "Jobs", icon: Camera },
   { href: "/admin/realtors", label: "Realtors", icon: UsersRound },
 ];
 

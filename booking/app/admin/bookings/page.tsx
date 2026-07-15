@@ -8,8 +8,9 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import type { BookingStatus } from "@/lib/supabase/database.types";
 
 import CancelBookingButton from "./CancelBookingButton";
+import { ACTIVE_JOB_STATUSES, prioritizeActiveJobs } from "./active-jobs";
 
-export const metadata = { title: "Bookings" };
+export const metadata = { title: "Jobs" };
 export const dynamic = "force-dynamic";
 
 interface BookingRow {
@@ -32,13 +33,6 @@ const FILTERS: { id: "active" | "all" | BookingStatus; label: string }[] = [
   { id: "cancelled", label: "Cancelled" },
 ];
 
-const ACTIVE_STATUSES: BookingStatus[] = [
-  "requested",
-  "confirmed",
-  "shot",
-  "editing",
-];
-
 export default async function BookingsPage({
   searchParams,
 }: {
@@ -57,12 +51,15 @@ export default async function BookingsPage({
       "id, status, scheduled_at, services, created_at, properties(street_address, city), profiles(full_name, email)",
     )
     .eq("organization_id", admin.organizationId)
-    .order("scheduled_at", { ascending: true, nullsFirst: false })
+    .order("scheduled_at", {
+      ascending: true,
+      nullsFirst: filter === "active",
+    })
     .order("created_at", { ascending: false })
     .limit(search ? 500 : 200);
 
   if (filter === "active") {
-    query = query.in("status", ACTIVE_STATUSES);
+    query = query.in("status", ACTIVE_JOB_STATUSES);
   } else if (filter !== "all") {
     query = query.eq("status", filter as BookingStatus);
   }
@@ -89,11 +86,11 @@ export default async function BookingsPage({
             <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
               Job board
             </p>
-            <h1 className="mt-1 text-2xl font-bold text-realtor-text">Bookings</h1>
+            <h1 className="mt-1 text-2xl font-bold text-realtor-text">Jobs</h1>
             <p className="mt-1 max-w-xl text-sm text-realtor-muted">
               {filter === "active"
-                ? "Today and upcoming active shoots. Past jobs live in the status filters."
-                : "Search and review shoots by status, realtor, property, or service."}
+                ? "Unscheduled requests and active production work. Completed jobs live in the status filters."
+                : "Search and review jobs by status, realtor, property, or service."}
             </p>
           </div>
           <Link
@@ -109,13 +106,13 @@ export default async function BookingsPage({
         <form className="flex min-w-0 gap-2" action="/admin/bookings">
           <input type="hidden" name="filter" value={filter} />
           <label className="sr-only" htmlFor="booking-search">
-            Search bookings
+            Search jobs
           </label>
           <input
             id="booking-search"
             name="q"
             defaultValue={search}
-            placeholder="Search bookings..."
+            placeholder="Search jobs..."
             className="min-h-11 min-w-0 flex-1 rounded-full border border-realtor-primary/15 bg-white/65 px-4 text-sm text-realtor-text outline-none transition placeholder:text-realtor-muted focus:border-realtor-primary/45"
           />
           <div className="flex shrink-0 gap-2">
@@ -159,14 +156,14 @@ export default async function BookingsPage({
             <div className="flex flex-wrap items-end justify-between gap-2">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
-                  Coming up
+                  Needs attention + in progress
                 </p>
                 <h2 className="mt-1 text-lg font-semibold text-realtor-text">
-                  Today and future shoots
+                  Unscheduled requests and active jobs
                 </h2>
               </div>
               <p className="text-xs text-realtor-muted">
-                {bookings.length} active booking{bookings.length === 1 ? "" : "s"}
+                {bookings.length} active job{bookings.length === 1 ? "" : "s"}
               </p>
             </div>
           ) : null}
@@ -179,10 +176,10 @@ export default async function BookingsPage({
       ) : (
         <p className="rounded-2xl border border-dashed border-realtor-primary/15 bg-realtor-surface/60 px-4 py-8 text-center text-sm text-realtor-muted">
           {search
-            ? `No bookings matched "${search}".`
+            ? `No jobs matched "${search}".`
             : filter === "active"
-              ? "No active shoots today or coming up."
-              : "No bookings in this view."}
+              ? "No active jobs need attention."
+              : "No jobs in this view."}
         </p>
       )}
     </div>
@@ -220,7 +217,7 @@ function BookingListItem({ booking }: { booking: BookingRow }) {
           <span className="text-[10px] text-realtor-muted">
             {booking.scheduled_at
               ? formatBookingDate(booking.scheduled_at)
-              : "no date"}
+              : "Needs scheduling"}
           </span>
           <div className="flex flex-wrap justify-end gap-2">
             <Link
@@ -269,21 +266,7 @@ function visibleBookingsForFilter(
   filter: (typeof FILTERS)[number]["id"],
 ): BookingRow[] {
   if (filter !== "active") return bookings;
-  const todayKey = localDateKey(new Date());
-  return bookings.filter(
-    (booking) =>
-      booking.scheduled_at &&
-      localDateKey(new Date(booking.scheduled_at)) >= todayKey,
-  );
-}
-
-function localDateKey(date: Date): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: BUSINESS_TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
+  return prioritizeActiveJobs(bookings);
 }
 
 function formatBookingDate(iso: string): string {

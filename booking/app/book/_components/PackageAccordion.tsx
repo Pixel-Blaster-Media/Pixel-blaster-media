@@ -5,6 +5,11 @@ import { useMemo, useState } from "react";
 
 import type { CatalogItemDTO } from "@/lib/booking/catalog-dto";
 import BookingTotalBar from "./BookingTotalBar";
+import {
+  findCommonPackageLines,
+  packageDescriptionLines,
+  withoutCommonPackageLines,
+} from "./package-description";
 
 /**
  * Step 1 picker — two collapsible sections (Bundles, A-La-Carte) plus
@@ -58,6 +63,10 @@ export default function PackageAccordion({
   const hasVideo = selectedSlugs.some((s) => bySlug.get(s)?.is_video);
   const visibleAddons = addons.filter(
     (a) => !a.require_has_video || hasVideo,
+  );
+  const commonPackageLines = useMemo(
+    () => findCommonPackageLines(bundles.map((bundle) => bundle.description)),
+    [bundles],
   );
 
   function updateUrl(nextServices: string[], nextAddons: string[]) {
@@ -136,9 +145,29 @@ export default function PackageAccordion({
           ) : null}
         </div>
 
+        {commonPackageLines.length > 0 ? (
+          <aside className="mb-4 border-y border-realtor-primary/12 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
+              Every package includes
+            </p>
+            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-realtor-muted">
+              {commonPackageLines.map((line) => (
+                <li key={line} className="flex items-center gap-1.5">
+                  <span aria-hidden="true" className="text-realtor-primary">✓</span>
+                  <span>{line}</span>
+                </li>
+              ))}
+            </ul>
+          </aside>
+        ) : null}
+
         <ul className="booking-package-grid">
           {bundles.map((b) => {
             const selected = selectedSlugs.includes(b.slug);
+            const uniquePackageLines = withoutCommonPackageLines(
+              b.description,
+              commonPackageLines,
+            );
             return (
               <li key={b.id}>
                 <article
@@ -179,7 +208,8 @@ export default function PackageAccordion({
                         </p>
                       ) : (
                         <p className="mt-1 text-sm leading-6 text-realtor-muted">
-                          {shortDescription(b.description)}
+                          {uniquePackageLines[0] ??
+                            "A practical fit for a standard real estate listing."}
                         </p>
                       )}
                     </div>
@@ -228,8 +258,8 @@ export default function PackageAccordion({
                     </p>
                   ) : null}
 
-                  {b.description ? (
-                    <PackageDetails item={b} />
+                  {uniquePackageLines.length > 0 ? (
+                    <PackageDetails lines={uniquePackageLines} />
                   ) : null}
                 </article>
               </li>
@@ -423,39 +453,24 @@ function MediaBadges({
   );
 }
 
-function PackageDetails({
-  item,
-  inverted = false,
-}: {
-  item: CatalogItemDTO;
-  inverted?: boolean;
-}) {
-  const lines = descriptionLines(item.description);
+function PackageDetails({ lines }: { lines: string[] }) {
   const content = lines.length > 0 ? (
-    <ul
-      className={
-        "grid gap-1.5 text-xs sm:grid-cols-2 " +
-        (inverted ? "text-white/78" : "text-realtor-muted")
-      }
-    >
+    <ul className="grid gap-1.5 text-xs text-realtor-muted sm:grid-cols-2">
       {lines.map((line) => (
         <li key={line} className="flex gap-2">
-          <span className={inverted ? "mt-0.5 text-realtor-accent" : "mt-0.5 text-realtor-primary"}>✓</span>
+          <span className="mt-0.5 text-realtor-primary">✓</span>
           <span>{line}</span>
         </li>
       ))}
     </ul>
   ) : (
-    <p className={inverted ? "text-xs text-white/72" : "text-xs text-realtor-muted"}>
+    <p className="text-xs text-realtor-muted">
       Package details will appear here once configured.
     </p>
   );
 
   const boxClass =
-    "booking-package-details mt-3 rounded-2xl border p-3 " +
-    (inverted
-      ? "border-white/20 bg-white/10"
-      : "border-realtor-primary/20 bg-white");
+    "booking-package-details mt-3 rounded-2xl border border-realtor-primary/20 bg-white p-3";
 
   return (
     <>
@@ -527,16 +542,8 @@ function AccordionSection({
   );
 }
 
-function descriptionLines(description: string): string[] {
-  return description
-    .split(/\n+/)
-    .map((line) => line.trim().replace(/^[-•]\s*/, ""))
-    .filter(Boolean)
-    .slice(0, 8);
-}
-
 function shortDescription(description: string): string {
-  const first = descriptionLines(description)[0];
+  const first = packageDescriptionLines(description)[0];
   return first ?? "Good fit for a standard real estate media booking.";
 }
 

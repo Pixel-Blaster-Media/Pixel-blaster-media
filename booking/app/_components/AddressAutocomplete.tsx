@@ -290,6 +290,8 @@ export default function AddressAutocomplete({
     status,
     valueLength: value.length,
     suggestionCount: suggestions.length,
+    selected:
+      value.trim().length > 0 && selectedValueRef.current === value.trim(),
   });
 
   return (
@@ -315,16 +317,25 @@ export default function AddressAutocomplete({
           aria-expanded={isOpen}
           aria-controls={listboxId}
           aria-haspopup="listbox"
+          aria-invalid={Boolean(error)}
+          aria-describedby={
+            error ? `${inputId}-helper ${inputId}-error` : `${inputId}-helper`
+          }
           className={
             "address-autocomplete-input mt-1 w-full rounded-md border bg-ink-soft px-3 py-2 text-white placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-light/60 " +
             (error ? "border-red-400/60" : "border-white/10")
           }
         />
-        <span className="address-autocomplete-helper mt-1 block text-[11px] text-ink-muted">
+        <span
+          id={`${inputId}-helper`}
+          className="address-autocomplete-helper mt-1 block text-[11px] text-ink-muted"
+        >
           {helperText}
         </span>
         {error ? (
-          <span className="mt-1 block text-xs text-red-300">{error}</span>
+          <span id={`${inputId}-error`} className="mt-1 block text-xs text-red-300">
+            {error}
+          </span>
         ) : null}
       </label>
       {isOpen && suggestions.length > 0 ? (
@@ -422,7 +433,11 @@ function helperForStatus(args: {
   status: AutocompleteStatus;
   valueLength: number;
   suggestionCount: number;
+  selected: boolean;
 }): string {
+  if (args.selected) {
+    return "Address selected.";
+  }
   if (args.keyProblem === "missing") {
     return "Address suggestions are not configured yet — type manually.";
   }

@@ -43,6 +43,7 @@ export default async function RootLayout({
   const user = await getCurrentUser();
   const brand = user ? await loadOrganizationBrand(user.organizationId) : null;
   const nav = navigationForUser(user);
+  const mobileNav = mobileNavigationForUser(user, nav);
   const userLabel = user ? displayNameFor(user.fullName ?? user.email) : null;
 
   return (
@@ -110,7 +111,7 @@ export default async function RootLayout({
             <div className="relative z-[160] shrink-0 md:hidden">
               <SiteHeaderMobileMenu
                 label={userLabel ?? "Site"}
-                items={nav}
+                items={mobileNav}
                 signOutAction={user ? signOut : undefined}
                 avatarUrl={user?.profilePhotoUrl ?? null}
               />
@@ -171,8 +172,8 @@ function navigationForUser(
   if (user?.role === "admin") {
     return [
       { href: "/admin/today", label: "Today" },
-      { href: "/admin/bookings", label: "Bookings" },
       { href: "/admin/calendar", label: "Calendar" },
+      { href: "/admin/bookings", label: "Jobs" },
       { href: "/admin/realtors", label: "Realtors" },
       { href: "/admin/settings", label: "Settings" },
     ];
@@ -195,6 +196,18 @@ function navigationForUser(
       label: "Main Site ↗",
       external: true,
     },
+  ];
+}
+
+function mobileNavigationForUser(
+  user: Awaited<ReturnType<typeof getCurrentUser>>,
+  defaultNavigation: SiteNavItem[],
+): SiteNavItem[] {
+  if (user?.role !== "admin") return defaultNavigation;
+  return [
+    { href: "/admin/inbox", label: "Inbox" },
+    { href: "/admin/iguide", label: "iGUIDE" },
+    { href: "/admin/settings", label: "Settings" },
   ];
 }
 
