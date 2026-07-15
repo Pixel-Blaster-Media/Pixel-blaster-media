@@ -115,20 +115,7 @@ export default async function BookStep4Page({
         )}
       </section>
 
-      <ConfirmUpsellPanel
-        state={scopedState}
-        catalog={[...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(
-          (item) => ({
-            slug: item.slug,
-            name: item.name,
-            price_cents: item.price_cents,
-            duration_minutes: item.duration_minutes,
-            require_has_video: item.require_has_video,
-          }),
-        )}
-      />
-
-      {/* Summary */}
+      {/* Summary first so customers confirm their existing choice before add-ons. */}
       <section className="realtor-elevated-panel rounded-3xl p-4 text-sm md:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-realtor-primary/10 pb-4">
           <div>
@@ -237,6 +224,19 @@ export default async function BookStep4Page({
           before invoicing.
         </p>
       </section>
+
+      <ConfirmUpsellPanel
+        state={scopedState}
+        catalog={[...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(
+          (item) => ({
+            slug: item.slug,
+            name: item.name,
+            price_cents: item.price_cents,
+            duration_minutes: item.duration_minutes,
+            require_has_video: item.require_has_video,
+          }),
+        )}
+      />
 
       <ConfirmForm
         state={scopedState}

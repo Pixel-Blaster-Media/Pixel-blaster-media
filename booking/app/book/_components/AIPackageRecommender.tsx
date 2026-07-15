@@ -316,46 +316,41 @@ export default function AIPackageRecommender({
     </section>
   );
 
-  return (
-    <>
-      {assistantOpen ? (
-        <section
-          className="fixed inset-x-3 z-[80] max-h-[78dvh] overflow-y-auto rounded-3xl border border-realtor-primary/20 bg-[#fffdf8] p-3 shadow-2xl shadow-realtor-text/25 md:inset-x-auto md:right-6 md:w-[520px]"
-          style={{
-            bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.75rem)",
-          }}
-        >
-          <div className="mb-2 flex items-center justify-between gap-3 px-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-realtor-primary">
-              Optional helper
-            </p>
-            <button
-              type="button"
-              onClick={() => setAssistantOpen(false)}
-              className="tap-target rounded-full border border-realtor-primary/15 px-3 py-1 text-xs font-semibold text-realtor-muted transition hover:text-realtor-primary"
-            >
-              Close
-            </button>
-          </div>
-          {panel}
-        </section>
-      ) : null}
-
-      {!assistantOpen ? (
+  return assistantOpen ? (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3 px-1">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-realtor-primary">
+          Optional helper
+        </p>
         <button
           type="button"
-          onClick={() => setAssistantOpen(true)}
-          className="fixed z-[80] flex h-12 w-12 items-center justify-center rounded-full border border-realtor-primary/20 bg-realtor-primary text-xs font-bold text-white shadow-2xl shadow-realtor-text/30 transition hover:scale-105 hover:bg-realtor-primary-light sm:h-14 sm:w-14 sm:text-sm"
-          style={{
-            right: "calc(env(safe-area-inset-right, 0px) + 0.75rem)",
-            bottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)",
-          }}
-          aria-label="Open AI booking concierge"
+          onClick={() => setAssistantOpen(false)}
+          className="tap-target rounded-full border border-realtor-primary/15 px-3 py-1 text-xs font-semibold text-realtor-muted transition hover:text-realtor-primary"
         >
-          AI
+          Close
         </button>
-      ) : null}
-    </>
+      </div>
+      {panel}
+    </div>
+  ) : (
+    <button
+      type="button"
+      onClick={() => setAssistantOpen(true)}
+      className="flex w-full items-center justify-between gap-4 rounded-2xl border border-realtor-primary/20 bg-white/75 px-4 py-3 text-left shadow-sm shadow-realtor-text/5 transition hover:border-realtor-primary/45 hover:bg-white"
+      aria-label="Open AI booking concierge"
+    >
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-realtor-text">
+          Need help choosing?
+        </span>
+        <span className="mt-0.5 block text-xs text-realtor-muted">
+          Describe the listing and get a practical package recommendation.
+        </span>
+      </span>
+      <span className="shrink-0 rounded-full bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white">
+        Ask AI →
+      </span>
+    </button>
   );
 }
 
