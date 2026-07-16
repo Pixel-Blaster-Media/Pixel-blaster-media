@@ -48,7 +48,7 @@ function parseCallbackUri(value: string): URL {
   return url;
 }
 
-function canonicalCallbackUri(appUrl: string): string {
+export function googleCalendarCanonicalCallbackUri(appUrl: string): string {
   const configuredAppUrl = appUrl.trim();
   if (
     !configuredAppUrl ||
@@ -79,7 +79,7 @@ export function googleCalendarRedirectUri(
   appUrl: string,
   configuredRedirectUri?: string,
 ): string {
-  const canonical = canonicalCallbackUri(appUrl);
+  const canonical = googleCalendarCanonicalCallbackUri(appUrl);
   const configured = configuredRedirectUri?.trim();
   return configured
     ? parseCallbackUri(configured).toString()
@@ -234,7 +234,7 @@ export function googleCalendarCanonicalConnectPageUri(
   requestOrigin: string | null = null,
   requestReferer: string | null = null,
 ): string | null {
-  const canonicalCallback = new URL(canonicalCallbackUri(appUrl));
+  const canonicalCallback = new URL(googleCalendarCanonicalCallbackUri(appUrl));
   const normalizedHost = normalizeRequestHost(requestHost);
   const sourceOrigin =
     requestOrigin !== null
@@ -263,7 +263,7 @@ export function googleCalendarCallbackRelayUri(
   configuredRedirectUri?: string,
 ): string | null {
   const request = new URL(requestUrl);
-  const canonicalCallback = new URL(canonicalCallbackUri(appUrl));
+  const canonicalCallback = new URL(googleCalendarCanonicalCallbackUri(appUrl));
   const authorizedCallback = new URL(
     googleCalendarRedirectUri(appUrl, configuredRedirectUri),
   );
