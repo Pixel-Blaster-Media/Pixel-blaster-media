@@ -18,8 +18,8 @@ export default function GoogleCalendarTester() {
             Test booking-to-calendar sync
           </p>
           <p className="mt-1 text-xs text-realtor-muted">
-            Creates a short test event on the connected Google Calendar so we
-            know booking events can be written.
+            Checks busy-time access, then creates a short test event so we know
+            booking availability and calendar writes both work.
           </p>
         </div>
         <button
@@ -40,6 +40,8 @@ export default function GoogleCalendarTester() {
 
       {result ? (
         <div
+          role="status"
+          aria-live="polite"
           className={`mt-3 rounded-xl border p-3 text-sm ${
             result.ok
               ? "border-emerald-200 bg-emerald-50 text-emerald-800"
@@ -48,7 +50,9 @@ export default function GoogleCalendarTester() {
         >
           {result.ok ? (
             <>
-              <p className="font-semibold">Calendar sync works.</p>
+              <p className="font-semibold">
+                Calendar availability and sync work.
+              </p>
               <p className="mt-1">
                 Calendar: <code>{result.calendarId}</code>
               </p>

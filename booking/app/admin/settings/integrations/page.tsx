@@ -224,10 +224,34 @@ export default async function IntegrationsPage({
           role="alert"
           className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
         >
-          Google Calendar connection failed ({googleFlashError}). Double-check
-          that your OAuth app&apos;s authorized redirect URI matches{" "}
-          <code>{process.env.NEXT_PUBLIC_APP_URL}/api/integrations/google-calendar/callback</code>
-          .
+          {googleFlashError === "missing_calendar_scopes" ? (
+            <>
+              Google did not grant both event access and busy-time access. Your
+              existing connection was kept. Reconnect and approve both Calendar
+              permissions.
+            </>
+          ) : googleFlashError === "google_account_mismatch" ? (
+            <>
+              That is a different Google account from the connected calendar.
+              Your existing connection was kept. Disconnect first to switch
+              accounts.
+            </>
+          ) : googleFlashError === "missing_account_email" ? (
+            <>
+              Google did not return the connected account email. Your existing
+              connection was kept; retry consent and approve account access.
+            </>
+          ) : (
+            <>
+              Google Calendar connection failed ({googleFlashError}). Double-check
+              that your OAuth app&apos;s authorized redirect URI matches{" "}
+              <code>
+                {process.env.NEXT_PUBLIC_APP_URL}
+                /api/integrations/google-calendar/callback
+              </code>
+              .
+            </>
+          )}
         </p>
       ) : null}
       {googleFlashOk ? (
@@ -719,6 +743,17 @@ export default async function IntegrationsPage({
               </dd>
             </dl>
             <GoogleCalendarTester />
+            <div className="rounded-2xl border border-realtor-primary/15 bg-white/70 p-4 text-sm text-realtor-text">
+              <p className="font-semibold">Manage busy-time access</p>
+              <p className="mt-1 text-xs leading-5 text-realtor-muted">
+                If busy times stop blocking booking slots, reconnect to refresh
+                Google permissions. Your current connection stays active unless
+                the new Google consent succeeds.
+              </p>
+              <div className="mt-3">
+                <GoogleConnectButton label="Reconnect Google Calendar" />
+              </div>
+            </div>
             <GoogleDisconnectButton />
 
             <div className="rounded-2xl border border-realtor-primary/15 bg-white/70 p-4">

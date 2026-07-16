@@ -15,9 +15,9 @@ import "server-only";
  *   5. We store the refresh_token; every API call either uses the cached
  *      access token (if not stale) or refresh()es to mint a new one.
  *
- * Scope choice: calendar.events gives read+write on events only. That's
- * everything we need (free/busy query + insert event). We deliberately
- * don't ask for full calendar scope — principle of least privilege.
+ * Scope choice: calendar.events gives read+write on events, while Google's
+ * separate freeBusy endpoint requires calendar.events.freebusy. We request
+ * only those two capabilities rather than full calendar access.
  */
 
 const GOOGLE_AUTH_URL =
@@ -27,12 +27,22 @@ const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 
 /**
  * openid + email give us the connected account's email via the id_token.
- * calendar.events is read+write on events only. No settings, no sharing.
+ * calendar.events is read+write on events only. calendar.events.freebusy is
+ * the narrow availability scope required by the freeBusy endpoint.
  */
+export const GOOGLE_CALENDAR_EVENTS_SCOPE =
+  "https://www.googleapis.com/auth/calendar.events";
+export const GOOGLE_CALENDAR_FREE_BUSY_SCOPE =
+  "https://www.googleapis.com/auth/calendar.events.freebusy";
+export const GOOGLE_REQUIRED_CALENDAR_SCOPES = [
+  GOOGLE_CALENDAR_EVENTS_SCOPE,
+  GOOGLE_CALENDAR_FREE_BUSY_SCOPE,
+] as const;
+
 const GOOGLE_SCOPES = [
   "openid",
   "email",
-  "https://www.googleapis.com/auth/calendar.events",
+  ...GOOGLE_REQUIRED_CALENDAR_SCOPES,
 ].join(" ");
 
 export function buildAuthorizeUrl({
