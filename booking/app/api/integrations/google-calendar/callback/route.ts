@@ -12,6 +12,11 @@ import {
   exchangeCodeForTokens,
   GOOGLE_REQUIRED_CALENDAR_SCOPES,
 } from "@/lib/integrations/google-calendar/oauth";
+import { googleCalendarOAuthStateMatchesAdmin } from "@/lib/integrations/google-calendar/oauth-state";
+import {
+  googleCalendarCallbackRelayUri,
+  googleCalendarRedirectUri,
+} from "@/lib/integrations/google-calendar/redirect-uri";
 import { missingGrantedScopes } from "@/lib/integrations/google-calendar/scope-grants";
 
 export const runtime = "nodejs";
@@ -31,35 +36,69 @@ type MutableCookieStore = {
  *   - ?error=...  — set when the admin denied consent
  *
  * We:
- *   1. Validate state against the cookie.
- *   2. Exchange the code for access + refresh tokens.
- *   3. Decode the id_token's "email" claim for display in the admin UI.
- *   4. Upsert the singleton google_calendar_connection row.
- *   5. Redirect back to the integrations settings page with a flash.
+ *   1. Relay an allowlisted callback from an authorized alias to the canonical
+ *      signed-in origin when those hosts differ.
+ *   2. Validate state against the canonical host's cookie and the initiating
+ *      admin/organization context.
+ *   3. Exchange the code for access + refresh tokens.
+ *   4. Decode the id_token's "email" claim for display in the admin UI.
+ *   5. Upsert the singleton google_calendar_connection row.
+ *   6. Redirect back to the integrations settings page with a flash.
  */
 export async function GET(request: NextRequest) {
-  const admin = await requireAdmin();
-
   const url = new URL(request.url);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!appUrl) {
+    return NextResponse.json(
+      { error: "Google Calendar OAuth is not configured." },
+      { status: 500 },
+    );
+  }
+
+  let redirectUri: string;
+  try {
+    redirectUri = googleCalendarRedirectUri(
+      appUrl,
+      process.env.GOOGLE_CALENDAR_REDIRECT_URI,
+    );
+  } catch (err) {
+    console.error("Invalid Google Calendar redirect configuration", err);
+    return NextResponse.json(
+      { error: "Google Calendar OAuth redirect is misconfigured." },
+      { status: 500 },
+    );
+  }
+
+  let relayUri: string | null;
+  try {
+    relayUri = googleCalendarCallbackRelayUri(
+      request.url,
+      appUrl,
+      redirectUri,
+    );
+  } catch {
+    return NextResponse.json(
+      { error: "Google Calendar callback origin is not allowed." },
+      { status: 400 },
+    );
+  }
+  if (relayUri) {
+    const relayResponse = NextResponse.redirect(relayUri, 303);
+    relayResponse.headers.set("Cache-Control", "no-store");
+    relayResponse.headers.set("Referrer-Policy", "no-referrer");
+    return relayResponse;
+  }
+
+  const admin = await requireAdmin();
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const errorParam = url.searchParams.get("error");
 
   const settingsUrl = new URL("/admin/settings/integrations", url.origin);
 
-  if (errorParam) {
-    settingsUrl.searchParams.set("google_error", errorParam);
-    return NextResponse.redirect(settingsUrl);
-  }
-
-  if (!code || !state) {
-    settingsUrl.searchParams.set("google_error", "missing_params");
-    return NextResponse.redirect(settingsUrl);
-  }
-
   const cookieStore = (await cookies()) as unknown as MutableCookieStore;
   const expectedState = cookieStore.get(STATE_COOKIE)?.value;
-  if (!expectedState || expectedState !== state) {
+  if (!state || !expectedState || expectedState !== state) {
     settingsUrl.searchParams.set("google_error", "state_mismatch");
     return NextResponse.redirect(settingsUrl);
   }
@@ -67,17 +106,33 @@ export async function GET(request: NextRequest) {
   // Burn the state cookie so it can't be replayed.
   cookieStore.delete(STATE_COOKIE);
 
+  if (
+    !googleCalendarOAuthStateMatchesAdmin(
+      state,
+      admin.userId,
+      admin.organizationId,
+    )
+  ) {
+    settingsUrl.searchParams.set("google_error", "state_context_mismatch");
+    return NextResponse.redirect(settingsUrl);
+  }
+
+  if (errorParam) {
+    settingsUrl.searchParams.set("google_error", errorParam.slice(0, 80));
+    return NextResponse.redirect(settingsUrl);
+  }
+
+  if (!code) {
+    settingsUrl.searchParams.set("google_error", "missing_params");
+    return NextResponse.redirect(settingsUrl);
+  }
+
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (!clientId || !clientSecret || !appUrl) {
+  if (!clientId || !clientSecret) {
     settingsUrl.searchParams.set("google_error", "server_misconfigured");
     return NextResponse.redirect(settingsUrl);
   }
-  const redirectUri = new URL(
-    "/api/integrations/google-calendar/callback",
-    appUrl,
-  ).toString();
 
   try {
     const tokens = await exchangeCodeForTokens({

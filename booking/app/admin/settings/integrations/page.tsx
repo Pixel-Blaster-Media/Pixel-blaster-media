@@ -6,6 +6,7 @@ import {
   getGoogleCalendarConnection,
   getGoogleCalendarSources,
 } from "@/lib/integrations/google-calendar/client";
+import { googleCalendarRedirectUri } from "@/lib/integrations/google-calendar/redirect-uri";
 import { getCredentialSource } from "@/lib/integrations/credentials";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getQBClient, QBOError } from "@/lib/integrations/quickbooks/client";
@@ -56,6 +57,7 @@ export default async function IntegrationsPage({
     qbo_error?: string;
     google_connected?: string;
     google_error?: string;
+    google_connect_host?: string;
   }>;
 }) {
   const admin = await requireAdmin();
@@ -95,6 +97,7 @@ export default async function IntegrationsPage({
   const flashOk = params.qbo_connected === "1";
   const googleFlashError = params.google_error;
   const googleFlashOk = params.google_connected === "1";
+  const googleConnectHostReady = params.google_connect_host === "1";
 
   // Per-provider credential status — strictly server-side so we can
   // show whether each field is set without ever leaking values.
@@ -180,6 +183,16 @@ export default async function IntegrationsPage({
   );
   const googleReady = Boolean(googleConnection && googleConfigured);
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
+  const resolvedGoogleRedirectUri = (() => {
+    try {
+      return googleCalendarRedirectUri(
+        appUrl,
+        process.env.GOOGLE_CALENDAR_REDIRECT_URI,
+      );
+    } catch {
+      return "Invalid Google Calendar redirect configuration";
+    }
+  })();
   const iguideWebhookUrlBase = appUrl
     ? `${appUrl}/api/integrations/iguide/webhook?secret=`
     : "/api/integrations/iguide/webhook?secret=";
@@ -241,17 +254,29 @@ export default async function IntegrationsPage({
               Google did not return the connected account email. Your existing
               connection was kept; retry consent and approve account access.
             </>
+          ) : googleFlashError === "state_context_mismatch" ? (
+            <>
+              Your signed-in admin changed during Google consent. Nothing was
+              connected or replaced. Return here and try again without switching
+              accounts.
+            </>
           ) : (
             <>
               Google Calendar connection failed ({googleFlashError}). Double-check
               that your OAuth app&apos;s authorized redirect URI matches{" "}
-              <code>
-                {process.env.NEXT_PUBLIC_APP_URL}
-                /api/integrations/google-calendar/callback
-              </code>
+              <code>{resolvedGoogleRedirectUri}</code>
               .
             </>
           )}
+        </p>
+      ) : null}
+      {googleConnectHostReady ? (
+        <p
+          role="status"
+          className="rounded-2xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900"
+        >
+          You&apos;re now on Pixel Blaster&apos;s canonical signed-in address. Tap
+          the Google Calendar button again to continue.
         </p>
       ) : null}
       {googleFlashOk ? (
@@ -983,7 +1008,7 @@ export default async function IntegrationsPage({
               <li>
                 Set Authorized redirect URI to{" "}
                 <code className="text-xs">
-                  {process.env.NEXT_PUBLIC_APP_URL}/api/integrations/google-calendar/callback
+                  {resolvedGoogleRedirectUri}
                 </code>
                 .
               </li>

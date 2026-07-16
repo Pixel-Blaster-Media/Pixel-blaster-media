@@ -1,7 +1,7 @@
 "use server";
 
 import { randomBytes } from "crypto";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
@@ -22,6 +22,11 @@ import {
   buildAuthorizeUrl as buildGoogleAuthorizeUrl,
   revokeToken as revokeGoogleToken,
 } from "@/lib/integrations/google-calendar/oauth";
+import { buildGoogleCalendarOAuthState } from "@/lib/integrations/google-calendar/oauth-state";
+import {
+  googleCalendarCanonicalConnectPageUri,
+  googleCalendarRedirectUri,
+} from "@/lib/integrations/google-calendar/redirect-uri";
 import {
   deleteGoogleCalendarConnection,
   getGoogleCalendarClient,
@@ -383,7 +388,7 @@ function normalizeIGuideWebhookSecret(value: string): string {
  * validates the echoed state against the cookie.
  */
 export async function startGoogleCalendarConnect(): Promise<void> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
@@ -394,7 +399,23 @@ export async function startGoogleCalendarConnect(): Promise<void> {
     );
   }
 
-  const state = randomBytes(24).toString("hex");
+  const redirectUri = googleCalendarRedirectUri(
+    appUrl,
+    process.env.GOOGLE_CALENDAR_REDIRECT_URI,
+  );
+  const requestHeaders = await headers();
+  const requestHost =
+    requestHeaders.get("host") ?? requestHeaders.get("x-forwarded-host");
+  const canonicalConnectPage = googleCalendarCanonicalConnectPageUri(
+    appUrl,
+    requestHost,
+  );
+  if (canonicalConnectPage) redirect(canonicalConnectPage);
+
+  const state = buildGoogleCalendarOAuthState(
+    admin.userId,
+    admin.organizationId,
+  );
   const cookieStore = (await cookies()) as unknown as MutableCookieStore;
   cookieStore.set(GOOGLE_STATE_COOKIE, state, {
     httpOnly: true,
@@ -403,11 +424,6 @@ export async function startGoogleCalendarConnect(): Promise<void> {
     path: "/",
     maxAge: 10 * 60,
   });
-
-  const redirectUri = new URL(
-    "/api/integrations/google-calendar/callback",
-    appUrl,
-  ).toString();
 
   const authUrl = buildGoogleAuthorizeUrl({ clientId, redirectUri, state });
   redirect(authUrl);
