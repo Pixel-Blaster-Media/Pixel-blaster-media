@@ -1,6 +1,6 @@
 import SettingsHub from "./SettingsHub";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { isPlatformAdmin } from "@/lib/auth/require-platform-admin";
+import { hasPlatformAdminAccess } from "@/lib/auth/require-platform-admin";
 import { getCredentialSource } from "@/lib/integrations/credentials";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import CopyBookingLinkButton from "./business/CopyBookingLinkButton";
@@ -69,7 +69,7 @@ export default async function SettingsPage() {
     loadLaunchReadiness(admin.organizationId),
     loadTodayCommandPreferences(admin.organizationId),
   ]);
-  const sections = isPlatformAdmin(admin)
+  const sections = (await hasPlatformAdminAccess(admin))
     ? [
         ...SETTINGS_SECTIONS,
         {

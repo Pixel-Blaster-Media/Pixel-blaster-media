@@ -2,28 +2,34 @@ import "server-only";
 
 import { notFound } from "next/navigation";
 
-import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
+import { getServerSupabase } from "@/lib/supabase/server";
 
 import { requireAdmin, type AdminContext } from "./require-admin";
 
 /**
- * Temporary platform-owner gate.
- *
- * Pixel Blaster is the first/default organization, so only its admins can
- * create other companies until we add a dedicated platform role.
+ * Platform-owner gate. Platform access is granted only by the explicit,
+ * server-side email allowlist and fails closed when it is not configured.
  */
 export async function requirePlatformAdmin(): Promise<AdminContext> {
   const admin = await requireAdmin();
-  if (!isPlatformAdmin(admin)) notFound();
+  if (!(await hasPlatformAdminAccess(admin))) notFound();
   return admin;
 }
 
-export function isPlatformAdmin(admin: AdminContext): boolean {
+export async function hasPlatformAdminAccess(
+  admin: AdminContext,
+): Promise<boolean> {
   const explicitEmails = configuredPlatformAdminEmails();
-  if (explicitEmails.length > 0) {
-    return explicitEmails.includes(admin.email.toLowerCase());
-  }
-  return admin.organizationId === DEFAULT_ORGANIZATION_ID;
+  if (explicitEmails.length === 0) return false;
+
+  const supabase = await getServerSupabase();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error || !user?.email || user.id !== admin.userId) return false;
+  return explicitEmails.includes(user.email.toLowerCase());
 }
 
 function configuredPlatformAdminEmails(): string[] {

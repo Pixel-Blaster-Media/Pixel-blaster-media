@@ -4,7 +4,6 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { getServerSupabase } from "@/lib/supabase/server";
-import type { UserRole } from "@/lib/supabase/database.types";
 
 export interface AdminContext {
   userId: string;
@@ -18,7 +17,12 @@ interface ProfileLookupRow {
   organization_id: string;
   email: string;
   full_name: string | null;
-  role: UserRole;
+  archived_at: string | null;
+}
+
+interface AdminMembershipRow {
+  organization_id: string;
+  role: "owner" | "admin";
 }
 
 /**
@@ -60,22 +64,30 @@ export async function requireAdmin(): Promise<AdminContext> {
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("id, organization_id, email, full_name, role")
+    .select("id, organization_id, email, full_name, archived_at")
     .eq("id", userId)
     .single<ProfileLookupRow>();
 
-  if (error || !profile) {
-    console.warn("[auth] no profile for authed user", userId, error?.message);
+  if (error || !profile || profile.archived_at) {
+    console.warn("[auth] no active profile for authed user", userId, error?.message);
     redirect(signInPath);
   }
 
-  if (profile.role !== "admin") {
+  const { data: membership, error: membershipError } = await supabase
+    .from("organization_members")
+    .select("organization_id, role")
+    .eq("profile_id", userId)
+    .eq("organization_id", profile.organization_id)
+    .in("role", ["owner", "admin"])
+    .maybeSingle<AdminMembershipRow>();
+
+  if (membershipError || !membership) {
     redirect("/portal");
   }
 
   return {
     userId: profile.id,
-    organizationId: profile.organization_id,
+    organizationId: membership.organization_id,
     email: profile.email,
     fullName: profile.full_name,
   };

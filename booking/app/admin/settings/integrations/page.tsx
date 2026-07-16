@@ -10,7 +10,7 @@ import { googleCalendarRedirectUri } from "@/lib/integrations/google-calendar/re
 import { getCredentialSource } from "@/lib/integrations/credentials";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getQBClient, QBOError } from "@/lib/integrations/quickbooks/client";
-import { getServerSupabase } from "@/lib/supabase/server";
+import { getServiceSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 
 import ConnectButton from "./ConnectButton";
@@ -63,7 +63,7 @@ export default async function IntegrationsPage({
   const admin = await requireAdmin();
   const isDefaultOrganization = admin.organizationId === DEFAULT_ORGANIZATION_ID;
   const params = await searchParams;
-  const supabase = await getServerSupabase();
+  const supabase = getServiceSupabase();
   const { data: connection } = await supabase
     .from("quickbooks_connection")
     .select("*")

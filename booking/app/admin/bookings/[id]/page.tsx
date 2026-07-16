@@ -30,7 +30,10 @@ import {
 } from "@/lib/integrations/iguide/photo-downloads";
 import { hasPortalCredentials } from "@/lib/integrations/iguide/portal-client";
 import { listBookingAutoenhanceBatches } from "@/lib/integrations/autoenhance/workflow";
-import { getServerSupabase } from "@/lib/supabase/server";
+import {
+  getServerSupabase,
+  getServiceSupabase,
+} from "@/lib/supabase/server";
 import type {
   BookingStatus,
   DeliverableSource,
@@ -163,7 +166,6 @@ export default async function BookingDetailPage({
     { data: booking, error: bookErr },
     { data: deliverables },
     { data: iguideJob },
-    { data: deliveryNotification },
     { data: listingWebsite },
     { data: bookingLineItems },
     autoenhanceBatches,
@@ -193,14 +195,6 @@ export default async function BookingDetailPage({
         .eq("organization_id", admin.organizationId)
         .maybeSingle<IGuideJobRow>(),
       supabase
-        .from("booking_notifications")
-        .select("sent_at")
-        .eq("booking_id", id)
-        .eq("kind", "delivery_ready")
-        .order("sent_at", { ascending: false })
-        .limit(1)
-        .maybeSingle<BookingNotificationRow>(),
-      supabase
         .from("listing_websites")
         .select(
           "template, slug, is_published, headline, description, feature_bullets, included_sections, gallery_image_urls, hero_image_url, agent_name, agent_email, agent_phone, brokerage_name, cta_text, cta_url",
@@ -217,6 +211,16 @@ export default async function BookingDetailPage({
     ]);
 
   if (bookErr || !booking) notFound();
+
+  const service = getServiceSupabase();
+  const { data: deliveryNotification } = await service
+    .from("booking_notifications")
+    .select("sent_at")
+    .eq("booking_id", booking.id)
+    .eq("kind", "delivery_ready")
+    .order("sent_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<BookingNotificationRow>();
 
   const property = booking.properties;
   const profile = booking.profiles;
