@@ -14,6 +14,8 @@ type ConnectionRow =
 
 /** 5-minute safety margin before the stored expiry — avoids mid-call token death. */
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
+/** Bound every Google freeBusy caller, including customer availability. */
+const FREE_BUSY_REQUEST_TIMEOUT_MS = 20_000;
 
 export class GoogleCalendarError extends Error {
   constructor(
@@ -365,6 +367,7 @@ async function queryFreeBusy(
         timeMax: to.toISOString(),
         items: [{ id: calendarId }],
       }),
+      signal: AbortSignal.timeout(FREE_BUSY_REQUEST_TIMEOUT_MS),
     },
   );
 
