@@ -86,6 +86,7 @@ interface CalendarItem {
   href?: string;
   statusLabel?: string;
   statusClass?: string;
+  syncWarning?: string;
   sourceName?: string;
   sourceColor?: string;
   bookingDetails?: {
@@ -291,6 +292,9 @@ export default async function AdminCalendarPage({
       href: `/admin/bookings/${booking.id}`,
       statusLabel: meta.label,
       statusClass: meta.pill,
+      syncWarning: googleOutOfSync
+        ? "Google Calendar out of sync"
+        : undefined,
       bookingDetails: {
         fullAddress,
         services,
