@@ -51,6 +51,7 @@ interface CalendarItem {
   href?: string;
   statusLabel?: string;
   statusClass?: string;
+  syncWarning?: string;
   sourceColor?: string;
   bookingDetails?: {
     fullAddress: string;
@@ -2207,12 +2208,86 @@ function CalendarQuickView({
             ×
           </button>
         </div>
-        <p className="mt-3 break-words text-sm leading-6 text-realtor-muted">
-          {item.subtitle}
-        </p>
+        {item.kind !== "booking" ? (
+          <p className="mt-3 break-words text-sm leading-6 text-realtor-muted">
+            {item.subtitle}
+          </p>
+        ) : null}
+
+        {item.kind === "booking" && details ? (
+          <section
+            data-calendar-quick-summary
+            className="mt-4 space-y-3 rounded-2xl border border-realtor-primary/15 bg-white/70 p-3"
+          >
+            {item.syncWarning ? (
+              <p
+                role="alert"
+                data-calendar-sync-warning
+                className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900"
+              >
+                {item.syncWarning}. Verify the connected Google event before
+                making another schedule change.
+              </p>
+            ) : null}
+
+            {details.fullAddress ? (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
+                  Address
+                </p>
+                <p className="mt-1 text-sm font-semibold leading-5 text-realtor-text">
+                  {details.fullAddress}
+                </p>
+              </div>
+            ) : null}
+
+            <div className="grid grid-cols-2 gap-3 border-t border-realtor-primary/10 pt-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">Client</p>
+                <p className="mt-1 truncate text-sm font-semibold text-realtor-text">
+                  {details.realtorName}
+                </p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">Services</p>
+                <p className="mt-1 line-clamp-2 text-sm font-semibold leading-5 text-realtor-text">
+                  {details.services.join(", ") || "Not set"}
+                </p>
+                {details.addOns.length ? (
+                  <p className="mt-1 line-clamp-1 text-[11px] text-realtor-muted">
+                    + {details.addOns.join(", ")}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 border-t border-realtor-primary/10 pt-3">
+              {item.href ? (
+                <Link
+                  href={item.href}
+                  className="inline-flex min-h-10 flex-1 basis-28 items-center justify-center rounded-full bg-realtor-primary px-4 text-xs font-semibold text-white transition hover:bg-realtor-primary-light"
+                >Open job</Link>
+              ) : null}
+              {mapHref ? (
+                <a
+                  href={mapHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex min-h-10 items-center justify-center rounded-full border border-realtor-primary/20 bg-white px-3 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40"
+                >Directions</a>
+              ) : null}
+              {details.realtorPhone ? (
+                <a
+                  href={`tel:${details.realtorPhone}`}
+                  className="inline-flex min-h-10 items-center justify-center rounded-full border border-realtor-primary/20 bg-white px-3 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40"
+                >Call</a>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
 
         {item.kind === "booking" ? (
-          <details className="mt-5 rounded-2xl border border-realtor-primary/15 bg-white/70 p-3">
+          <details className="mt-3 rounded-2xl border border-realtor-primary/15 bg-white/70 p-3">
             <summary className="cursor-pointer list-none text-sm font-semibold text-realtor-primary marker:hidden">
               <span className="flex items-center justify-between gap-3">
                 Change date & time
@@ -2344,107 +2419,81 @@ function CalendarQuickView({
           </section>
         ) : null}
 
-        {details ? (
-          <div className="mt-5 space-y-4 border-t border-realtor-primary/10 pt-4">
-            {details.fullAddress ? (
-              <QuickViewSection label="Address">
-                <p className="text-sm font-semibold leading-5 text-realtor-text">
-                  {details.fullAddress}
-                </p>
-              </QuickViewSection>
-            ) : null}
+        {item.kind === "booking" && details ? (
+          <details
+            data-calendar-more-details
+            className="mt-3 rounded-2xl border border-realtor-primary/15 bg-white/50 p-3"
+          >
+            <summary className="cursor-pointer list-none text-sm font-semibold text-realtor-muted marker:hidden">
+              <span className="flex items-center justify-between gap-3">
+                More booking details
+                <span aria-hidden="true" className="text-lg leading-none">
+                  +
+                </span>
+              </span>
+            </summary>
+            <div className="mt-3 space-y-3 border-t border-realtor-primary/10 pt-3">
+              <div className="grid grid-cols-2 gap-2">
+                <QuickViewFact
+                  label="Square feet"
+                  value={
+                    details.squareFootage
+                      ? details.squareFootage.toLocaleString("en-CA")
+                      : "Not set"
+                  }
+                />
+                <QuickViewFact
+                  label="Occupancy"
+                  value={details.occupancy ?? "Not set"}
+                />
+                <QuickViewFact
+                  label="Basement"
+                  value={
+                    details.includeBasement == null
+                      ? "Not set"
+                      : details.includeBasement
+                        ? "Include"
+                        : "Skip"
+                  }
+                />
+                <QuickViewFact
+                  label="Brokerage"
+                  value={details.brokerage ?? "Not set"}
+                />
+              </div>
 
-            <QuickViewSection label="Package">
-              <p className="text-sm font-semibold text-realtor-text">
-                {details.services.join(", ") || "Not set"}
-              </p>
-              {details.addOns.length ? (
-                <p className="mt-1 text-xs leading-5 text-realtor-muted">
-                  Add-ons: {details.addOns.join(", ")}
-                </p>
+              {details.realtorEmail || details.realtorPhone ? (
+                <QuickViewSection label="Contact">
+                  {details.realtorEmail ? (
+                    <p className="break-all text-xs text-realtor-muted">
+                      {details.realtorEmail}
+                    </p>
+                  ) : null}
+                  {details.realtorPhone ? (
+                    <p className="mt-1 text-xs text-realtor-muted">
+                      {details.realtorPhone}
+                    </p>
+                  ) : null}
+                </QuickViewSection>
               ) : null}
-            </QuickViewSection>
 
-            <div className="grid grid-cols-2 gap-2">
-              <QuickViewFact
-                label="Square feet"
-                value={
-                  details.squareFootage
-                    ? details.squareFootage.toLocaleString("en-CA")
-                    : "Not set"
-                }
-              />
-              <QuickViewFact
-                label="Occupancy"
-                value={details.occupancy ?? "Not set"}
-              />
-              <QuickViewFact
-                label="Basement"
-                value={
-                  details.includeBasement == null
-                    ? "Not set"
-                    : details.includeBasement
-                      ? "Include"
-                      : "Skip"
-                }
-              />
-              <QuickViewFact
-                label="Brokerage"
-                value={details.brokerage ?? "Not set"}
-              />
-            </div>
-
-            <QuickViewSection label="Realtor">
-              <p className="text-sm font-semibold text-realtor-text">
-                {details.realtorName}
-              </p>
-              <p className="mt-1 break-all text-xs text-realtor-muted">
-                {details.realtorEmail}
-              </p>
-              {details.realtorPhone ? (
-                <p className="mt-1 text-xs text-realtor-muted">
-                  {details.realtorPhone}
-                </p>
+              {details.realtorNotes ? (
+                <QuickViewNote label="Agent notes" body={details.realtorNotes} />
               ) : null}
-            </QuickViewSection>
-
-            {details.realtorNotes ? (
-              <QuickViewNote label="Agent notes" body={details.realtorNotes} />
-            ) : null}
-            {details.clientNotes ? (
-              <QuickViewNote label="Realtor request" body={details.clientNotes} />
-            ) : null}
-            {details.propertyNotes ? (
-              <QuickViewNote label="Property notes" body={details.propertyNotes} />
-            ) : null}
-            {details.internalNotes ? (
-              <QuickViewNote label="Internal notes" body={details.internalNotes} />
-            ) : null}
-
-            <div className="grid gap-2 sm:grid-cols-2">
-              {mapHref ? (
-                <a
-                  href={mapHref}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex min-h-10 items-center justify-center rounded-full border border-realtor-primary/20 bg-white px-3 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40"
-                >
-                  Directions
-                </a>
+              {details.clientNotes ? (
+                <QuickViewNote label="Realtor request" body={details.clientNotes} />
               ) : null}
-              {details.realtorPhone ? (
-                <a
-                  href={`tel:${details.realtorPhone}`}
-                  className="inline-flex min-h-10 items-center justify-center rounded-full border border-realtor-primary/20 bg-white px-3 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40"
-                >
-                  Call realtor
-                </a>
+              {details.propertyNotes ? (
+                <QuickViewNote label="Property notes" body={details.propertyNotes} />
+              ) : null}
+              {details.internalNotes ? (
+                <QuickViewNote label="Internal notes" body={details.internalNotes} />
               ) : null}
             </div>
-          </div>
+          </details>
         ) : null}
 
-        {item.href ? (
+        {item.href && item.kind !== "booking" ? (
           <Link
             href={item.href}
             target={external ? "_blank" : undefined}
