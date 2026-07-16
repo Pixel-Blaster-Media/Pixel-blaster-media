@@ -26,6 +26,7 @@ import {
   deleteGoogleCalendarConnection,
   getGoogleCalendarClient,
   getGoogleCalendarConnection,
+  GoogleCalendarError,
 } from "@/lib/integrations/google-calendar/client";
 import { buildAuthorizeUrl } from "@/lib/integrations/quickbooks/oauth";
 import { getServiceSupabase } from "@/lib/supabase/server";
@@ -566,6 +567,27 @@ export async function testGoogleCalendarConnection(): Promise<{
 
     const start = new Date(Date.now() + 15 * 60_000);
     const end = new Date(start.getTime() + 15 * 60_000);
+
+    // Availability checks and event writes use different Google scopes. Verify
+    // free/busy first so a stale OAuth grant cannot produce a false-green test.
+    try {
+      await client.getBusy(start, end);
+    } catch (err) {
+      if (
+        err instanceof GoogleCalendarError &&
+        err.status === 403 &&
+        err.reason === "insufficientPermissions"
+      ) {
+        return {
+          ok: false,
+          error:
+            "Busy-time access is missing. Reconnect Google Calendar to approve the free/busy permission, then run this test again.",
+          config,
+        };
+      }
+      throw err;
+    }
+
     const event = await client.createEvent({
       summary: "Pixel Blaster calendar sync test",
       description:

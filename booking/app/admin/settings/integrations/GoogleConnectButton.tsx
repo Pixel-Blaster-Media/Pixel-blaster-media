@@ -4,7 +4,11 @@ import { useTransition } from "react";
 
 import { startGoogleCalendarConnect } from "./actions";
 
-export default function GoogleConnectButton() {
+export default function GoogleConnectButton({
+  label = "Connect Google Calendar",
+}: {
+  label?: string;
+}) {
   const [pending, startPending] = useTransition();
   return (
     <button
@@ -13,7 +17,7 @@ export default function GoogleConnectButton() {
       onClick={() => startPending(() => startGoogleCalendarConnect())}
       className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-60"
     >
-      {pending ? "Redirecting…" : "Connect Google Calendar"}
+      {pending ? "Redirecting…" : label}
     </button>
   );
 }

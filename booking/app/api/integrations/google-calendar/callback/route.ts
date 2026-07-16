@@ -3,13 +3,16 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import {
+  getGoogleCalendarConnection,
   persistTokens,
   tokensFromExchange,
 } from "@/lib/integrations/google-calendar/client";
 import {
   emailFromIdToken,
   exchangeCodeForTokens,
+  GOOGLE_REQUIRED_CALENDAR_SCOPES,
 } from "@/lib/integrations/google-calendar/oauth";
+import { missingGrantedScopes } from "@/lib/integrations/google-calendar/scope-grants";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -84,6 +87,17 @@ export async function GET(request: NextRequest) {
       clientSecret,
     });
 
+    const missingScopes = missingGrantedScopes(
+      tokens.scope,
+      GOOGLE_REQUIRED_CALENDAR_SCOPES,
+    );
+    if (missingScopes.length > 0) {
+      // Google supports granular consent. Never replace a working connection
+      // with a partial grant that cannot check availability or write events.
+      settingsUrl.searchParams.set("google_error", "missing_calendar_scopes");
+      return NextResponse.redirect(settingsUrl);
+    }
+
     const { accessToken, expiresInSeconds, refreshToken } =
       tokensFromExchange(tokens);
 
@@ -96,7 +110,28 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(settingsUrl);
     }
 
-    const email = emailFromIdToken(tokens.id_token) ?? "unknown";
+    const email = emailFromIdToken(tokens.id_token);
+    if (!email) {
+      settingsUrl.searchParams.set("google_error", "missing_account_email");
+      return NextResponse.redirect(settingsUrl);
+    }
+
+    const existingConnection = await getGoogleCalendarConnection({
+      organizationId: admin.organizationId,
+    });
+    const existingEmail = existingConnection?.google_account_email
+      .trim()
+      .toLowerCase();
+    if (
+      existingEmail &&
+      existingEmail !== "unknown" &&
+      existingEmail !== email.trim().toLowerCase()
+    ) {
+      // Saved calendar ids belong to the original account. Switching accounts
+      // in place would leave those sources stale; disconnect explicitly first.
+      settingsUrl.searchParams.set("google_error", "google_account_mismatch");
+      return NextResponse.redirect(settingsUrl);
+    }
 
     await persistTokens({
       organizationId: admin.organizationId,

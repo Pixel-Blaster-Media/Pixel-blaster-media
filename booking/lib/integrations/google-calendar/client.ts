@@ -19,9 +19,24 @@ export class GoogleCalendarError extends Error {
   constructor(
     message: string,
     public status?: number,
+    public reason?: string,
   ) {
     super(message);
     this.name = "GoogleCalendarError";
+  }
+}
+
+function googleCalendarErrorReason(body: string): string | undefined {
+  try {
+    const payload = JSON.parse(body) as {
+      error?: { errors?: Array<{ reason?: unknown }> };
+    };
+    const reason = payload.error?.errors?.find(
+      (entry) => typeof entry.reason === "string",
+    )?.reason;
+    return typeof reason === "string" ? reason : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -192,18 +207,33 @@ export async function getGoogleCalendarClients(
   if (!clientId || !clientSecret) return [];
 
   const rows = await getGoogleCalendarConnections(scope);
-  const clients = await Promise.all(
-    rows.map((row) => clientFromConnection(row, clientId, clientSecret)),
+  if (rows.length === 0) return [];
+  const tokenSource = rows.find((row) => row.write_bookings) ?? rows[0];
+  const primaryTokenSource = await getGoogleCalendarConnection({
+    organizationId: organizationId(scope),
+  });
+  const sharedTokenSource = primaryTokenSource ?? tokenSource;
+  if (!sharedTokenSource) return [];
+  const sharedAccessToken = await ensureAccessToken(
+    sharedTokenSource,
+    clientId,
+    clientSecret,
   );
-  return clients;
+  return Promise.all(
+    rows.map((row) =>
+      clientFromConnection(row, clientId, clientSecret, sharedAccessToken),
+    ),
+  );
 }
 
 async function clientFromConnection(
   conn: ConnectionRow,
   clientId: string,
   clientSecret: string,
+  sharedAccessToken?: string,
 ): Promise<GoogleCalendarClient> {
-  const accessToken = await ensureAccessToken(conn, clientId, clientSecret);
+  const accessToken =
+    sharedAccessToken ?? await ensureAccessToken(conn, clientId, clientSecret);
   const calendarId = conn.calendar_id || "primary";
 
   return {
@@ -343,6 +373,7 @@ async function queryFreeBusy(
     throw new GoogleCalendarError(
       `freeBusy query failed: ${body.slice(0, 500)}`,
       res.status,
+      googleCalendarErrorReason(body),
     );
   }
 
@@ -574,17 +605,17 @@ export async function persistTokens(args: {
   const expiresAt = new Date(
     Date.now() + args.expiresInSeconds * 1000,
   ).toISOString();
-  const basePayload = {
+  const tokenPayload = {
     google_account_email: args.googleAccountEmail,
     refresh_token: args.refreshToken,
     access_token: args.accessToken,
     access_token_expires_at: expiresAt,
-    calendar_id: args.calendarId ?? "primary",
     connected_by: args.connectedBy ?? null,
   };
   const sourcePayload = {
-    ...basePayload,
+    ...tokenPayload,
     organization_id: organizationId(args),
+    calendar_id: args.calendarId ?? "primary",
     display_name: "Main booking calendar",
     source_color: "#3f7356",
     source_type: "primary" as const,
@@ -599,7 +630,8 @@ export async function persistTokens(args: {
   if (existing) {
     const updated = await supabase
       .from("google_calendar_connection")
-      .update(sourcePayload)
+      .update(tokenPayload)
+      .eq("organization_id", organizationId(args))
       .eq("id", existing.id);
     if (updated.error) {
       throw new Error(
