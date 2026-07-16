@@ -11,6 +11,11 @@ import {
   buildGoogleCalendarOAuthState,
   googleCalendarOAuthStateMatchesAdmin,
 } from "../lib/integrations/google-calendar/oauth-state.ts";
+import {
+  googleCalendarCallbackHasRelayControls,
+  googleCalendarCallbackRelayIsVerified,
+  signGoogleCalendarCallbackRelayUri,
+} from "../lib/integrations/google-calendar/callback-relay.ts";
 import { missingGrantedScopes } from "../lib/integrations/google-calendar/scope-grants.ts";
 
 const oauthSource = await readFile(
@@ -52,6 +57,8 @@ const googleCallbackSource = await readFile(
 );
 
 const canonicalAppUrl = "https://www.pixelblastermedia.com";
+const canonicalCallback =
+  `${canonicalAppUrl}/api/integrations/google-calendar/callback`;
 const authorizedCallback =
   "https://pixel-blaster-media.vercel.app/api/integrations/google-calendar/callback";
 
@@ -382,6 +389,115 @@ test("authorized callback relays only OAuth fields to the canonical host", () =>
   );
 });
 
+test("signed callback relay survives the canonical Vercel proxy hop", () => {
+  const secret = "unit-test-relay-secret";
+  const canonicalRelay = `${canonicalCallback}?code=one-time-code&state=csrf-token`;
+  const signed = signGoogleCalendarCallbackRelayUri(
+    canonicalRelay,
+    canonicalCallback,
+    secret,
+  );
+  const proxied = new URL(signed);
+  proxied.host = "pixel-blaster-media.vercel.app";
+
+  assert.equal(
+    googleCalendarCallbackRelayIsVerified(
+      proxied.toString(),
+      canonicalCallback,
+      secret,
+    ),
+    true,
+  );
+  assert.equal(googleCalendarCallbackHasRelayControls(canonicalRelay), false);
+  assert.equal(googleCalendarCallbackHasRelayControls(proxied.toString()), true);
+  assert.equal(
+    googleCalendarCallbackRelayIsVerified(
+      canonicalRelay,
+      canonicalCallback,
+      secret,
+    ),
+    false,
+    "unsigned callbacks must not bypass the first relay hop",
+  );
+
+  const deniedRelay = `${canonicalCallback}?state=csrf-token&error=access_denied`;
+  const signedDenied = new URL(
+    signGoogleCalendarCallbackRelayUri(
+      deniedRelay,
+      canonicalCallback,
+      secret,
+    ),
+  );
+  signedDenied.host = "pixel-blaster-media.vercel.app";
+  assert.equal(
+    googleCalendarCallbackRelayIsVerified(
+      signedDenied.toString(),
+      canonicalCallback,
+      secret,
+    ),
+    true,
+  );
+
+  for (const mutate of [
+    (url) => url.searchParams.set("state", "tampered-state"),
+    (url) => url.searchParams.set("code", "tampered-code"),
+    (url) => url.searchParams.set("error", "tampered-error"),
+    (url) => url.searchParams.set("unexpected", "drop-me"),
+    (url) => url.searchParams.append("state", "duplicate-state"),
+    (url) => url.searchParams.set("_google_relay", "0"),
+    (url) => url.searchParams.set("_google_relay_sig", "0".repeat(64)),
+  ]) {
+    const tampered = new URL(proxied);
+    mutate(tampered);
+    assert.equal(
+      googleCalendarCallbackRelayIsVerified(
+        tampered.toString(),
+        canonicalCallback,
+        secret,
+      ),
+      false,
+    );
+  }
+  assert.equal(
+    googleCalendarCallbackRelayIsVerified(
+      proxied.toString(),
+      canonicalCallback,
+      "wrong-secret",
+    ),
+    false,
+  );
+
+  const noncanonicalRelay = new URL(canonicalRelay);
+  noncanonicalRelay.host = "pixel-blaster-media.vercel.app";
+  assert.throws(
+    () =>
+      signGoogleCalendarCallbackRelayUri(
+        noncanonicalRelay.toString(),
+        canonicalCallback,
+        secret,
+      ),
+    /relay URI is malformed/i,
+  );
+  assert.throws(
+    () =>
+      signGoogleCalendarCallbackRelayUri(
+        `${canonicalRelay}&unexpected=drop-me`,
+        canonicalCallback,
+        secret,
+      ),
+    /relay URI is malformed/i,
+  );
+  assert.throws(
+    () =>
+      signGoogleCalendarCallbackRelayUri(
+        canonicalRelay.replace("https://", "https://user:pass@"),
+        canonicalCallback,
+        secret,
+      ),
+    /relay URI is malformed/i,
+  );
+});
+
 test("OAuth start and token exchange share the dedicated redirect setting", () => {
   const resolverCall =
     /googleCalendarRedirectUri\(\s*appUrl,\s*process\.env\.GOOGLE_CALENDAR_REDIRECT_URI,?\s*\)/;
@@ -409,9 +525,43 @@ test("OAuth callback relay runs before host-scoped admin authentication", () => 
   );
   const adminIndex = googleCallbackSource.indexOf("await requireAdmin()");
   assert.ok(relayIndex >= 0 && adminIndex > relayIndex);
-  assert.match(googleCallbackSource, /NextResponse\.redirect\(relayUri, 303\)/);
+  assert.match(
+    googleCallbackSource,
+    /NextResponse\.redirect\(signedRelayUri, 303\)/,
+  );
   assert.match(googleCallbackSource, /"Cache-Control", "no-store"/);
   assert.match(googleCallbackSource, /"Referrer-Policy", "no-referrer"/);
+});
+
+test("signed callback hop is verified before relay and authentication", () => {
+  const secretIndex = googleCallbackSource.indexOf(
+    "const clientSecret = process.env.GOOGLE_CLIENT_SECRET",
+  );
+  const verificationIndex = googleCallbackSource.indexOf(
+    "googleCalendarCallbackRelayIsVerified(",
+  );
+  const relayIndex = googleCallbackSource.indexOf(
+    "googleCalendarCallbackRelayUri(",
+  );
+  const adminIndex = googleCallbackSource.indexOf("await requireAdmin()");
+  assert.ok(
+    secretIndex >= 0 &&
+      verificationIndex > secretIndex &&
+      relayIndex > verificationIndex &&
+      adminIndex > relayIndex,
+  );
+  assert.match(
+    googleCallbackSource,
+    /!verifiedRelayHop\s*&&\s*googleCalendarCallbackHasRelayControls\(request\.url\)/,
+  );
+  assert.match(
+    googleCallbackSource,
+    /signGoogleCalendarCallbackRelayUri\(\s*relayUri,\s*canonicalCallbackUri,\s*clientSecret,?\s*\)/,
+  );
+  assert.match(
+    googleCallbackSource,
+    /new URL\(\s*"\/admin\/settings\/integrations",\s*canonicalCallbackUri,?\s*\)/,
+  );
 });
 
 test("callback configuration errors are classified before origin errors", () => {

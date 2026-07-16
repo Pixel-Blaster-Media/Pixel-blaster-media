@@ -14,7 +14,13 @@ import {
 } from "@/lib/integrations/google-calendar/oauth";
 import { googleCalendarOAuthStateMatchesAdmin } from "@/lib/integrations/google-calendar/oauth-state";
 import {
+  googleCalendarCallbackHasRelayControls,
+  googleCalendarCallbackRelayIsVerified,
+  signGoogleCalendarCallbackRelayUri,
+} from "@/lib/integrations/google-calendar/callback-relay";
+import {
   googleCalendarCallbackRelayUri,
+  googleCalendarCanonicalCallbackUri,
   googleCalendarRedirectUri,
 } from "@/lib/integrations/google-calendar/redirect-uri";
 import { missingGrantedScopes } from "@/lib/integrations/google-calendar/scope-grants";
@@ -55,8 +61,10 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  let canonicalCallbackUri: string;
   let redirectUri: string;
   try {
+    canonicalCallbackUri = googleCalendarCanonicalCallbackUri(appUrl);
     redirectUri = googleCalendarRedirectUri(
       appUrl,
       process.env.GOOGLE_CALENDAR_REDIRECT_URI,
@@ -69,21 +77,50 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  let relayUri: string | null;
-  try {
-    relayUri = googleCalendarCallbackRelayUri(
-      request.url,
-      appUrl,
-      redirectUri,
-    );
-  } catch {
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientSecret) {
     return NextResponse.json(
-      { error: "Google Calendar callback origin is not allowed." },
+      { error: "Google Calendar OAuth is not configured." },
+      { status: 500 },
+    );
+  }
+
+  const verifiedRelayHop = googleCalendarCallbackRelayIsVerified(
+    request.url,
+    canonicalCallbackUri,
+    clientSecret,
+  );
+  if (
+    !verifiedRelayHop &&
+    googleCalendarCallbackHasRelayControls(request.url)
+  ) {
+    return NextResponse.json(
+      { error: "Google Calendar callback relay is invalid." },
       { status: 400 },
     );
   }
+  let relayUri: string | null = null;
+  if (!verifiedRelayHop) {
+    try {
+      relayUri = googleCalendarCallbackRelayUri(
+        request.url,
+        appUrl,
+        redirectUri,
+      );
+    } catch {
+      return NextResponse.json(
+        { error: "Google Calendar callback origin is not allowed." },
+        { status: 400 },
+      );
+    }
+  }
   if (relayUri) {
-    const relayResponse = NextResponse.redirect(relayUri, 303);
+    const signedRelayUri = signGoogleCalendarCallbackRelayUri(
+      relayUri,
+      canonicalCallbackUri,
+      clientSecret,
+    );
+    const relayResponse = NextResponse.redirect(signedRelayUri, 303);
     relayResponse.headers.set("Cache-Control", "no-store");
     relayResponse.headers.set("Referrer-Policy", "no-referrer");
     return relayResponse;
@@ -94,7 +131,10 @@ export async function GET(request: NextRequest) {
   const state = url.searchParams.get("state");
   const errorParam = url.searchParams.get("error");
 
-  const settingsUrl = new URL("/admin/settings/integrations", url.origin);
+  const settingsUrl = new URL(
+    "/admin/settings/integrations",
+    canonicalCallbackUri,
+  );
 
   const cookieStore = (await cookies()) as unknown as MutableCookieStore;
   const expectedState = cookieStore.get(STATE_COOKIE)?.value;
@@ -128,8 +168,7 @@ export async function GET(request: NextRequest) {
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
+  if (!clientId) {
     settingsUrl.searchParams.set("google_error", "server_misconfigured");
     return NextResponse.redirect(settingsUrl);
   }
