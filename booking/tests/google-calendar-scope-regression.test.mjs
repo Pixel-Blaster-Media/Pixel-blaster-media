@@ -147,6 +147,134 @@ test("Google OAuth kickoff is pinned to the canonical signed-in host", () => {
     ),
     `${canonicalAppUrl}/admin/settings/integrations?google_connect_host=1`,
   );
+  assert.equal(
+    googleCalendarCanonicalConnectPageUri(
+      canonicalAppUrl,
+      "pixel-blaster-media.vercel.app",
+      canonicalAppUrl,
+    ),
+    null,
+    "canonical browser origin must survive the www-to-booking Vercel rewrite",
+  );
+  assert.equal(
+    googleCalendarCanonicalConnectPageUri(
+      canonicalAppUrl,
+      "pixel-blaster-media.vercel.app",
+      null,
+      `${canonicalAppUrl}/admin/settings/integrations`,
+    ),
+    null,
+    "canonical browser referer must survive the www-to-booking Vercel rewrite",
+  );
+  assert.equal(
+    googleCalendarCanonicalConnectPageUri(
+      canonicalAppUrl,
+      "pixel-blaster-media.vercel.app",
+      null,
+      `${canonicalAppUrl}/admin/settings/integrations?google_error=access_denied`,
+    ),
+    null,
+  );
+  assert.equal(
+    googleCalendarCanonicalConnectPageUri(
+      canonicalAppUrl,
+      "pixel-blaster-media.vercel.app",
+      null,
+      "https://pixel-blaster-media.vercel.app/admin/settings/integrations",
+    ),
+    `${canonicalAppUrl}/admin/settings/integrations?google_connect_host=1`,
+  );
+  assert.equal(
+    googleCalendarCanonicalConnectPageUri(
+      canonicalAppUrl,
+      "pixel-blaster-media.vercel.app",
+      canonicalAppUrl,
+      "malformed lower-priority referer",
+    ),
+    null,
+  );
+  assert.equal(
+    googleCalendarCanonicalConnectPageUri(
+      canonicalAppUrl,
+      "pixel-blaster-media.vercel.app",
+      "https://pixel-blaster-media.vercel.app",
+      `${canonicalAppUrl}/admin/settings/integrations`,
+    ),
+    `${canonicalAppUrl}/admin/settings/integrations?google_connect_host=1`,
+  );
+  for (const malformedReferer of [
+    "",
+    "null",
+    "http://www.pixelblastermedia.com/admin/settings/integrations",
+    "https://user@www.pixelblastermedia.com/admin/settings/integrations",
+    `${canonicalAppUrl}/admin/settings/business`,
+    `${canonicalAppUrl}/admin/settings/integrations/`,
+    `${canonicalAppUrl}/admin/settings/integrations#fragment`,
+    ` ${canonicalAppUrl}/admin/settings/integrations`,
+    `${canonicalAppUrl}/admin/settings/integrations,https://attacker.example`,
+    "https:\\www.pixelblastermedia.com/admin/settings/integrations",
+    "https://www.pixelblastermedia.com:443/admin/settings/integrations",
+  ]) {
+    assert.throws(
+      () =>
+        googleCalendarCanonicalConnectPageUri(
+          canonicalAppUrl,
+          "pixel-blaster-media.vercel.app",
+          null,
+          malformedReferer,
+        ),
+      /request referer/i,
+      malformedReferer,
+    );
+  }
+  assert.equal(
+    googleCalendarCanonicalConnectPageUri(
+      canonicalAppUrl,
+      "www.pixelblastermedia.com",
+      "https://pixel-blaster-media.vercel.app",
+    ),
+    `${canonicalAppUrl}/admin/settings/integrations?google_connect_host=1`,
+  );
+  assert.throws(
+    () =>
+      googleCalendarCanonicalConnectPageUri(
+        canonicalAppUrl,
+        "pixel-blaster-media.vercel.app",
+        `${canonicalAppUrl}/unexpected-path`,
+      ),
+    /request origin/i,
+  );
+  for (const malformedOrigin of [
+    "",
+    "null",
+    "http://www.pixelblastermedia.com",
+    "https://user@www.pixelblastermedia.com",
+    `${canonicalAppUrl}/`,
+    `${canonicalAppUrl}?`,
+    `${canonicalAppUrl}#`,
+    ` ${canonicalAppUrl}`,
+    `${canonicalAppUrl},https://attacker.example`,
+    "https:\\www.pixelblastermedia.com",
+  ]) {
+    assert.throws(
+      () =>
+        googleCalendarCanonicalConnectPageUri(
+          canonicalAppUrl,
+          "pixel-blaster-media.vercel.app",
+          malformedOrigin,
+        ),
+      /request origin/i,
+      malformedOrigin,
+    );
+  }
+  assert.equal(
+    googleCalendarCanonicalConnectPageUri(
+      "http://localhost:3000",
+      "localhost:3000",
+      "http://localhost:3000",
+    ),
+    null,
+  );
   assert.throws(
     () => googleCalendarCanonicalConnectPageUri(canonicalAppUrl, null),
     /request host/i,
@@ -179,6 +307,40 @@ test("Google OAuth kickoff is pinned to the canonical signed-in host", () => {
       malformedHost,
     );
   }
+  for (const sourceHeaders of [
+    { origin: canonicalAppUrl, referer: null },
+    {
+      origin: null,
+      referer: `${canonicalAppUrl}/admin/settings/integrations`,
+    },
+  ]) {
+    assert.throws(
+      () =>
+        googleCalendarCanonicalConnectPageUri(
+          canonicalAppUrl,
+          "www.pixelblastermedia.com/",
+          sourceHeaders.origin,
+          sourceHeaders.referer,
+        ),
+      /request host/i,
+      "Host validation must run before canonical Origin or Referer trust",
+    );
+  }
+});
+
+test("Google OAuth kickoff passes the browser origin through proxy routing", () => {
+  assert.match(
+    integrationActionsSource,
+    /const requestOrigin = requestHeaders\.get\("origin"\)/,
+  );
+  assert.match(
+    integrationActionsSource,
+    /const requestReferer = requestHeaders\.get\("referer"\)/,
+  );
+  assert.match(
+    integrationActionsSource,
+    /googleCalendarCanonicalConnectPageUri\(\s*appUrl,\s*requestHost,\s*requestOrigin,\s*requestReferer,?\s*\)/,
+  );
 });
 
 test("authorized callback relays only OAuth fields to the canonical host", () => {

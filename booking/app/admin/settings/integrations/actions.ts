@@ -406,9 +406,13 @@ export async function startGoogleCalendarConnect(): Promise<void> {
   const requestHeaders = await headers();
   const requestHost =
     requestHeaders.get("host") ?? requestHeaders.get("x-forwarded-host");
+  const requestOrigin = requestHeaders.get("origin");
+  const requestReferer = requestHeaders.get("referer");
   const canonicalConnectPage = googleCalendarCanonicalConnectPageUri(
     appUrl,
     requestHost,
+    requestOrigin,
+    requestReferer,
   );
   if (canonicalConnectPage) redirect(canonicalConnectPage);
 
