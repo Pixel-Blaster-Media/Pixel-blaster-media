@@ -1091,51 +1091,6 @@ comment on table public.integration_credentials is
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0012_spiro_inspired_catalog_merchandising.sql
--- ============================================================================
-
--- ============================================================================
--- Pixel Blaster Booking — Spiro-inspired merchandising fields
---
--- Adds lightweight sales guidance to the catalog so the booking flow can steer
--- realtors toward the best-fit package without hard-coding marketing labels in
--- React components.
--- ============================================================================
-
-alter table public.catalog_items
-  add column if not exists badge text,
-  add column if not exists highlight boolean not null default false,
-  add column if not exists ideal_for text;
-
-update public.catalog_items
-set badge = 'Essential',
-    highlight = false,
-    ideal_for = 'Photos + iGUIDE basics for standard listings'
-where slug = 'blue_print';
-
-update public.catalog_items
-set badge = 'Most popular',
-    highlight = true,
-    ideal_for = 'Realtors who want photos, drone, reels, and iGUIDE in one package'
-where slug = 'social_media_special';
-
-update public.catalog_items
-set badge = 'Best value',
-    highlight = true,
-    ideal_for = 'Listings that need stronger video/social coverage'
-where slug = 'social_media_plus';
-
-update public.catalog_items
-set badge = 'Luxury',
-    highlight = false,
-    ideal_for = 'High-end listings that need the full media push'
-where slug = 'ultimate';
-
--- ============================================================================
--- End supabase/migrations/0012_spiro_inspired_catalog_merchandising.sql
--- ============================================================================
-
--- ============================================================================
 -- Begin supabase/migrations/0013_booking_overlap_guard.sql
 -- ============================================================================
 
@@ -3509,4 +3464,75 @@ grant select, insert, update, delete on table public.push_subscriptions
 
 -- ============================================================================
 -- End supabase/migrations/20260710153500_harden_push_subscription_grants.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260716141227_catalog_merchandising_columns.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Pixel Blaster Booking — catalog merchandising columns (recovery)
+--
+-- Adds lightweight sales guidance to the catalog so the booking flow can steer
+-- realtors toward the best-fit package without hard-coding marketing labels in
+-- React components. This originally used the same 0012 version prefix as the
+-- integration-credentials migration and was never applied to production. The
+-- timestamped version repairs that history collision without replaying older
+-- migrations. Every schema change and data default is safe to rerun.
+-- ============================================================================
+
+-- Fail quickly rather than queue behind a long transaction and block requests.
+set lock_timeout = '5s';
+
+alter table public.catalog_items
+  add column if not exists badge text,
+  add column if not exists highlight boolean not null default false,
+  add column if not exists ideal_for text;
+
+update public.catalog_items
+set badge = 'Essential',
+    highlight = false,
+    ideal_for = 'Photos + iGUIDE basics for standard listings'
+where slug = 'blue_print'
+  and organization_id = '00000000-0000-0000-0000-000000000001'
+  and badge is null
+  and ideal_for is null
+  and highlight = false;
+
+update public.catalog_items
+set badge = 'Most popular',
+    highlight = true,
+    ideal_for = 'Realtors who want photos, drone, reels, and iGUIDE in one package'
+where slug = 'social_media_special'
+  and organization_id = '00000000-0000-0000-0000-000000000001'
+  and badge is null
+  and ideal_for is null
+  and highlight = false;
+
+update public.catalog_items
+set badge = 'Best value',
+    highlight = true,
+    ideal_for = 'Listings that need stronger video/social coverage'
+where slug = 'social_media_plus'
+  and organization_id = '00000000-0000-0000-0000-000000000001'
+  and badge is null
+  and ideal_for is null
+  and highlight = false;
+
+update public.catalog_items
+set badge = 'Luxury',
+    highlight = false,
+    ideal_for = 'High-end listings that need the full media push'
+where slug = 'ultimate'
+  and organization_id = '00000000-0000-0000-0000-000000000001'
+  and badge is null
+  and ideal_for is null
+  and highlight = false;
+
+-- PostgREST normally reloads after DDL, but notify explicitly so the pricing
+-- server action can write the new fields immediately after this migration.
+notify pgrst, 'reload schema';
+
+-- ============================================================================
+-- End supabase/migrations/20260716141227_catalog_merchandising_columns.sql
 -- ============================================================================
