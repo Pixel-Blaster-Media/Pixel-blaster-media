@@ -153,12 +153,99 @@ function normalizeRequestHost(requestHost: string | null): string {
   return parsed.host.toLowerCase();
 }
 
+function normalizeRequestOrigin(requestOrigin: string): string {
+  const value = requestOrigin;
+  if (
+    !value ||
+    value !== value.trim() ||
+    value.includes(",") ||
+    value.includes("@") ||
+    value.includes("?") ||
+    value.includes("#") ||
+    value.includes("\\") ||
+    /[\u0000-\u0020\u007f]/.test(value)
+  ) {
+    throw new Error("Google OAuth request origin is malformed.");
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error("Google OAuth request origin is malformed.");
+  }
+
+  const localHttp =
+    parsed.protocol === "http:" && LOCAL_HOSTNAMES.has(parsed.hostname);
+  if (
+    (parsed.protocol !== "https:" && !localHttp) ||
+    parsed.username ||
+    parsed.password ||
+    parsed.pathname !== "/" ||
+    parsed.search ||
+    parsed.hash ||
+    value !== parsed.origin
+  ) {
+    throw new Error("Google OAuth request origin is malformed.");
+  }
+  return parsed.origin;
+}
+
+function normalizeRequestReferer(requestReferer: string): string {
+  const value = requestReferer;
+  if (
+    !value ||
+    value !== value.trim() ||
+    value.includes(",") ||
+    value.includes("#") ||
+    value.includes("\\") ||
+    /[\u0000-\u0020\u007f]/.test(value)
+  ) {
+    throw new Error("Google OAuth request referer is malformed.");
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error("Google OAuth request referer is malformed.");
+  }
+
+  const localHttp =
+    parsed.protocol === "http:" && LOCAL_HOSTNAMES.has(parsed.hostname);
+  const authorityEnd = value.indexOf("/", parsed.protocol.length + 2);
+  const rawOrigin = authorityEnd >= 0 ? value.slice(0, authorityEnd) : value;
+  if (
+    (parsed.protocol !== "https:" && !localHttp) ||
+    parsed.username ||
+    parsed.password ||
+    parsed.pathname !== "/admin/settings/integrations" ||
+    parsed.hash ||
+    rawOrigin !== parsed.origin
+  ) {
+    throw new Error("Google OAuth request referer is malformed.");
+  }
+  return parsed.origin;
+}
+
 export function googleCalendarCanonicalConnectPageUri(
   appUrl: string,
   requestHost: string | null,
+  requestOrigin: string | null = null,
+  requestReferer: string | null = null,
 ): string | null {
   const canonicalCallback = new URL(canonicalCallbackUri(appUrl));
-  if (normalizeRequestHost(requestHost) === canonicalCallback.host.toLowerCase()) {
+  const normalizedHost = normalizeRequestHost(requestHost);
+  const sourceOrigin =
+    requestOrigin !== null
+      ? normalizeRequestOrigin(requestOrigin)
+      : requestReferer !== null
+        ? normalizeRequestReferer(requestReferer)
+        : null;
+  const canonicalRequest = sourceOrigin
+    ? sourceOrigin === canonicalCallback.origin
+    : normalizedHost === canonicalCallback.host.toLowerCase();
+  if (canonicalRequest) {
     return null;
   }
 
