@@ -2,6 +2,15 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import {
+  googleCalendarCallbackRelayUri,
+  googleCalendarCanonicalConnectPageUri,
+  googleCalendarRedirectUri,
+} from "../lib/integrations/google-calendar/redirect-uri.ts";
+import {
+  buildGoogleCalendarOAuthState,
+  googleCalendarOAuthStateMatchesAdmin,
+} from "../lib/integrations/google-calendar/oauth-state.ts";
 import { missingGrantedScopes } from "../lib/integrations/google-calendar/scope-grants.ts";
 
 const oauthSource = await readFile(
@@ -41,6 +50,275 @@ const googleCallbackSource = await readFile(
   ),
   "utf8",
 );
+
+const canonicalAppUrl = "https://www.pixelblastermedia.com";
+const authorizedCallback =
+  "https://pixel-blaster-media.vercel.app/api/integrations/google-calendar/callback";
+
+test("Google OAuth state is bound to the initiating admin and organization", () => {
+  const state = buildGoogleCalendarOAuthState("user-a", "organization-a");
+  assert.match(state, /^[a-f0-9]{48}\.[a-f0-9]{32}$/);
+  assert.equal(
+    googleCalendarOAuthStateMatchesAdmin(
+      state,
+      "user-a",
+      "organization-a",
+    ),
+    true,
+  );
+  assert.equal(
+    googleCalendarOAuthStateMatchesAdmin(
+      state,
+      "user-b",
+      "organization-a",
+    ),
+    false,
+  );
+  assert.equal(
+    googleCalendarOAuthStateMatchesAdmin(
+      state,
+      "user-a",
+      "organization-b",
+    ),
+    false,
+  );
+  assert.equal(
+    googleCalendarOAuthStateMatchesAdmin(
+      "malformed",
+      "user-a",
+      "organization-a",
+    ),
+    false,
+  );
+});
+
+test("dedicated Google callback overrides and trims the general app URL", () => {
+  assert.equal(
+    googleCalendarRedirectUri(
+      canonicalAppUrl,
+      `  ${authorizedCallback}  `,
+    ),
+    authorizedCallback,
+  );
+  assert.equal(
+    googleCalendarRedirectUri(canonicalAppUrl, "   "),
+    `${canonicalAppUrl}/api/integrations/google-calendar/callback`,
+  );
+});
+
+test("Google callback configuration rejects unsafe or malformed URIs", () => {
+  const unsafe = [
+    "/api/integrations/google-calendar/callback",
+    "http://pixel-blaster-media.vercel.app/api/integrations/google-calendar/callback",
+    "https://user:pass@pixel-blaster-media.vercel.app/api/integrations/google-calendar/callback",
+    "https://pixel-blaster-media.vercel.app/wrong",
+    `${authorizedCallback}?tenant=other`,
+    `${authorizedCallback}#fragment`,
+    `${authorizedCallback}?`,
+    `${authorizedCallback}#`,
+    `${authorizedCallback}?#`,
+    authorizedCallback.replace("https://", "https://:@"),
+  ];
+  for (const candidate of unsafe) {
+    assert.throws(
+      () => googleCalendarRedirectUri(canonicalAppUrl, candidate),
+      /Google Calendar redirect URI/,
+      candidate,
+    );
+  }
+  assert.throws(
+    () => googleCalendarRedirectUri("not-an-app-url", authorizedCallback),
+    /NEXT_PUBLIC_APP_URL/,
+  );
+});
+
+test("Google OAuth kickoff is pinned to the canonical signed-in host", () => {
+  assert.equal(
+    googleCalendarCanonicalConnectPageUri(
+      canonicalAppUrl,
+      "www.pixelblastermedia.com",
+    ),
+    null,
+  );
+  assert.equal(
+    googleCalendarCanonicalConnectPageUri(
+      canonicalAppUrl,
+      "pixel-blaster-media.vercel.app",
+    ),
+    `${canonicalAppUrl}/admin/settings/integrations?google_connect_host=1`,
+  );
+  assert.throws(
+    () => googleCalendarCanonicalConnectPageUri(canonicalAppUrl, null),
+    /request host/i,
+  );
+  assert.throws(
+    () =>
+      googleCalendarCanonicalConnectPageUri(
+        canonicalAppUrl,
+        "attacker.example, www.pixelblastermedia.com",
+      ),
+    /request host/i,
+  );
+  for (const malformedHost of [
+    "www.pixelblastermedia.com/",
+    "www.pixelblastermedia.com\\",
+    "@www.pixelblastermedia.com",
+    "www.pixelblastermedia.com:",
+    "www.pixelblastermedia.com?",
+    "www.pixelblastermedia.com#",
+    " www.pixelblastermedia.com",
+    "www.pixelblastermedia.com ",
+  ]) {
+    assert.throws(
+      () =>
+        googleCalendarCanonicalConnectPageUri(
+          canonicalAppUrl,
+          malformedHost,
+        ),
+      /request host/i,
+      malformedHost,
+    );
+  }
+});
+
+test("authorized callback relays only OAuth fields to the canonical host", () => {
+  const request =
+    `${authorizedCallback}?code=one-time-code&state=csrf-token` +
+    "&scope=calendar&authuser=0&attacker=drop-me";
+  assert.equal(
+    googleCalendarCallbackRelayUri(
+      request,
+      canonicalAppUrl,
+      authorizedCallback,
+    ),
+    `${canonicalAppUrl}/api/integrations/google-calendar/callback?code=one-time-code&state=csrf-token`,
+  );
+  assert.equal(
+    googleCalendarCallbackRelayUri(
+      `${canonicalAppUrl}/api/integrations/google-calendar/callback?code=one-time-code&state=csrf-token`,
+      canonicalAppUrl,
+      authorizedCallback,
+    ),
+    null,
+  );
+  assert.equal(
+    googleCalendarCallbackRelayUri(
+      `${authorizedCallback}?error=access_denied&state=csrf-token&error_description=drop-me`,
+      canonicalAppUrl,
+      authorizedCallback,
+    ),
+    `${canonicalAppUrl}/api/integrations/google-calendar/callback?state=csrf-token&error=access_denied`,
+  );
+  assert.throws(
+    () =>
+      googleCalendarCallbackRelayUri(
+        "https://attacker.example/api/integrations/google-calendar/callback?code=x&state=y",
+        canonicalAppUrl,
+        authorizedCallback,
+      ),
+    /callback origin/i,
+  );
+});
+
+test("OAuth start and token exchange share the dedicated redirect setting", () => {
+  const resolverCall =
+    /googleCalendarRedirectUri\(\s*appUrl,\s*process\.env\.GOOGLE_CALENDAR_REDIRECT_URI,?\s*\)/;
+  assert.match(integrationActionsSource, resolverCall);
+  assert.match(googleCallbackSource, resolverCall);
+});
+
+test("OAuth kickoff canonicalizes before setting its state cookie", () => {
+  const hostDecisionIndex = integrationActionsSource.indexOf(
+    "googleCalendarCanonicalConnectPageUri(",
+  );
+  const stateCookieIndex = integrationActionsSource.indexOf(
+    "cookieStore.set(GOOGLE_STATE_COOKIE",
+  );
+  assert.ok(hostDecisionIndex >= 0 && stateCookieIndex > hostDecisionIndex);
+  assert.match(
+    integrationsPageSource,
+    /Tap\s+the\s+Google\s+Calendar\s+button\s+again\s+to\s+continue/i,
+  );
+});
+
+test("OAuth callback relay runs before host-scoped admin authentication", () => {
+  const relayIndex = googleCallbackSource.indexOf(
+    "googleCalendarCallbackRelayUri(",
+  );
+  const adminIndex = googleCallbackSource.indexOf("await requireAdmin()");
+  assert.ok(relayIndex >= 0 && adminIndex > relayIndex);
+  assert.match(googleCallbackSource, /NextResponse\.redirect\(relayUri, 303\)/);
+  assert.match(googleCallbackSource, /"Cache-Control", "no-store"/);
+  assert.match(googleCallbackSource, /"Referrer-Policy", "no-referrer"/);
+});
+
+test("callback configuration errors are classified before origin errors", () => {
+  const configIndex = googleCallbackSource.indexOf(
+    "redirectUri = googleCalendarRedirectUri(",
+  );
+  const config500Index = googleCallbackSource.indexOf(
+    "{ status: 500 }",
+    configIndex,
+  );
+  const relayIndex = googleCallbackSource.indexOf(
+    "googleCalendarCallbackRelayUri(",
+  );
+  const origin400Index = googleCallbackSource.indexOf(
+    "{ status: 400 }",
+    relayIndex,
+  );
+  assert.ok(
+    configIndex >= 0 &&
+      config500Index > configIndex &&
+      relayIndex > config500Index &&
+      origin400Index > relayIndex,
+  );
+});
+
+test("OAuth error callbacks validate and burn state before returning", () => {
+  const stateValidationIndex = googleCallbackSource.indexOf(
+    "expectedState !== state",
+  );
+  const burnStateIndex = googleCallbackSource.indexOf(
+    "cookieStore.delete(STATE_COOKIE)",
+  );
+  const errorIndex = googleCallbackSource.indexOf("if (errorParam)");
+  assert.ok(
+    stateValidationIndex >= 0 &&
+      burnStateIndex > stateValidationIndex &&
+      errorIndex > burnStateIndex,
+  );
+});
+
+test("OAuth callback stays bound to the initiating admin and organization", () => {
+  assert.match(
+    integrationActionsSource,
+    /buildGoogleCalendarOAuthState\(\s*admin\.userId,\s*admin\.organizationId,?\s*\)/,
+  );
+  const bindingIndex = googleCallbackSource.indexOf(
+    "googleCalendarOAuthStateMatchesAdmin(",
+  );
+  const exchangeIndex = googleCallbackSource.indexOf(
+    "await exchangeCodeForTokens(",
+  );
+  assert.ok(bindingIndex >= 0 && exchangeIndex > bindingIndex);
+  assert.match(googleCallbackSource, /state_context_mismatch/);
+  assert.match(
+    integrationsPageSource,
+    /signed-in\s+admin\s+changed\s+during\s+Google\s+consent/i,
+  );
+});
+
+test("Google diagnostics and setup display the normalized redirect URI", () => {
+  assert.match(
+    integrationsPageSource,
+    /googleCalendarRedirectUri\(\s*appUrl,\s*process\.env\.GOOGLE_CALENDAR_REDIRECT_URI,?\s*\)/,
+  );
+  assert.equal(
+    integrationsPageSource.match(/\{resolvedGoogleRedirectUri\}/g)?.length,
+    2,
+  );
+});
 
 test("Google OAuth requests event write and free-busy access", () => {
   assert.match(
