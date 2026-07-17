@@ -167,6 +167,30 @@ export default async function IntegrationsPage({
 
   const resendConfigured = resendApiKeyStatus.source !== "none";
   const autoenhanceConfigured = autoenhanceApiKeyStatus.source !== "none";
+  const autoenhanceReady =
+    autoenhanceConfigured && autoenhanceWebhookStatus.source !== "none";
+  const quickBooksConfigured = Boolean(
+    process.env.QUICKBOOKS_CLIENT_ID && process.env.QUICKBOOKS_CLIENT_SECRET,
+  );
+  const quickBooksDefaultItemAvailable = Boolean(
+    connection?.default_item_id &&
+      items?.some((item) => item.Id === connection?.default_item_id),
+  );
+  const quickBooksReady = Boolean(
+    quickBooksConfigured &&
+      connection &&
+      !itemError &&
+      quickBooksDefaultItemAvailable,
+  );
+  const quickBooksStatus = !connection
+    ? "Not connected"
+    : !quickBooksConfigured
+      ? "Needs credentials"
+      : itemError
+        ? "Needs attention"
+        : !quickBooksDefaultItemAvailable
+          ? "Needs item mapping"
+          : `Ready · ${connection.environment}`;
   const openAiConfigured = openAiApiKeyStatus.source !== "none";
   const googleMapsConfigured = googleMapsApiKeyStatus.source !== "none";
   const iguideConfigured =
@@ -199,21 +223,87 @@ export default async function IntegrationsPage({
   const autoenhanceWebhookUrl = `${appUrl || ""}/api/integrations/autoenhance/webhook?org=${admin.organizationId}`;
 
   return (
-    <div className="space-y-10">
-      <header className="realtor-panel rounded-2xl p-4">
+    <div className="space-y-7 pb-12">
+      <header className="max-w-3xl">
         <Link
           href="/admin/settings"
-          className="text-xs font-semibold uppercase tracking-[0.2em] text-realtor-primary hover:text-realtor-text"
+          className="text-sm font-semibold text-realtor-primary hover:text-realtor-text"
         >
           ← Settings
         </Link>
-        <h1 className="mt-1 text-2xl font-bold text-realtor-text">
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-realtor-text">
           Integrations
         </h1>
-        <p className="mt-2 text-sm text-realtor-muted">
-          Third-party services that plug into the booking system.
+        <p className="mt-2 text-sm leading-6 text-realtor-muted">
+          Review configuration status first, then jump to a provider when you
+          need to connect, troubleshoot, or make a change.
         </p>
       </header>
+
+      <section className="overflow-hidden rounded-2xl border border-realtor-primary/12 bg-realtor-surface/75">
+        <div className="px-4 pb-4 pt-5 sm:px-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-realtor-primary/75">
+            Configuration overview
+          </p>
+          <h2 className="mt-1 text-xl font-semibold text-realtor-text">
+            Integration status at a glance
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-realtor-muted">
+            Statuses apply only to this company unless a tool is marked platform managed.
+          </p>
+        </div>
+        <div className="grid border-t border-realtor-primary/10 md:grid-cols-2 xl:grid-cols-3">
+          <IntegrationOverviewRow
+            href="#google-calendar"
+            name="Google Calendar"
+            purpose="Availability and booking sync"
+            status={googleReady ? "Connected" : googleConnection ? "Needs attention" : "Not connected"}
+            tone={googleReady ? "ready" : "attention"}
+          />
+          <IntegrationOverviewRow
+            href="#quickbooks"
+            name="QuickBooks"
+            purpose="Invoices and service mapping"
+            status={quickBooksStatus}
+            tone={quickBooksReady ? "ready" : connection ? "attention" : "neutral"}
+          />
+          <IntegrationOverviewRow
+            href="#email-delivery"
+            name="Email delivery"
+            purpose="Confirmations and notifications"
+            status={isDefaultOrganization ? (resendConfigured && emailFrom ? "Configured" : "Needs attention") : "Platform managed"}
+            tone={isDefaultOrganization && !(resendConfigured && emailFrom) ? "attention" : "ready"}
+          />
+          <IntegrationOverviewRow
+            href="#iguide"
+            name="iGUIDE"
+            purpose="Tours and ready-event syncing"
+            status={iguideConfigured && iguideWebhookConfigured ? "Ready" : "Setup needed"}
+            tone={iguideConfigured && iguideWebhookConfigured ? "ready" : "attention"}
+          />
+          <IntegrationOverviewRow
+            href="#autoenhance"
+            name="Autoenhance"
+            purpose="Photo enhancement workflow"
+            status={autoenhanceReady ? "Ready" : autoenhanceConfigured ? "Needs webhook" : "Not configured"}
+            tone={autoenhanceReady ? "ready" : autoenhanceConfigured ? "attention" : "neutral"}
+          />
+          <IntegrationOverviewRow
+            href="#ai-assistant"
+            name="AI assistant"
+            purpose="Admin planning and writing tools"
+            status={openAiConfigured ? "Configured" : "Optional"}
+            tone={openAiConfigured ? "ready" : "neutral"}
+          />
+          <IntegrationOverviewRow
+            href="#google-maps"
+            name="Google Maps"
+            purpose="Drive-time and route warnings"
+            status={googleMapsConfigured ? "Enhanced routes" : "Basic fallback"}
+            tone={googleMapsConfigured ? "ready" : "neutral"}
+          />
+        </div>
+      </section>
 
       {flashError ? (
         <p
@@ -222,7 +312,7 @@ export default async function IntegrationsPage({
         >
           QuickBooks connection failed ({flashError}). Double-check your
           Intuit app's redirect URI matches{" "}
-          <code>{process.env.NEXT_PUBLIC_APP_URL}/api/integrations/quickbooks/callback</code>
+          <code className="break-all">{process.env.NEXT_PUBLIC_APP_URL}/api/integrations/quickbooks/callback</code>
           .
         </p>
       ) : null}
@@ -264,7 +354,7 @@ export default async function IntegrationsPage({
             <>
               Google Calendar connection failed ({googleFlashError}). Double-check
               that your OAuth app&apos;s authorized redirect URI matches{" "}
-              <code>{resolvedGoogleRedirectUri}</code>
+              <code className="break-all">{resolvedGoogleRedirectUri}</code>
               .
             </>
           )}
@@ -288,18 +378,15 @@ export default async function IntegrationsPage({
       ) : null}
 
       {isDefaultOrganization ? (
-      <section className="realtor-elevated-panel rounded-2xl p-5">
+      <section id="email-delivery" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-realtor-text">
               Email (Resend)
             </h2>
             <p className="mt-1 text-sm text-realtor-muted">
-              Sends booking confirmations, admin notifications, and the
-              &ldquo;shoot confirmed&rdquo; email with the portal magic link.
-              Supabase magic-link / signup emails are configured separately
-              in Supabase → Auth → Emails → SMTP Settings (use the same
-              Resend API key there).
+              Sends booking confirmations and admin alerts. Supabase sign-in
+              emails are configured separately under Auth → SMTP.
             </p>
           </div>
           {resendConfigured && emailFrom ? (
@@ -313,6 +400,15 @@ export default async function IntegrationsPage({
           )}
         </div>
 
+        <details
+          id="email-configuration"
+          open={!(resendConfigured && emailFrom)}
+          className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
+        >
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
+            Configuration & diagnostics
+          </summary>
+          <div className="border-t border-realtor-primary/10 px-4 pb-4">
         <CredentialsForm
           provider="resend"
           fields={[
@@ -360,9 +456,11 @@ export default async function IntegrationsPage({
             </div>
           </div>
         </div>
+          </div>
+        </details>
       </section>
       ) : (
-        <section className="realtor-elevated-panel rounded-2xl p-5">
+        <section id="email-delivery" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-realtor-text">
@@ -389,20 +487,24 @@ export default async function IntegrationsPage({
         </section>
       )}
 
-      <section className="realtor-elevated-panel rounded-2xl p-5">
+      <section id="autoenhance" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-realtor-text">
               Autoenhance.ai
             </h2>
             <p className="mt-1 text-sm text-realtor-muted">
-              Enhance booking photos and send completed full-resolution JPEGs
-              into the linked iGUIDE gallery.
+              Enhances booking photos and sends completed JPEGs to the linked
+              iGUIDE gallery.
             </p>
           </div>
-          {autoenhanceConfigured ? (
+          {autoenhanceReady ? (
             <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
-              Configured
+              Ready
+            </span>
+          ) : autoenhanceConfigured ? (
+            <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+              Needs webhook
             </span>
           ) : (
             <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
@@ -411,6 +513,15 @@ export default async function IntegrationsPage({
           )}
         </div>
 
+        <details
+          id="autoenhance-configuration"
+          open={!autoenhanceReady}
+          className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
+        >
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
+            Configuration & diagnostics
+          </summary>
+          <div className="border-t border-realtor-primary/10 px-4 pb-4">
         <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
           <p className="text-sm font-semibold text-realtor-text">
             Automatic completion updates
@@ -469,18 +580,19 @@ export default async function IntegrationsPage({
             webhook_secret: autoenhanceWebhookStatus,
           }}
         />
+          </div>
+        </details>
       </section>
 
-      <section className="realtor-elevated-panel rounded-2xl p-5">
+      <section id="ai-assistant" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-realtor-text">
               AI Assistant
             </h2>
             <p className="mt-1 text-sm text-realtor-muted">
-              Powers the floating admin assistant and realtor-facing copy tools.
-              You can use the platform key or save this company&apos;s own
-              OpenAI API key. Saved keys are never shown again.
+              Powers admin planning and realtor-facing copy tools. Use the
+              platform key or this company&apos;s own OpenAI key.
             </p>
           </div>
           {openAiConfigured ? (
@@ -494,6 +606,14 @@ export default async function IntegrationsPage({
           )}
         </div>
 
+        <details
+          id="ai-configuration"
+          className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
+        >
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
+            Configuration & diagnostics
+          </summary>
+          <div className="border-t border-realtor-primary/10 px-4 pb-4">
         <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
           <p className="text-sm font-semibold text-realtor-text">
             How this works
@@ -529,19 +649,19 @@ export default async function IntegrationsPage({
           }}
         />
         <OpenAITester />
+          </div>
+        </details>
       </section>
 
-      <section className="realtor-elevated-panel rounded-2xl p-5">
+      <section id="google-maps" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-realtor-text">
               Google Maps Routes
             </h2>
             <p className="mt-1 text-sm text-realtor-muted">
-              Optional. If this is configured, the Today page uses Google
-              Routes for drive-time and distance warnings. If it is not
-              configured, the app still falls back to simple schedule and city
-              checks.
+              Adds accurate drive-time warnings to Today. Without it, basic
+              schedule and city checks still work.
             </p>
           </div>
           {googleMapsConfigured ? (
@@ -555,6 +675,14 @@ export default async function IntegrationsPage({
           )}
         </div>
 
+        <details
+          id="maps-configuration"
+          className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
+        >
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
+            Configuration & diagnostics
+          </summary>
+          <div className="border-t border-realtor-primary/10 px-4 pb-4">
         <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
           <p className="text-sm font-semibold text-realtor-text">
             Cost-safe fallback
@@ -578,20 +706,19 @@ export default async function IntegrationsPage({
           ]}
           statuses={{ api_key: googleMapsApiKeyStatus }}
         />
+          </div>
+        </details>
       </section>
 
       {/* iGUIDE — Portal API + webhook secret. Used by /admin/bookings to
           sync tour deliverables and by the webhook receiver to verify
           incoming events. */}
-      <section className="realtor-elevated-panel rounded-2xl p-5">
+      <section id="iguide" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-realtor-text">iGUIDE</h2>
             <p className="mt-1 text-sm text-realtor-muted">
-              Connect this once so new iGUIDEs from your phone can be matched
-              to bookings and synced into deliverables. The current API can also
-              search the company&apos;s portal tours when the token includes the
-              iguide.list permission.
+              Matches portal tours to bookings and syncs ready deliverables.
             </p>
           </div>
           {iguideConfigured && iguideWebhookConfigured ? (
@@ -605,6 +732,15 @@ export default async function IntegrationsPage({
           )}
         </div>
 
+        <details
+          id="iguide-configuration"
+          open={!(iguideConfigured && iguideWebhookConfigured)}
+          className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
+        >
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
+            Configuration & diagnostics
+          </summary>
+          <div className="border-t border-realtor-primary/10 px-4 pb-4">
         <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
           <p className="text-sm font-semibold text-realtor-text">
             Portal search is now supported
@@ -700,21 +836,19 @@ export default async function IntegrationsPage({
             added in iGUIDE.
           </p>
         ) : null}
+          </div>
+        </details>
       </section>
 
-      <section className="realtor-elevated-panel rounded-2xl p-5">
+      <section id="google-calendar" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-realtor-text">
               Google Calendar
             </h2>
             <p className="mt-1 text-sm text-realtor-muted">
-              Syncs your personal calendar with the booking system. Busy
-              blocks (personal appointments, other commitments) hide their
-              time slots from realtors, so nothing can double-book you. When
-              a realtor confirms a booking, the shoot is added to your
-              calendar automatically with the property address, realtor
-              contact info, and any notes.
+              Blocks public booking times when your calendars are busy and
+              adds confirmed shoots to the booking calendar.
             </p>
           </div>
           {googleReady ? (
@@ -736,6 +870,15 @@ export default async function IntegrationsPage({
           )}
         </div>
 
+        <details
+          id="calendar-configuration"
+          open={!googleReady}
+          className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
+        >
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
+            Manage connection & calendars
+          </summary>
+          <div className="border-t border-realtor-primary/10 px-4 pb-4">
         {googleConnection ? (
           <div className="mt-5 space-y-4">
             {!googleConfigured ? (
@@ -1021,32 +1164,44 @@ export default async function IntegrationsPage({
             </ol>
           </div>
         )}
+          </div>
+        </details>
       </section>
 
-      <section className="realtor-elevated-panel rounded-2xl p-5">
+      <section id="quickbooks" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-realtor-text">
               QuickBooks Online
             </h2>
             <p className="mt-1 text-sm text-realtor-muted">
-              When you click &quot;Send invoice&quot; on a booking, we upsert the
-              realtor as a QB customer and create an invoice with line items
-              from your pricing settings. Invoices land in QuickBooks exactly
-              where your accountant expects them.
+              Creates QuickBooks customers and invoices from confirmed
+              bookings using your pricing items.
             </p>
           </div>
-          {connection ? (
-            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
-              Connected · {connection.environment}
-            </span>
-          ) : (
-            <span className="shrink-0 rounded-full border border-realtor-primary/15 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
-              Not connected
-            </span>
-          )}
+          <span
+            className={
+              "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider " +
+              (quickBooksReady
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : connection
+                  ? "border-amber-200 bg-amber-50 text-amber-700"
+                  : "border-realtor-primary/15 bg-white text-realtor-muted")
+            }
+          >
+            {quickBooksStatus}
+          </span>
         </div>
 
+        <details
+          id="quickbooks-configuration"
+          open={!quickBooksReady}
+          className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
+        >
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
+            Manage connection & invoice mapping
+          </summary>
+          <div className="border-t border-realtor-primary/10 px-4 pb-4">
         {connection ? (
           <div className="mt-5 space-y-4">
             <dl className="grid gap-y-1 text-sm md:grid-cols-[180px_1fr]">
@@ -1102,7 +1257,7 @@ export default async function IntegrationsPage({
               </li>
               <li>
                 Set the redirect URI to{" "}
-                <code className="text-xs">
+                <code className="break-all text-xs">
                   {process.env.NEXT_PUBLIC_APP_URL}/api/integrations/quickbooks/callback
                 </code>
                 .
@@ -1121,7 +1276,49 @@ export default async function IntegrationsPage({
             <ConnectButton />
           </div>
         )}
+          </div>
+        </details>
       </section>
     </div>
+  );
+}
+
+function IntegrationOverviewRow({
+  href,
+  name,
+  purpose,
+  status,
+  tone,
+}: {
+  href: string;
+  name: string;
+  purpose: string;
+  status: string;
+  tone: "ready" | "attention" | "neutral";
+}) {
+  const statusClass =
+    tone === "ready"
+      ? "bg-emerald-50 text-emerald-800"
+      : tone === "attention"
+        ? "bg-amber-50 text-amber-900"
+        : "bg-realtor-surface-muted text-realtor-muted";
+
+  return (
+    <a
+      href={href}
+      className="group flex min-h-24 min-w-0 items-center justify-between gap-3 border-b border-realtor-primary/10 bg-white/45 px-4 py-4 transition hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-realtor-primary md:border-r sm:px-5"
+    >
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-realtor-text">
+          {name}
+        </span>
+        <span className="mt-1 block text-xs leading-5 text-realtor-muted">
+          {purpose}
+        </span>
+      </span>
+      <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusClass}`}>
+        {status}
+      </span>
+    </a>
   );
 }
