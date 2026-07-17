@@ -653,12 +653,20 @@ export async function persistTokens(args: {
 }
 
 export async function deleteGoogleCalendarConnection(
-  scope?: CalendarConnectionScope,
+  scope: CalendarConnectionScope & { organizationId: string },
 ): Promise<ConnectionRow | null> {
   const supabase = getServiceSupabase();
+  const orgId = organizationId(scope);
   const conn = await getGoogleCalendarConnection(scope);
-  if (!conn) return null;
-  await supabase.from("google_calendar_connection").delete().eq("id", conn.id);
+  const deleted = await supabase
+    .from("google_calendar_connection")
+    .delete()
+    .eq("organization_id", orgId);
+  if (deleted.error) {
+    throw new Error(
+      `Delete google calendar connections failed: ${deleted.error.message}`,
+    );
+  }
   return conn;
 }
 

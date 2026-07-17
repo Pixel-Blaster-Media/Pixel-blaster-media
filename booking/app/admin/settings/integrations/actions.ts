@@ -1,6 +1,5 @@
 "use server";
 
-import { randomBytes } from "crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -34,6 +33,7 @@ import {
   GoogleCalendarError,
 } from "@/lib/integrations/google-calendar/client";
 import { buildAuthorizeUrl } from "@/lib/integrations/quickbooks/oauth";
+import { buildQuickBooksOAuthState } from "@/lib/integrations/quickbooks/oauth-state";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
 const STATE_COOKIE = "qbo_oauth_state";
@@ -61,7 +61,7 @@ type MutableCookieStore = {
  * returned `state` against this cookie.
  */
 export async function startQuickBooksConnect(): Promise<void> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const clientId = process.env.QUICKBOOKS_CLIENT_ID;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
@@ -72,7 +72,10 @@ export async function startQuickBooksConnect(): Promise<void> {
     );
   }
 
-  const state = randomBytes(24).toString("hex");
+  const state = buildQuickBooksOAuthState(
+    admin.userId,
+    admin.organizationId,
+  );
   const cookieStore = (await cookies()) as unknown as MutableCookieStore;
   cookieStore.set(STATE_COOKIE, state, {
     httpOnly: true,
