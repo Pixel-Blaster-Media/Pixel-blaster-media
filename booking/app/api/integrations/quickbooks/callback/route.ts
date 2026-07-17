@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { exchangeCodeForTokens } from "@/lib/integrations/quickbooks/oauth";
+import { quickBooksOAuthStateMatchesAdmin } from "@/lib/integrations/quickbooks/oauth-state";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -40,24 +41,37 @@ export async function GET(request: NextRequest) {
 
   const settingsUrl = new URL("/admin/settings/integrations", url.origin);
 
-  if (errorParam) {
-    settingsUrl.searchParams.set("qbo_error", errorParam);
-    return NextResponse.redirect(settingsUrl);
-  }
-
-  if (!code || !state || !realmId) {
-    settingsUrl.searchParams.set("qbo_error", "missing_params");
-    return NextResponse.redirect(settingsUrl);
-  }
-
   const cookieStore = (await cookies()) as unknown as MutableCookieStore;
   const expectedState = cookieStore.get(STATE_COOKIE)?.value;
-  if (!expectedState || expectedState !== state) {
+  if (!state || !expectedState || expectedState !== state) {
     settingsUrl.searchParams.set("qbo_error", "state_mismatch");
     return NextResponse.redirect(settingsUrl);
   }
-  // Single-use cookie — clear after validation.
+
+  // Burn the state cookie before handling either success or denial so it
+  // cannot be replayed.
   cookieStore.delete(STATE_COOKIE);
+
+  if (
+    !quickBooksOAuthStateMatchesAdmin(
+      state,
+      admin.userId,
+      admin.organizationId,
+    )
+  ) {
+    settingsUrl.searchParams.set("qbo_error", "state_context_mismatch");
+    return NextResponse.redirect(settingsUrl);
+  }
+
+  if (errorParam) {
+    settingsUrl.searchParams.set("qbo_error", errorParam.slice(0, 80));
+    return NextResponse.redirect(settingsUrl);
+  }
+
+  if (!code || !realmId) {
+    settingsUrl.searchParams.set("qbo_error", "missing_params");
+    return NextResponse.redirect(settingsUrl);
+  }
 
   const clientId = process.env.QUICKBOOKS_CLIENT_ID;
   const clientSecret = process.env.QUICKBOOKS_CLIENT_SECRET;
