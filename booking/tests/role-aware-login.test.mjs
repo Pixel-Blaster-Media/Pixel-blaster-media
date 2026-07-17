@@ -140,6 +140,13 @@ const quarantineMigrationUrl = new URL(
   import.meta.url,
 );
 const migrationSource = readFileSync(quarantineMigrationUrl, "utf8");
+const metadataProvisioningMigration = readFileSync(
+  new URL(
+    "../supabase/migrations/20260717211142_auth_user_metadata_update_provisioning.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 test("privileged company membership routes to the admin workspace", () => {
   assert.equal(
@@ -360,6 +367,23 @@ test("only trusted service provisioning can create realtor profiles", () => {
   for (const caller of [bookingAction, inboxAction, calendarAction]) {
     assert.match(caller, /provisionRealtorAuthUser/);
   }
+});
+
+test("trusted provisioning runs when Supabase applies protected app metadata", () => {
+  assert.match(
+    metadataProvisioningMigration,
+    /after insert or update of raw_app_meta_data on auth\.users/,
+  );
+  assert.match(
+    metadataProvisioningMigration,
+    /marker-less identity[\s\S]*quarantined/i,
+  );
+  assert.match(metadataProvisioningMigration, /realtor_organization_id/);
+  assert.match(metadataProvisioningMigration, /insert into public\.profiles/);
+  assert.doesNotMatch(
+    metadataProvisioningMigration,
+    /raise exception 'public signup is disabled'/,
+  );
 });
 
 test("existing Auth identities cannot be moved or reactivated across tenants", () => {

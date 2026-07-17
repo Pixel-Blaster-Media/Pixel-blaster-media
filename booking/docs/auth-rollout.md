@@ -35,7 +35,7 @@ creation returns an ambiguous response, the command prints a stable
 identity instead of creating another one. Concurrent bootstrap attempts can create
 at most one owner; losing attempts remove their own marker-bound Auth identity.
 
-## Production rollout for migration 20260717140806
+## Coordinated rollout for migrations `20260717140806` and `20260717211142`
 
 Do not use `supabase db push --include-all`. Local and linked migration histories may diverge.
 
@@ -48,22 +48,24 @@ Do not use `supabase db push --include-all`. Local and linked migration historie
    - every unbooked realtor profile has been reviewed explicitly.
 5. Wrap the exact contents of `supabase/migrations/20260717140806_quarantine_unprovisioned_auth_users.sql` in `begin; ... commit;` and apply that file to the linked project.
 6. Mark **only** version `20260717140806` applied in the remote migration ledger with `supabase migration repair --linked --status applied 20260717140806`.
-7. Run the auth provisioning canary and tenant-hardening canary. Confirm:
+7. Wrap the exact contents of `supabase/migrations/20260717211142_auth_user_metadata_update_provisioning.sql` in a second `begin; ... commit;` transaction and apply it. This installs the final GoTrue-compatible INSERT/metadata-UPDATE trigger without exposing tenant authority to marker-less identities.
+8. Mark **only** version `20260717211142` applied with `supabase migration repair --linked --status applied 20260717211142`.
+9. Run the auth provisioning canary and tenant-hardening canary. Confirm:
    - commands: `npm run verify:auth-provisioning` and `npx tsx scripts/verify-tenant-hardening.ts` from `booking/`, with the linked project's `NEXT_PUBLIC_SUPABASE_URL`, anon key, and service-role key loaded;
-   - anonymous signup rolls back;
+   - hosted anonymous signup is rejected without creating an Auth identity;
    - invitation creation stays profile-less;
    - trusted realtor creation lands in the exact tenant;
    - malformed/nonexistent tenant markers fail;
    - canary cleanup leaves no residue.
-8. Verify company/realtor login, password reset, owner invitation claim, public booking, inbox acceptance, and calendar booking in production; then end maintenance.
-9. Keep `ENABLE_PUBLIC_SIGNUP=0` and public Auth signup disabled permanently.
+10. Verify company/realtor login, password reset, owner invitation claim, public booking, inbox acceptance, and calendar booking in production; then end maintenance.
+11. Keep `ENABLE_PUBLIC_SIGNUP=0` and public Auth signup disabled permanently. Marker-less Auth identities are deliberately profile-less, so this hosted Auth control is mandatory and must be checked on every release.
 
 ## Failure handling
 
 - If deployment fails before migration, leave both signup controls disabled and roll back the app normally; the compatibility build is not required by the old trigger.
 - If migration fails, its transaction must roll back completely. Resolve the reported audit mismatch; do not bypass the guard.
 - If the migration succeeds but application verification fails, do not re-enable signup and do not roll back to code with unmarked `createUser` callers. Repair forward or redeploy the reviewed marker-writing build.
-- If SQL commits but migration-ledger repair fails, do not rerun the SQL. Verify the functions/tables and repair only version `20260717140806` as applied.
+- If either SQL file commits but its migration-ledger repair fails, do not rerun that SQL. Verify the resulting functions/tables/trigger and repair only the corresponding version (`20260717140806` or `20260717211142`) as applied.
 - Failed or ambiguous realtor provisioning returns a correlation reference and writes a service-only `provisioning_cleanup_events` row when the database is reachable. Resolve the event before asking the client to retry. Cleanup never performs legacy destructive guesses: unavailable marker/quarantine verification preserves the identity for operator reconciliation.
 - Reconcile a reference with service-role/operator access before retrying:
   `select * from public.provisioning_cleanup_events where id = '<reference>'::uuid or provisioning_id = '<reference>'::uuid;`
