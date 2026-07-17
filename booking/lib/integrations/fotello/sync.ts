@@ -24,6 +24,7 @@ export interface SyncFotelloResult {
 
 export interface TrackEnhanceArgs {
   enhanceId: string;
+  organizationId: string;
   booking: { id: string; property_id: string; fotello_listing_id: string | null };
   shotType?: FotelloShotType;
 }
@@ -41,12 +42,13 @@ export interface TrackEnhanceArgs {
  */
 export async function syncEnhance({
   enhanceId,
+  organizationId,
   booking,
   shotType,
 }: TrackEnhanceArgs): Promise<SyncFotelloResult> {
   let enhance: FotelloEnhance;
   try {
-    enhance = await getEnhance(enhanceId);
+    enhance = await getEnhance(enhanceId, organizationId);
   } catch (err) {
     if (err instanceof FotelloError) {
       return { ok: false, upserted: false, error: err.message };
@@ -88,7 +90,7 @@ export async function syncEnhance({
 
   const { error } = await supabase
     .from("deliverables")
-    .upsert(row, { onConflict: "source,external_id" });
+    .upsert(row, { onConflict: "organization_id,source,external_id" });
 
   if (error) {
     console.error("[fotello.sync] upsert failed", error);
@@ -136,6 +138,15 @@ export async function getFreshGalleryUrl(
   if (error || !data) return { url: null, error: "Deliverable not found." };
   if (!data.external_id) return { url: null, error: "No Fotello enhance id on this deliverable." };
 
+  const { data: bookingScope, error: bookingScopeError } = await supabase
+    .from("bookings")
+    .select("organization_id")
+    .eq("id", data.booking_id)
+    .maybeSingle<{ organization_id: string }>();
+  if (bookingScopeError || !bookingScope) {
+    return { url: null, error: "Booking organization not found." };
+  }
+
   const cachedUrl = data.url;
   const expiresAt = data.metadata?.url_expires_at
     ? Date.parse(data.metadata.url_expires_at)
@@ -155,6 +166,7 @@ export async function getFreshGalleryUrl(
   // Refresh via /getEnhance.
   const result = await syncEnhance({
     enhanceId: data.external_id,
+    organizationId: bookingScope.organization_id,
     booking: {
       id: data.booking_id,
       property_id: data.property_id,

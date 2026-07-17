@@ -32,23 +32,23 @@ const DEFAULT_BASE_URL = "https://manage.youriguide.com/api/v1";
 const PORTAL_FETCH_TIMEOUT_MS = 15_000;
 
 interface PortalScope {
-  organizationId?: string;
+  organizationId: string;
 }
 
 async function getCredentials(
-  scope?: PortalScope,
+  scope: PortalScope,
 ): Promise<{ appId: string; appToken: string; baseUrl: string } | null> {
   const appId = await getCredential(
     "iguide",
     "app_id",
     "IGUIDE_APP_ID",
-    scope?.organizationId,
+    scope.organizationId,
   );
   const appToken = await getCredential(
     "iguide",
     "app_token",
     "IGUIDE_APP_TOKEN",
-    scope?.organizationId,
+    scope.organizationId,
   );
   if (!appId || !appToken) return null;
   const baseUrl = (process.env.IGUIDE_API_BASE?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, "");
@@ -56,7 +56,7 @@ async function getCredentials(
 }
 
 /** Is the Portal API configured? Useful to gate admin UI. */
-export async function hasPortalCredentials(scope?: PortalScope): Promise<boolean> {
+export async function hasPortalCredentials(scope: PortalScope): Promise<boolean> {
   return (await getCredentials(scope)) !== null;
 }
 
@@ -70,7 +70,7 @@ export interface PortalResult<T> {
 async function portalFetch<T>(
   path: string,
   init: RequestInit = {},
-  scope?: PortalScope,
+  scope: PortalScope,
 ): Promise<PortalResult<T>> {
   const creds = await getCredentials(scope);
   if (!creds) {
@@ -339,7 +339,7 @@ interface IGuideUploadPermitResponse {
 
 /** Verify the configured iGuide credentials without touching any booking data. */
 export async function testPortalCredentials(
-  scope?: PortalScope,
+  scope: PortalScope,
 ): Promise<
   PortalResult<{ appId: string }>
 > {
@@ -358,7 +358,7 @@ export async function testPortalCredentials(
  */
 export async function createIGuide(
   input: IGuideCreateInput,
-  scope?: PortalScope,
+  scope: PortalScope,
 ): Promise<PortalResult<IGuideCreateResponse>> {
   return portalFetch<IGuideCreateResponse>("/iguides/", {
     method: "POST",
@@ -377,7 +377,7 @@ export async function createIGuide(
 export async function getReadyEventObject(
   iguideId: string,
   taskId: string,
-  scope?: PortalScope,
+  scope: PortalScope,
 ): Promise<PortalResult<IGuideReadyEvent>> {
   const qs = new URLSearchParams({ taskId }).toString();
   return portalFetch<IGuideReadyEvent>(
@@ -396,7 +396,7 @@ export async function getReadyEventObject(
  */
 export async function getAssetUrls(
   iguideId: string,
-  scope?: PortalScope,
+  scope: PortalScope,
 ): Promise<PortalResult<IGuideAssetUrlsResponse>> {
   return portalFetch<IGuideAssetUrlsResponse>(
     `/iguides/${encodeURIComponent(iguideId)}/asset-urls`,
@@ -418,7 +418,7 @@ export async function getAssetUrls(
  */
 export async function uploadAssetToIGuide(
   input: IGuideUploadAssetInput,
-  scope?: PortalScope,
+  scope: PortalScope,
 ): Promise<PortalResult<IGuideUploadAssetResponse>> {
   const bytes = new Uint8Array(input.bytes);
   if (!bytes.byteLength) {
@@ -543,7 +543,7 @@ export async function uploadAssetToIGuide(
  * unavailable to customer integrations earlier in the project.
  */
 export async function listIGuides(
-  scope?: PortalScope,
+  scope: PortalScope,
 ): Promise<PortalResult<IGuideListItem[]>> {
   const result = await portalFetch<unknown>("/iguides", {}, scope);
   if (!result.ok) {

@@ -73,8 +73,13 @@ export class FotelloError extends Error {
   }
 }
 
-async function apiKey(): Promise<string> {
-  const key = await getCredential("fotello", "api_key", "FOTELLO_API_KEY");
+async function apiKey(organizationId: string): Promise<string> {
+  const key = await getCredential(
+    "fotello",
+    "api_key",
+    "FOTELLO_API_KEY",
+    organizationId,
+  );
   if (!key) {
     throw new FotelloError(
       "Fotello API key not configured. Save it in /admin/settings/integrations or set FOTELLO_API_KEY in env vars.",
@@ -97,6 +102,7 @@ function authorizationHeader(path: string, key: string): string {
 async function request<T>(
   method: "GET" | "POST",
   path: string,
+  organizationId: string,
   init: { body?: Record<string, unknown>; query?: Record<string, string> } = {},
 ): Promise<T> {
   const url = new URL(path, FOTELLO_BASE_URL);
@@ -104,7 +110,7 @@ async function request<T>(
     url.searchParams.set(k, v);
   }
 
-  const token = await apiKey();
+  const token = await apiKey(organizationId);
   const res = await fetch(url.toString(), {
     method,
     headers: {
@@ -133,16 +139,31 @@ async function request<T>(
 
 // ---- Public API ----
 
-export function getEnhance(id: string): Promise<FotelloEnhance> {
-  return request<FotelloEnhance>("GET", "/getEnhance", { query: { id } });
+export function getEnhance(
+  id: string,
+  organizationId: string,
+): Promise<FotelloEnhance> {
+  return request<FotelloEnhance>("GET", "/getEnhance", organizationId, {
+    query: { id },
+  });
 }
 
-export function createListing(name: string): Promise<FotelloListing> {
-  return request<FotelloListing>("POST", "/createListing", { body: { name } });
+export function createListing(
+  name: string,
+  organizationId: string,
+): Promise<FotelloListing> {
+  return request<FotelloListing>("POST", "/createListing", organizationId, {
+    body: { name },
+  });
 }
 
-export function createUpload(filename: string): Promise<FotelloUpload> {
-  return request<FotelloUpload>("POST", "/createUpload", { body: { filename } });
+export function createUpload(
+  filename: string,
+  organizationId: string,
+): Promise<FotelloUpload> {
+  return request<FotelloUpload>("POST", "/createUpload", organizationId, {
+    body: { filename },
+  });
 }
 
 export interface CreateEnhanceInput {
@@ -153,8 +174,9 @@ export interface CreateEnhanceInput {
 
 export function createEnhance(
   input: CreateEnhanceInput,
+  organizationId: string,
 ): Promise<{ id: string }> {
-  return request<{ id: string }>("POST", "/createEnhance", {
+  return request<{ id: string }>("POST", "/createEnhance", organizationId, {
     body: {
       upload_ids: input.uploadIds,
       listing_id: input.listingId,
@@ -177,14 +199,20 @@ export interface PrepareDownloadInput {
 
 export function prepareDownload(
   input: PrepareDownloadInput,
+  organizationId: string,
 ): Promise<FotelloPreparedDownload> {
-  return request<FotelloPreparedDownload>("POST", "/v1/prepare-download", {
-    body: {
-      listing_id: input.listingId,
-      ...(input.photoFormats?.length
-        ? { photo_formats: input.photoFormats }
-        : {}),
-      ...(input.sections?.length ? { sections: input.sections } : {}),
+  return request<FotelloPreparedDownload>(
+    "POST",
+    "/v1/prepare-download",
+    organizationId,
+    {
+      body: {
+        listing_id: input.listingId,
+        ...(input.photoFormats?.length
+          ? { photo_formats: input.photoFormats }
+          : {}),
+        ...(input.sections?.length ? { sections: input.sections } : {}),
+      },
     },
-  });
+  );
 }

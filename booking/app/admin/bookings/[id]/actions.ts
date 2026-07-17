@@ -1305,7 +1305,7 @@ export async function saveIGuidePhotoDownloads(
       },
       ready_at: new Date().toISOString(),
     },
-    { onConflict: "source,external_id" },
+    { onConflict: "organization_id,source,external_id" },
   );
 
   if (error) return { ok: false, error: error.message };
@@ -1774,7 +1774,10 @@ export async function prepareFotelloUpload(
   try {
     let listingId = booking.fotello_listing_id;
     if (!listingId) {
-      const listing = await createListing(fotelloListingName(booking));
+      const listing = await createListing(
+        fotelloListingName(booking),
+        admin.organizationId,
+      );
       listingId = listing.id;
       const { error: updateError } = await service
         .from("bookings")
@@ -1785,7 +1788,9 @@ export async function prepareFotelloUpload(
     }
 
     const uploads = await Promise.all(
-      cleanFilenames.map((filename) => createUpload(filename)),
+      cleanFilenames.map((filename) =>
+        createUpload(filename, admin.organizationId),
+      ),
     );
     revalidatePath(`/admin/bookings/${bookingId}`);
     return {
@@ -1848,12 +1853,16 @@ export async function startFotelloEnhance(
   }
 
   try {
-    const enhance = await createEnhance({
-      uploadIds: cleanUploadIds,
-      listingId: cleanListingId,
-    });
+    const enhance = await createEnhance(
+      {
+        uploadIds: cleanUploadIds,
+        listingId: cleanListingId,
+      },
+      admin.organizationId,
+    );
     const result = await syncEnhance({
       enhanceId: enhance.id,
+      organizationId: admin.organizationId,
       booking: {
         id: booking.id,
         property_id: booking.property_id,
@@ -1906,6 +1915,7 @@ export async function trackFotelloEnhance(
 
   const result = await syncEnhance({
     enhanceId: trimmed,
+    organizationId: admin.organizationId,
     booking,
     shotType,
   });

@@ -100,7 +100,7 @@ export class AutoenhanceError extends Error {
   }
 }
 
-async function apiKey(organizationId?: string): Promise<string> {
+async function apiKey(organizationId: string): Promise<string> {
   const key = await getCredential(
     "autoenhance",
     "api_key",
@@ -123,8 +123,8 @@ async function request<T>(
   init: {
     body?: Record<string, unknown>;
     query?: Record<string, string | number | boolean | null | undefined>;
-    organizationId?: string;
-  } = {},
+    organizationId: string;
+  },
 ): Promise<T> {
   const url = new URL(path, AUTOENHANCE_BASE_URL);
   for (const [key, value] of Object.entries(init.query ?? {})) {
@@ -172,7 +172,7 @@ async function request<T>(
 
 export async function createOrder(
   name: string,
-  organizationId?: string,
+  organizationId: string,
 ): Promise<AutoenhanceOrder> {
   const order = await request<AutoenhanceOrder & { id?: string }>("POST", "/v3/orders/", {
     organizationId,
@@ -186,7 +186,7 @@ export async function createOrder(
 
 export async function createImage(
   input: CreateImageInput,
-  organizationId?: string,
+  organizationId: string,
 ): Promise<AutoenhanceImage> {
   const image = await request<
     AutoenhanceImage & {
@@ -227,7 +227,7 @@ export async function createImage(
 
 export async function createBracket(
   input: CreateBracketInput,
-  organizationId?: string,
+  organizationId: string,
 ): Promise<AutoenhanceBracket> {
   const bracket = await request<
     AutoenhanceBracket & {
@@ -254,7 +254,7 @@ export async function createBracket(
 
 export function deleteOrder(
   orderId: string,
-  organizationId?: string,
+  organizationId: string,
 ): Promise<void> {
   return request<void>(
     "DELETE",
@@ -265,7 +265,7 @@ export function deleteOrder(
 
 export function getImage(
   imageId: string,
-  organizationId?: string,
+  organizationId: string,
 ): Promise<AutoenhanceImage> {
   return request<AutoenhanceImage>(
     "GET",
@@ -276,7 +276,7 @@ export function getImage(
 
 export function getOrder(
   orderId: string,
-  organizationId?: string,
+  organizationId: string,
 ): Promise<AutoenhanceOrder> {
   return request<AutoenhanceOrder>(
     "GET",
@@ -287,7 +287,7 @@ export function getOrder(
 
 export function getOrderBrackets(
   orderId: string,
-  organizationId?: string,
+  organizationId: string,
 ): Promise<AutoenhanceOrderBrackets> {
   return request<AutoenhanceOrderBrackets>(
     "GET",
@@ -298,7 +298,7 @@ export function getOrderBrackets(
 
 export function processOrder(
   orderId: string,
-  organizationId?: string,
+  organizationId: string,
   options: {
     bracketGroups?: string[][];
     bracketsPerImage?: number;
@@ -354,13 +354,13 @@ export function processOrder(
 export async function fetchEnhancedImage(
   imageId: string,
   options: {
-    organizationId?: string;
+    organizationId: string;
     format?: "jpeg" | "png" | "webp" | "avif";
     quality?: number;
     preview?: boolean;
     maxWidth?: number;
     devMode?: boolean;
-  } = {},
+  },
 ): Promise<Response> {
   const url = new URL(
     `/v3/images/${encodeURIComponent(imageId)}/enhanced`,
