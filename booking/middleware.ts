@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { shouldHandoffAuthCode } from "@/lib/auth/auth-code-handoff";
+
 /**
  * Edge middleware.
  *
@@ -39,11 +41,7 @@ export async function middleware(request: NextRequest) {
   // 1. Auth-code handoff. Any `?code=` on a non-callback, non-API path
   // gets funnelled through /auth/callback which handles the exchange.
   const authCode = request.nextUrl.searchParams.get("code");
-  if (
-    authCode &&
-    !path.startsWith("/auth/callback") &&
-    !path.startsWith("/api/")
-  ) {
+  if (shouldHandoffAuthCode(path, Boolean(authCode))) {
     const callback = request.nextUrl.clone();
     callback.pathname = "/auth/callback";
     const next = path === "/" ? "/admin" : path;
@@ -62,6 +60,7 @@ export async function middleware(request: NextRequest) {
   if (!hasSessionCookie(request)) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/sign-in";
+    url.searchParams.set("audience", path.startsWith("/admin") ? "company" : "realtor");
     url.searchParams.set("next", `${path}${request.nextUrl.search}`);
     return NextResponse.redirect(url);
   }

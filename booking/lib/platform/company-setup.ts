@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 
 import { emailHasAccount } from "@/lib/auth/email-lookup";
 import { sendEmail } from "@/lib/email/resend";
@@ -93,6 +93,7 @@ export async function createCompanyWorkspace(
         password: input.adminPassword,
         email_confirm: true,
         user_metadata: { full_name: input.adminName },
+        app_metadata: { company_invitation_id: randomUUID() },
       });
     if (createUserError || !created.user) {
       throw new Error(createUserError?.message ?? "Could not create admin user.");

@@ -7,7 +7,11 @@ import { requestPasswordReset, type ResetRequestState } from "./actions";
 
 const initial: ResetRequestState | null = null;
 
-export default function ResetRequestForm() {
+export default function ResetRequestForm({
+  initialEmail,
+}: {
+  initialEmail: string;
+}) {
   const [state, formAction] = useActionState(requestPasswordReset, initial);
 
   return (
@@ -19,10 +23,11 @@ export default function ResetRequestForm() {
         <input
           name="email"
           type="email"
+          defaultValue={initialEmail}
           required
           autoComplete="email"
           className={
-            "mt-1 w-full rounded-xl border bg-realtor-surface px-3 py-2 text-realtor-text placeholder-realtor-muted focus:outline-none focus:ring-2 focus:ring-realtor-primary/60 " +
+            "mt-1 min-h-11 w-full rounded-xl border bg-realtor-surface px-3 py-2 text-realtor-text placeholder-realtor-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-realtor-primary " +
             (state?.error ? "border-red-400/60" : "border-realtor-primary/15")
           }
         />
@@ -45,7 +50,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="w-full rounded-full bg-realtor-primary px-4 py-2.5 font-semibold text-white hover:bg-realtor-primary-light disabled:cursor-not-allowed disabled:opacity-60"
+      className="min-h-11 w-full rounded-full bg-realtor-primary px-4 py-2.5 font-semibold text-white hover:bg-realtor-primary-light focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-realtor-primary disabled:cursor-not-allowed disabled:opacity-60"
     >
       {pending ? "Sending…" : "Send reset link"}
     </button>

@@ -28,7 +28,7 @@ export default function BookLayout({ children }: { children: ReactNode }) {
         <footer className="flex items-center justify-center border-t border-realtor-primary/10 pt-5 text-xs text-realtor-muted">
           <span>Already booked?</span>
           <Link
-            href="/auth/sign-in?next=/portal"
+            href="/auth/sign-in?audience=realtor&next=/portal"
             className="ml-1.5 font-semibold text-realtor-primary hover:underline"
           >
             Open client portal

@@ -76,4 +76,9 @@ test("generated Supabase setup includes the repaired migration", async () => {
     setupSql,
     /0012_spiro_inspired_catalog_merchandising\.sql/,
   );
+  assert.match(
+    setupSql,
+    /Begin supabase\/migrations\/20260717140806_quarantine_unprovisioned_auth_users\.sql/,
+  );
+  assert.doesNotMatch(setupSql, /create the first company account at \/start/i);
 });

@@ -1,9 +1,12 @@
 "use server";
 
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { provisionRealtorAuthUser } from "@/lib/auth/provision-realtor";
+import { rollbackProvisionedRealtor } from "@/lib/auth/rollback-provisioned-realtor";
 import { totalDurationMinutes } from "@/lib/booking/services";
 import { ccRecipientsFor } from "@/lib/email/recipients";
 import { sendEmail } from "@/lib/email/resend";
@@ -93,30 +96,57 @@ export async function acceptRequest(
     return { ok: false, error: "Already accepted." };
   }
 
-  // 2. Find or create the auth user.
+  // 2. Reuse only an active realtor already in this organization, otherwise
+  // create a new trusted Auth user. Never move, promote, or reactivate an
+  // existing identity matched only by email.
   let userId: string | null = null;
+  let createdUserInRequest = false;
+  let provisioningId: string | null = null;
   try {
-    const { data: list } = await supabase.auth.admin.listUsers({
-      page: 1,
-      perPage: 200,
-    });
-    const found = list?.users.find(
-      (u) => u.email?.toLowerCase() === req.contact_email.toLowerCase(),
-    );
-    if (found) {
-      userId = found.id;
-    } else {
-      const { data: created, error: createErr } =
-        await supabase.auth.admin.createUser({
-          email: req.contact_email,
-          email_confirm: true,
-          user_metadata: { full_name: req.contact_name },
-        });
-      if (createErr || !created.user) {
-        console.error("[accept] createUser failed", createErr);
-        return { ok: false, error: "Could not create realtor account." };
+    const { data: existingProfile, error: profileLookupError } = await supabase
+      .from("profiles")
+      .select("id, organization_id, role, archived_at")
+      .ilike("email", req.contact_email)
+      .maybeSingle<{
+        id: string;
+        organization_id: string;
+        role: "admin" | "realtor";
+        archived_at: string | null;
+      }>();
+    if (profileLookupError) {
+      console.error("[accept] existing profile lookup failed", profileLookupError.code);
+      return { ok: false, error: "Could not verify the realtor account." };
+    }
+    if (existingProfile) {
+      if (
+        existingProfile.organization_id !== admin.organizationId ||
+        existingProfile.role !== "realtor" ||
+        existingProfile.archived_at
+      ) {
+        return {
+          ok: false,
+          error:
+            "That email belongs to an existing account that cannot be linked to this company. Contact support.",
+        };
       }
-      userId = created.user.id;
+      userId = existingProfile.id;
+    } else {
+      const provisioned = await provisionRealtorAuthUser({
+        service: supabase,
+        email: req.contact_email,
+        fullName: req.contact_name,
+        organizationId: admin.organizationId,
+        context: "inbox-create",
+      });
+      if (!provisioned.ok) {
+        return {
+          ok: false,
+          error: `${provisioned.message} Reference: ${provisioned.reference}`,
+        };
+      }
+      userId = provisioned.userId;
+      provisioningId = provisioned.provisioningId;
+      createdUserInRequest = true;
     }
   } catch (err) {
     console.error("[accept] auth lookup threw", err);
@@ -144,6 +174,21 @@ export async function acceptRequest(
 
   if (acceptErr || !bookingId) {
     console.error("[accept] transactional accept failed", acceptErr);
+    if (createdUserInRequest && userId && provisioningId) {
+      const rollback = await rollbackProvisionedRealtor({
+        userId,
+        provisioningId,
+        context: "inbox-accept",
+      });
+      if (rollback.status !== "deleted") {
+        return {
+          ok: false,
+          error:
+            "The request was not accepted. Do not retry; email info@pixelblastermedia.com and include this reference." +
+            (rollback.reference ? ` Reference: ${rollback.reference}` : ""),
+        };
+      }
+    }
     if (acceptErr?.code === "23P01") {
       return {
         ok: false,
@@ -305,6 +350,7 @@ async function sendShootConfirmedEmail(args: {
         error?.message,
       );
       const fallback = new URL("/auth/sign-in", appUrl);
+      fallback.searchParams.set("audience", "realtor");
       fallback.searchParams.set("next", "/portal");
       portalLink = fallback.toString();
       usedFallbackLink = true;
@@ -314,6 +360,7 @@ async function sendShootConfirmedEmail(args: {
   } catch (err) {
     console.warn("[accept.email] generateLink threw — using fallback.", err);
     const fallback = new URL("/auth/sign-in", appUrl);
+    fallback.searchParams.set("audience", "realtor");
     fallback.searchParams.set("next", "/portal");
     portalLink = fallback.toString();
     usedFallbackLink = true;

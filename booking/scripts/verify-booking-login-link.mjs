@@ -7,13 +7,13 @@ const layoutPath = join(root, "app/book/layout.tsx");
 const source = readFileSync(layoutPath, "utf8");
 
 const requiredSnippets = [
-  'href="/auth/sign-in?next=/portal"',
+  'href="/auth/sign-in?audience=realtor&next=/portal"',
   "Already booked?",
   "Open client portal",
 ];
 
 const missing = requiredSnippets.filter((snippet) => !source.includes(snippet));
-const portalLinkCount = source.match(/href="\/auth\/sign-in\?next=\/portal"/g)
+const portalLinkCount = source.match(/href="\/auth\/sign-in\?audience=realtor&next=\/portal"/g)
   ?.length ?? 0;
 
 if (missing.length > 0 || portalLinkCount < 1) {

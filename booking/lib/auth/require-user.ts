@@ -2,6 +2,7 @@ import "server-only";
 
 import { redirect } from "next/navigation";
 
+import { isMissingSessionError } from "@/lib/auth/session-error";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type { UserRole } from "@/lib/supabase/database.types";
 
@@ -40,30 +41,40 @@ export async function requireUser(nextPath?: string): Promise<UserContext> {
   const supabase = await getServerSupabase();
   const {
     data: { session },
+    error: sessionError,
   } = await supabase.auth.getSession();
+
+  if (sessionError && !isMissingSessionError(sessionError)) {
+    console.error("[auth] session refresh failed", sessionError.name);
+    redirect("/auth/access-unavailable");
+  }
 
   const userId = session?.access_token
     ? decodeUserIdFromJwt(session.access_token)
     : null;
 
   if (!userId) {
-    const suffix = nextPath ? `?next=${encodeURIComponent(nextPath)}` : "";
-    redirect(`/auth/sign-in${suffix}`);
+    const suffix = nextPath ? `&next=${encodeURIComponent(nextPath)}` : "";
+    redirect(`/auth/sign-in?audience=realtor${suffix}`);
   }
 
   const { data: profile, error } = await supabase
     .from("profiles")
     .select("id, organization_id, email, full_name, phone, archived_at, role")
     .eq("id", userId)
-    .single<ProfileRow>();
+    .maybeSingle<ProfileRow>();
 
-  if (error || !profile) {
-    console.warn("[auth] no profile for authed user", userId, error?.message);
-    redirect("/auth/sign-in");
+  if (error) {
+    console.error("[auth] profile lookup failed", error.code);
+    redirect("/auth/access-unavailable");
   }
-  if (profile.role === "realtor" && profile.archived_at) {
-    console.warn("[auth] archived realtor tried to access portal", userId);
-    redirect("/auth/sign-in");
+  if (!profile) {
+    console.warn("[auth] no profile for authed user", userId);
+    redirect("/auth/no-workspace");
+  }
+  if (profile.archived_at) {
+    console.warn("[auth] archived user tried to access the application", userId);
+    redirect("/auth/no-workspace");
   }
 
   return {

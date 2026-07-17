@@ -8,7 +8,8 @@
 -- First-time use:
 --   1. Paste this whole file into the Supabase SQL Editor.
 --   2. Run it once on an empty project database.
---   3. Deploy the app, then create the first company account at /start.
+--   3. Disable public Auth signup before exposing the project.
+--   4. Follow docs/auth-rollout.md and run the guarded first-company bootstrap.
 --
 -- Do not run this against a live database that already has user/customer data.
 -- Apply new files in supabase/migrations/ instead.
@@ -3535,4 +3536,1015 @@ notify pgrst, 'reload schema';
 
 -- ============================================================================
 -- End supabase/migrations/20260716141227_catalog_merchandising_columns.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260716183000_emergency_tenant_authorization_hardening.sql
+-- ============================================================================
+
+-- Emergency tenant authorization hardening.
+--
+-- This migration closes two release-blocking SaaS isolation defects:
+-- 1. authenticated browser clients could change privileged profile fields;
+-- 2. legacy global is_admin() policies crossed organization boundaries.
+
+create or replace function public.prevent_profile_authorization_self_change()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (select auth.uid()) is not null
+     and (
+       old.role is distinct from new.role
+       or old.organization_id is distinct from new.organization_id
+       or old.email is distinct from new.email
+       or old.archived_at is distinct from new.archived_at
+     ) then
+    raise exception 'Profile authorization fields cannot be changed'
+      using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.prevent_profile_authorization_self_change()
+  from public, anon, authenticated;
+
+drop trigger if exists profiles_prevent_authorization_self_change
+  on public.profiles;
+create trigger profiles_prevent_authorization_self_change
+  before update of role, organization_id, email, archived_at
+  on public.profiles
+  for each row execute function public.prevent_profile_authorization_self_change();
+
+-- Browser RLS authority requires all three facts to agree: the caller has an
+-- unarchived profile, that profile's active organization matches the target,
+-- and a privileged membership exists in that same organization.
+create or replace function public.is_organization_admin(target_org_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select exists (
+    select 1
+      from public.profiles p
+      join public.organization_members om
+        on om.profile_id = p.id
+       and om.organization_id = p.organization_id
+     where p.id = (select auth.uid())
+       and p.organization_id = target_org_id
+       and p.archived_at is null
+       and om.role in ('owner', 'admin')
+  );
+$$;
+
+revoke all on function public.is_organization_admin(uuid)
+  from public, anon;
+grant execute on function public.is_organization_admin(uuid)
+  to authenticated;
+
+-- organization_members represents the active organization selected on profiles.
+-- Enforce that invariant for service-role and browser writes alike. The lock
+-- closes the gap between validating existing rows and installing the trigger.
+lock table public.organization_members in share row exclusive mode;
+
+do $$
+begin
+  if exists (
+    select 1
+      from public.organization_members om
+      left join public.profiles p on p.id = om.profile_id
+     where p.id is null
+        or p.organization_id is distinct from om.organization_id
+  ) then
+    raise exception 'Existing organization membership does not match profile organization'
+      using errcode = '23514';
+  end if;
+end;
+$$;
+
+create or replace function public.enforce_membership_organization_match()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not exists (
+    select 1
+      from public.profiles p
+     where p.id = new.profile_id
+       and p.organization_id = new.organization_id
+  ) then
+    raise exception 'Membership organization must match profile organization'
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.enforce_membership_organization_match()
+  from public, anon, authenticated;
+
+drop trigger if exists organization_members_enforce_profile_organization
+  on public.organization_members;
+create trigger organization_members_enforce_profile_organization
+  before insert or update of organization_id, profile_id
+  on public.organization_members
+  for each row execute function public.enforce_membership_organization_match();
+
+-- Organizations are visible and editable only inside the caller's membership.
+-- Platform-wide creation/listing continues through server-only service-role code.
+drop policy if exists "organizations: admin read" on public.organizations;
+drop policy if exists "organizations: admin write" on public.organizations;
+drop policy if exists "organizations: org admin read" on public.organizations;
+drop policy if exists "organizations: org admin update" on public.organizations;
+
+create policy "organizations: org admin read"
+  on public.organizations for select
+  to authenticated
+  using (public.is_organization_admin(id));
+
+create policy "organizations: org admin update"
+  on public.organizations for update
+  to authenticated
+  using (public.is_organization_admin(id))
+  with check (public.is_organization_admin(id));
+
+-- Membership reads stay available to the member and that organization's
+-- administrators. Writes can only target an organization the caller already
+-- administers, preventing creation of a membership in another tenant.
+drop policy if exists "organization_members: self or admin read"
+  on public.organization_members;
+drop policy if exists "organization_members: admin write"
+  on public.organization_members;
+drop policy if exists "organization_members: self or org admin read"
+  on public.organization_members;
+drop policy if exists "organization_members: org admin insert"
+  on public.organization_members;
+drop policy if exists "organization_members: org admin update"
+  on public.organization_members;
+drop policy if exists "organization_members: org admin delete"
+  on public.organization_members;
+
+create policy "organization_members: self or org admin read"
+  on public.organization_members for select
+  to authenticated
+  using (
+    profile_id = (select auth.uid())
+    or public.is_organization_admin(organization_id)
+  );
+
+create policy "organization_members: org admin insert"
+  on public.organization_members for insert
+  to authenticated
+  with check (public.is_organization_admin(organization_id));
+
+create policy "organization_members: org admin update"
+  on public.organization_members for update
+  to authenticated
+  using (public.is_organization_admin(organization_id))
+  with check (public.is_organization_admin(organization_id));
+
+create policy "organization_members: org admin delete"
+  on public.organization_members for delete
+  to authenticated
+  using (public.is_organization_admin(organization_id));
+
+-- These tables contain OAuth tokens, provider API credentials, or notification
+-- recipient PII. Runtime management already goes through requireAdmin() plus the
+-- service-role client, so authenticated browser clients need no direct policy.
+drop policy if exists "google_calendar_connection: admin read"
+  on public.google_calendar_connection;
+drop policy if exists "google_calendar_connection: admin write"
+  on public.google_calendar_connection;
+
+drop policy if exists "booking_notifications_admin_all"
+  on public.booking_notifications;
+
+drop policy if exists "integration_credentials: admin read"
+  on public.integration_credentials;
+drop policy if exists "integration_credentials: admin write"
+  on public.integration_credentials;
+drop policy if exists "integration_credentials: org admin read"
+  on public.integration_credentials;
+drop policy if exists "integration_credentials: org admin write"
+  on public.integration_credentials;
+
+drop policy if exists "quickbooks_connection: admin read"
+  on public.quickbooks_connection;
+drop policy if exists "quickbooks_connection: admin write"
+  on public.quickbooks_connection;
+drop policy if exists "quickbooks_connection: org admin read"
+  on public.quickbooks_connection;
+drop policy if exists "quickbooks_connection: org admin write"
+  on public.quickbooks_connection;
+
+-- No remaining policy depends on the legacy global helper. Keep it unavailable
+-- through PostgREST so tenant users cannot invoke a platform-wide role oracle.
+revoke all on function public.is_admin()
+  from public, anon, authenticated;
+
+-- ============================================================================
+-- End supabase/migrations/20260716183000_emergency_tenant_authorization_hardening.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260716210000_tenant_scope_deliverable_external_ids.sql
+-- ============================================================================
+
+-- Tenant-scope provider identities stored on deliverables.
+-- A provider may reuse the same external ID in two unrelated accounts; those
+-- rows must not conflict across organizations.
+
+alter table public.deliverables
+  add column if not exists organization_id uuid
+  references public.organizations(id) on delete cascade;
+
+-- Keep the backfill, validation, trigger installation, and constraint swap in
+-- one migration transaction without a concurrent-write gap.
+lock table public.deliverables in share row exclusive mode;
+
+update public.deliverables d
+set organization_id = b.organization_id
+from public.bookings b
+where b.id = d.booking_id
+  and d.organization_id is distinct from b.organization_id;
+
+do $$
+begin
+  if exists (
+    select 1
+    from public.deliverables d
+    left join public.bookings b on b.id = d.booking_id
+    left join public.properties p on p.id = d.property_id
+    where b.id is null
+       or p.id is null
+       or b.property_id is distinct from d.property_id
+       or b.organization_id is distinct from p.organization_id
+       or d.organization_id is distinct from b.organization_id
+  ) then
+    raise exception 'Cannot tenant-scope deliverables: booking/property organization mismatch exists';
+  end if;
+end;
+$$;
+
+create or replace function public.set_deliverable_organization()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  booking_organization_id uuid;
+  booking_property_id uuid;
+  property_organization_id uuid;
+begin
+  select b.organization_id, b.property_id
+    into booking_organization_id, booking_property_id
+  from public.bookings b
+  where b.id = new.booking_id;
+
+  select p.organization_id
+    into property_organization_id
+  from public.properties p
+  where p.id = new.property_id;
+
+  if booking_organization_id is null or property_organization_id is null then
+    raise exception 'Deliverable booking and property must exist';
+  end if;
+
+  if new.property_id is distinct from booking_property_id then
+    raise exception 'Deliverable property must match its booking property';
+  end if;
+
+  if booking_organization_id is distinct from property_organization_id then
+    raise exception 'Deliverable booking and property must belong to the same organization';
+  end if;
+
+  if new.organization_id is null then
+    new.organization_id := booking_organization_id;
+  elsif new.organization_id is distinct from booking_organization_id then
+    raise exception 'Deliverable organization must match its booking and property';
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.set_deliverable_organization() from public;
+revoke all on function public.set_deliverable_organization() from anon;
+revoke all on function public.set_deliverable_organization() from authenticated;
+
+drop trigger if exists deliverables_set_organization on public.deliverables;
+create trigger deliverables_set_organization
+before insert or update of organization_id, booking_id, property_id
+on public.deliverables
+for each row execute function public.set_deliverable_organization();
+
+alter table public.deliverables
+  alter column organization_id set not null;
+
+alter table public.deliverables
+  drop constraint if exists deliverables_source_external_id_key;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.deliverables'::regclass
+      and conname = 'deliverables_organization_source_external_id_key'
+      and contype = 'u'
+  ) then
+    alter table public.deliverables
+      add constraint deliverables_organization_source_external_id_key
+      unique (organization_id, source, external_id);
+  end if;
+end;
+$$;
+
+create index if not exists deliverables_organization_idx
+  on public.deliverables(organization_id);
+
+-- ============================================================================
+-- End supabase/migrations/20260716210000_tenant_scope_deliverable_external_ids.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260716223000_company_invitation_auth_recovery.sql
+-- ============================================================================
+
+-- Quarantine pending company owners, recover ambiguous Auth mutations, and
+-- atomically claim tenant membership only after workspace provisioning succeeds.
+
+create or replace function public.handle_new_auth_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  -- Pending invitation users must not inherit the default organization. Without
+  -- a profile, all normal application authorization paths fail closed.
+  if new.raw_app_meta_data ? 'company_invitation_id' then
+    return new;
+  end if;
+
+  insert into public.profiles (id, email, full_name)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'full_name', null)
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+create or replace function public.find_company_invitation_auth_user(
+  p_invitation_id uuid
+)
+returns uuid
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  matching_ids uuid[];
+begin
+  select array_agg(u.id order by u.id)
+  into matching_ids
+  from auth.users u
+  where u.raw_app_meta_data ->> 'company_invitation_id' = p_invitation_id::text;
+
+  if coalesce(cardinality(matching_ids), 0) = 0 then
+    return null;
+  end if;
+  if cardinality(matching_ids) <> 1 then
+    raise exception 'company invitation marker is not unique';
+  end if;
+  return matching_ids[1];
+end;
+$$;
+
+create or replace function public.claim_company_invitation_owner(
+  p_invitation_id uuid,
+  p_user_id uuid,
+  p_organization_id uuid,
+  p_email text,
+  p_full_name text
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  existing_profile_org uuid;
+  profile_exists boolean;
+begin
+  if not exists (
+    select 1
+    from auth.users u
+    where u.id = p_user_id
+      and lower(u.email) = lower(p_email)
+      and u.raw_app_meta_data ->> 'company_invitation_id' = p_invitation_id::text
+  ) then
+    raise exception 'invitation identity mismatch';
+  end if;
+
+  select p.organization_id
+  into existing_profile_org
+  from public.profiles p
+  where p.id = p_user_id
+  for update;
+  profile_exists := found;
+
+  if profile_exists and existing_profile_org is distinct from p_organization_id then
+    raise exception 'invitation user already belongs to another organization';
+  end if;
+
+  if exists (
+    select 1
+    from public.organization_members om
+    where om.profile_id = p_user_id
+      and om.organization_id <> p_organization_id
+  ) then
+    raise exception 'invitation user already has another organization membership';
+  end if;
+
+  if profile_exists then
+    update public.profiles
+    set email = lower(p_email),
+        full_name = p_full_name,
+        role = 'admin'
+    where id = p_user_id
+      and organization_id = p_organization_id;
+  else
+    insert into public.profiles (
+      id,
+      organization_id,
+      email,
+      full_name,
+      role
+    ) values (
+      p_user_id,
+      p_organization_id,
+      lower(p_email),
+      p_full_name,
+      'admin'
+    );
+  end if;
+
+  insert into public.organization_members (
+    organization_id,
+    profile_id,
+    role
+  ) values (
+    p_organization_id,
+    p_user_id,
+    'owner'
+  )
+  on conflict (organization_id, profile_id)
+  do update set role = 'owner';
+end;
+$$;
+
+revoke all on function public.find_company_invitation_auth_user(uuid) from public;
+revoke all on function public.find_company_invitation_auth_user(uuid) from anon;
+revoke all on function public.find_company_invitation_auth_user(uuid) from authenticated;
+grant execute on function public.find_company_invitation_auth_user(uuid) to service_role;
+
+revoke all on function public.claim_company_invitation_owner(uuid, uuid, uuid, text, text) from public;
+revoke all on function public.claim_company_invitation_owner(uuid, uuid, uuid, text, text) from anon;
+revoke all on function public.claim_company_invitation_owner(uuid, uuid, uuid, text, text) from authenticated;
+grant execute on function public.claim_company_invitation_owner(uuid, uuid, uuid, text, text) to service_role;
+
+-- ============================================================================
+-- End supabase/migrations/20260716223000_company_invitation_auth_recovery.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260717140806_quarantine_unprovisioned_auth_users.sql
+-- ============================================================================
+
+-- Close generic Supabase Auth signup at the database boundary and make realtor
+-- provisioning explicitly tenant-bound. Existing legitimate realtors are marked
+-- only when they have booking provenance; any ambiguous historical profile aborts
+-- this migration for manual review instead of being guessed or deleted.
+
+-- Historical booking-created realtors predate the trusted app_metadata marker.
+-- A booking owned by the profile is durable evidence that the account was used in
+-- the realtor workflow. Keep the profile organization as the trusted tenant.
+do $$
+declare
+  mismatch_count integer;
+begin
+  select count(*)
+  into mismatch_count
+  from public.bookings b
+  join public.profiles p on p.id = b.owner_id
+  where b.organization_id is distinct from p.organization_id;
+
+  if mismatch_count > 0 then
+    raise exception 'cross-tenant booking owner/profile mismatch(es) remain: %', mismatch_count
+      using errcode = 'P0001',
+            hint = 'Reconcile booking and profile organizations before applying this migration.';
+  end if;
+end;
+$$;
+
+update auth.users u
+set raw_app_meta_data =
+  coalesce(u.raw_app_meta_data, '{}'::jsonb) ||
+  jsonb_build_object('realtor_organization_id', p.organization_id::text)
+from public.profiles p
+where p.id = u.id
+  and p.role = 'realtor'
+  and not (coalesce(u.raw_app_meta_data, '{}'::jsonb) ? 'realtor_organization_id')
+  and exists (
+    select 1
+    from public.bookings b
+    where b.owner_id = p.id
+      and b.organization_id = p.organization_id
+  );
+
+-- Fail closed if a realtor profile still lacks reviewed provenance. Operations
+-- must remove an unauthorized profile and its memberships or set a reviewed
+-- matching marker before retrying. Never auto-classify an account with no booking.
+do $$
+declare
+  unreviewed_count integer;
+  marker record;
+  parsed_organization_id uuid;
+begin
+  for marker in
+    select
+      p.id,
+      p.organization_id,
+      u.raw_app_meta_data ->> 'realtor_organization_id' as marker_value
+    from public.profiles p
+    join auth.users u on u.id = p.id
+    where p.role = 'realtor'
+      and coalesce(u.raw_app_meta_data, '{}'::jsonb) ?
+        'realtor_organization_id'
+  loop
+    begin
+      parsed_organization_id := marker.marker_value::uuid;
+    exception
+      when invalid_text_representation then
+        raise exception 'realtor % has malformed organization provenance', marker.id
+          using errcode = '22023';
+    end;
+
+    if parsed_organization_id is distinct from marker.organization_id then
+      raise exception 'realtor % provenance does not match profile organization', marker.id
+        using errcode = 'P0001';
+    end if;
+
+    if not exists (
+      select 1
+      from public.organizations o
+      where o.id = parsed_organization_id
+    ) then
+      raise exception 'realtor % provenance references a missing organization', marker.id
+        using errcode = '23503';
+    end if;
+  end loop;
+
+  select count(*)
+  into unreviewed_count
+  from public.profiles p
+  join auth.users u on u.id = p.id
+  where p.role = 'realtor'
+    and not (
+      coalesce(u.raw_app_meta_data, '{}'::jsonb) ?
+      'realtor_organization_id'
+    );
+
+  if unreviewed_count > 0 then
+    raise exception 'unreviewed realtor profile(s) remain: %', unreviewed_count
+      using errcode = 'P0001',
+            hint = 'Review each unmarked realtor before applying this migration.';
+  end if;
+end;
+$$;
+
+create or replace function public.handle_new_auth_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  realtor_organization_id uuid;
+begin
+  -- Owner invitations intentionally remain profile-less until their token is
+  -- claimed atomically by the invitation workflow.
+  if new.raw_app_meta_data ? 'company_invitation_id' then
+    return new;
+  end if;
+
+  -- raw_app_meta_data is controlled by Supabase admin/service-role operations.
+  -- Rejecting here rolls back the auth.users insert, so direct anon signup/OAuth
+  -- cannot reserve an email or create an unassigned Auth identity.
+  if not (new.raw_app_meta_data ? 'realtor_organization_id') then
+    raise exception 'public signup is disabled; trusted provisioning marker required'
+      using errcode = '42501';
+  end if;
+
+  begin
+    realtor_organization_id :=
+      nullif(new.raw_app_meta_data ->> 'realtor_organization_id', '')::uuid;
+  exception
+    when invalid_text_representation then
+      raise exception 'invalid realtor organization marker'
+        using errcode = '22023';
+  end;
+
+  if realtor_organization_id is null or not exists (
+    select 1
+    from public.organizations o
+    where o.id = realtor_organization_id
+  ) then
+    raise exception 'realtor organization does not exist'
+      using errcode = '23503';
+  end if;
+
+  insert into public.profiles (
+    id,
+    email,
+    full_name,
+    organization_id,
+    role
+  )
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data ->> 'full_name', null),
+    realtor_organization_id,
+    'realtor'
+  )
+  on conflict (id) do nothing;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.handle_new_auth_user()
+  from public, anon, authenticated;
+
+-- The service-only request-acceptance RPC must not move or reactivate an Auth
+-- identity. Its owner must already be an active realtor in the requested tenant.
+create or replace function public.create_booking_from_request(
+  p_organization_id uuid,
+  p_request_id uuid,
+  p_owner_id uuid,
+  p_scheduled_at timestamptz,
+  p_scheduled_ends_at timestamptz
+)
+returns uuid
+language plpgsql
+set search_path = ''
+as $$
+declare
+  req public.booking_requests%rowtype;
+  new_property_id uuid;
+  new_booking_id uuid;
+begin
+  select *
+    into req
+    from public.booking_requests
+    where id = p_request_id
+      and organization_id = p_organization_id
+    for update;
+
+  if not found then
+    raise exception 'Booking request not found'
+      using errcode = 'P0002';
+  end if;
+
+  if req.status = 'accepted' then
+    raise exception 'Booking request already accepted'
+      using errcode = 'P0001';
+  end if;
+
+  perform 1
+  from public.profiles p
+  where p.id = p_owner_id
+    and p.organization_id = p_organization_id
+    and p.role = 'realtor'
+    and p.archived_at is null
+  for update;
+
+  if not found then
+    raise exception 'booking owner is not an active realtor in this organization'
+      using errcode = '42501';
+  end if;
+
+  update public.profiles
+    set full_name = req.contact_name,
+        phone = req.contact_phone,
+        brokerage = req.brokerage
+    where id = p_owner_id
+      and organization_id = p_organization_id;
+
+  insert into public.properties (
+    organization_id,
+    owner_id,
+    street_address,
+    city,
+    province,
+    postal_code
+  ) values (
+    p_organization_id,
+    p_owner_id,
+    req.street_address,
+    req.city,
+    coalesce(req.province, 'ON'),
+    req.postal_code
+  )
+  returning id into new_property_id;
+
+  insert into public.bookings (
+    organization_id,
+    property_id,
+    owner_id,
+    status,
+    scheduled_at,
+    scheduled_ends_at,
+    services,
+    add_ons,
+    square_footage,
+    client_notes
+  ) values (
+    p_organization_id,
+    new_property_id,
+    p_owner_id,
+    'confirmed',
+    p_scheduled_at,
+    p_scheduled_ends_at,
+    req.services,
+    req.add_ons,
+    req.square_footage,
+    req.notes
+  )
+  returning id into new_booking_id;
+
+  update public.booking_requests
+    set status = 'accepted',
+        booking_id = new_booking_id
+    where id = p_request_id
+      and organization_id = p_organization_id;
+
+  return new_booking_id;
+end;
+$$;
+
+revoke all on function public.create_booking_from_request(
+  uuid,
+  uuid,
+  uuid,
+  timestamptz,
+  timestamptz
+) from public, anon, authenticated;
+
+grant execute on function public.create_booking_from_request(
+  uuid,
+  uuid,
+  uuid,
+  timestamptz,
+  timestamptz
+) to service_role;
+
+create table if not exists public.auth_recovery_grants (
+  jti_hash text primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  expires_at timestamptz not null,
+  consumed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+alter table public.auth_recovery_grants enable row level security;
+revoke all on table public.auth_recovery_grants from public, anon, authenticated;
+grant select, insert, update, delete on table public.auth_recovery_grants to service_role;
+
+create or replace function public.consume_auth_recovery_grant(
+  p_jti_hash text,
+  p_user_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.auth_recovery_grants
+  set consumed_at = now()
+  where jti_hash = p_jti_hash
+    and user_id = p_user_id
+    and consumed_at is null
+    and expires_at > now();
+  return found;
+end;
+$$;
+
+revoke all on function public.consume_auth_recovery_grant(text, uuid)
+  from public, anon, authenticated;
+grant execute on function public.consume_auth_recovery_grant(text, uuid)
+  to service_role;
+
+create table if not exists public.provisioning_cleanup_events (
+  id uuid primary key,
+  auth_user_id uuid,
+  provisioning_id uuid,
+  property_id uuid,
+  status text not null check (status in ('quarantined', 'retained', 'failed')),
+  context text not null,
+  detail text,
+  created_at timestamptz not null default now(),
+  resolved_at timestamptz
+);
+
+alter table public.provisioning_cleanup_events enable row level security;
+revoke all on table public.provisioning_cleanup_events from public, anon, authenticated;
+grant select, insert, update on table public.provisioning_cleanup_events to service_role;
+
+create or replace function public.find_realtor_provisioning_auth_user(
+  p_provisioning_id uuid,
+  p_organization_id uuid
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  matched_ids uuid[];
+begin
+  select array_agg(u.id order by u.created_at)
+  into matched_ids
+  from auth.users u
+  where u.raw_app_meta_data ->> 'realtor_provisioning_id' = p_provisioning_id::text
+    and u.raw_app_meta_data ->> 'realtor_organization_id' = p_organization_id::text;
+
+  if coalesce(array_length(matched_ids, 1), 0) > 1 then
+    raise exception 'Provisioning marker is not unique.';
+  end if;
+  return matched_ids[1];
+end;
+$$;
+
+revoke all on function public.find_realtor_provisioning_auth_user(uuid, uuid)
+  from public, anon, authenticated;
+grant execute on function public.find_realtor_provisioning_auth_user(uuid, uuid)
+  to service_role;
+
+create or replace function public.bootstrap_first_company_owner(
+  p_invitation_id uuid,
+  p_user_id uuid,
+  p_email text,
+  p_full_name text,
+  p_company_name text,
+  p_company_slug text,
+  p_primary_color text,
+  p_accent_color text
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  default_organization_id constant uuid := '00000000-0000-0000-0000-000000000001';
+begin
+  perform pg_advisory_xact_lock(hashtext('pixel-blaster-first-company-bootstrap'));
+
+  if exists (select 1 from public.profiles)
+     or exists (
+       select 1 from public.organization_members where role in ('owner', 'admin')
+     ) then
+    raise exception 'first company already bootstrapped';
+  end if;
+
+  if not exists (
+    select 1 from auth.users u
+    where u.id = p_user_id
+      and lower(u.email) = lower(p_email)
+      and u.raw_app_meta_data ->> 'company_invitation_id' = p_invitation_id::text
+  ) then
+    raise exception 'bootstrap identity mismatch';
+  end if;
+
+  insert into public.profiles (
+    id, organization_id, email, full_name, role
+  ) values (
+    p_user_id, default_organization_id, lower(p_email), p_full_name, 'admin'
+  );
+
+  insert into public.organization_members (
+    organization_id, profile_id, role
+  ) values (
+    default_organization_id, p_user_id, 'owner'
+  );
+
+  update public.organizations
+  set name = p_company_name,
+      slug = p_company_slug,
+      primary_color = p_primary_color,
+      accent_color = p_accent_color
+  where id = default_organization_id;
+
+  if not found then
+    raise exception 'default organization missing';
+  end if;
+end;
+$$;
+
+revoke all on function public.bootstrap_first_company_owner(
+  uuid, uuid, text, text, text, text, text, text
+) from public, anon, authenticated;
+grant execute on function public.bootstrap_first_company_owner(
+  uuid, uuid, text, text, text, text, text, text
+) to service_role;
+
+-- Quarantine a synthetic realtor only when no successful or concurrent work
+-- depends on that identity. FK checks keep a concurrent insert from racing the
+-- profile deletion; any such race aborts this transaction instead of deleting
+-- an identity that another request has committed.
+create or replace function public.quarantine_unbooked_realtor(
+  p_user_id uuid,
+  p_property_id uuid,
+  p_provisioning_id uuid
+)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not exists (
+    select 1 from auth.users u
+    where u.id = p_user_id
+      and u.raw_app_meta_data ->> 'realtor_provisioning_id' = p_provisioning_id::text
+  ) then
+    return 'retained';
+  end if;
+
+  if exists (
+    select 1 from public.bookings where owner_id = p_user_id
+  ) or exists (
+    select 1
+    from public.organization_members
+    where profile_id = p_user_id
+      and role in ('owner', 'admin')
+  ) then
+    return 'retained';
+  end if;
+
+  if p_property_id is not null then
+    delete from public.properties
+    where id = p_property_id
+      and owner_id = p_user_id
+      and not exists (
+        select 1 from public.bookings where property_id = p_property_id
+      );
+  end if;
+
+  if exists (
+    select 1 from public.properties where owner_id = p_user_id
+  ) then
+    return 'retained';
+  end if;
+
+  delete from public.organization_members
+  where profile_id = p_user_id;
+
+  delete from public.profiles
+  where id = p_user_id
+    and role = 'realtor';
+
+  if found or not exists (
+    select 1 from public.profiles where id = p_user_id
+  ) then
+    return 'quarantined';
+  end if;
+
+  return 'retained';
+end;
+$$;
+
+revoke all on function public.quarantine_unbooked_realtor(uuid, uuid, uuid)
+  from public, anon, authenticated;
+grant execute on function public.quarantine_unbooked_realtor(uuid, uuid, uuid)
+  to service_role;
+
+-- ============================================================================
+-- End supabase/migrations/20260717140806_quarantine_unprovisioned_auth_users.sql
 -- ============================================================================

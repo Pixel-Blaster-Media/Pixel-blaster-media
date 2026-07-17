@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { provisionRealtorAuthUser } from "@/lib/auth/provision-realtor";
+import { rollbackProvisionedRealtor } from "@/lib/auth/rollback-provisioned-realtor";
 import {
   BUSINESS_TZ,
   businessDateTimeLocalToUtc,
@@ -199,12 +201,20 @@ export async function createAdminShoot(
     .map((item) => item.slug);
 
   const supabase = getServiceSupabase();
-  const userId = await findOrCreateRealtor({
+  const realtor = await findOrCreateRealtor({
     organizationId: admin.organizationId,
     email: contactEmail,
     fullName: contactName,
   });
-  if (!userId) return { ok: false, error: "Could not create realtor account." };
+  if (!realtor) {
+    return {
+      ok: false,
+      error:
+        "Could not create the realtor account. If this email already has a sign-in, contact support.",
+    };
+  }
+  if ("error" in realtor) return { ok: false, error: realtor.error };
+  const userId = realtor.userId;
 
   await supabase
     .from("profiles")
@@ -230,7 +240,19 @@ export async function createAdminShoot(
     province,
     postalCode,
   });
-  if (!propertyId) return { ok: false, error: "Could not save property." };
+  if (!propertyId) {
+    if (realtor.newlyCreated) {
+      const rollback = await rollbackProvisionedRealtor({
+        userId,
+        provisioningId: realtor.provisioningId!,
+        context: "calendar-property",
+      });
+      if (rollback.status !== "deleted") {
+        return { ok: false, error: cleanupReference(rollback.reference) };
+      }
+    }
+    return { ok: false, error: "Could not save property." };
+  }
 
   const scheduledEndsAt = new Date(
     scheduledAt.getTime() + duration * 60_000,
@@ -256,6 +278,17 @@ export async function createAdminShoot(
 
   if (bookingError || !booking) {
     console.error("[admin-calendar] booking insert failed", bookingError);
+    if (realtor.newlyCreated) {
+      const rollback = await rollbackProvisionedRealtor({
+        userId,
+        propertyId,
+        provisioningId: realtor.provisioningId!,
+        context: "calendar-booking",
+      });
+      if (rollback.status !== "deleted") {
+        return { ok: false, error: cleanupReference(rollback.reference) };
+      }
+    }
     if (bookingError?.code === "23P01") {
       return {
         ok: false,
@@ -652,41 +685,62 @@ export async function moveCalendarBlock(
   return { ok: true };
 }
 
+function cleanupReference(reference: string | null): string {
+  return (
+    "The booking was not completed. Do not retry; email info@pixelblastermedia.com and include this reference." +
+    (reference ? ` Reference: ${reference}` : "")
+  );
+}
+
 async function findOrCreateRealtor(args: {
   organizationId: string;
   email: string;
   fullName: string;
-}): Promise<string | null> {
-  const supabase = getServiceSupabase();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, archived_at")
-    .eq("organization_id", args.organizationId)
-    .eq("email", args.email)
-    .limit(1)
-    .maybeSingle<{ id: string; archived_at: string | null }>();
-  if (profile?.id) {
-    if (profile.archived_at) {
-      await supabase
-        .from("profiles")
-        .update({
-          archived_at: null,
-          full_name: args.fullName,
-          role: "realtor",
-        })
-        .eq("organization_id", args.organizationId)
-        .eq("id", profile.id);
+}): Promise<
+  | {
+      userId: string;
+      newlyCreated: boolean;
+      provisioningId: string | null;
     }
-    return profile.id;
+  | { error: string }
+  | null
+> {
+  const supabase = getServiceSupabase();
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("id, organization_id, role, archived_at")
+    .ilike("email", args.email)
+    .maybeSingle<{
+      id: string;
+      organization_id: string;
+      role: "admin" | "realtor";
+      archived_at: string | null;
+    }>();
+  if (profileError) {
+    console.error("[admin-calendar] existing profile lookup failed", profileError.code);
+    return null;
+  }
+  if (profile?.id) {
+    if (
+      profile.organization_id !== args.organizationId ||
+      profile.role !== "realtor" ||
+      profile.archived_at
+    ) {
+      return null;
+    }
+    return { userId: profile.id, newlyCreated: false, provisioningId: null };
   }
 
-  const { data: created, error } = await supabase.auth.admin.createUser({
+  const provisioned = await provisionRealtorAuthUser({
+    service: supabase,
     email: args.email,
-    email_confirm: true,
-    user_metadata: { full_name: args.fullName },
+    fullName: args.fullName,
+    organizationId: args.organizationId,
+    context: "calendar-create",
   });
-  if (created.user) {
-    await supabase
+  if (provisioned.ok) {
+    const provisioningId = provisioned.provisioningId;
+    const { data: provisionedProfile, error: provisionError } = await supabase
       .from("profiles")
       .update({
         organization_id: args.organizationId,
@@ -694,36 +748,39 @@ async function findOrCreateRealtor(args: {
         role: "realtor",
         archived_at: null,
       })
-      .eq("id", created.user.id);
-    return created.user.id;
-  }
-
-  if (error?.message.toLowerCase().includes("already")) {
-    const { data: list } = await supabase.auth.admin.listUsers({
-      page: 1,
-      perPage: 200,
-    });
-    const found = list?.users.find(
-      (user) => user.email?.toLowerCase() === args.email,
-    );
-    if (found) {
-      await supabase
-        .from("profiles")
-        .update({
-          organization_id: args.organizationId,
-          full_name: args.fullName,
-          role: "realtor",
-          archived_at: null,
-        })
-        .eq("id", found.id);
-      return found.id;
+      .eq("id", provisioned.userId)
+      .eq("role", "realtor")
+      .is("archived_at", null)
+      .select("id")
+      .maybeSingle<{ id: string }>();
+    if (provisionError || !provisionedProfile) {
+      console.error(
+        "[admin-calendar] trusted realtor profile verification failed",
+        provisionError?.code ?? "missing_profile",
+      );
+      const rollback = await rollbackProvisionedRealtor({
+        userId: provisioned.userId,
+        provisioningId,
+        context: "calendar-profile-verification",
+      });
+      if (rollback.status !== "deleted") {
+        console.error(
+          "[admin-calendar] profile verification cleanup",
+          rollback.reference,
+        );
+        return { error: cleanupReference(rollback.reference) };
+      }
+      return null;
     }
+    return {
+      userId: provisionedProfile.id,
+      newlyCreated: true,
+      provisioningId,
+    };
   }
-
-  if (error) {
-    console.error("[admin-calendar] createUser failed", error);
-  }
-  return null;
+  return {
+    error: `${provisioned.message} Reference: ${provisioned.reference}`,
+  };
 }
 
 async function findOrCreateProperty(args: {

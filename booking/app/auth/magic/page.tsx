@@ -1,39 +1,51 @@
-import type { Metadata } from "next";
 import Link from "next/link";
+
+import {
+  buildLoginContinuationPath,
+  safePostAuthPath,
+  type LoginAudience,
+} from "@/lib/auth/account-destination";
 
 import SignInForm from "../sign-in/SignInForm";
 
-export const metadata: Metadata = {
-  title: "Magic link sign in",
-};
-
-export default async function MagicLinkSignInPage({
+export default async function MagicLinkPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ audience?: string; next?: string }>;
 }) {
   const params = await searchParams;
+  const audience: LoginAudience =
+    params.audience === "realtor" ? "realtor" : "company";
+  const continuation = params.next
+    ? safePostAuthPath(params.next)
+    : buildLoginContinuationPath(audience, null);
+  const backParams = new URLSearchParams({
+    audience,
+    next: continuation,
+  });
+
   return (
     <div className="space-y-6">
       <header>
-        <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
-          Pixel Blaster
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-realtor-primary">
+          {audience === "company" ? "Photography company" : "Realtor or agent"}
         </p>
         <h1 className="mt-2 text-3xl font-bold text-realtor-text">
           Email me a sign-in link
         </h1>
-        <p className="mt-2 text-sm text-realtor-muted">
-          Use this if you cannot get into your account with a password.
+        <p className="mt-2 text-sm leading-6 text-realtor-muted">
+          Enter the email already linked to your workspace. Unknown emails do
+          not create accounts.
         </p>
       </header>
-      <SignInForm next={params.next} />
+      <SignInForm next={continuation} />
       <p className="text-xs text-realtor-muted">
-        Know your password?{" "}
+        Prefer your password?{" "}
         <Link
-          href={`/auth/sign-in${params.next ? `?next=${encodeURIComponent(params.next)}` : ""}`}
-          className="text-realtor-primary underline"
+          href={`/auth/sign-in?${backParams.toString()}`}
+          className="font-semibold text-realtor-primary underline"
         >
-          Sign in with password
+          Return to login
         </Link>
         .
       </p>

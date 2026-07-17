@@ -12,7 +12,9 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "db:setup": "bash scripts/generate-supabase-setup.sh",
-    "db:types": "supabase gen types typescript --local > lib/supabase/database.types.ts"
+    "db:types": "supabase gen types typescript --local > lib/supabase/database.types.ts",
+    "bootstrap:first-company": "tsx scripts/bootstrap-first-company.ts",
+    "verify:auth-provisioning": "tsx scripts/verify-auth-provisioning.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1065.0",
@@ -34,6 +36,7 @@
     "eslint-config-next": "^15.5.15",
     "postcss": "^8.5.10",
     "tailwindcss": "^3.4.13",
+    "tsx": "^4.20.3",
     "typescript": "^5.6.2"
   },
   "engines": {

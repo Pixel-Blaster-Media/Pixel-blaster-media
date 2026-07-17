@@ -922,6 +922,18 @@ export interface Database {
       integration_credentials: IntegrationCredentialsTable;
       iguide_jobs: IGuideJobsTable;
       iguide_webhook_events: IGuideWebhookEventsTable;
+      auth_recovery_grants: {
+        Row: { jti_hash: string; user_id: string; expires_at: string; consumed_at: string | null; created_at: string };
+        Insert: { jti_hash: string; user_id: string; expires_at: string; consumed_at?: string | null; created_at?: string };
+        Update: { consumed_at?: string | null; expires_at?: string };
+        Relationships: [];
+      };
+      provisioning_cleanup_events: {
+        Row: { id: string; auth_user_id: string | null; provisioning_id: string | null; property_id: string | null; status: string; context: string; detail: string | null; created_at: string; resolved_at: string | null };
+        Insert: { id: string; auth_user_id?: string | null; provisioning_id?: string | null; property_id?: string | null; status: string; context: string; detail?: string | null; created_at?: string; resolved_at?: string | null };
+        Update: { status?: string; detail?: string | null; resolved_at?: string | null };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -939,6 +951,10 @@ export interface Database {
       };
       find_company_invitation_auth_user: {
         Args: { p_invitation_id: string };
+        Returns: string | null;
+      };
+      find_realtor_provisioning_auth_user: {
+        Args: { p_provisioning_id: string; p_organization_id: string };
         Returns: string | null;
       };
       claim_company_invitation_owner: {
@@ -960,6 +976,31 @@ export interface Database {
           p_scheduled_ends_at: string | null;
         };
         Returns: string;
+      };
+      quarantine_unbooked_realtor: {
+        Args: {
+          p_user_id: string;
+          p_property_id: string | null;
+          p_provisioning_id: string;
+        };
+        Returns: "quarantined" | "retained";
+      };
+      consume_auth_recovery_grant: {
+        Args: { p_jti_hash: string; p_user_id: string };
+        Returns: boolean;
+      };
+      bootstrap_first_company_owner: {
+        Args: {
+          p_invitation_id: string;
+          p_user_id: string;
+          p_email: string;
+          p_full_name: string;
+          p_company_name: string;
+          p_company_slug: string;
+          p_primary_color: string;
+          p_accent_color: string;
+        };
+        Returns: undefined;
       };
     };
     Enums: {

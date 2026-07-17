@@ -3,6 +3,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { safePostAuthPath } from "@/lib/auth/account-destination";
+
 type MutableCookieStore = {
   getAll(): Array<{ name: string; value: string }>;
   delete(name: string): void;
@@ -44,7 +46,7 @@ export async function signInWithPassword(
 ): Promise<PasswordSignInState> {
   const email = ((formData.get("email") as string | null) ?? "").trim().toLowerCase();
   const password = ((formData.get("password") as string | null) ?? "").toString();
-  const next = safeNextPath(
+  const next = safePostAuthPath(
     ((formData.get("next") as string | null) ?? "/admin").trim(),
   );
 
@@ -182,12 +184,4 @@ export async function signInWithPassword(
   });
 
   redirect(next);
-}
-
-function safeNextPath(next: string): string {
-  if (!next.startsWith("/") || next.startsWith("//") || next.includes("\\")) {
-    return "/admin";
-  }
-  if (next.startsWith("/auth/")) return "/admin";
-  return next;
 }
