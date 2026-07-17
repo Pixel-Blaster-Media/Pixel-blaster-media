@@ -377,6 +377,7 @@ interface IGuideWebhookEventsTable {
 interface DeliverablesTable {
   Row: {
     id: string;
+    organization_id: string;
     booking_id: string;
     property_id: string;
     type: DeliverableType;
@@ -392,6 +393,7 @@ interface DeliverablesTable {
   };
   Insert: {
     id?: string;
+    organization_id?: string;
     booking_id: string;
     property_id: string;
     type: DeliverableType;

@@ -76,15 +76,18 @@ export async function testPrepareDownload(input: {
     processedItems: number;
   }>
 > {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const listingId = normalizeListingId(input.listingId);
   if (!listingId) return { ok: false, error: "Listing ID is required." };
   try {
-    const download = await prepareDownload({
-      listingId,
-      photoFormats: input.photoFormats,
-      sections: input.sections,
-    });
+    const download = await prepareDownload(
+      {
+        listingId,
+        photoFormats: input.photoFormats,
+        sections: input.sections,
+      },
+      admin.organizationId,
+    );
     return {
       ok: true,
       listingId,
@@ -112,13 +115,18 @@ export async function diagnosePrepareDownload(input: {
     }
   | { ok: false; error: string; attempts: PrepareDownloadAttempt[] }
 > {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const listingId = normalizeListingId(input.listingId);
   if (!listingId) {
     return { ok: false, error: "Listing ID is required.", attempts: [] };
   }
 
-  const apiKey = await getCredential("fotello", "api_key", "FOTELLO_API_KEY");
+  const apiKey = await getCredential(
+    "fotello",
+    "api_key",
+    "FOTELLO_API_KEY",
+    admin.organizationId,
+  );
   if (!apiKey) {
     return {
       ok: false,
@@ -229,11 +237,11 @@ export async function diagnosePrepareDownload(input: {
 export async function testCreateListing(
   name: string,
 ): Promise<ActionResult<{ id: string }>> {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Listing name is required." };
   try {
-    const listing = await createListing(trimmed);
+    const listing = await createListing(trimmed, admin.organizationId);
     return { ok: true, id: listing.id };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
@@ -243,11 +251,11 @@ export async function testCreateListing(
 export async function testCreateUpload(
   filename: string,
 ): Promise<ActionResult<{ id: string; url: string; expires: string }>> {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const trimmed = filename.trim();
   if (!trimmed) return { ok: false, error: "Filename is required." };
   try {
-    const upload = await createUpload(trimmed);
+    const upload = await createUpload(trimmed, admin.organizationId);
     return {
       ok: true,
       id: upload.id,
@@ -269,7 +277,7 @@ export async function testUploadAndEnhance(formData: FormData): Promise<
     enhancedImageUrlExpires: string | null;
   }>
 > {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const listingName = String(formData.get("listingName") ?? "").trim();
   let listingId = String(formData.get("listingId") ?? "").trim();
   const shotType = String(formData.get("shotType") ?? "interior") === "exterior"
@@ -293,13 +301,13 @@ export async function testUploadAndEnhance(formData: FormData): Promise<
 
   try {
     if (!listingId) {
-      const listing = await createListing(listingName);
+      const listing = await createListing(listingName, admin.organizationId);
       listingId = listing.id;
     }
 
     const uploadIds: string[] = [];
     for (const file of files) {
-      const upload = await createUpload(file.name);
+      const upload = await createUpload(file.name, admin.organizationId);
       const put = await fetch(upload.url, {
         method: "PUT",
         headers: { "Content-Type": "application/octet-stream" },
@@ -314,8 +322,11 @@ export async function testUploadAndEnhance(formData: FormData): Promise<
       uploadIds.push(upload.id);
     }
 
-    const enhance = await createEnhance({ listingId, uploadIds, shotType });
-    const current = await getEnhance(enhance.id);
+    const enhance = await createEnhance(
+      { listingId, uploadIds, shotType },
+      admin.organizationId,
+    );
+    const current = await getEnhance(enhance.id, admin.organizationId);
     return {
       ok: true,
       listingId,
@@ -335,17 +346,20 @@ export async function testCreateEnhance(input: {
   uploadIds: string[];
   shotType: FotelloShotType;
 }): Promise<ActionResult<{ id: string }>> {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const listingId = input.listingId.trim();
   const uploadIds = input.uploadIds.map((id) => id.trim()).filter(Boolean);
   if (!listingId) return { ok: false, error: "Listing ID is required." };
   if (!uploadIds.length) return { ok: false, error: "At least one upload ID is required." };
   try {
-    const enhance = await createEnhance({
-      listingId,
-      uploadIds,
-      shotType: input.shotType,
-    });
+    const enhance = await createEnhance(
+      {
+        listingId,
+        uploadIds,
+        shotType: input.shotType,
+      },
+      admin.organizationId,
+    );
     return { ok: true, id: enhance.id };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
@@ -360,11 +374,11 @@ export async function testGetEnhance(id: string): Promise<
     enhancedImageUrlExpires: string | null;
   }>
 > {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const trimmed = id.trim();
   if (!trimmed) return { ok: false, error: "Enhance ID is required." };
   try {
-    const enhance = await getEnhance(trimmed);
+    const enhance = await getEnhance(trimmed, admin.organizationId);
     return {
       ok: true,
       id: enhance.id,

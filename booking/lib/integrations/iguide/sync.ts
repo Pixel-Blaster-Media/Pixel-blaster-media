@@ -799,7 +799,7 @@ async function upsertDeliverables(
   // refreshed.
   const { error: upsertError } = await supabase
     .from("deliverables")
-    .upsert(rows, { onConflict: "source,external_id" });
+    .upsert(rows, { onConflict: "organization_id,source,external_id" });
   if (upsertError) {
     console.error("[iguide.sync] deliverable upsert failed", upsertError);
     return {

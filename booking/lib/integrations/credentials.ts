@@ -11,7 +11,8 @@ import { getServiceSupabase } from "@/lib/supabase/server";
  * given key is:
  *
  *   1. The named field on the provider's row, if present and non-empty.
- *   2. The matching environment variable, as a fallback.
+ *   2. For the default Pixel Blaster organization only, the matching
+ *      deployment environment variable as a legacy fallback.
  *   3. null.
  *
  * Migration is lazy: existing env-var-only setups keep working until
@@ -52,7 +53,7 @@ function cacheKey(provider: Provider, organizationId: string): string {
 
 async function loadProvider(
   provider: Provider,
-  organizationId = DEFAULT_ORGANIZATION_ID,
+  organizationId: string,
 ): Promise<Record<string, string>> {
   const key = cacheKey(provider, organizationId);
   const cached = cache.get(key);
@@ -68,7 +69,7 @@ async function loadProvider(
 
   if (error) {
     console.warn(
-      `[credentials] DB read failed for ${provider} — falling back to env`,
+      `[credentials] DB read failed for ${provider}`,
       error.message,
     );
     return {};
@@ -88,12 +89,15 @@ export async function getCredential(
   provider: Provider,
   field: string,
   envVar: string,
-  organizationId = DEFAULT_ORGANIZATION_ID,
+  organizationId: string,
 ): Promise<string | null> {
   const row = await loadProvider(provider, organizationId);
   const fromDb = row[field]?.trim();
   if (fromDb) return fromDb;
-  const fromEnv = process.env[envVar]?.trim();
+  const fromEnv =
+    organizationId === DEFAULT_ORGANIZATION_ID
+      ? process.env[envVar]?.trim()
+      : undefined;
   return fromEnv || null;
 }
 
@@ -108,14 +112,17 @@ export async function getCredentialSource(
   provider: Provider,
   field: string,
   envVar: string,
-  organizationId = DEFAULT_ORGANIZATION_ID,
+  organizationId: string,
 ): Promise<{ source: CredentialSource; hint?: string }> {
   const row = await loadProvider(provider, organizationId);
   const fromDb = row[field]?.trim();
   if (fromDb) {
     return { source: "db", hint: lastFour(fromDb) };
   }
-  const fromEnv = process.env[envVar]?.trim();
+  const fromEnv =
+    organizationId === DEFAULT_ORGANIZATION_ID
+      ? process.env[envVar]?.trim()
+      : undefined;
   if (fromEnv) {
     return { source: "env", hint: lastFour(fromEnv) };
   }
@@ -131,7 +138,7 @@ export async function saveCredentials(
   provider: Provider,
   fields: Record<string, string>,
   updatedBy: string | null,
-  organizationId = DEFAULT_ORGANIZATION_ID,
+  organizationId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = getServiceSupabase();
 
@@ -160,14 +167,14 @@ export async function saveCredentials(
 }
 
 /**
- * Remove specific fields from a provider's stored credentials. After
- * this, those fields fall back to env vars again. Use this when the
- * admin clicks "clear" on a credential field.
+ * Remove specific fields from a provider's stored credentials. The default
+ * organization may then use its legacy environment fallback; every other
+ * organization becomes unconfigured. Use this when an admin clicks "clear".
  */
 export async function clearCredentialFields(
   provider: Provider,
   fields: string[],
-  organizationId = DEFAULT_ORGANIZATION_ID,
+  organizationId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = getServiceSupabase();
   const existing = await loadProvider(provider, organizationId);
@@ -195,8 +202,8 @@ export async function clearCredentialFields(
 }
 
 function clearCredentialsCache(
-  provider?: Provider,
-  organizationId = DEFAULT_ORGANIZATION_ID,
+  provider: Provider | undefined,
+  organizationId: string,
 ): void {
   if (provider) cache.delete(cacheKey(provider, organizationId));
   else cache.clear();

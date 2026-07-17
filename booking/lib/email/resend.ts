@@ -27,7 +27,7 @@ interface SendEmailArgs {
   /** Reply-To override; useful so client replies go to your real inbox. */
   replyTo?: string;
   /** Company scope for credentials, sender display name, and reply-to defaults. */
-  organizationId?: string | null;
+  organizationId: string;
 }
 
 export interface SendEmailResult {
@@ -43,7 +43,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
       "resend",
       "api_key",
       "RESEND_API_KEY",
-      args.organizationId ?? undefined,
+      args.organizationId,
     ),
     getOrganizationEmailSettings(args.organizationId),
   ]);
