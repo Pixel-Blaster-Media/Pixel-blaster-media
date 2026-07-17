@@ -1,6 +1,25 @@
 const INTERNAL_ORIGIN = "https://internal.invalid";
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 
+export function safeAppOrigin(
+  configuredOrigin: string | undefined,
+  fallbackOrigin: string,
+): string {
+  for (const candidate of [configuredOrigin, fallbackOrigin]) {
+    if (!candidate) continue;
+    try {
+      const parsed = new URL(candidate);
+      const isLocalHttp =
+        parsed.protocol === "http:" &&
+        (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1");
+      if (parsed.protocol === "https:" || isLocalHttp) return parsed.origin;
+    } catch {
+      // Try the trusted request-origin fallback next.
+    }
+  }
+  return INTERNAL_ORIGIN;
+}
+
 export function safeNextPath(
   next: string | null,
   fallback = "/admin/settings/business?welcome=1",
