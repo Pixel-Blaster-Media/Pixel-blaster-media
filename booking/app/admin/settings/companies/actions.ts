@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requirePlatformAdmin } from "@/lib/auth/require-platform-admin";
 import {
   cleanText,
-  createCompanyWorkspace,
+  createCompanyWorkspaceWithInvitation,
   normalizeCompanySlug,
   type CompanySetupResult,
 } from "@/lib/platform/company-setup";
@@ -17,12 +17,11 @@ export async function createCompany(
   formData: FormData,
 ): Promise<CreateCompanyResult> {
   const platformAdmin = await requirePlatformAdmin();
-  const result = await createCompanyWorkspace({
+  const result = await createCompanyWorkspaceWithInvitation({
     companyName: cleanText(formData.get("company_name")),
     slug: normalizeCompanySlug(cleanText(formData.get("slug"))),
     adminName: cleanText(formData.get("admin_name")),
     adminEmail: cleanText(formData.get("admin_email")).toLowerCase(),
-    adminPassword: String(formData.get("admin_password") ?? ""),
     primaryColor: cleanText(formData.get("primary_color")) || "#3f7f5f",
     accentColor: cleanText(formData.get("accent_color")) || "#c9a35b",
     copyCatalog: formData.get("copy_catalog") === "on",
