@@ -25,7 +25,9 @@ const recoveryMigrationUrl = new URL(
 const recoveryMigration = existsSync(recoveryMigrationUrl)
   ? readFileSync(recoveryMigrationUrl, "utf8")
   : "";
-const { safeNextPath } = await import("../lib/auth/safe-next-path.ts");
+const { safeAppOrigin, safeNextPath } = await import(
+  "../lib/auth/safe-next-path.ts"
+);
 
 test("platform company onboarding sends a one-time owner invitation instead of collecting a password", () => {
   assert.doesNotMatch(companyFormSource, /name="admin_password"/);
@@ -132,6 +134,10 @@ test("owner invitation confirms its token hash into a server-side session", () =
   assert.match(source, /verifyOtp\(\{/);
   assert.match(source, /token_hash:\s*tokenHash/);
   assert.match(source, /safeNextPath\(next\)/);
+  assert.match(
+    source,
+    /safeAppOrigin\(\s*process\.env\.NEXT_PUBLIC_APP_URL,\s*url\.origin,?\s*\)/,
+  );
 });
 
 test("invitation confirmation accepts only normalized same-origin paths", () => {
@@ -149,5 +155,19 @@ test("invitation confirmation accepts only normalized same-origin paths", () => 
   assert.equal(
     safeNextPath("/auth/confirm?token_hash=secret", fallback),
     fallback,
+  );
+});
+
+test("invitation confirmation redirects to the configured canonical app origin", () => {
+  assert.equal(
+    safeAppOrigin(
+      "https://www.pixelblastermedia.com",
+      "https://internal.vercel.app",
+    ),
+    "https://www.pixelblastermedia.com",
+  );
+  assert.equal(
+    safeAppOrigin("javascript:alert(1)", "https://internal.vercel.app"),
+    "https://internal.vercel.app",
   );
 });
