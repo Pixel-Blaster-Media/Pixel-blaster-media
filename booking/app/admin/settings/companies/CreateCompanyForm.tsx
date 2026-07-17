@@ -74,8 +74,8 @@ export default function CreateCompanyForm() {
             First admin
           </p>
           <p className="mt-2 text-sm leading-6 text-realtor-muted">
-            Use a real email for the owner/operator. They can sign in with this
-            temporary password, then change it from the password reset flow.
+            Use the owner/operator&apos;s real email. We will send a one-time
+            invitation that opens their private setup checklist.
           </p>
         </div>
 
@@ -91,15 +91,6 @@ export default function CreateCompanyForm() {
           type="email"
           required
           placeholder="alex@example.com"
-        />
-        <Field
-          label="Temporary password"
-          name="admin_password"
-          type="password"
-          required
-          minLength={10}
-          placeholder="At least 10 characters"
-          helper="Store this somewhere safe before sending it to the new company."
         />
 
         <label className="flex items-start gap-3 rounded-2xl border border-realtor-primary/15 bg-realtor-soft/35 p-4">
@@ -138,7 +129,7 @@ export default function CreateCompanyForm() {
             disabled={pending}
             className="rounded-full bg-realtor-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-realtor-text/10 transition hover:bg-realtor-primary/90 disabled:cursor-not-allowed disabled:opacity-55"
           >
-            {pending ? "Creating..." : "Create company"}
+            {pending ? "Creating..." : "Create company and send invitation"}
           </button>
         </div>
 
@@ -149,7 +140,14 @@ export default function CreateCompanyForm() {
         ) : null}
         {state.ok ? (
           <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-900">
-            <p className="font-semibold">{state.companyName} is ready.</p>
+            <p className="font-semibold">
+              {state.invitationSent
+                ? `${state.companyName} is ready and the owner invitation was sent.`
+                : `${state.companyName} is ready, but invitation delivery was not confirmed.`}
+            </p>
+            {state.warning ? (
+              <p className="mt-1 font-medium">{state.warning}</p>
+            ) : null}
             <p className="mt-1">
               Admin: {state.adminEmail} · Booking link:{" "}
               <code className="rounded bg-white/70 px-1.5 py-0.5">

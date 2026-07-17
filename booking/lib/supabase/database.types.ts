@@ -937,6 +937,20 @@ export interface Database {
         Args: { target_org_id: string };
         Returns: boolean;
       };
+      find_company_invitation_auth_user: {
+        Args: { p_invitation_id: string };
+        Returns: string | null;
+      };
+      claim_company_invitation_owner: {
+        Args: {
+          p_invitation_id: string;
+          p_user_id: string;
+          p_organization_id: string;
+          p_email: string;
+          p_full_name: string;
+        };
+        Returns: undefined;
+      };
       create_booking_from_request: {
         Args: {
           p_organization_id: string;

@@ -1,6 +1,9 @@
 import "server-only";
 
+import { createHash } from "crypto";
+
 import { emailHasAccount } from "@/lib/auth/email-lookup";
+import { sendEmail } from "@/lib/email/resend";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { CatalogItemKind, Database } from "@/lib/supabase/database.types";
@@ -32,13 +35,20 @@ export interface ExistingUserCompanySetupInput {
   sourceCatalogOrganizationId?: string;
 }
 
+export type InvitationCompanySetupInput = Omit<
+  CompanySetupInput,
+  "adminPassword"
+>;
+
 export interface CompanySetupResult {
   ok: boolean;
   error?: string;
+  warning?: string;
   companyName?: string;
   slug?: string;
   adminEmail?: string;
   bookingPath?: string;
+  invitationSent?: boolean;
 }
 
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
@@ -107,10 +117,17 @@ export async function createCompanyWorkspace(
       });
     if (memberError) throw new Error(memberError.message);
   } catch (err) {
-    await cleanupFailedCompany(organization.id, createdUserId);
+    const cleanupError = await cleanupFailedCompany(
+      organization.id,
+      createdUserId,
+    );
+    const originalError =
+      err instanceof Error ? err.message : "Company setup failed.";
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Company setup failed.",
+      error: cleanupError
+        ? `${originalError} Automatic cleanup failed: ${cleanupError}`
+        : originalError,
     };
   }
 
@@ -120,6 +137,163 @@ export async function createCompanyWorkspace(
     slug: organization.slug,
     adminEmail: input.adminEmail,
     bookingPath: `/book?org=${organization.slug}`,
+  };
+}
+
+export async function createCompanyWorkspaceWithInvitation(
+  input: InvitationCompanySetupInput,
+): Promise<CompanySetupResult> {
+  const service = getServiceSupabase();
+  const validation = validateCompanySetupInput(input, { requirePassword: false });
+  if (validation) return { ok: false, error: validation };
+
+  const appUrl = normalizedAppUrl();
+  if (!appUrl) {
+    return { ok: false, error: "Company invitations are not configured." };
+  }
+
+  const { invitationId, organizationId } = invitationRecoveryIds(input.adminEmail);
+  const recoveryReference = invitationId.slice(0, 8);
+
+  const slugCheck = await ensureSlugAvailable(input.slug, organizationId);
+  if (slugCheck) return { ok: false, error: slugCheck };
+
+  // Recover a prior accepted-but-response-lost attempt before mutating Auth.
+  // A found marker is safe to resume because only service-role code can set it.
+  let recovery = await recoverInvitationAuthUser(invitationId);
+  if (recovery.status === "unresolved") {
+    return {
+      ok: false,
+      error: `Invitation recovery is temporarily unavailable. Retry the same email and company handle (reference ${recoveryReference}).`,
+    };
+  }
+
+  let createdUserId: string;
+  if (recovery.status === "found") {
+    createdUserId = recovery.userId;
+  } else {
+    let created;
+    let createUserError;
+    try {
+      const result = await service.auth.admin.createUser({
+        email: input.adminEmail,
+        email_confirm: false,
+        user_metadata: { full_name: input.adminName },
+        app_metadata: { company_invitation_id: invitationId },
+      });
+      created = result.data;
+      createUserError = result.error;
+    } catch {
+      created = { user: null };
+      createUserError = new Error("Auth creation response was unavailable.");
+    }
+
+    if (createUserError || !created.user) {
+      recovery = await recoverInvitationAuthUser(invitationId, {
+        waitForCommit: true,
+      });
+      if (recovery.status === "unresolved") {
+        return {
+          ok: false,
+          error: `Invitation account state is unresolved. Retry the same email and company handle (reference ${recoveryReference}).`,
+        };
+      }
+      if (recovery.status === "found") {
+        createdUserId = recovery.userId;
+      } else {
+        return {
+          ok: false,
+          error: createUserError
+            ? "That email already has an account or could not be invited."
+            : "Could not create owner invitation.",
+        };
+      }
+    } else {
+      createdUserId = created.user.id;
+    }
+  }
+
+  let organization: { id: string; name: string; slug: string } | null = null;
+  try {
+    organization = await createOrganization(input, organizationId);
+    await seedStarterWorkspace(input, organization.id, { idempotent: true });
+
+    const generated = await service.auth.admin.generateLink({
+      type: "magiclink",
+      email: input.adminEmail,
+    });
+    const hashedToken = generated.data.properties?.hashed_token;
+    const createdUser = generated.data.user;
+    if (
+      generated.error ||
+      !createdUser ||
+      !hashedToken ||
+      createdUser.id !== createdUserId
+    ) {
+      throw new Error(
+        generated.error?.message ?? "Could not create owner invitation.",
+      );
+    }
+
+    const invitationUrl = new URL("/auth/confirm", appUrl);
+    invitationUrl.searchParams.set("token_hash", hashedToken);
+    invitationUrl.searchParams.set(
+      "next",
+      "/admin/settings/business?welcome=1",
+    );
+
+    const { error: claimError } = await service.rpc(
+      "claim_company_invitation_owner",
+      {
+        p_invitation_id: invitationId,
+        p_user_id: createdUserId,
+        p_organization_id: organization.id,
+        p_email: input.adminEmail,
+        p_full_name: input.adminName,
+      },
+    );
+    if (claimError) throw new Error(claimError.message);
+
+    const invitation = await sendEmail({
+      to: input.adminEmail,
+      subject: `You are invited to ${organization.name}`,
+      html: companyOwnerInvitationHtml({
+        adminName: input.adminName,
+        companyName: organization.name,
+        actionLink: invitationUrl.toString(),
+      }),
+      organizationId: DEFAULT_ORGANIZATION_ID,
+    });
+    if (!invitation.ok || invitation.skipped) {
+      // A mail provider may accept a message while its response is lost. Keep
+      // the valid company and account so a possibly delivered link never dies.
+      return {
+        ok: true,
+        companyName: organization.name,
+        slug: organization.slug,
+        adminEmail: input.adminEmail,
+        bookingPath: `/book?org=${organization.slug}`,
+        invitationSent: false,
+        warning:
+          "The company was created, but invitation delivery could not be confirmed. Ask the owner to use email sign-in.",
+      };
+    }
+  } catch (err) {
+    const originalError =
+      err instanceof Error ? err.message : "Company invitation failed.";
+    return {
+      ok: false,
+      error: `${originalError} Review the error and retry this owner email (reference ${recoveryReference}).`,
+    };
+  }
+
+  return {
+    ok: true,
+    companyName: organization.name,
+    slug: organization.slug,
+    adminEmail: input.adminEmail,
+    bookingPath: `/book?org=${organization.slug}`,
+    invitationSent: true,
   };
 }
 
@@ -165,10 +339,14 @@ export async function createCompanyWorkspaceForExistingUser(
       });
     if (memberError) throw new Error(memberError.message);
   } catch (err) {
-    await cleanupFailedCompany(organization.id, null);
+    const cleanupError = await cleanupFailedCompany(organization.id, null);
+    const originalError =
+      err instanceof Error ? err.message : "Company setup failed.";
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Company setup failed.",
+      error: cleanupError
+        ? `${originalError} Automatic cleanup failed: ${cleanupError}`
+        : originalError,
     };
   }
 
@@ -196,7 +374,7 @@ export function normalizeCompanySlug(value: string): string {
 }
 
 function validateCompanySetupInput(
-  input: CompanySetupInput | ExistingUserCompanySetupInput,
+  input: CompanySetupInput | ExistingUserCompanySetupInput | InvitationCompanySetupInput,
   options: { requirePassword: boolean },
 ): string | null {
   if (!input.companyName) return "Company name is required.";
@@ -218,7 +396,43 @@ function validateCompanySetupInput(
   return null;
 }
 
-async function ensureSlugAvailable(slug: string): Promise<string | null> {
+function normalizedAppUrl(): string | null {
+  const value = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+function companyOwnerInvitationHtml(input: {
+  adminName: string;
+  companyName: string;
+  actionLink: string;
+}): string {
+  const name = escapeHtml(input.adminName);
+  const company = escapeHtml(input.companyName);
+  const link = escapeHtml(input.actionLink);
+  return `<p>Hi ${name},</p><p>Your private ${company} booking workspace is ready.</p><p><a href="${link}">Open your workspace</a></p><p>This is a one-time sign-in link. After signing in, finish the launch checklist and set your password from the sign-in reset flow.</p>`;
+}
+
+function escapeHtml(value: string): string {
+  const entities: Record<string, string> = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  };
+  return value.replace(/[&<>"']/g, (character) => entities[character]);
+}
+
+async function ensureSlugAvailable(
+  slug: string,
+  allowedOrganizationId?: string,
+): Promise<string | null> {
   const service = getServiceSupabase();
   const { data: existingOrg, error: slugError } = await service
     .from("organizations")
@@ -226,48 +440,80 @@ async function ensureSlugAvailable(slug: string): Promise<string | null> {
     .eq("slug", slug)
     .maybeSingle<{ id: string }>();
   if (slugError) return slugError.message;
-  if (existingOrg) return "That company handle is already taken.";
+  if (existingOrg && existingOrg.id !== allowedOrganizationId) {
+    return "That company handle is already taken.";
+  }
   return null;
 }
 
 async function createOrganization(
-  input: CompanySetupInput | ExistingUserCompanySetupInput,
+  input: CompanySetupInput | ExistingUserCompanySetupInput | InvitationCompanySetupInput,
+  organizationId?: string,
 ): Promise<{ id: string; name: string; slug: string }> {
   const service = getServiceSupabase();
+  if (organizationId) {
+    const { data: existingOrganization, error: existingError } = await service
+      .from("organizations")
+      .select("id, name, slug")
+      .eq("id", organizationId)
+      .maybeSingle<{ id: string; name: string; slug: string }>();
+    if (existingError) throw new Error(existingError.message);
+    if (existingOrganization) {
+      if (existingOrganization.slug !== input.slug) {
+        throw new Error(
+          "That owner email is already associated with another company invitation.",
+        );
+      }
+      return existingOrganization;
+    }
+  }
+
+  const values = {
+    ...(organizationId ? { id: organizationId } : {}),
+    name: input.companyName,
+    slug: input.slug,
+    primary_color: input.primaryColor,
+    accent_color: input.accentColor,
+    email_from_name: input.companyName,
+    reply_to_email: input.adminEmail,
+    admin_notification_email: input.adminEmail,
+  };
   const { data: organization, error: orgError } = await service
     .from("organizations")
-    .insert({
-      name: input.companyName,
-      slug: input.slug,
-      primary_color: input.primaryColor,
-      accent_color: input.accentColor,
-      email_from_name: input.companyName,
-      reply_to_email: input.adminEmail,
-      admin_notification_email: input.adminEmail,
-    })
+    .insert(values)
     .select("id, name, slug")
     .single<{ id: string; name: string; slug: string }>();
 
   if (orgError || !organization) {
+    if (orgError?.code === "23505") {
+      throw new Error(
+        "The company handle was claimed by another setup. Refresh the company list and choose an available handle if needed.",
+      );
+    }
     throw new Error(orgError?.message ?? "Could not create company.");
   }
   return organization;
 }
 
 async function seedStarterWorkspace(
-  input: CompanySetupInput | ExistingUserCompanySetupInput,
+  input: CompanySetupInput | ExistingUserCompanySetupInput | InvitationCompanySetupInput,
   organizationId: string,
+  options: { idempotent?: boolean } = {},
 ): Promise<void> {
-  await seedBusinessHours(organizationId);
+  await seedBusinessHours(organizationId, options.idempotent);
   if (input.copyCatalog) {
     await copyStarterCatalog(
       input.sourceCatalogOrganizationId ?? DEFAULT_ORGANIZATION_ID,
       organizationId,
+      options.idempotent,
     );
   }
 }
 
-async function seedBusinessHours(organizationId: string): Promise<void> {
+async function seedBusinessHours(
+  organizationId: string,
+  idempotent = false,
+): Promise<void> {
   const service = getServiceSupabase();
   const rows = [0, 1, 2, 3, 4, 5, 6].map((day) => ({
     organization_id: organizationId,
@@ -276,13 +522,19 @@ async function seedBusinessHours(organizationId: string): Promise<void> {
     end_time: "17:00",
     enabled: day >= 1 && day <= 5,
   }));
-  const { error } = await service.from("business_hours").upsert(rows);
+  const { error } = await service.from("business_hours").upsert(
+    rows,
+    idempotent
+      ? { onConflict: "organization_id,day_of_week", ignoreDuplicates: true }
+      : undefined,
+  );
   if (error) throw new Error(`Could not seed business hours: ${error.message}`);
 }
 
 async function copyStarterCatalog(
   fromOrganizationId: string,
   toOrganizationId: string,
+  idempotent = false,
 ): Promise<void> {
   const service = getServiceSupabase();
   const { data, error } = await service
@@ -318,9 +570,13 @@ async function copyStarterCatalog(
       ideal_for: item.ideal_for,
     }),
   );
-  const { error: insertError } = await service
-    .from("catalog_items")
-    .insert(inserts);
+  const catalogMutation = idempotent
+    ? service.from("catalog_items").upsert(inserts, {
+        onConflict: "organization_id,slug",
+        ignoreDuplicates: true,
+      })
+    : service.from("catalog_items").insert(inserts);
+  const { error: insertError } = await catalogMutation;
   if (insertError) {
     throw new Error(`Could not copy starter catalog: ${insertError.message}`);
   }
@@ -332,21 +588,134 @@ function compactCatalogInsert(row: CatalogItemInsert): CatalogItemInsert {
   ) as CatalogItemInsert;
 }
 
-async function cleanupFailedCompany(
-  organizationId: string,
-  createdUserId: string | null,
-): Promise<void> {
+function invitationRecoveryIds(email: string): {
+  invitationId: string;
+  organizationId: string;
+} {
+  const normalizedEmail = email.trim().toLowerCase();
+  return {
+    invitationId: deterministicUuid("company-invitation", normalizedEmail),
+    organizationId: deterministicUuid("company-organization", normalizedEmail),
+  };
+}
+
+function deterministicUuid(namespace: string, value: string): string {
+  const hex = createHash("sha256")
+    .update(`${namespace}\0${value}`, "utf8")
+    .digest("hex")
+    .slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+type InvitationAuthRecovery =
+  | { status: "found"; userId: string }
+  | { status: "absent" }
+  | { status: "unresolved" };
+
+async function recoverInvitationAuthUser(
+  invitationId: string,
+  options: { waitForCommit?: boolean } = {},
+): Promise<InvitationAuthRecovery> {
   const service = getServiceSupabase();
-  if (createdUserId) {
-    await service.auth.admin.deleteUser(createdUserId);
+  const attempts = options.waitForCommit ? 5 : 1;
+  let finalStatus: "absent" | "unresolved" = "unresolved";
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const { data, error } = await service.rpc(
+        "find_company_invitation_auth_user",
+        { p_invitation_id: invitationId },
+      );
+      if (!error) {
+        if (typeof data === "string" && data) {
+          return { status: "found", userId: data };
+        }
+        finalStatus = data === null ? "absent" : "unresolved";
+      } else {
+        finalStatus = "unresolved";
+        console.error(
+          "[company-setup.recovery] invitation user lookup failed",
+          error.message,
+        );
+      }
+    } catch (error) {
+      finalStatus = "unresolved";
+      console.error(
+        "[company-setup.recovery] invitation user lookup failed",
+        error,
+      );
+    }
+    if (attempt < attempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+    }
   }
-  await service
-    .from("catalog_items")
-    .delete()
-    .eq("organization_id", organizationId);
-  await service
-    .from("business_hours")
-    .delete()
-    .eq("organization_id", organizationId);
-  await service.from("organizations").delete().eq("id", organizationId);
+
+  return { status: finalStatus };
+}
+
+async function cleanupFailedCompany(
+  organizationId: string | null,
+  createdUserId: string | null,
+): Promise<string | null> {
+  const service = getServiceSupabase();
+  const failures: string[] = [];
+
+  async function runStep(
+    label: string,
+    action: () => PromiseLike<{ error: { message: string } | null }>,
+  ): Promise<void> {
+    try {
+      const result = await action();
+      if (result.error) {
+        console.error(`[company-setup.cleanup] ${label}`, result.error.message);
+        failures.push(label);
+      }
+    } catch (error) {
+      console.error(`[company-setup.cleanup] ${label}`, error);
+      failures.push(label);
+    }
+  }
+
+  if (organizationId) {
+    if (createdUserId) {
+      await runStep("remove owner membership", () =>
+        service
+          .from("organization_members")
+          .delete()
+          .eq("organization_id", organizationId)
+          .eq("profile_id", createdUserId),
+      );
+      await runStep("remove owner profile", () =>
+        service
+          .from("profiles")
+          .delete()
+          .eq("organization_id", organizationId)
+          .eq("id", createdUserId),
+      );
+    }
+    await runStep("remove copied catalog", () =>
+      service
+        .from("catalog_items")
+        .delete()
+        .eq("organization_id", organizationId),
+    );
+    await runStep("remove business hours", () =>
+      service
+        .from("business_hours")
+        .delete()
+        .eq("organization_id", organizationId),
+    );
+    await runStep("remove organization", () =>
+      service.from("organizations").delete().eq("id", organizationId),
+    );
+  }
+
+  if (createdUserId) {
+    await runStep("remove auth user", async () => {
+      const result = await service.auth.admin.deleteUser(createdUserId);
+      return { error: result.error };
+    });
+  }
+
+  return failures.length ? failures.join(", ") : null;
 }
