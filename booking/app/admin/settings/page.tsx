@@ -4,216 +4,86 @@ import { hasPlatformAdminAccess } from "@/lib/auth/require-platform-admin";
 import { getCredentialSource } from "@/lib/integrations/credentials";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import CopyBookingLinkButton from "./business/CopyBookingLinkButton";
-import {
-  loadTodayCommandPreferences,
-  saveTodayCommandPreferences,
-} from "../today/actions";
-import type { TodayCommandPreferences } from "../today/preferences";
-import {
-  publicVapidKey,
-  pushNotificationsConfigured,
-} from "@/lib/notifications/push";
-import InstallAppCard from "./InstallAppCard";
 
-const SETTINGS_SECTIONS = [
+const SETTINGS_GROUPS = [
   {
-    href: "/admin/settings/business",
-    title: "Business profile",
-    description:
-      "Edit the company name, booking handle, and brand colors for this organization.",
-    details: [
-      "Keep business identity separate per company.",
-      "Reserve a clean booking handle for future branded links.",
-      "Set the base colors future themes can use.",
+    title: "Business setup",
+    description: "The essentials customers see and use when they book.",
+    sections: [
+      {
+        href: "/admin/settings/business",
+        title: "Business profile",
+        description: "Company identity, booking link, brand, and email sender details.",
+      },
+      {
+        href: "/admin/settings/availability",
+        title: "Availability",
+        description: "Working hours, booking windows, and time away.",
+      },
+      {
+        href: "/admin/settings/pricing",
+        title: "Pricing & services",
+        description: "Packages, add-ons, durations, and square-footage rules.",
+      },
     ],
   },
   {
-    href: "/admin/settings/availability",
-    title: "Availability",
-    description:
-      "Set working days, daily hours, and the windows realtors can book.",
-    details: [
-      "Control the public booking calendar.",
-      "Keep schedule rules separate per company.",
-      "Use calendar blocks for one-off time away.",
-    ],
-  },
-  {
-    href: "/admin/settings/pricing",
-    title: "Pricing",
-    description:
-      "Manage packages, add-ons, media badges, durations, and square-footage rules.",
-    details: [
-      "Update bundle prices and booking durations.",
-      "Control à-la-carte services and optional add-ons.",
-      "Tune square-footage pricing rules and package descriptions.",
-    ],
-  },
-  {
-    href: "/admin/settings/integrations",
-    title: "Integrations",
-    description: "Connect Google Calendar, email, QuickBooks, iGUIDE, and delivery tools.",
-    details: [
-      "Manage Google Calendar sync.",
-      "Test confirmation emails and notification delivery.",
-      "Connect QuickBooks, iGUIDE, and related delivery tools.",
+    title: "Tools & workflow",
+    description: "How the admin workspace behaves and connects to outside services.",
+    sections: [
+      {
+        href: "/admin/settings/integrations",
+        title: "Integrations",
+        description: "Calendar, accounting, delivery, email, maps, and AI connections.",
+      },
+      {
+        href: "/admin/settings/preferences",
+        title: "Workspace & app",
+        description: "Install the app, manage phone notifications, and set the company Today view.",
+      },
     ],
   },
 ] as const;
+
+const PLATFORM_GROUP = {
+  title: "Platform administration",
+  description: "Pixel Blaster platform controls, separate from this company’s settings.",
+  sections: [
+    {
+      href: "/admin/settings/companies",
+      title: "Companies",
+      description: "Create and manage isolated company workspaces and owner invitations.",
+    },
+  ],
+} as const;
 
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const admin = await requireAdmin();
-  const [readiness, todayPreferences] = await Promise.all([
-    loadLaunchReadiness(admin.organizationId),
-    loadTodayCommandPreferences(admin.organizationId),
-  ]);
-  const sections = (await hasPlatformAdminAccess(admin))
-    ? [
-        ...SETTINGS_SECTIONS,
-        {
-          href: "/admin/settings/companies",
-          title: "Companies",
-          description:
-            "Create a new photography company with its own booking handle, admin, catalog, and setup checklist.",
-          details: [
-            "Add the business and first admin account.",
-            "Seed default working hours and copy a starter catalog.",
-            "Keep client-company data separate for SaaS rollout.",
-          ],
-        },
-      ]
-    : SETTINGS_SECTIONS;
+  const readiness = await loadLaunchReadiness(admin.organizationId);
+  const groups = (await hasPlatformAdminAccess(admin))
+    ? [...SETTINGS_GROUPS, PLATFORM_GROUP]
+    : SETTINGS_GROUPS;
 
   return (
-    <div className="space-y-6">
-      <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-5 shadow-lg shadow-realtor-text/10">
-        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-realtor-primary/80">
-          Admin
+    <div className="space-y-7 pb-10">
+      <header className="max-w-3xl">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-realtor-primary/75">
+          Administration
         </p>
-        <h1 className="mt-2 text-2xl font-semibold text-realtor-text md:text-3xl">
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-realtor-text">
           Settings
         </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-realtor-muted">
-          Control how booking, pricing, availability, and connected tools work.
-          We can add more business preferences here as the system grows.
+        <p className="mt-2 text-sm leading-6 text-realtor-muted">
+          Set up the customer experience first, then connect the tools your team
+          uses behind the scenes.
         </p>
       </header>
 
       <LaunchReadinessCard readiness={readiness} />
-
-      <InstallAppCard
-        publicKey={publicVapidKey()}
-        configured={pushNotificationsConfigured()}
-      />
-
-      <TodayPreferencesCard preferences={todayPreferences} />
-
-      <SettingsHub sections={sections} />
+      <SettingsHub groups={groups} />
     </div>
-  );
-}
-
-function TodayPreferencesCard({
-  preferences,
-}: {
-  preferences: TodayCommandPreferences;
-}) {
-  return (
-    <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-5 shadow-lg shadow-realtor-text/10">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-realtor-primary/80">
-            Today view
-          </p>
-          <h2 className="mt-2 text-xl font-semibold text-realtor-text">
-            Daily command center reminders
-          </h2>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-realtor-muted">
-            Choose what appears on the Today page. Keep it focused for the way
-            you actually work in the morning.
-          </p>
-        </div>
-        <a
-          href="/admin/today"
-          className="rounded-full border border-realtor-primary/20 bg-white px-4 py-2 text-sm font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
-        >
-          Open Today
-        </a>
-      </div>
-      <form action={saveTodayCommandPreferences} className="mt-5 space-y-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <TodayPreferenceToggle
-            name="show_deliverables"
-            label="Delivery reminders"
-            description="Show unfinished media links and delivery checklist items."
-            checked={preferences.showDeliverables}
-          />
-          <TodayPreferenceToggle
-            name="show_agent_memory"
-            label="Agent memory"
-            description="Show saved realtor preferences and private reminder notes."
-            checked={preferences.showAgentMemory}
-          />
-          <TodayPreferenceToggle
-            name="show_route_warnings"
-            label="Route spacing"
-            description="Show tight gaps, city changes, and map links between shoots."
-            checked={preferences.showRouteWarnings}
-          />
-          <TodayPreferenceToggle
-            name="show_booking_notes"
-            label="Booking notes"
-            description="Show client notes and private notes on each shoot card."
-            checked={preferences.showBookingNotes}
-          />
-          <TodayPreferenceToggle
-            name="show_shoot_brief"
-            label="AI shoot brief"
-            description="Show the AI-generated shoot-day plan panel."
-            checked={preferences.showShootBrief}
-          />
-        </div>
-        <button
-          type="submit"
-          className="rounded-full bg-realtor-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-realtor-text/10 transition hover:bg-realtor-primary/90"
-        >
-          Save Today preferences
-        </button>
-      </form>
-    </section>
-  );
-}
-
-function TodayPreferenceToggle({
-  name,
-  label,
-  description,
-  checked,
-}: {
-  name: string;
-  label: string;
-  description: string;
-  checked: boolean;
-}) {
-  return (
-    <label className="flex gap-3 rounded-2xl border border-realtor-primary/12 bg-white/70 p-3 transition hover:border-realtor-primary/35 hover:bg-white">
-      <input
-        type="checkbox"
-        name={name}
-        defaultChecked={checked}
-        className="mt-1 h-4 w-4 accent-realtor-primary"
-      />
-      <span>
-        <span className="block text-sm font-semibold text-realtor-text">
-          {label}
-        </span>
-        <span className="mt-1 block text-xs leading-5 text-realtor-muted">
-          {description}
-        </span>
-      </span>
-    </label>
   );
 }
 
@@ -289,6 +159,9 @@ async function loadLaunchReadiness(
       organization?.admin_notification_email ||
       process.env.EMAIL_FROM,
   );
+  const googleConfigured = Boolean(
+    process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET,
+  );
   const items = [
     {
       title: "Business profile",
@@ -318,7 +191,7 @@ async function loadLaunchReadiness(
     {
       title: "Calendar sync",
       body: "Bookings can land on the photographer's calendar.",
-      done: Boolean(calendarConnection),
+      done: Boolean(calendarConnection && googleConfigured),
       href: "/admin/settings/integrations",
     },
     {
@@ -346,6 +219,7 @@ async function loadLaunchReadiness(
 
 function LaunchReadinessCard({ readiness }: { readiness: LaunchReadiness }) {
   const ready = readiness.completed === readiness.total;
+  const remainingItems = readiness.items.filter((item) => !item.done);
   return (
     <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-5 shadow-lg shadow-realtor-text/10">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -399,38 +273,38 @@ function LaunchReadinessCard({ readiness }: { readiness: LaunchReadiness }) {
         </div>
       </div>
 
-      <div className="mt-5 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-        {readiness.items.map((item) => (
-          <a
-            key={item.title}
-            href={item.href}
-            target={item.external ? "_blank" : undefined}
-            rel={item.external ? "noopener noreferrer" : undefined}
-            className="rounded-2xl border border-realtor-primary/12 bg-white/65 p-3 transition hover:border-realtor-primary/35 hover:bg-white"
-          >
-            <span className="flex items-start gap-2">
-              <span
-                className={
-                  "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold " +
-                  (item.done
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-amber-200 bg-amber-50 text-amber-700")
-                }
+      {remainingItems.length ? (
+        <div className="mt-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-800">
+            Needs attention
+          </p>
+          <div className="mt-2 grid gap-2 md:grid-cols-2">
+            {remainingItems.map((item) => (
+              <a
+                key={item.title}
+                href={item.href}
+                target={item.external ? "_blank" : undefined}
+                rel={item.external ? "noopener noreferrer" : undefined}
+                className="rounded-2xl border border-amber-200 bg-amber-50/70 p-3 transition hover:border-amber-300 hover:bg-amber-50"
               >
-                {item.done ? "✓" : "!"}
-              </span>
-              <span>
-                <span className="block text-sm font-semibold text-realtor-text">
-                  {item.title}
+                <span className="flex items-start gap-2">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-white text-[10px] font-bold text-amber-700">
+                    !
+                  </span>
+                  <span>
+                    <span className="block text-sm font-semibold text-realtor-text">
+                      {item.title}
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-realtor-muted">
+                      {item.body}
+                    </span>
+                  </span>
                 </span>
-                <span className="mt-1 block text-xs leading-5 text-realtor-muted">
-                  {item.body}
-                </span>
-              </span>
-            </span>
-          </a>
-        ))}
-      </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
