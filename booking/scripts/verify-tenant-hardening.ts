@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -28,11 +28,15 @@ function authenticatedClient() {
   });
 }
 
-async function createUser(email: string) {
+async function createUser(
+  email: string,
+  appMetadata: Record<string, string>,
+) {
   const result = await service.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
+    app_metadata: appMetadata,
   });
   if (result.error || !result.data.user) {
     throw new Error(result.error?.message ?? "user creation failed");
@@ -59,21 +63,36 @@ async function main() {
     }
     organizationId = organization.data.id;
 
-    adminId = await createUser(adminEmail);
+    adminId = await createUser(adminEmail, {
+      company_invitation_id: randomUUID(),
+    });
     const adminProfile = await service
       .from("profiles")
-      .update({ organization_id: organizationId, role: "admin" })
-      .eq("id", adminId);
+      .upsert({
+        id: adminId,
+        email: adminEmail,
+        organization_id: organizationId,
+        role: "admin",
+      });
     if (adminProfile.error) throw new Error(adminProfile.error.message);
 
-    realtorId = await createUser(realtorEmail);
+    realtorId = await createUser(realtorEmail, {
+      realtor_organization_id: organizationId,
+      realtor_provisioning_id: randomUUID(),
+    });
     const realtorProfile = await service
       .from("profiles")
-      .update({ organization_id: organizationId })
-      .eq("id", realtorId);
+      .upsert({
+        id: realtorId,
+        email: realtorEmail,
+        organization_id: organizationId,
+        role: "realtor",
+      });
     if (realtorProfile.error) throw new Error(realtorProfile.error.message);
 
-    foreignId = await createUser(foreignEmail);
+    foreignId = await createUser(foreignEmail, {
+      realtor_organization_id: DEFAULT_ORGANIZATION_ID,
+    });
 
     const adminClient = authenticatedClient();
     const adminSignIn = await adminClient.auth.signInWithPassword({

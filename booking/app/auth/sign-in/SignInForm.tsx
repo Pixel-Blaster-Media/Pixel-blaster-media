@@ -22,7 +22,7 @@ export default function SignInForm({ next }: { next?: string }) {
           name="email"
           autoComplete="email"
           required
-          className="realtor-field mt-1 w-full rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-realtor-primary/60"
+          className="realtor-field mt-1 min-h-11 w-full rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-realtor-primary/60"
         />
       </label>
       {state?.error ? (
@@ -41,7 +41,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="w-full rounded-full bg-realtor-primary px-4 py-2 font-semibold text-white transition hover:bg-realtor-primary-light disabled:cursor-not-allowed disabled:opacity-60"
+      className="min-h-11 w-full rounded-full bg-realtor-primary px-4 py-2 font-semibold text-white transition hover:bg-realtor-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-realtor-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
     >
       {pending ? "Sending…" : "Email me a sign-in link"}
     </button>

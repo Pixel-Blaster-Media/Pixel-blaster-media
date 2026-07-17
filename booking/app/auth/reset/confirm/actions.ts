@@ -1,24 +1,20 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { getServerSupabase } from "@/lib/supabase/server";
+import { clearRecoverySession } from "@/lib/auth/clear-recovery-session";
+import {
+  RECOVERY_GRANT_COOKIE,
+  verifyRecoveryGrant,
+} from "@/lib/auth/recovery-flow";
+import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
 
 export interface ResetConfirmState {
   error?: string;
+  needsFreshLink?: boolean;
 }
 
-/**
- * After the user lands on /auth/reset/confirm (they've exchanged the
- * recovery code for a session cookie via /auth/callback), they submit
- * a new password here. We call supabase.auth.updateUser({ password }),
- * which works for the current session — no old-password verification
- * required, because the recovery link IS the verification.
- *
- * On success we redirect to /portal (the signed-in home). They stay
- * signed in with the session that was minted during the recovery
- * exchange.
- */
 export async function setNewPassword(
   _prev: ResetConfirmState | null,
   formData: FormData,
@@ -33,22 +29,76 @@ export async function setNewPassword(
     return { error: "Passwords don't match — re-enter to confirm." };
   }
 
-  const supabase = await getServerSupabase();
+  let supabase: Awaited<ReturnType<typeof getServerSupabase>> | null = null;
+  try {
+  supabase = await getServerSupabase();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+  const cookieStore = await cookies();
+  const grant = user
+    ? verifyRecoveryGrant(
+        cookieStore.get(RECOVERY_GRANT_COOKIE)?.value,
+        user.id,
+      )
+    : null;
+  if (userError || !user || !grant) {
+    await clearRecoverySession(supabase);
     return {
-      error:
-        "Your reset session expired. Request a fresh link from /auth/reset.",
+      error: "Your reset authorization expired. Request a fresh password-reset link.",
+      needsFreshLink: true,
+    };
+  }
+
+  const consumed = await getServiceSupabase().rpc(
+    "consume_auth_recovery_grant",
+    { p_jti_hash: grant.jtiHash, p_user_id: user.id },
+  );
+  if (consumed.error) {
+    console.error("[auth/reset/confirm] grant consumption failed", consumed.error.code);
+    await clearRecoverySession(supabase);
+    return {
+      error: "We couldn't verify this reset. Request a fresh password-reset link.",
+      needsFreshLink: true,
+    };
+  }
+  if (!consumed.data) {
+    await clearRecoverySession(supabase);
+    return {
+      error: "This reset authorization was already used or expired. Request a fresh link.",
+      needsFreshLink: true,
     };
   }
 
   const { error } = await supabase.auth.updateUser({ password });
   if (error) {
     console.error("[auth/reset/confirm] updateUser failed", error.message);
-    return { error: `Could not set the new password: ${error.message}` };
+    await clearRecoverySession(supabase);
+    return {
+      error: "Could not set the new password. Request a fresh reset link and try again.",
+      needsFreshLink: true,
+    };
   }
 
-  redirect("/portal?password_updated=1");
+  cookieStore.set(RECOVERY_GRANT_COOKIE, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/auth/reset/confirm",
+    maxAge: 0,
+  });
+  } catch (error) {
+    console.error(
+      "[auth/reset/confirm] reset transport failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    await clearRecoverySession(supabase);
+    return {
+      error:
+        "We couldn't complete this reset. Request a fresh password-reset link before trying again.",
+      needsFreshLink: true,
+    };
+  }
+  redirect("/auth/continue?password_updated=1");
 }

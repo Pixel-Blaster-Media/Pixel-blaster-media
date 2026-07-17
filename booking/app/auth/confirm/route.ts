@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
 
 function signInRedirect(origin: string, error: string): NextResponse {
   const destination = new URL("/auth/sign-in", origin);
+  destination.searchParams.set("audience", "company");
   destination.searchParams.set("error", error);
   return NextResponse.redirect(destination);
 }

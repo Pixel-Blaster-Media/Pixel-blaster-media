@@ -187,10 +187,12 @@ function navigationForUser(
   }
 
   return [
-    { href: "/start", label: "Sign up" },
-    { href: "/auth/sign-in?next=/admin", label: "Sign in" },
+    { href: "/auth/sign-in", label: "Log in" },
     { href: "/book", label: "Book" },
-    { href: "/portal", label: "Client Portal" },
+    {
+      href: "/auth/sign-in?audience=realtor&next=%2Fportal",
+      label: "Realtor portal",
+    },
     {
       href: "https://www.pixelblastermedia.com",
       label: "Main Site ↗",

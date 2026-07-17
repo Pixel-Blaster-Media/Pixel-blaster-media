@@ -2040,6 +2040,7 @@ async function sendBookingConfirmationEmailBestEffort(args: {
       });
       if (error || !data?.properties?.action_link) {
         const fallback = new URL("/auth/sign-in", appUrl);
+        fallback.searchParams.set("audience", "realtor");
         fallback.searchParams.set("next", "/portal");
         portalLink = fallback.toString();
         usedFallbackLink = true;
@@ -2049,6 +2050,7 @@ async function sendBookingConfirmationEmailBestEffort(args: {
     } catch (err) {
       console.warn("[booking-edit] confirmation magic link failed", err);
       const fallback = new URL("/auth/sign-in", appUrl);
+      fallback.searchParams.set("audience", "realtor");
       fallback.searchParams.set("next", "/portal");
       portalLink = fallback.toString();
       usedFallbackLink = true;

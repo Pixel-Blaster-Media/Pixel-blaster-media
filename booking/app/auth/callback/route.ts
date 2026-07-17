@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { safePostAuthPath } from "@/lib/auth/account-destination";
 import { getServerSupabase } from "@/lib/supabase/server";
 
 /**
@@ -13,10 +14,17 @@ import { getServerSupabase } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next") ?? "/admin";
+  const providerError = url.searchParams.get("error");
+  const next = safePostAuthPath(url.searchParams.get("next"));
 
-  if (!code) {
-    return NextResponse.redirect(new URL("/auth/sign-in", url.origin));
+  if (providerError || !code) {
+    const failed = new URL("/auth/sign-in", url.origin);
+    failed.searchParams.set(
+      "error",
+      providerError ? "callback_failed" : "expired",
+    );
+    applyAudience(failed, next, url.origin);
+    return NextResponse.redirect(failed);
   }
 
   const supabase = await getServerSupabase();
@@ -26,18 +34,21 @@ export async function GET(request: NextRequest) {
     console.error("[auth] exchangeCodeForSession failed", error.message);
     const failed = new URL("/auth/sign-in", url.origin);
     failed.searchParams.set("error", "expired");
+    applyAudience(failed, next, url.origin);
     return NextResponse.redirect(failed);
   }
 
-  return NextResponse.redirect(new URL(safeNextPath(next), url.origin));
+  return NextResponse.redirect(new URL(next, url.origin));
 }
 
-function safeNextPath(next: string): string {
-  if (!next.startsWith("/") || next.startsWith("//") || next.includes("\\")) {
-    return "/admin";
+function applyAudience(destination: URL, next: string, origin: string): void {
+  const continuation = new URL(next, origin);
+  const audience = continuation.searchParams.get("audience");
+  if (audience === "company" || audience === "realtor") {
+    destination.searchParams.set("audience", audience);
   }
-  if (next.startsWith("/auth/") || next.startsWith("/start/oauth/")) {
-    return "/admin";
+  const requested = safePostAuthPath(continuation.searchParams.get("next"));
+  if (requested !== "/auth/continue") {
+    destination.searchParams.set("next", requested);
   }
-  return next;
 }

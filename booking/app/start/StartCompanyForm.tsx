@@ -170,7 +170,7 @@ export default function StartCompanyForm() {
 
       <p className="text-center text-sm text-realtor-muted">
         Already have an account?{" "}
-        <Link href="/auth/sign-in?next=/admin" className="text-realtor-primary underline">
+        <Link href="/auth/sign-in?audience=company&next=/admin" className="text-realtor-primary underline">
           Sign in
         </Link>
       </p>

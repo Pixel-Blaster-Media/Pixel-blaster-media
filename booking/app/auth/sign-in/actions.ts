@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { safePostAuthPath } from "@/lib/auth/account-destination";
 import { getServerSupabase } from "@/lib/supabase/server";
 
 export interface SignInState {
@@ -23,7 +24,9 @@ export async function sendMagicLink(
   const email = ((formData.get("email") as string | null) ?? "")
     .trim()
     .toLowerCase();
-  const next = ((formData.get("next") as string | null) ?? "/admin").trim();
+  const next = safePostAuthPath(
+    ((formData.get("next") as string | null) ?? "/auth/continue").trim(),
+  );
 
   if (!email) {
     return { error: "Please enter your email." };

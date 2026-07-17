@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 
+import { createRecoveryFlowToken } from "@/lib/auth/recovery-flow";
 import { getServerSupabase } from "@/lib/supabase/server";
 
 export interface ResetRequestState {
@@ -40,19 +41,32 @@ export async function requestPasswordReset(
     };
   }
 
-  const redirectTo = `${appUrl}/auth/callback?next=${encodeURIComponent(
-    "/auth/reset/confirm",
-  )}`;
+  try {
+    const recoveryCallback = new URL("/auth/recovery/callback", appUrl);
+    recoveryCallback.searchParams.set("flow", createRecoveryFlowToken(email));
+    const redirectTo = recoveryCallback.toString();
 
-  const supabase = await getServerSupabase();
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo,
-  });
+    const supabase = await getServerSupabase();
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo,
+    });
 
-  if (error) {
-    // We don't surface account-existence errors to the user, but we DO
-    // want to know about unexpected failures (e.g. SMTP down).
-    console.warn("[auth/reset] resetPasswordForEmail failed", error.message);
+    if (error) {
+      console.warn("[auth/reset] resetPasswordForEmail failed", error.message);
+      return {
+        error:
+          "We couldn't send a reset email right now. Please wait a moment and try again.",
+      };
+    }
+  } catch (error) {
+    console.error(
+      "[auth/reset] reset request transport failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return {
+      error:
+        "We couldn't send a reset email right now. Please wait a moment and try again.",
+    };
   }
 
   redirect(

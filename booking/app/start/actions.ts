@@ -1,80 +1,15 @@
 "use server";
 
-import { redirect } from "next/navigation";
-
-import {
-  setSupabaseSessionCookie,
-  signInWithPasswordREST,
-} from "@/lib/auth/set-session-cookie";
-import {
-  cleanText,
-  createCompanyWorkspace,
-  normalizeCompanySlug,
-  type CompanySetupResult,
-} from "@/lib/platform/company-setup";
+import type { CompanySetupResult } from "@/lib/platform/company-setup";
 
 export type StartCompanyResult = CompanySetupResult;
 
 export async function startCompanySignup(
   _prev: StartCompanyResult | null,
-  formData: FormData,
+  _formData: FormData,
 ): Promise<StartCompanyResult> {
-  if (process.env.ENABLE_PUBLIC_SIGNUP !== "1") {
-    return {
-      ok: false,
-      error: "Company signup is currently closed.",
-    };
-  }
-
-  if (cleanText(formData.get("website"))) {
-    return { ok: false, error: "Could not create this account." };
-  }
-
-  const adminName = cleanText(formData.get("admin_name"));
-  const adminEmail = cleanText(formData.get("admin_email")).toLowerCase();
-  const adminPassword = String(formData.get("admin_password") ?? "");
-  const companyName =
-    cleanText(formData.get("company_name")) || starterCompanyName(adminName);
-  const companySlug =
-    normalizeCompanySlug(cleanText(formData.get("company_slug"))) ||
-    starterCompanySlug(adminEmail);
-  const primaryColor = cleanText(formData.get("primary_color")) || "#3f7f5f";
-  const accentColor = cleanText(formData.get("accent_color")) || "#c9a35b";
-
-  const result = await createCompanyWorkspace({
-    companyName,
-    slug: companySlug,
-    adminName: cleanText(formData.get("admin_name")),
-    adminEmail,
-    adminPassword,
-    primaryColor,
-    accentColor,
-    copyCatalog: true,
-  });
-
-  if (!result.ok) return result;
-
-  const signIn = await signInWithPasswordREST(adminEmail, adminPassword);
-  if (!signIn.ok) {
-    return {
-      ok: false,
-      error:
-        "Your account was created, but automatic sign-in failed. Use the sign-in page with the email and password you just created.",
-    };
-  }
-
-  await setSupabaseSessionCookie(signIn.tokens, adminEmail);
-  redirect("/admin/settings/business?welcome=1");
-}
-
-function starterCompanyName(adminName: string): string {
-  const firstName = adminName.trim().split(/\s+/)[0];
-  return firstName ? `${firstName}'s Booking System` : "New Booking System";
-}
-
-function starterCompanySlug(adminEmail: string): string {
-  const localPart = adminEmail.split("@")[0] || "company";
-  const base = normalizeCompanySlug(localPart).slice(0, 32) || "company";
-  const suffix = Math.random().toString(36).slice(2, 8);
-  return `${base}-${suffix}`;
+  return {
+    ok: false,
+    error: "Company signup is currently closed. New companies require an owner invitation during beta.",
+  };
 }

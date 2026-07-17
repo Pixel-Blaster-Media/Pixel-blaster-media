@@ -23,10 +23,10 @@ export default function Home() {
             Book a shoot
           </Link>
           <Link
-            href="/auth/sign-in?next=/admin"
+            href="/auth/sign-in?audience=company&next=/admin"
             className="rounded-full border border-realtor-primary/25 bg-realtor-surface px-7 py-3 text-center text-sm font-semibold text-realtor-primary transition hover:border-realtor-primary/45 hover:bg-realtor-primary/10"
           >
-            Admin sign in
+            Company login
           </Link>
         </div>
 

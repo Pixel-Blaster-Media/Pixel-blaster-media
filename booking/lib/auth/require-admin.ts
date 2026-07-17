@@ -3,6 +3,7 @@ import "server-only";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { isMissingSessionError } from "@/lib/auth/session-error";
 import { getServerSupabase } from "@/lib/supabase/server";
 
 export interface AdminContext {
@@ -18,6 +19,7 @@ interface ProfileLookupRow {
   email: string;
   full_name: string | null;
   archived_at: string | null;
+  role: "admin" | "realtor";
 }
 
 interface AdminMembershipRow {
@@ -51,7 +53,13 @@ export async function requireAdmin(): Promise<AdminContext> {
   // for a fresh session the call returns immediately.
   const {
     data: { session },
+    error: sessionError,
   } = await supabase.auth.getSession();
+
+  if (sessionError && !isMissingSessionError(sessionError)) {
+    console.error("[auth] admin session refresh failed", sessionError.name);
+    redirect("/auth/access-unavailable");
+  }
 
   if (!session?.access_token) {
     redirect(signInPath);
@@ -64,13 +72,17 @@ export async function requireAdmin(): Promise<AdminContext> {
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("id, organization_id, email, full_name, archived_at")
+    .select("id, organization_id, email, full_name, archived_at, role")
     .eq("id", userId)
-    .single<ProfileLookupRow>();
+    .maybeSingle<ProfileLookupRow>();
 
-  if (error || !profile || profile.archived_at) {
-    console.warn("[auth] no active profile for authed user", userId, error?.message);
-    redirect(signInPath);
+  if (error) {
+    console.error("[auth] profile lookup failed", error.code);
+    redirect("/auth/access-unavailable");
+  }
+  if (!profile || profile.archived_at) {
+    console.warn("[auth] no active profile for authed user", userId);
+    redirect("/auth/no-workspace");
   }
 
   const { data: membership, error: membershipError } = await supabase
@@ -81,8 +93,12 @@ export async function requireAdmin(): Promise<AdminContext> {
     .in("role", ["owner", "admin"])
     .maybeSingle<AdminMembershipRow>();
 
-  if (membershipError || !membership) {
-    redirect("/portal");
+  if (membershipError) {
+    console.error("[auth] admin membership lookup failed", membershipError.code);
+    redirect("/auth/access-unavailable");
+  }
+  if (!membership) {
+    redirect(profile.role === "realtor" ? "/portal" : "/auth/no-workspace");
   }
 
   return {
@@ -97,7 +113,7 @@ async function adminSignInPath(): Promise<string> {
   const headerStore = await headers();
   const currentPath = headerStore.get("x-current-path") ?? "/admin";
   const next = safeNextPath(currentPath);
-  return `/auth/sign-in?next=${encodeURIComponent(next)}`;
+  return `/auth/sign-in?audience=company&next=${encodeURIComponent(next)}`;
 }
 
 function safeNextPath(next: string): string {

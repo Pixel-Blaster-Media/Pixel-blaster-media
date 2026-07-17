@@ -3,10 +3,13 @@
 import { redirect } from "next/navigation";
 
 import { emailHasAccount } from "@/lib/auth/email-lookup";
+import { provisionRealtorAuthUser } from "@/lib/auth/provision-realtor";
+import { rollbackProvisionedRealtor } from "@/lib/auth/rollback-provisioned-realtor";
 import {
   setSupabaseSessionCookie,
   signInWithPasswordREST,
 } from "@/lib/auth/set-session-cookie";
+import type { SessionTokens } from "@/lib/auth/set-session-cookie";
 import {
   BUSINESS_TZ,
   isSlotAvailable,
@@ -136,25 +139,8 @@ export async function createPublicBooking(
     };
   }
 
-  // -------- Resolve current user: existing session, sign-in, or sign-up --------
-  const authResult = await resolveUser({
-    organizationId: organization.id,
-    organizationName: organization.name,
-    contactEmail,
-    contactName,
-    contactPhone,
-    brokerage,
-    password,
-  });
-  if (!authResult.ok) return authResult.result;
-  const userId = authResult.userId;
-  const userEmail = authResult.email;
-  const userDisplayName = authResult.fullName ?? authResult.email;
-  const organizationId = authResult.organizationId;
-  const signedInToPortal = authResult.signedInToPortal;
-
   // -------- Re-validate catalog items --------
-  const catalog = await getActiveCatalog({ organizationId });
+  const catalog = await getActiveCatalog({ organizationId: organization.id });
   const bySlug = new Map<string, (typeof catalog.bundles)[number]>();
   for (const r of catalog.bundles) bySlug.set(r.slug, r);
   for (const r of catalog.aLaCarte) bySlug.set(r.slug, r);
@@ -191,7 +177,7 @@ export async function createPublicBooking(
 
   // -------- Re-check slot availability (defends against races) --------
   const stillFree = await isSlotAvailable(slotStart, duration, {
-    organizationId,
+    organizationId: organization.id,
   });
   if (!stillFree) {
     return {
@@ -202,6 +188,24 @@ export async function createPublicBooking(
       },
     };
   }
+
+  // Provision only after every non-transactional validation has passed. A user
+  // created below is rolled back if the property or booking cannot be committed.
+  const authResult = await resolveUser({
+    organizationId: organization.id,
+    organizationName: organization.name,
+    contactEmail,
+    contactName,
+    contactPhone,
+    brokerage,
+    password,
+  });
+  if (!authResult.ok) return authResult.result;
+  const userId = authResult.userId;
+  const userEmail = authResult.email;
+  const userDisplayName = authResult.fullName ?? authResult.email;
+  const organizationId = authResult.organizationId;
+  let signedInToPortal = authResult.signedInToPortal;
 
   const supabase = getServiceSupabase();
 
@@ -230,6 +234,16 @@ export async function createPublicBooking(
       .single<InsertedRow>();
     if (propErr || !created) {
       console.error("[book] property insert failed", propErr);
+      if (authResult.newlyCreated) {
+        const rollback = await rollbackProvisionedRealtor({
+          userId,
+          provisioningId: authResult.provisioningId!,
+          context: "public-booking-property",
+        });
+        if (rollback.status !== "deleted") {
+          return cleanupNeedsSupport(rollback.reference);
+        }
+      }
       return {
         ok: false,
         errors: { _form: "Could not save property. Try again." },
@@ -267,6 +281,17 @@ export async function createPublicBooking(
 
   if (bookErr || !booking) {
     console.error("[book] booking insert failed", bookErr);
+    if (authResult.newlyCreated) {
+      const rollback = await rollbackProvisionedRealtor({
+        userId,
+        propertyId,
+        provisioningId: authResult.provisioningId!,
+        context: "public-booking-insert",
+      });
+      if (rollback.status !== "deleted") {
+        return cleanupNeedsSupport(rollback.reference);
+      }
+    }
     if (bookErr?.code === "23P01") {
       return {
         ok: false,
@@ -280,6 +305,15 @@ export async function createPublicBooking(
       ok: false,
       errors: { _form: "Could not save booking. Try again." },
     };
+  }
+
+  if (authResult.sessionTokens) {
+    try {
+      await setSupabaseSessionCookie(authResult.sessionTokens, authResult.email);
+    } catch (error) {
+      console.error("[book] post-commit session installation failed", error);
+      signedInToPortal = false;
+    }
   }
 
   const bookingLineItems = [...validServices, ...validAddons].map((item) => ({
@@ -546,6 +580,9 @@ interface ResolveUserOk {
   fullName: string | null;
   organizationId: string;
   signedInToPortal: boolean;
+  newlyCreated: boolean;
+  provisioningId: string | null;
+  sessionTokens: SessionTokens | null;
 }
 interface ResolveUserErr {
   ok: false;
@@ -563,6 +600,7 @@ async function resolveUser(params: {
 }): Promise<ResolveUserOk | ResolveUserErr> {
   // 1) Already signed in? Use the existing session.
   const supabase = await getServerSupabase();
+  const service = getServiceSupabase();
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -572,7 +610,7 @@ async function resolveUser(params: {
     if (userId) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("id, email, full_name, organization_id, archived_at")
+        .select("id, email, full_name, organization_id, archived_at, role")
         .eq("id", userId)
         .maybeSingle<{
           id: string;
@@ -580,6 +618,7 @@ async function resolveUser(params: {
           full_name: string | null;
           organization_id: string | null;
           archived_at: string | null;
+          role: "admin" | "realtor";
         }>();
       if (profile) {
         if (profile.archived_at) {
@@ -588,6 +627,16 @@ async function resolveUser(params: {
         if (profile.organization_id !== params.organizationId) {
           return organizationMismatch(params.organizationName);
         }
+        if (
+          profile.role !== "realtor" ||
+          (await hasPrivilegedCompanyMembership(
+            service,
+            profile.id,
+            params.organizationId,
+          ))
+        ) {
+          return companyAccountCannotBook();
+        }
         return {
           ok: true,
           userId: profile.id,
@@ -595,6 +644,9 @@ async function resolveUser(params: {
           fullName: profile.full_name,
           organizationId: profile.organization_id ?? DEFAULT_ORGANIZATION_ID,
           signedInToPortal: true,
+          newlyCreated: false,
+          provisioningId: null,
+          sessionTokens: null,
         };
       }
     }
@@ -618,7 +670,6 @@ async function resolveUser(params: {
   }
 
   const exists = await emailHasAccount(params.contactEmail);
-  const service = getServiceSupabase();
 
   if (exists) {
     // 2) Existing account → sign in.
@@ -642,8 +693,6 @@ async function resolveUser(params: {
         },
       };
     }
-    await setSupabaseSessionCookie(signIn.tokens, params.contactEmail);
-
     const userId = decodeUserId(signIn.tokens.access_token);
     if (!userId) {
       return {
@@ -656,7 +705,7 @@ async function resolveUser(params: {
     }
     const { data: profile } = await service
       .from("profiles")
-      .select("id, email, full_name, organization_id, archived_at")
+      .select("id, email, full_name, organization_id, archived_at, role")
       .eq("id", userId)
       .maybeSingle<{
         id: string;
@@ -664,6 +713,7 @@ async function resolveUser(params: {
         full_name: string | null;
         organization_id: string | null;
         archived_at: string | null;
+        role: "admin" | "realtor";
       }>();
     if (!profile) {
       return {
@@ -680,6 +730,16 @@ async function resolveUser(params: {
     if (profile.archived_at) {
       return removedRealtorAccount();
     }
+    if (
+      profile.role !== "realtor" ||
+      (await hasPrivilegedCompanyMembership(
+        service,
+        profile.id,
+        params.organizationId,
+      ))
+    ) {
+      return companyAccountCannotBook();
+    }
     // Top up phone/brokerage if the user left them empty before, but only
     // after confirming this account belongs to the requested company.
     await maybeFillProfile(service, userId, {
@@ -695,43 +755,35 @@ async function resolveUser(params: {
       fullName: profile.full_name ?? params.contactName,
       organizationId: profile.organization_id ?? DEFAULT_ORGANIZATION_ID,
       signedInToPortal: true,
+      newlyCreated: false,
+      provisioningId: null,
+      sessionTokens: signIn.tokens,
     };
   }
 
   // 3) New email → create user (pre-confirmed) and sign in.
-  const { data: created, error: createErr } = await service.auth.admin.createUser({
+  const provisioned = await provisionRealtorAuthUser({
+    service,
     email: params.contactEmail,
     password: params.password,
-    email_confirm: true,
-    user_metadata: { full_name: params.contactName },
+    fullName: params.contactName,
+    organizationId: params.organizationId,
+    context: "public-booking-create",
   });
-  if (createErr || !created.user) {
-    console.error("[book] createUser failed", createErr);
-    const msg = (createErr?.message ?? "").toLowerCase();
-    if (msg.includes("already") && msg.includes("registered")) {
-      return {
-        ok: false,
-        result: {
-          ok: false,
-          errors: {
-            contact_email:
-              "We couldn't confirm those account details. Check the email and password, or use the reset link.",
-          },
-        },
-      };
-    }
+  if (!provisioned.ok) {
     return {
       ok: false,
       result: {
         ok: false,
         errors: {
-          _form: "We couldn't create or sign in to the account. Please try again.",
+          _form: `${provisioned.message} Reference: ${provisioned.reference}`,
         },
       },
     };
   }
 
-  const newUserId = created.user.id;
+  const newUserId = provisioned.userId;
+  const provisioningId = provisioned.provisioningId;
   await maybeFillProfile(service, newUserId, {
     organizationId: params.organizationId,
     setOrganization: true,
@@ -745,22 +797,26 @@ async function resolveUser(params: {
     params.password,
   );
   if (!signIn.ok) {
-    // The user was created but sign-in failed — they can still sign in
-    // later via /auth/sign-in, so don't block the booking.
     console.warn("[book] sign-in after create failed", signIn.error);
+    const rollback = await rollbackProvisionedRealtor({
+      userId: newUserId,
+      provisioningId,
+      context: "public-booking-sign-in",
+    });
+    if (rollback.status !== "deleted") {
+      return { ok: false, result: cleanupNeedsSupport(rollback.reference) };
+    }
     return {
       ok: false,
       result: {
         ok: false,
         errors: {
           _form:
-            "Your account was created but we couldn't sign you in automatically. Try /auth/sign-in.",
+            "We couldn't create and verify the account. Please try again.",
         },
       },
     };
   }
-  await setSupabaseSessionCookie(signIn.tokens, params.contactEmail);
-
   return {
     ok: true,
     userId: newUserId,
@@ -768,6 +824,9 @@ async function resolveUser(params: {
     fullName: params.contactName,
     organizationId: params.organizationId,
     signedInToPortal: true,
+    newlyCreated: true,
+    provisioningId,
+    sessionTokens: signIn.tokens,
   };
 }
 
@@ -783,6 +842,49 @@ function organizationMismatch(organizationName: string): ResolveUserErr {
       },
     },
   };
+}
+
+function cleanupNeedsSupport(reference: string | null): BookResult {
+  return {
+    ok: false,
+    errors: {
+      _form:
+        "The booking was not completed. Do not retry; email info@pixelblastermedia.com and include this reference." +
+        (reference ? ` Reference: ${reference}` : ""),
+    },
+  };
+}
+
+function companyAccountCannotBook(): ResolveUserErr {
+  return {
+    ok: false,
+    result: {
+      ok: false,
+      errors: {
+        _form:
+          "This is a company workspace account, not a realtor portal account. Sign out and use the realtor account that should own the booking.",
+      },
+    },
+  };
+}
+
+async function hasPrivilegedCompanyMembership(
+  supabase: ReturnType<typeof getServiceSupabase>,
+  userId: string,
+  organizationId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("organization_members")
+    .select("profile_id")
+    .eq("profile_id", userId)
+    .eq("organization_id", organizationId)
+    .in("role", ["owner", "admin"])
+    .maybeSingle<{ profile_id: string }>();
+  if (error) {
+    console.error("[book] privileged membership verification failed", error.code);
+    return true;
+  }
+  return Boolean(data);
 }
 
 function removedRealtorAccount(): ResolveUserErr {

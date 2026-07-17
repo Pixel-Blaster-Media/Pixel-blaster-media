@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "Reset password" };
 export default async function ResetPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sent?: string; email?: string }>;
+  searchParams: Promise<{ sent?: string; email?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const sent = params.sent === "1";
@@ -23,6 +23,14 @@ export default async function ResetPage({
           Send yourself a reset link
         </h1>
       </header>
+
+      {params.error ? (
+        <p className="rounded-xl border border-amber-400/40 bg-amber-400/10 p-4 text-sm text-amber-900">
+          {params.error === "expired"
+            ? "That password-reset link is invalid or expired. Request a fresh link below."
+            : "We couldn't verify that password-reset link right now. Request a fresh link below."}
+        </p>
+      ) : null}
 
       {sent ? (
         <div className="space-y-4">
@@ -40,7 +48,7 @@ export default async function ResetPage({
           </p>
         </div>
       ) : (
-        <ResetRequestForm />
+        <ResetRequestForm initialEmail={params.email ?? ""} />
       )}
 
       <p className="border-t border-realtor-primary/10 pt-4 text-xs text-realtor-muted">
