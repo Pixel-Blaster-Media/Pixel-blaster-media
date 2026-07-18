@@ -12,7 +12,7 @@ import {
 import type { TodayCommandPreferences } from "../../today/preferences";
 import InstallAppCard from "../InstallAppCard";
 
-export const metadata = { title: "Workspace & app" };
+export const metadata = { title: "App & daily view" };
 
 export default async function WorkspacePreferencesPage() {
   const admin = await requireAdmin();
@@ -28,7 +28,7 @@ export default async function WorkspacePreferencesPage() {
           ← Settings
         </Link>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-realtor-text">
-          Workspace & app
+          App & daily view
         </h1>
         <p className="mt-2 text-sm leading-6 text-realtor-muted">
           Install the app on this device and choose what your company sees on

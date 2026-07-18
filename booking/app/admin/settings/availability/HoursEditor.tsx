@@ -36,7 +36,7 @@ export default function HoursEditor({
       className={`rounded-2xl border p-4 transition ${
         isOpen
           ? "border-realtor-primary/15 bg-realtor-surface/85 shadow-sm shadow-realtor-text/5"
-          : "border-realtor-primary/10 bg-realtor-surface-muted/45"
+          : "border-realtor-primary/10 bg-realtor-soft/45"
       }`}
     >
       <input type="hidden" name="day_of_week" value={dayOfWeek} />
@@ -58,7 +58,7 @@ export default function HoursEditor({
             onChange={(event) => setIsOpen(event.currentTarget.checked)}
             className="peer sr-only"
           />
-          <span className="relative h-6 w-11 rounded-full border border-realtor-primary/20 bg-realtor-surface-muted transition peer-checked:border-realtor-primary/40 peer-checked:bg-realtor-primary">
+          <span className="relative h-6 w-11 rounded-full border border-realtor-primary/20 bg-realtor-soft transition peer-checked:border-realtor-primary/40 peer-checked:bg-realtor-primary">
             <span className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition peer-checked:translate-x-5" />
           </span>
         </label>

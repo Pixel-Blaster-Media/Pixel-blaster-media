@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import {
@@ -32,7 +33,7 @@ import {
   updateGoogleCalendarSource,
 } from "./actions";
 
-export const metadata: Metadata = { title: "Integrations" };
+export const metadata: Metadata = { title: "Connections" };
 export const dynamic = "force-dynamic";
 
 type ConnectionRow =
@@ -197,6 +198,12 @@ export default async function IntegrationsPage({
     iguideAppIdStatus.source !== "none" &&
     iguideAppTokenStatus.source !== "none";
   const iguideWebhookConfigured = iguideWebhookStatus.source !== "none";
+  const iguideStarted = [
+    iguideAppIdStatus,
+    iguideAppTokenStatus,
+    iguideWebhookStatus,
+  ].some((status) => status.source !== "none");
+  const iguideReady = iguideConfigured && iguideWebhookConfigured;
 
   const emailFrom = isDefaultOrganization ? process.env.EMAIL_FROM ?? null : null;
   const adminEmail = isDefaultOrganization
@@ -232,76 +239,93 @@ export default async function IntegrationsPage({
           ← Settings
         </Link>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-realtor-text">
-          Integrations
+          Connections
         </h1>
         <p className="mt-2 text-sm leading-6 text-realtor-muted">
-          Review configuration status first, then jump to a provider when you
-          need to connect, troubleshoot, or make a change.
+          Most photo companies only need Calendar and Email to start. Connect
+          the rest only when it earns a place in your workflow.
         </p>
       </header>
 
-      <section className="overflow-hidden rounded-2xl border border-realtor-primary/12 bg-realtor-surface/75">
+      <section className="overflow-hidden rounded-2xl border border-realtor-primary/12 bg-realtor-surface/75 shadow-sm">
         <div className="px-4 pb-4 pt-5 sm:px-5">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-realtor-primary/75">
-            Configuration overview
+            What keeps booking running
           </p>
           <h2 className="mt-1 text-xl font-semibold text-realtor-text">
             Integration status at a glance
           </h2>
           <p className="mt-1 text-sm leading-6 text-realtor-muted">
-            Statuses apply only to this company unless a tool is marked platform managed.
+            Start with the essentials. Optional tools stay quiet until you begin setting them up.
           </p>
         </div>
-        <div className="grid border-t border-realtor-primary/10 md:grid-cols-2 xl:grid-cols-3">
-          <IntegrationOverviewRow
-            href="#google-calendar"
-            name="Google Calendar"
-            purpose="Availability and booking sync"
-            status={googleReady ? "Connected" : googleConnection ? "Needs attention" : "Not connected"}
-            tone={googleReady ? "ready" : "attention"}
-          />
-          <IntegrationOverviewRow
-            href="#quickbooks"
-            name="QuickBooks"
-            purpose="Invoices and service mapping"
-            status={quickBooksStatus}
-            tone={quickBooksReady ? "ready" : connection ? "attention" : "neutral"}
-          />
-          <IntegrationOverviewRow
-            href="#email-delivery"
-            name="Email delivery"
-            purpose="Confirmations and notifications"
-            status={isDefaultOrganization ? (resendConfigured && emailFrom ? "Configured" : "Needs attention") : "Platform managed"}
-            tone={isDefaultOrganization && !(resendConfigured && emailFrom) ? "attention" : "ready"}
-          />
-          <IntegrationOverviewRow
-            href="#iguide"
-            name="iGUIDE"
-            purpose="Tours and ready-event syncing"
-            status={iguideConfigured && iguideWebhookConfigured ? "Ready" : "Setup needed"}
-            tone={iguideConfigured && iguideWebhookConfigured ? "ready" : "attention"}
-          />
-          <IntegrationOverviewRow
-            href="#autoenhance"
-            name="Autoenhance"
-            purpose="Photo enhancement workflow"
-            status={autoenhanceReady ? "Ready" : autoenhanceConfigured ? "Needs webhook" : "Not configured"}
-            tone={autoenhanceReady ? "ready" : autoenhanceConfigured ? "attention" : "neutral"}
-          />
-          <IntegrationOverviewRow
-            href="#ai-assistant"
-            name="AI assistant"
-            purpose="Admin planning and writing tools"
-            status={openAiConfigured ? "Configured" : "Optional"}
-            tone={openAiConfigured ? "ready" : "neutral"}
-          />
-          <IntegrationOverviewRow
-            href="#google-maps"
-            name="Google Maps"
-            purpose="Drive-time and route warnings"
-            status={googleMapsConfigured ? "Enhanced routes" : "Basic fallback"}
-            tone={googleMapsConfigured ? "ready" : "neutral"}
-          />
+        <div className="grid border-t border-realtor-primary/10 lg:grid-cols-3">
+          <ConnectionGroup
+            title="Booking essentials"
+            description="Calendar and email keep everyday booking dependable."
+          >
+            <IntegrationOverviewRow
+              href="#google-calendar"
+              name="Google Calendar"
+              purpose="Availability and booking sync"
+              status={googleReady ? "Connected" : googleConnection ? "Needs attention" : "Connect"}
+              tone={googleReady ? "ready" : "attention"}
+            />
+            <IntegrationOverviewRow
+              href="#email-delivery"
+              name="Email delivery"
+              purpose="Confirmations and notifications"
+              status={isDefaultOrganization ? (resendConfigured && emailFrom ? "Configured" : "Needs attention") : "Platform managed"}
+              tone={isDefaultOrganization && !(resendConfigured && emailFrom) ? "attention" : "ready"}
+            />
+          </ConnectionGroup>
+
+          <ConnectionGroup
+            title="Production workflow"
+            description="Connect only the services your production process uses."
+          >
+            <IntegrationOverviewRow
+              href="#iguide"
+              name="iGUIDE"
+              purpose="Tours and ready-event syncing"
+              status={iguideReady ? "Ready" : iguideStarted ? "Finish setup" : "Optional"}
+              tone={iguideReady ? "ready" : iguideStarted ? "attention" : "neutral"}
+            />
+            <IntegrationOverviewRow
+              href="#autoenhance"
+              name="Autoenhance"
+              purpose="Photo enhancement workflow"
+              status={autoenhanceReady ? "Ready" : autoenhanceConfigured ? "Needs webhook" : "Optional"}
+              tone={autoenhanceReady ? "ready" : autoenhanceConfigured ? "attention" : "neutral"}
+            />
+            <IntegrationOverviewRow
+              href="#quickbooks"
+              name="QuickBooks"
+              purpose="Invoices and service mapping"
+              status={connection ? quickBooksStatus : "Optional"}
+              tone={quickBooksReady ? "ready" : connection ? "attention" : "neutral"}
+            />
+          </ConnectionGroup>
+
+          <ConnectionGroup
+            title="Optional helpers"
+            description="Useful enhancements, never requirements for taking a booking."
+          >
+            <IntegrationOverviewRow
+              href="#ai-assistant"
+              name="AI assistant"
+              purpose="Admin planning and writing tools"
+              status={openAiConfigured ? "Configured" : "Optional"}
+              tone={openAiConfigured ? "ready" : "neutral"}
+            />
+            <IntegrationOverviewRow
+              href="#google-maps"
+              name="Google Maps"
+              purpose="Drive-time and route warnings"
+              status={googleMapsConfigured ? "Enhanced routes" : "Basic fallback"}
+              tone={googleMapsConfigured ? "ready" : "neutral"}
+            />
+          </ConnectionGroup>
         </div>
       </section>
 
@@ -377,469 +401,6 @@ export default async function IntegrationsPage({
         </p>
       ) : null}
 
-      {isDefaultOrganization ? (
-      <section id="email-delivery" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-realtor-text">
-              Email (Resend)
-            </h2>
-            <p className="mt-1 text-sm text-realtor-muted">
-              Sends booking confirmations and admin alerts. Supabase sign-in
-              emails are configured separately under Auth → SMTP.
-            </p>
-          </div>
-          {resendConfigured && emailFrom ? (
-            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
-              Configured
-            </span>
-          ) : (
-            <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
-              Not configured
-            </span>
-          )}
-        </div>
-
-        <details
-          id="email-configuration"
-          open={!(resendConfigured && emailFrom)}
-          className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
-        >
-          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
-            Configuration & diagnostics
-          </summary>
-          <div className="border-t border-realtor-primary/10 px-4 pb-4">
-        <CredentialsForm
-          provider="resend"
-          fields={[
-            {
-              name: "api_key",
-              label: "Resend API key",
-              helper:
-                "Starts with re_. Create at resend.com/api-keys with Sending access on pixelblastermedia.com.",
-            },
-          ]}
-          statuses={{ api_key: resendApiKeyStatus }}
-        />
-
-        <div className="mt-5 space-y-4 border-t border-realtor-primary/10 pt-4">
-          <dl className="grid gap-y-1 text-sm md:grid-cols-[180px_1fr]">
-            <dt className="text-realtor-muted">EMAIL_FROM</dt>
-            <dd className="text-realtor-text">
-              {emailFrom ? (
-                <code className="text-xs">{emailFrom}</code>
-              ) : (
-                <span className="text-amber-700">not set in Vercel env</span>
-              )}
-            </dd>
-            <dt className="text-realtor-muted">ADMIN_NOTIFICATION_EMAIL</dt>
-            <dd className="text-realtor-text">
-              {adminEmail ? (
-                <code className="text-xs">{adminEmail}</code>
-              ) : (
-                <span className="text-realtor-muted">—</span>
-              )}
-            </dd>
-          </dl>
-
-          <div>
-            <p className="text-xs uppercase tracking-wider text-realtor-primary">
-              Send test email
-            </p>
-            <p className="mt-1 text-xs text-realtor-muted">
-              Sends a plain test email via the same pipeline that powers
-              booking confirmations. The result below shows exactly what
-              Resend returned — no guesswork.
-            </p>
-            <div className="mt-3">
-              <EmailTester defaultTo={adminEmail} />
-            </div>
-          </div>
-        </div>
-          </div>
-        </details>
-      </section>
-      ) : (
-        <section id="email-delivery" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-realtor-text">
-                Email delivery
-              </h2>
-              <p className="mt-1 text-sm leading-6 text-realtor-muted">
-                Email sending is handled by the platform for beta companies, so
-                new businesses do not need their own Resend account or API key.
-                Set the sender name, reply-to email, and admin alert inbox in
-                Business profile.
-              </p>
-            </div>
-            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
-              Platform managed
-            </span>
-          </div>
-
-          <Link
-            href="/admin/settings/business"
-            className="mt-4 inline-flex rounded-full border border-realtor-primary/20 bg-white px-4 py-2 text-sm font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
-          >
-            Edit email identity
-          </Link>
-        </section>
-      )}
-
-      <section id="autoenhance" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-realtor-text">
-              Autoenhance.ai
-            </h2>
-            <p className="mt-1 text-sm text-realtor-muted">
-              Enhances booking photos and sends completed JPEGs to the linked
-              iGUIDE gallery.
-            </p>
-          </div>
-          {autoenhanceReady ? (
-            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
-              Ready
-            </span>
-          ) : autoenhanceConfigured ? (
-            <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
-              Needs webhook
-            </span>
-          ) : (
-            <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
-              Not configured
-            </span>
-          )}
-        </div>
-
-        <details
-          id="autoenhance-configuration"
-          open={!autoenhanceReady}
-          className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
-        >
-          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
-            Configuration & diagnostics
-          </summary>
-          <div className="border-t border-realtor-primary/10 px-4 pb-4">
-        <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
-          <p className="text-sm font-semibold text-realtor-text">
-            Automatic completion updates
-          </p>
-          <p className="mt-1 text-xs leading-relaxed text-realtor-muted">
-            Add this URL as the webhook URL in Autoenhance&apos;s API settings.
-            Paste the same long random value into Autoenhance&apos;s authentication
-            field and the Webhook secret field below. The secret and API key
-            remain server-side.
-          </p>
-          <div className="mt-3 flex flex-col gap-2 rounded-xl border border-realtor-primary/15 bg-white/80 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <code className="min-w-0 break-all text-[11px] text-realtor-text">
-              {autoenhanceWebhookUrl}
-            </code>
-            <CopyTextButton value={autoenhanceWebhookUrl} />
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span
-              className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${
-                autoenhanceWebhookStatus.source === "none"
-                  ? "border-amber-200 bg-amber-50 text-amber-800"
-                  : "border-emerald-200 bg-emerald-50 text-emerald-800"
-              }`}
-            >
-              {autoenhanceWebhookStatus.source === "none"
-                ? "Webhook secret needed"
-                : "Webhook authentication saved"}
-            </span>
-            <Link
-              href="/admin/autoenhance-test"
-              className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
-            >
-              Open test sandbox
-            </Link>
-          </div>
-        </div>
-
-        <CredentialsForm
-          provider="autoenhance"
-          fields={[
-            {
-              name: "api_key",
-              label: "Autoenhance API key",
-              helper:
-                "Create this in Autoenhance. For Vercel env fallback use AUTOENHANCE_API_KEY.",
-            },
-            {
-              name: "webhook_secret",
-              label: "Webhook secret",
-              helper:
-                "Use the exact same random secret in Autoenhance's webhook authentication field. For Vercel fallback use AUTOENHANCE_WEBHOOK_SECRET.",
-            },
-          ]}
-          statuses={{
-            api_key: autoenhanceApiKeyStatus,
-            webhook_secret: autoenhanceWebhookStatus,
-          }}
-        />
-          </div>
-        </details>
-      </section>
-
-      <section id="ai-assistant" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-realtor-text">
-              AI Assistant
-            </h2>
-            <p className="mt-1 text-sm text-realtor-muted">
-              Powers admin planning and realtor-facing copy tools. Use the
-              platform key or this company&apos;s own OpenAI key.
-            </p>
-          </div>
-          {openAiConfigured ? (
-            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
-              Configured
-            </span>
-          ) : (
-            <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
-              Not configured
-            </span>
-          )}
-        </div>
-
-        <details
-          id="ai-configuration"
-          className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
-        >
-          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
-            Configuration & diagnostics
-          </summary>
-          <div className="border-t border-realtor-primary/10 px-4 pb-4">
-        <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
-          <p className="text-sm font-semibold text-realtor-text">
-            How this works
-          </p>
-          <p className="mt-1 text-xs leading-relaxed text-realtor-muted">
-            If a company saves its own key, its assistant calls OpenAI with
-            that key. If not, the app falls back to the platform
-            <code className="mx-1">OPENAI_API_KEY</code>. Anything that changes
-            bookings still asks for confirmation first.
-          </p>
-        </div>
-
-        <CredentialsForm
-          provider="openai"
-          fields={[
-            {
-              name: "api_key",
-              label: "OpenAI API key",
-              helper:
-                "Starts with sk-. Create it in the OpenAI dashboard. We store it server-side only.",
-            },
-            {
-              name: "model",
-              label: "Model override",
-              helper:
-                "Optional. Leave blank to use the platform default model.",
-              type: "text",
-            },
-          ]}
-          statuses={{
-            api_key: openAiApiKeyStatus,
-            model: openAiModelStatus,
-          }}
-        />
-        <OpenAITester />
-          </div>
-        </details>
-      </section>
-
-      <section id="google-maps" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-realtor-text">
-              Google Maps Routes
-            </h2>
-            <p className="mt-1 text-sm text-realtor-muted">
-              Adds accurate drive-time warnings to Today. Without it, basic
-              schedule and city checks still work.
-            </p>
-          </div>
-          {googleMapsConfigured ? (
-            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
-              V2 enabled
-            </span>
-          ) : (
-            <span className="shrink-0 rounded-full border border-realtor-primary/15 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
-              V1 fallback
-            </span>
-          )}
-        </div>
-
-        <details
-          id="maps-configuration"
-          className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
-        >
-          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
-            Configuration & diagnostics
-          </summary>
-          <div className="border-t border-realtor-primary/10 px-4 pb-4">
-        <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
-          <p className="text-sm font-semibold text-realtor-text">
-            Cost-safe fallback
-          </p>
-          <p className="mt-1 text-xs leading-relaxed text-realtor-muted">
-            Use a server-side Google Maps key with the Routes API enabled.
-            Keep your browser Places key separate. The app only calls this
-            from server code and only requests route duration and distance.
-          </p>
-        </div>
-
-        <CredentialsForm
-          provider="google_maps"
-          fields={[
-            {
-              name: "api_key",
-              label: "Google Maps server API key",
-              helper:
-                "Enable Routes API. For Vercel env fallback use GOOGLE_MAPS_SERVER_API_KEY.",
-            },
-          ]}
-          statuses={{ api_key: googleMapsApiKeyStatus }}
-        />
-          </div>
-        </details>
-      </section>
-
-      {/* iGUIDE — Portal API + webhook secret. Used by /admin/bookings to
-          sync tour deliverables and by the webhook receiver to verify
-          incoming events. */}
-      <section id="iguide" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-realtor-text">iGUIDE</h2>
-            <p className="mt-1 text-sm text-realtor-muted">
-              Matches portal tours to bookings and syncs ready deliverables.
-            </p>
-          </div>
-          {iguideConfigured && iguideWebhookConfigured ? (
-            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
-              Ready
-            </span>
-          ) : (
-            <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
-              Setup needed
-            </span>
-          )}
-        </div>
-
-        <details
-          id="iguide-configuration"
-          open={!(iguideConfigured && iguideWebhookConfigured)}
-          className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
-        >
-          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
-            Configuration & diagnostics
-          </summary>
-          <div className="border-t border-realtor-primary/10 px-4 pb-4">
-        <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
-          <p className="text-sm font-semibold text-realtor-text">
-            Portal search is now supported
-          </p>
-          <p className="mt-1 text-xs leading-relaxed text-realtor-muted">
-            iGUIDE added the list endpoint to its public documentation in July
-            2026. Include <strong>iguide.list</strong>, then use the test button
-            below to confirm this token can see portal tours. Manual paste and
-            ready webhooks remain available either way.
-          </p>
-        </div>
-
-        <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
-          <p className="text-sm font-semibold text-realtor-text">
-            What to copy from iGUIDE
-          </p>
-          <ol className="mt-2 list-inside list-decimal space-y-1 text-sm text-realtor-muted">
-            <li>
-              In iGUIDE, go to{" "}
-              <strong>Settings → API Management → API Tokens</strong>.
-            </li>
-            <li>
-              Copy iGUIDE&apos;s <strong>Client ID</strong> into{" "}
-              <strong>iGUIDE Client ID</strong> below.
-            </li>
-            <li>
-              Copy iGUIDE&apos;s <strong>Token</strong> into{" "}
-              <strong>iGUIDE Token</strong> below.
-            </li>
-            <li>
-              Give that token these permissions: <strong>iguide.read</strong>,{" "}
-              <strong>iguide.write</strong>, <strong>iguide.process</strong>, and{" "}
-              <strong>iguide.events</strong>. Add <strong>iguide.list</strong> for
-              portal tour search.
-            </li>
-            <li>
-              Make up a long random <strong>Webhook secret</strong>, save it
-              below, then add it to the end of the webhook URL in iGUIDE.
-            </li>
-          </ol>
-        </div>
-
-        <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-white/70 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
-            Webhook URL for iGUIDE
-          </p>
-          <p className="mt-1 text-xs text-realtor-muted">
-            After saving the webhook secret below, paste this into iGUIDE&apos;s
-            webhook setup and put your secret after the equals sign.
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <code className="min-w-0 flex-1 overflow-x-auto rounded-xl border border-realtor-primary/15 bg-white px-3 py-2 text-xs text-realtor-text">
-              {iguideWebhookUrlBase}YOUR_SECRET_HERE
-            </code>
-            <CopyTextButton value={`${iguideWebhookUrlBase}YOUR_SECRET_HERE`} />
-          </div>
-        </div>
-
-        <CredentialsForm
-          provider="iguide"
-          fields={[
-            {
-              name: "app_id",
-              label: "iGUIDE Client ID",
-              helper:
-                "In iGUIDE this may be labelled Client ID. It is the short ID beside the token.",
-              type: "text",
-            },
-            {
-              name: "app_token",
-              label: "iGUIDE Token",
-              helper:
-                "In iGUIDE this is labelled Token. It is the long secret value shown when the token is created.",
-            },
-            {
-              name: "webhook_secret",
-              label: "Webhook secret",
-              helper:
-                "You choose this. Use a long random value and put the same value after secret= in iGUIDE. If you paste the whole webhook URL here by mistake, we will save just the secret.",
-            },
-          ]}
-          statuses={{
-            app_id: iguideAppIdStatus,
-            app_token: iguideAppTokenStatus,
-            webhook_secret: iguideWebhookStatus,
-          }}
-        />
-        <IGuideTester disabled={!iguideConfigured} />
-        {!iguideWebhookConfigured ? (
-          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
-            The API credentials can be tested, but automatic ready-event syncing
-            stays off until a webhook secret is saved and the matching URL is
-            added in iGUIDE.
-          </p>
-        ) : null}
-          </div>
-        </details>
-      </section>
-
       <section id="google-calendar" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -886,12 +447,20 @@ export default async function IntegrationsPage({
                 <p className="font-semibold">
                   Google Calendar is connected, but it cannot sync bookings yet.
                 </p>
-                <p className="mt-1">
-                  <code>GOOGLE_CLIENT_ID</code> and{" "}
-                  <code>GOOGLE_CLIENT_SECRET</code> are blank in the app
-                  environment. Add those values in Vercel, redeploy, then use
-                  the test below.
-                </p>
+                {isDefaultOrganization ? (
+                  <p className="mt-1">
+                    <code>GOOGLE_CLIENT_ID</code> and{" "}
+                    <code>GOOGLE_CLIENT_SECRET</code> are blank in the app
+                    environment. Add those values in Vercel, redeploy, then use
+                    the test below.
+                  </p>
+                ) : (
+                  <p className="mt-1">
+                    Platform setup needs attention. Contact the platform
+                    administrator; your company does not need to provide Google
+                    developer credentials.
+                  </p>
+                )}
               </div>
             ) : null}
             <dl className="grid gap-y-1 text-sm md:grid-cols-[180px_1fr]">
@@ -1110,15 +679,17 @@ export default async function IntegrationsPage({
           </div>
         ) : googleConfigured ? (
           <div className="mt-5 space-y-3">
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              <p className="font-semibold">Seeing &quot;Access blocked&quot;?</p>
-              <p className="mt-1 text-xs leading-5">
-                The Google OAuth app is probably still in testing mode. Add
-                this photographer&apos;s Google account as a test user in Google
-                Cloud&apos;s OAuth consent screen, or publish and verify the app
-                before inviting outside companies.
-              </p>
-            </div>
+            {isDefaultOrganization ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <p className="font-semibold">Seeing &quot;Access blocked&quot;?</p>
+                <p className="mt-1 text-xs leading-5">
+                  The Google OAuth app is probably still in testing mode. Add
+                  this photographer&apos;s Google account as a test user in Google
+                  Cloud&apos;s OAuth consent screen, or publish and verify the app
+                  before inviting outside companies.
+                </p>
+              </div>
+            ) : null}
             <p className="text-sm text-realtor-muted">
               Click Connect, approve the access request on Google, and you&apos;ll
               land back here. You can disconnect anytime — revokes access on
@@ -1126,10 +697,10 @@ export default async function IntegrationsPage({
             </p>
             <GoogleConnectButton />
           </div>
-        ) : (
+        ) : isDefaultOrganization ? (
           <div className="mt-5 space-y-3">
             <p className="text-sm text-realtor-muted">
-              First-time setup:
+              First-time platform setup:
             </p>
             <ol className="list-inside list-decimal space-y-1 text-sm text-realtor-muted">
               <li>
@@ -1150,7 +721,7 @@ export default async function IntegrationsPage({
               </li>
               <li>
                 Set Authorized redirect URI to{" "}
-                <code className="text-xs">
+                <code className="break-all text-xs">
                   {resolvedGoogleRedirectUri}
                 </code>
                 .
@@ -1163,7 +734,359 @@ export default async function IntegrationsPage({
               <li>Refresh this page and click Connect.</li>
             </ol>
           </div>
+        ) : (
+          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-semibold">
+              Calendar connection is unavailable right now.
+            </p>
+            <p className="mt-1 leading-5">
+              Platform setup needs attention. Your company does not need to
+              provide Google developer credentials; contact the platform
+              administrator before connecting a calendar.
+            </p>
+          </div>
         )}
+          </div>
+        </details>
+      </section>
+
+      {isDefaultOrganization ? (
+      <section id="email-delivery" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-realtor-text">
+              Email (Resend)
+            </h2>
+            <p className="mt-1 text-sm text-realtor-muted">
+              Sends booking confirmations and admin alerts. Supabase sign-in
+              emails are configured separately under Auth → SMTP.
+            </p>
+          </div>
+          {resendConfigured && emailFrom ? (
+            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+              Configured
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+              Not configured
+            </span>
+          )}
+        </div>
+
+        <details
+          id="email-configuration"
+          open={!(resendConfigured && emailFrom)}
+          className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
+        >
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
+            Configuration & diagnostics
+          </summary>
+          <div className="border-t border-realtor-primary/10 px-4 pb-4">
+        <CredentialsForm
+          provider="resend"
+          fields={[
+            {
+              name: "api_key",
+              label: "Resend API key",
+              helper:
+                "Starts with re_. Create at resend.com/api-keys with Sending access on pixelblastermedia.com.",
+            },
+          ]}
+          statuses={{ api_key: resendApiKeyStatus }}
+        />
+
+        <div className="mt-5 space-y-4 border-t border-realtor-primary/10 pt-4">
+          <dl className="grid gap-y-1 text-sm md:grid-cols-[180px_1fr]">
+            <dt className="text-realtor-muted">EMAIL_FROM</dt>
+            <dd className="text-realtor-text">
+              {emailFrom ? (
+                <code className="text-xs">{emailFrom}</code>
+              ) : (
+                <span className="text-amber-700">not set in Vercel env</span>
+              )}
+            </dd>
+            <dt className="text-realtor-muted">ADMIN_NOTIFICATION_EMAIL</dt>
+            <dd className="text-realtor-text">
+              {adminEmail ? (
+                <code className="text-xs">{adminEmail}</code>
+              ) : (
+                <span className="text-realtor-muted">—</span>
+              )}
+            </dd>
+          </dl>
+
+          <div>
+            <p className="text-xs uppercase tracking-wider text-realtor-primary">
+              Send test email
+            </p>
+            <p className="mt-1 text-xs text-realtor-muted">
+              Sends a plain test email via the same pipeline that powers
+              booking confirmations. The result below shows exactly what
+              Resend returned — no guesswork.
+            </p>
+            <div className="mt-3">
+              <EmailTester defaultTo={adminEmail} />
+            </div>
+          </div>
+        </div>
+          </div>
+        </details>
+      </section>
+      ) : (
+        <section id="email-delivery" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-realtor-text">
+                Email delivery
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-realtor-muted">
+                Email sending is handled by the platform for beta companies, so
+                new businesses do not need their own Resend account or API key.
+                Set the sender name, reply-to email, and admin alert inbox in
+                Business profile.
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+              Platform managed
+            </span>
+          </div>
+
+          <Link
+            href="/admin/settings/business"
+            className="mt-4 inline-flex rounded-full border border-realtor-primary/20 bg-white px-4 py-2 text-sm font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+          >
+            Edit email identity
+          </Link>
+        </section>
+      )}
+
+      {/* iGUIDE — Portal API + webhook secret. Used by /admin/bookings to
+          sync tour deliverables and by the webhook receiver to verify
+          incoming events. */}
+      <section id="iguide" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-realtor-text">iGUIDE</h2>
+            <p className="mt-1 text-sm text-realtor-muted">
+              Matches portal tours to bookings and syncs ready deliverables.
+            </p>
+          </div>
+          {iguideReady ? (
+            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+              Ready
+            </span>
+          ) : iguideStarted ? (
+            <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+              Finish setup
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full border border-realtor-primary/15 bg-realtor-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
+              Optional
+            </span>
+          )}
+        </div>
+
+        <details
+          id="iguide-configuration"
+          open={iguideStarted && !iguideReady}
+          className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
+        >
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
+            Configuration & diagnostics
+          </summary>
+          <div className="border-t border-realtor-primary/10 px-4 pb-4">
+        <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
+          <p className="text-sm font-semibold text-realtor-text">
+            Portal search is now supported
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-realtor-muted">
+            iGUIDE added the list endpoint to its public documentation in July
+            2026. Include <strong>iguide.list</strong>, then use the test button
+            below to confirm this token can see portal tours. Manual paste and
+            ready webhooks remain available either way.
+          </p>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
+          <p className="text-sm font-semibold text-realtor-text">
+            What to copy from iGUIDE
+          </p>
+          <ol className="mt-2 list-inside list-decimal space-y-1 text-sm text-realtor-muted">
+            <li>
+              In iGUIDE, go to{" "}
+              <strong>Settings → API Management → API Tokens</strong>.
+            </li>
+            <li>
+              Copy iGUIDE&apos;s <strong>Client ID</strong> into{" "}
+              <strong>iGUIDE Client ID</strong> below.
+            </li>
+            <li>
+              Copy iGUIDE&apos;s <strong>Token</strong> into{" "}
+              <strong>iGUIDE Token</strong> below.
+            </li>
+            <li>
+              Give that token these permissions: <strong>iguide.read</strong>,{" "}
+              <strong>iguide.write</strong>, <strong>iguide.process</strong>, and{" "}
+              <strong>iguide.events</strong>. Add <strong>iguide.list</strong> for
+              portal tour search.
+            </li>
+            <li>
+              Make up a long random <strong>Webhook secret</strong>, save it
+              below, then add it to the end of the webhook URL in iGUIDE.
+            </li>
+          </ol>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-white/70 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
+            Webhook URL for iGUIDE
+          </p>
+          <p className="mt-1 text-xs text-realtor-muted">
+            After saving the webhook secret below, paste this into iGUIDE&apos;s
+            webhook setup and put your secret after the equals sign.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <code className="min-w-0 flex-1 overflow-x-auto rounded-xl border border-realtor-primary/15 bg-white px-3 py-2 text-xs text-realtor-text">
+              {iguideWebhookUrlBase}YOUR_SECRET_HERE
+            </code>
+            <CopyTextButton value={`${iguideWebhookUrlBase}YOUR_SECRET_HERE`} />
+          </div>
+        </div>
+
+        <CredentialsForm
+          provider="iguide"
+          fields={[
+            {
+              name: "app_id",
+              label: "iGUIDE Client ID",
+              helper:
+                "In iGUIDE this may be labelled Client ID. It is the short ID beside the token.",
+              type: "text",
+            },
+            {
+              name: "app_token",
+              label: "iGUIDE Token",
+              helper:
+                "In iGUIDE this is labelled Token. It is the long secret value shown when the token is created.",
+            },
+            {
+              name: "webhook_secret",
+              label: "Webhook secret",
+              helper:
+                "You choose this. Use a long random value and put the same value after secret= in iGUIDE. If you paste the whole webhook URL here by mistake, we will save just the secret.",
+            },
+          ]}
+          statuses={{
+            app_id: iguideAppIdStatus,
+            app_token: iguideAppTokenStatus,
+            webhook_secret: iguideWebhookStatus,
+          }}
+        />
+        <IGuideTester disabled={!iguideConfigured} />
+        {!iguideWebhookConfigured ? (
+          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+            The API credentials can be tested, but automatic ready-event syncing
+            stays off until a webhook secret is saved and the matching URL is
+            added in iGUIDE.
+          </p>
+        ) : null}
+          </div>
+        </details>
+      </section>
+
+      <section id="autoenhance" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-realtor-text">
+              Autoenhance.ai
+            </h2>
+            <p className="mt-1 text-sm text-realtor-muted">
+              Enhances booking photos and sends completed JPEGs to the linked
+              iGUIDE gallery.
+            </p>
+          </div>
+          {autoenhanceReady ? (
+            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+              Ready
+            </span>
+          ) : autoenhanceConfigured ? (
+            <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+              Needs webhook
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full border border-realtor-primary/15 bg-realtor-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
+              Optional
+            </span>
+          )}
+        </div>
+
+        <details
+          id="autoenhance-configuration"
+          open={autoenhanceConfigured && !autoenhanceReady}
+          className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
+        >
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
+            Configuration & diagnostics
+          </summary>
+          <div className="border-t border-realtor-primary/10 px-4 pb-4">
+        <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
+          <p className="text-sm font-semibold text-realtor-text">
+            Automatic completion updates
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-realtor-muted">
+            Add this URL as the webhook URL in Autoenhance&apos;s API settings.
+            Paste the same long random value into Autoenhance&apos;s authentication
+            field and the Webhook secret field below. The secret and API key
+            remain server-side.
+          </p>
+          <div className="mt-3 flex flex-col gap-2 rounded-xl border border-realtor-primary/15 bg-white/80 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <code className="min-w-0 break-all text-[11px] text-realtor-text">
+              {autoenhanceWebhookUrl}
+            </code>
+            <CopyTextButton value={autoenhanceWebhookUrl} />
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${
+                autoenhanceWebhookStatus.source === "none"
+                  ? "border-amber-200 bg-amber-50 text-amber-800"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-800"
+              }`}
+            >
+              {autoenhanceWebhookStatus.source === "none"
+                ? "Webhook secret needed"
+                : "Webhook authentication saved"}
+            </span>
+            <Link
+              href="/admin/autoenhance-test"
+              className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+            >
+              Open test sandbox
+            </Link>
+          </div>
+        </div>
+
+        <CredentialsForm
+          provider="autoenhance"
+          fields={[
+            {
+              name: "api_key",
+              label: "Autoenhance API key",
+              helper:
+                "Create this in Autoenhance. For Vercel env fallback use AUTOENHANCE_API_KEY.",
+            },
+            {
+              name: "webhook_secret",
+              label: "Webhook secret",
+              helper:
+                "Use the exact same random secret in Autoenhance's webhook authentication field. For Vercel fallback use AUTOENHANCE_WEBHOOK_SECRET.",
+            },
+          ]}
+          statuses={{
+            api_key: autoenhanceApiKeyStatus,
+            webhook_secret: autoenhanceWebhookStatus,
+          }}
+        />
           </div>
         </details>
       </section>
@@ -1195,7 +1118,7 @@ export default async function IntegrationsPage({
 
         <details
           id="quickbooks-configuration"
-          open={!quickBooksReady}
+          open={Boolean(connection && !quickBooksReady)}
           className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
         >
           <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
@@ -1278,8 +1201,158 @@ export default async function IntegrationsPage({
         )}
           </div>
         </details>
+      </section>      <section id="ai-assistant" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-realtor-text">
+              AI Assistant
+            </h2>
+            <p className="mt-1 text-sm text-realtor-muted">
+              Powers admin planning and realtor-facing copy tools. Use the
+              platform key or this company&apos;s own OpenAI key.
+            </p>
+          </div>
+          {openAiConfigured ? (
+            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+              Configured
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full border border-realtor-primary/15 bg-realtor-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
+              Optional
+            </span>
+          )}
+        </div>
+
+        <details
+          id="ai-configuration"
+          className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
+        >
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
+            Configuration & diagnostics
+          </summary>
+          <div className="border-t border-realtor-primary/10 px-4 pb-4">
+        <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
+          <p className="text-sm font-semibold text-realtor-text">
+            How this works
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-realtor-muted">
+            If a company saves its own key, its assistant calls OpenAI with
+            that key. If not, the app falls back to the platform
+            <code className="mx-1">OPENAI_API_KEY</code>. Anything that changes
+            bookings still asks for confirmation first.
+          </p>
+        </div>
+
+        <CredentialsForm
+          provider="openai"
+          fields={[
+            {
+              name: "api_key",
+              label: "OpenAI API key",
+              helper:
+                "Starts with sk-. Create it in the OpenAI dashboard. We store it server-side only.",
+            },
+            {
+              name: "model",
+              label: "Model override",
+              helper:
+                "Optional. Leave blank to use the platform default model.",
+              type: "text",
+            },
+          ]}
+          statuses={{
+            api_key: openAiApiKeyStatus,
+            model: openAiModelStatus,
+          }}
+        />
+        <OpenAITester />
+          </div>
+        </details>
       </section>
+
+      <section id="google-maps" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-realtor-text">
+              Google Maps Routes
+            </h2>
+            <p className="mt-1 text-sm text-realtor-muted">
+              Adds accurate drive-time warnings to Today. Without it, basic
+              schedule and city checks still work.
+            </p>
+          </div>
+          {googleMapsConfigured ? (
+            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+              V2 enabled
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full border border-realtor-primary/15 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
+              V1 fallback
+            </span>
+          )}
+        </div>
+
+        <details
+          id="maps-configuration"
+          className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
+        >
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
+            Configuration & diagnostics
+          </summary>
+          <div className="border-t border-realtor-primary/10 px-4 pb-4">
+        <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
+          <p className="text-sm font-semibold text-realtor-text">
+            Cost-safe fallback
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-realtor-muted">
+            Use a server-side Google Maps key with the Routes API enabled.
+            Keep your browser Places key separate. The app only calls this
+            from server code and only requests route duration and distance.
+          </p>
+        </div>
+
+        <CredentialsForm
+          provider="google_maps"
+          fields={[
+            {
+              name: "api_key",
+              label: "Google Maps server API key",
+              helper:
+                "Enable Routes API. For Vercel env fallback use GOOGLE_MAPS_SERVER_API_KEY.",
+            },
+          ]}
+          statuses={{ api_key: googleMapsApiKeyStatus }}
+        />
+          </div>
+        </details>
+      </section>
+
+
     </div>
+  );
+}
+
+function ConnectionGroup({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="min-w-0 border-b border-realtor-primary/10 lg:border-b-0 lg:border-r lg:last:border-r-0">
+      <header className="px-4 pb-3 pt-4 sm:px-5">
+        <h3 className="text-sm font-semibold text-realtor-text">{title}</h3>
+        <p className="mt-1 text-xs leading-5 text-realtor-muted">
+          {description}
+        </p>
+      </header>
+      <div className="divide-y divide-realtor-primary/10 border-t border-realtor-primary/10">
+        {children}
+      </div>
+    </section>
   );
 }
 
@@ -1301,12 +1374,12 @@ function IntegrationOverviewRow({
       ? "bg-emerald-50 text-emerald-800"
       : tone === "attention"
         ? "bg-amber-50 text-amber-900"
-        : "bg-realtor-surface-muted text-realtor-muted";
+        : "bg-realtor-soft text-realtor-muted";
 
   return (
     <a
       href={href}
-      className="group flex min-h-24 min-w-0 items-center justify-between gap-3 border-b border-realtor-primary/10 bg-white/45 px-4 py-4 transition hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-realtor-primary md:border-r sm:px-5"
+      className="group flex min-h-20 min-w-0 items-center justify-between gap-3 bg-white/45 px-4 py-3 transition hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-realtor-primary sm:px-5"
     >
       <span className="min-w-0">
         <span className="block text-sm font-semibold text-realtor-text">

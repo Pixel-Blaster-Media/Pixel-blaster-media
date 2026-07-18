@@ -19,19 +19,19 @@ export default async function PricingPage() {
 
   return (
     <div className="space-y-10">
-      <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
+      <header className="max-w-3xl">
         <Link
           href="/admin/settings"
-          className="text-xs font-semibold uppercase tracking-[0.2em] text-realtor-primary hover:text-realtor-primary"
+          className="text-sm font-semibold text-realtor-primary hover:text-realtor-text"
         >
           ← Settings
         </Link>
-        <h1 className="mt-1 text-2xl font-bold text-realtor-text">Pricing</h1>
-        <p className="mt-2 text-sm text-realtor-muted">
-          Bundles, à la carte items, and add-ons shown on the booking form
-          and invoiced via QuickBooks. Edits here take effect immediately
-          for new bookings. Existing bookings keep whatever price was
-          locked in at booking time.
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-realtor-text">
+          Services & pricing
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-realtor-muted">
+          Manage what clients can book. Changes apply to new bookings only;
+          existing jobs keep their original price.
         </p>
       </header>
 

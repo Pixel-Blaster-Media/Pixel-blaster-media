@@ -104,7 +104,7 @@ export default async function BusinessSettingsPage({
         </Link>
       </div>
 
-      <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-5 shadow-lg shadow-realtor-text/10">
+      <header className="max-w-3xl">
         <p className="text-xs font-semibold uppercase tracking-[0.28em] text-realtor-primary/80">
           {isWelcome ? "Welcome" : "Settings"}
         </p>
@@ -114,18 +114,48 @@ export default async function BusinessSettingsPage({
         <p className="mt-2 max-w-2xl text-sm leading-6 text-realtor-muted">
           {isWelcome
             ? "You are in. Finish these basics and your booking link will be ready to send to realtors."
-            : "The company-level identity for this booking system. This is the foundation for letting other photography companies run their own version later."}
+            : "The company name, brand, booking address, and email identity your clients see."}
         </p>
       </header>
 
-      <SetupChecklist
-        status={setupStatus}
-        bookingUrl={bookingUrl}
-        calendarEmail={calendarConnection?.google_account_email ?? null}
-      />
+      {isWelcome ? (
+        <SetupChecklist
+          status={setupStatus}
+          bookingUrl={bookingUrl}
+          calendarEmail={calendarConnection?.google_account_email ?? null}
+        />
+      ) : (
+        <BookingLinkBar bookingUrl={bookingUrl} />
+      )}
 
       <BusinessSettingsForm organization={organization} />
     </div>
+  );
+}
+
+function BookingLinkBar({ bookingUrl }: { bookingUrl: string }) {
+  return (
+    <section className="flex flex-col gap-3 rounded-2xl border border-realtor-primary/12 bg-realtor-soft/45 px-4 py-3 sm:flex-row sm:items-center sm:px-5">
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-realtor-muted">
+          Public booking link
+        </p>
+        <code className="mt-1 block truncate text-xs text-realtor-text sm:text-sm">
+          {bookingUrl}
+        </code>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <CopyBookingLinkButton value={bookingUrl} />
+        <Link
+          href={bookingUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex min-h-10 items-center rounded-full border border-realtor-primary/20 bg-white px-4 text-sm font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+        >
+          Preview
+        </Link>
+      </div>
+    </section>
   );
 }
 
@@ -161,7 +191,7 @@ function SetupChecklist({
         </span>
       </div>
 
-      <div className="mt-5 rounded-2xl border border-realtor-primary/10 bg-realtor-surface-muted/60 p-4">
+      <div className="mt-5 rounded-2xl border border-realtor-primary/10 bg-realtor-soft/60 p-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-realtor-muted">
           Public booking link
         </p>

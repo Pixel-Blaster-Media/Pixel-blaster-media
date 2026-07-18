@@ -71,14 +71,14 @@ export default async function AvailabilityPage() {
 
   return (
     <div className="space-y-6 pb-10">
-      <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-5 shadow-lg shadow-realtor-text/10">
+      <header className="max-w-3xl">
         <Link
           href="/admin/settings"
-          className="text-xs font-semibold uppercase tracking-[0.2em] text-realtor-primary/80 hover:text-realtor-text"
+          className="text-sm font-semibold text-realtor-primary hover:text-realtor-text"
         >
           ← Settings
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold text-realtor-text md:text-3xl">
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-realtor-text">
           Availability
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-realtor-muted">
