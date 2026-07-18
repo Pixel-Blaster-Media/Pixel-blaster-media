@@ -751,7 +751,7 @@ export default function CalendarWeekView({
 
   return (
     <div className="max-w-full space-y-3 px-0.5">
-      <section className="sticky top-2 z-[80] overflow-visible rounded-2xl border border-realtor-primary/15 bg-realtor-surface/95 p-2 shadow-lg shadow-realtor-text/10 backdrop-blur-xl">
+      <section className="sticky top-2 z-[80] overflow-visible rounded-3xl border border-realtor-primary/15 bg-realtor-surface/95 p-2 shadow-lg shadow-realtor-text/10 backdrop-blur-xl">
         <div className="md:hidden">
           <div className="flex items-center gap-2">
             <nav
@@ -1127,7 +1127,7 @@ export default function CalendarWeekView({
       ) : (
       <div
         ref={desktopTimelineScrollRef}
-        className="hidden max-h-[calc(100dvh-210px)] overflow-auto rounded-2xl border border-realtor-primary/10 bg-realtor-surface/85 shadow-lg shadow-black/10 md:block xl:max-h-[calc(100dvh-190px)]"
+        className="hidden max-h-[calc(100dvh-210px)] overflow-auto rounded-3xl border border-realtor-primary/10 bg-realtor-surface/85 shadow-lg shadow-black/10 md:block xl:max-h-[calc(100dvh-190px)]"
       >
         <div
           className="grid"
@@ -1311,7 +1311,7 @@ export default function CalendarWeekView({
           <section
             onTouchStart={handleMobileSwipeStart}
             onTouchEnd={handleMobileSwipeEnd}
-            className="max-w-full overflow-hidden rounded-2xl border border-realtor-primary/10 bg-realtor-surface shadow-sm shadow-realtor-text/5"
+            className="max-w-full overflow-hidden rounded-3xl border border-realtor-primary/10 bg-realtor-surface shadow-sm shadow-realtor-text/5"
           >
             <div className="flex items-center justify-between gap-2 px-4 py-3">
               <div className="min-w-0">
@@ -1339,7 +1339,7 @@ export default function CalendarWeekView({
               <div
                 data-calendar-drop-day={mobileDay.dateInput}
                 data-calendar-drop-mode="mobile"
-                className="relative overflow-hidden rounded-2xl border border-realtor-primary/15 bg-realtor-bg/60"
+                className="relative overflow-hidden rounded-3xl border border-realtor-primary/15 bg-realtor-bg/60"
                 style={{ height: mobileTimelineHeight }}
               >
                 {mobileDay.enabled ? (
@@ -1950,7 +1950,7 @@ function CalendarAgendaView({
   const todayKey = dateInputForLocalDate();
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-realtor-primary/15 bg-white/80 shadow-lg shadow-realtor-text/5">
+    <section className="overflow-hidden rounded-3xl border border-realtor-primary/15 bg-white/80 shadow-lg shadow-realtor-text/5">
       {days.map((day) => {
         const dayItems = [...(itemsByDay.get(day.dateInput) ?? [])].sort(
           (a, b) =>
@@ -2769,7 +2769,7 @@ function MobileTimelineEvent({
     ...eventLayoutStyle({ top, height, layout: item.layout, mobile: true }),
     ...sourceStyle,
   };
-  const eventClass = `absolute z-10 overflow-hidden rounded-xl border px-2.5 py-1.5 text-left shadow-sm ${classes}`;
+  const eventClass = `absolute z-10 overflow-hidden rounded-2xl border px-2.5 py-1.5 text-left shadow-sm ${classes}`;
 
   if (canOpen) {
     return (
@@ -2866,7 +2866,7 @@ function CalendarEvent({
       </div>
     </div>
   );
-  const baseClass = `absolute z-10 block overflow-hidden rounded-xl border px-3 py-2 text-left shadow-sm transition ${classes}`;
+  const baseClass = `absolute z-10 block overflow-hidden rounded-2xl border px-3 py-2 text-left shadow-sm transition ${classes}`;
 
   if (canMove) {
     return (
