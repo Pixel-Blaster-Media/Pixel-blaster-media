@@ -48,6 +48,10 @@ test("calendar hierarchy uses rounder outer surfaces and appointment cards", () 
     calendarSource,
     /max-w-full overflow-hidden rounded-3xl[^\n]*bg-realtor-surface/,
   );
+  assert.match(
+    calendarSource,
+    /data-calendar-drop-mode="mobile"[\s\S]{0,160}className="relative overflow-hidden rounded-2xl/,
+  );
   assert.match(calendarSource, /function CalendarAgendaView[\s\S]*?<section className="overflow-hidden rounded-3xl/);
   const roundedEventCards = calendarSource.match(
     /overflow-hidden rounded-2xl border px-(?:2\.5|3)/g,
