@@ -291,7 +291,7 @@ export default async function AdminCalendarPage({
       localDate,
       href: `/admin/bookings/${booking.id}`,
       statusLabel: meta.label,
-      statusClass: meta.pill,
+      statusClass: calendarStatusPill(booking.status),
       syncWarning: googleOutOfSync
         ? "Google Calendar out of sync"
         : undefined,
@@ -369,6 +369,9 @@ export default async function AdminCalendarPage({
   return (
     <div className="max-w-full space-y-4 px-0.5">
       <header className="px-1 py-1 md:py-2">
+        <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-realtor-primary/75 md:text-xs">
+          Schedule
+        </p>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <div className="md:hidden">
@@ -438,6 +441,23 @@ export default async function AdminCalendarPage({
       </div>
     </div>
   );
+}
+
+function calendarStatusPill(status: BookingStatus): string {
+  switch (status) {
+    case "requested":
+      return "border-realtor-accent/40 bg-realtor-accent/15 text-realtor-text";
+    case "shot":
+      return "border-sky-700/20 bg-sky-50 text-sky-900";
+    case "editing":
+      return "border-amber-700/20 bg-amber-50 text-amber-900";
+    case "delivered":
+      return "border-realtor-muted/20 bg-realtor-soft text-realtor-text";
+    case "cancelled":
+      return "border-red-700/20 bg-red-50 text-red-800";
+    default:
+      return "border-realtor-primary/25 bg-realtor-primary/10 text-realtor-primary";
+  }
 }
 
 function CalendarSidebar({
