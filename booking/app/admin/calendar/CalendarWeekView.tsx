@@ -1331,15 +1331,15 @@ export default function CalendarWeekView({
               </span>
             </div>
 
-            <div className="border-t border-realtor-primary/10 px-3 pb-3 pt-3">
+            <div className="border-t border-realtor-primary/10">
               <div
                 ref={mobileTimelineScrollRef}
-                className="h-[68dvh] min-h-[520px] max-h-[720px] overflow-y-auto overscroll-contain rounded-xl [-webkit-overflow-scrolling:touch]"
+                className="h-[68dvh] min-h-[520px] max-h-[720px] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
               >
               <div
                 data-calendar-drop-day={mobileDay.dateInput}
                 data-calendar-drop-mode="mobile"
-                className="relative overflow-hidden rounded-xl border border-realtor-primary/15 bg-realtor-bg/60"
+                className="relative overflow-hidden bg-realtor-bg/60"
                 style={{ height: mobileTimelineHeight }}
               >
                 {mobileDay.enabled ? (
@@ -2769,7 +2769,7 @@ function MobileTimelineEvent({
     ...eventLayoutStyle({ top, height, layout: item.layout, mobile: true }),
     ...sourceStyle,
   };
-  const eventClass = `absolute z-10 overflow-hidden rounded-2xl border px-2.5 py-1.5 text-left shadow-sm ${classes}`;
+  const eventClass = `absolute z-10 overflow-hidden rounded-xl border border-l-[3px] px-2.5 py-1.5 text-left shadow-sm ${classes}`;
 
   if (canOpen) {
     return (
@@ -2866,7 +2866,7 @@ function CalendarEvent({
       </div>
     </div>
   );
-  const baseClass = `absolute z-10 block overflow-hidden rounded-2xl border px-3 py-2 text-left shadow-sm transition ${classes}`;
+  const baseClass = `absolute z-10 block overflow-hidden rounded-xl border border-l-[3px] px-3 py-2 text-left shadow-sm transition ${classes}`;
 
   if (canMove) {
     return (
