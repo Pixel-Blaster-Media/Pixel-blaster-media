@@ -25,6 +25,39 @@ const quickViewSource = calendarSource.slice(
   calendarSource.indexOf("function QuickViewSection"),
 );
 
+test("mobile calendar heading keeps the week summary beside the title", () => {
+  assert.match(
+    calendarPageSource,
+    /flex min-w-0 items-baseline justify-between gap-2 md:hidden/,
+  );
+  assert.match(calendarPageSource, /text-\[clamp\(1\.25rem,6vw,1\.5rem\)\]/);
+  assert.match(
+    calendarPageSource,
+    /flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-right text-\[clamp\(11px,3vw,14px\)\]/,
+  );
+  assert.match(calendarPageSource, /data-calendar-week-summary/);
+  assert.match(calendarPageSource, /formatCompactWeekRange\(weekStart\)/);
+  assert.match(calendarPageSource, /month: "short"/);
+  assert.match(calendarPageSource, /appointmentCount} appt/);
+});
+
+test("calendar hierarchy uses rounder outer surfaces and appointment cards", () => {
+  assert.match(calendarSource, /sticky top-2[^\n]*rounded-3xl/);
+  assert.match(calendarSource, /overflow-auto rounded-3xl[^\n]*md:block/);
+  assert.match(
+    calendarSource,
+    /max-w-full overflow-hidden rounded-3xl[^\n]*bg-realtor-surface/,
+  );
+  assert.match(calendarSource, /function CalendarAgendaView[\s\S]*?<section className="overflow-hidden rounded-3xl/);
+  const roundedEventCards = calendarSource.match(
+    /overflow-hidden rounded-2xl border px-(?:2\.5|3)/g,
+  );
+  assert.ok(
+    roundedEventCards && roundedEventCards.length >= 2,
+    "Mobile and desktop appointment cards should both use rounded-2xl corners",
+  );
+});
+
 test("calendar booking quick view exposes an inline date and time reschedule action", () => {
   assert.match(quickViewSource, /Change date & time/);
   assert.match(quickViewSource, /type="date"/);

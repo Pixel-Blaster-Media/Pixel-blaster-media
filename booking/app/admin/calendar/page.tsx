@@ -374,12 +374,16 @@ export default async function AdminCalendarPage({
         </p>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
-            <div className="md:hidden">
-              <h1 className="text-2xl font-bold tracking-tight text-realtor-text">
+            <div className="flex min-w-0 items-baseline justify-between gap-2 md:hidden">
+              <h1 className="shrink-0 whitespace-nowrap text-[clamp(1.25rem,6vw,1.5rem)] font-bold tracking-tight text-realtor-text">
                 Calendar
               </h1>
-              <p className="mt-1 text-sm text-realtor-muted">
-                {formatWeekRange(weekStart)} · {appointmentCount} appointment
+              <p
+                data-calendar-week-summary
+                aria-label={`${formatWeekRange(weekStart)} · ${appointmentCount} appointment${appointmentCount === 1 ? "" : "s"}`}
+                className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-right text-[clamp(11px,3vw,14px)] leading-none tracking-[-0.015em] text-realtor-muted"
+              >
+                {formatCompactWeekRange(weekStart)} · {appointmentCount} appt
                 {appointmentCount === 1 ? "" : "s"}
               </p>
             </div>
@@ -858,6 +862,23 @@ function formatWeekRange(key: string): string {
   return startMonth === endMonth
     ? `${startMonth} ${start.getUTCDate()}-${end.getUTCDate()}, ${year}`
     : `${startMonth} ${start.getUTCDate()}-${endMonth} ${end.getUTCDate()}, ${year}`;
+}
+
+function formatCompactWeekRange(key: string): string {
+  const start = dateFromKey(key);
+  const end = new Date(start);
+  end.setUTCDate(start.getUTCDate() + 6);
+  const month = new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    month: "short",
+  });
+  const startMonth = month.format(start);
+  const endMonth = month.format(end);
+  const year = end.getUTCFullYear();
+
+  return startMonth === endMonth
+    ? `${startMonth} ${start.getUTCDate()}–${end.getUTCDate()}, ${year}`
+    : `${startMonth} ${start.getUTCDate()}–${endMonth} ${end.getUTCDate()}, ${year}`;
 }
 
 function timeToMinutes(value: string): number {
