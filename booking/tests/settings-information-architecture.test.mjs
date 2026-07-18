@@ -38,8 +38,9 @@ test("launch readiness shows only items that still need attention", () => {
 });
 
 test("settings navigation uses grouped flat rows instead of mobile accordions", () => {
-  assert.match(settingsPage, /title: "Business setup"/);
-  assert.match(settingsPage, /title: "Tools & workflow"/);
+  assert.match(settingsPage, /title: "Bookings"/);
+  assert.match(settingsPage, /title: "Connections"/);
+  assert.match(settingsPage, /title: "App & daily view"/);
   assert.match(settingsPage, /title: "Platform administration"/);
   assert.match(settingsHub, /divide-y/);
   assert.doesNotMatch(settingsHub, /useState/);
@@ -82,9 +83,15 @@ test("integration credentials and diagnostics are progressively disclosed", () =
 
 test("integration readiness includes required workflow configuration", () => {
   assert.match(integrationsPage, /const autoenhanceReady =/);
-  assert.match(integrationsPage, /open={!autoenhanceReady}/);
+  assert.match(
+    integrationsPage,
+    /open={autoenhanceConfigured && !autoenhanceReady}/,
+  );
   assert.match(integrationsPage, /const quickBooksReady =/);
-  assert.match(integrationsPage, /open={!quickBooksReady}/);
+  assert.match(
+    integrationsPage,
+    /open={Boolean\(connection && !quickBooksReady\)}/,
+  );
   assert.match(integrationsPage, /connection\?\.default_item_id/);
 });
 
@@ -94,7 +101,10 @@ test("QuickBooks readiness requires credentials and a usable active item mapping
   assert.match(integrationsPage, /!itemError/);
   assert.match(integrationsPage, /items\?\.some/);
   assert.match(integrationsPage, /item\.Id === connection\?\.default_item_id/);
-  assert.match(integrationsPage, /open={!quickBooksReady}/);
+  assert.match(
+    integrationsPage,
+    /open={Boolean\(connection && !quickBooksReady\)}/,
+  );
 });
 
 test("settings readiness and preference copy describe their true scope", () => {
@@ -102,6 +112,7 @@ test("settings readiness and preference copy describe their true scope", () => {
   assert.match(settingsPage, /process\.env\.GOOGLE_CLIENT_ID/);
   assert.match(settingsPage, /process\.env\.GOOGLE_CLIENT_SECRET/);
   assert.match(preferencesPage, /company.*Today/i);
+  assert.match(preferencesPage, /App & daily view/);
   assert.doesNotMatch(preferencesPage, /Personalize this device/);
 });
 
@@ -129,5 +140,87 @@ test("connected Calendar and QuickBooks details stay quiet until needed", () => 
   assert.ok(calendarDetails >= 0 && calendarDetails < calendarTester);
   assert.ok(quickBooksDetails >= 0 && quickBooksDetails < itemPicker);
   assert.match(integrationsPage, /open={!googleReady}/);
-  assert.match(integrationsPage, /open={!quickBooksReady}/);
+  assert.match(
+    integrationsPage,
+    /open={Boolean\(connection && !quickBooksReady\)}/,
+  );
+});
+
+test("settings overview leads with operator essentials instead of a beta checklist", () => {
+  assert.match(settingsPage, /Everything essential is ready/);
+  assert.match(settingsPage, /Only the items that need you appear here/);
+  assert.match(settingsPage, /title: "Bookings"/);
+  assert.match(settingsPage, /title: "Connections"/);
+  assert.match(settingsPage, /title: "App & daily view"/);
+  assert.doesNotMatch(settingsPage, /Beta readiness/);
+  assert.doesNotMatch(settingsPage, /beta wow-factor/);
+});
+
+test("business profile does not repeat the full launch checklist after onboarding", () => {
+  const businessPage = readFileSync(
+    new URL("../app/admin/settings/business/page.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(businessPage, /isWelcome\s*\?\s*\(/);
+  assert.match(businessPage, /<SetupChecklist/);
+  assert.match(businessPage, /<BookingLinkBar/);
+  assert.doesNotMatch(
+    businessPage,
+    /foundation for letting other photography companies run their own version later/,
+  );
+});
+
+test("connections make core tools prominent and keep untouched optional setup closed", () => {
+  assert.match(integrationsPage, /<h1[^>]*>[\s\S]*Connections/);
+  assert.match(integrationsPage, /Most photo companies only need/);
+  assert.match(integrationsPage, /Booking essentials/);
+  assert.match(integrationsPage, /Production workflow/);
+  assert.match(integrationsPage, /Optional helpers/);
+  assert.match(integrationsPage, /const iguideStarted =/);
+  assert.match(integrationsPage, /open={iguideStarted && !iguideReady}/);
+  assert.match(
+    integrationsPage,
+    /open={Boolean\(connection && !quickBooksReady\)}/,
+  );
+  assert.match(
+    integrationsPage,
+    /open={autoenhanceConfigured && !autoenhanceReady}/,
+  );
+  const providerOrder = [
+    'id="google-calendar"',
+    'id="email-delivery"',
+    'id="iguide"',
+    'id="autoenhance"',
+    'id="quickbooks"',
+    'id="ai-assistant"',
+    'id="google-maps"',
+  ].map((marker) => integrationsPage.indexOf(marker));
+  assert.ok(providerOrder.every((index) => index >= 0));
+  assert.deepEqual(providerOrder, [...providerOrder].sort((a, b) => a - b));
+  assert.match(
+    integrationsPage,
+    /Calendar connection is unavailable right now/,
+  );
+});
+
+test("settings surfaces use generated warm palette tokens", () => {
+  for (const relativePath of [
+    "../app/admin/settings/availability/HoursEditor.tsx",
+    "../app/admin/settings/business/BusinessSettingsForm.tsx",
+    "../app/admin/settings/business/page.tsx",
+  ]) {
+    const source = readFileSync(new URL(relativePath, import.meta.url), "utf8");
+    assert.doesNotMatch(source, /realtor-surface-muted|realtor-primary-light/);
+  }
+});
+
+test("settings subpages use quiet page headers instead of elevated header cards", () => {
+  for (const relativePath of [
+    "../app/admin/settings/availability/page.tsx",
+    "../app/admin/settings/pricing/page.tsx",
+  ]) {
+    const source = readFileSync(new URL(relativePath, import.meta.url), "utf8");
+    assert.match(source, /<header className="max-w-3xl">/);
+    assert.doesNotMatch(source, /<header className="rounded-2xl/);
+  }
 });

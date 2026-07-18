@@ -91,7 +91,7 @@ export default function BusinessSettingsForm({
               />
               <span className="mt-1 block text-xs leading-5 text-realtor-muted">
                 Public booking link:{" "}
-                <code className="rounded-md bg-realtor-surface-muted px-1.5 py-0.5 text-realtor-text">
+                <code className="rounded-md bg-realtor-soft px-1.5 py-0.5 text-realtor-text">
                   /book?org={bookingHandle || "your-company"}
                 </code>
                 . Spaces automatically become hyphens.
@@ -396,7 +396,7 @@ function BrandImageUpload({
         {label}
       </span>
       <span
-        className={`mt-2 flex w-full items-center justify-center overflow-hidden rounded-2xl border border-realtor-primary/15 bg-realtor-surface-muted text-xs font-bold uppercase tracking-[0.16em] text-realtor-primary ${previewClassName}`}
+        className={`mt-2 flex w-full items-center justify-center overflow-hidden rounded-2xl border border-realtor-primary/15 bg-realtor-soft text-xs font-bold uppercase tracking-[0.16em] text-realtor-primary ${previewClassName}`}
       >
         {visiblePreview ? (
           // eslint-disable-next-line @next/next/no-img-element
