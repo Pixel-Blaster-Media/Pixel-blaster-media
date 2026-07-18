@@ -75,6 +75,23 @@ test("pre-existing Google Calendar drift stays visible in the compact summary", 
   );
 });
 
+test("calendar surfaces use the shared warm workspace palette", () => {
+  assert.match(calendarPageSource, />\s*Schedule\s*</);
+  assert.match(calendarSource, /bg-realtor-bg\/60/);
+  assert.match(calendarSource, /bg-realtor-soft\/60/);
+  assert.match(calendarSource, /border-realtor-primary\/10/);
+  assert.match(calendarSource, /grid grid-cols-2 rounded-xl bg-realtor-soft\/70/);
+  assert.match(calendarSource, /aria-label="Calendar view"/);
+  assert.match(calendarSource, /focus-visible:ring-2/);
+  assert.match(
+    calendarPageSource,
+    /statusClass:\s*calendarStatusPill\(booking\.status\)/,
+  );
+  assert.doesNotMatch(calendarSource, /#fffdf8|#d8cab9|#d7d1c4|#d0cabd|#ded6c8|#ede6d9/);
+  assert.doesNotMatch(calendarSource, /realtor-surface-muted/);
+  assert.doesNotMatch(calendarSource, /realtor-primary-light/);
+});
+
 test("mobile admin navigation stays visible without covering calendar bottom sheets", () => {
   assert.match(bottomNavSource, /z-\[210\]/);
   const reservedNavOffsets = calendarSource.match(

@@ -753,7 +753,7 @@ export default function CalendarWeekView({
     <div className="max-w-full space-y-3 px-0.5">
       <section className="sticky top-2 z-[80] overflow-visible rounded-2xl border border-realtor-primary/15 bg-realtor-surface/95 p-2 shadow-lg shadow-realtor-text/10 backdrop-blur-xl">
         <div className="md:hidden">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <nav
               aria-label="Calendar week navigation"
               className="flex shrink-0 items-center gap-1"
@@ -762,13 +762,13 @@ export default function CalendarWeekView({
                 href={navigation.previousHref}
                 aria-label="Previous week"
                 title="Previous week"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-realtor-primary/15 bg-white text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-realtor-primary/15 bg-white text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
               >
                 <ChevronLeft aria-hidden="true" className="h-4 w-4" />
               </Link>
               <Link
                 href={navigation.todayHref}
-                className="inline-flex h-9 items-center justify-center rounded-full border border-realtor-primary/25 bg-white px-3 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/45"
+                className="inline-flex h-11 items-center justify-center rounded-full border border-realtor-primary/25 bg-white px-3 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/45"
               >
                 Today
               </Link>
@@ -776,48 +776,54 @@ export default function CalendarWeekView({
                 href={navigation.nextHref}
                 aria-label="Next week"
                 title="Next week"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-realtor-primary/15 bg-white text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-realtor-primary/15 bg-white text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
               >
                 <ChevronRight aria-hidden="true" className="h-4 w-4" />
               </Link>
             </nav>
 
-            <div className="ml-auto inline-flex rounded-full bg-realtor-primary/5 p-1">
-              {(["day", "agenda"] as const).map((view) => (
-                <button
-                  key={view}
-                  type="button"
-                  onClick={() => setMobileView(view)}
-                  aria-pressed={mobileView === view}
-                  className={`h-8 rounded-full px-3 text-[11px] font-semibold capitalize transition ${
-                    mobileView === view
-                      ? "bg-white text-realtor-primary shadow-sm"
-                      : "text-realtor-muted"
-                  }`}
-                >
-                  {view}
-                </button>
-              ))}
+            <div className="ml-auto flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => openAddSheet()}
+                aria-label="Add a shoot or blocked time"
+                title="Add a shoot or blocked time"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-realtor-primary text-white shadow-sm transition hover:opacity-90"
+              >
+                <Plus aria-hidden="true" className="h-4.5 w-4.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileToolsOpen(true)}
+                aria-label="Open calendar tools"
+                title="Search, calendars, and hours"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-realtor-primary/15 bg-realtor-surface text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
+              >
+                <SlidersHorizontal aria-hidden="true" className="h-4 w-4" />
+              </button>
             </div>
+          </div>
 
-            <button
-              type="button"
-              onClick={() => openAddSheet()}
-              aria-label="Add a shoot or blocked time"
-              title="Add a shoot or blocked time"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-realtor-primary text-white shadow-sm transition hover:bg-realtor-primary-light"
-            >
-              <Plus aria-hidden="true" className="h-4.5 w-4.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setMobileToolsOpen(true)}
-              aria-label="Open calendar tools"
-              title="Search, calendars, and hours"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-realtor-primary/15 bg-white text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
-            >
-              <SlidersHorizontal aria-hidden="true" className="h-4 w-4" />
-            </button>
+          <div
+            role="group"
+            aria-label="Calendar view"
+            className="mt-2 grid grid-cols-2 rounded-xl bg-realtor-soft/70 p-1"
+          >
+            {(["day", "agenda"] as const).map((view) => (
+              <button
+                key={view}
+                type="button"
+                onClick={() => setMobileView(view)}
+                aria-pressed={mobileView === view}
+                className={`min-h-11 rounded-lg text-xs font-semibold capitalize outline-none transition focus-visible:ring-2 focus-visible:ring-realtor-primary/40 focus-visible:ring-offset-1 ${
+                  mobileView === view
+                    ? "bg-realtor-surface text-realtor-primary shadow-sm"
+                    : "text-realtor-muted"
+                }`}
+              >
+                {view}
+              </button>
+            ))}
           </div>
 
           <div className="mt-2 grid max-w-full grid-cols-7 gap-1 border-t border-realtor-primary/10 pt-2">
@@ -833,7 +839,7 @@ export default function CalendarWeekView({
                   className={`min-w-0 rounded-lg border px-1 py-1 text-center transition ${
                     isSelected
                       ? "border-realtor-primary bg-realtor-primary text-white shadow-sm"
-                      : "border-transparent bg-realtor-surface-muted text-realtor-text hover:border-realtor-primary/20"
+                      : "border-transparent bg-realtor-soft/65 text-realtor-text hover:border-realtor-primary/20"
                   }`}
                 >
                   <span
@@ -862,7 +868,7 @@ export default function CalendarWeekView({
                         : day.enabled
                           ? isSelected
                             ? "bg-white/45"
-                            : "bg-realtor-primary-light/70"
+                            : "bg-realtor-primary/45"
                           : isSelected
                             ? "bg-white/25"
                             : "bg-realtor-muted/20"
@@ -972,7 +978,7 @@ export default function CalendarWeekView({
           <button
             type="button"
             onClick={() => openAddSheet()}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-realtor-primary px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-realtor-primary-light"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-realtor-primary px-4 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
           >
             <Plus aria-hidden="true" className="h-4 w-4" />
             Add
@@ -1054,7 +1060,7 @@ export default function CalendarWeekView({
 
             <Link
               href="/admin/settings/availability"
-              className="mt-3 flex items-center gap-3 rounded-xl border border-realtor-primary/10 bg-realtor-surface-muted px-3 py-3 text-sm font-semibold text-realtor-text"
+              className="mt-3 flex items-center gap-3 rounded-xl border border-realtor-primary/10 bg-realtor-soft/65 px-3 py-3 text-sm font-semibold text-realtor-text"
             >
               <Clock3 aria-hidden="true" className="h-4 w-4 text-realtor-primary" />
               Working hours and blocked dates
@@ -1121,7 +1127,7 @@ export default function CalendarWeekView({
       ) : (
       <div
         ref={desktopTimelineScrollRef}
-        className="hidden max-h-[calc(100dvh-210px)] overflow-auto rounded-2xl border border-[#d8cab9]/70 bg-[#fffdf8]/80 shadow-lg shadow-black/10 md:block xl:max-h-[calc(100dvh-190px)]"
+        className="hidden max-h-[calc(100dvh-210px)] overflow-auto rounded-2xl border border-realtor-primary/10 bg-realtor-surface/85 shadow-lg shadow-black/10 md:block xl:max-h-[calc(100dvh-190px)]"
       >
         <div
           className="grid"
@@ -1130,36 +1136,36 @@ export default function CalendarWeekView({
             minWidth: desktopGridMinWidth,
           }}
         >
-          <div className="sticky left-0 top-0 z-30 border-b border-[#d8cab9]/70 bg-[#fffdf8] px-2 py-3" />
+          <div className="sticky left-0 top-0 z-30 border-b border-realtor-primary/10 bg-realtor-surface px-2 py-3" />
           {displayedDesktopDays.map((day) => (
             <div
               key={day.key}
-              className={`sticky top-0 z-20 border-b border-l border-[#d8cab9]/70 px-3 py-3 ${
+              className={`sticky top-0 z-20 border-b border-l border-realtor-primary/10 px-3 py-3 ${
                 currentDayKey === day.dateInput
-                  ? "bg-[#eef4ed]"
-                  : "bg-[#fffdf8]"
+                  ? "bg-realtor-primary/5"
+                  : "bg-realtor-surface"
               }`}
             >
               <div className="flex items-center gap-1.5">
-                <p className="text-xs uppercase tracking-wider text-[#6f7a70]">
+                <p className="text-xs uppercase tracking-wider text-realtor-muted">
                   {day.shortLabel}
                 </p>
                 {currentDayKey === day.dateInput ? (
                   <span className="h-1.5 w-1.5 rounded-full bg-realtor-primary" />
                 ) : null}
               </div>
-              <p className="text-xs font-semibold text-[#23332b]">{day.label}</p>
+              <p className="text-xs font-semibold text-realtor-text">{day.label}</p>
             </div>
           ))}
 
           <div
-            className="sticky left-0 z-20 bg-[#fffdf8]"
+            className="sticky left-0 z-20 bg-realtor-surface"
             style={{ height: gridHeight }}
           >
             {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, i) => (
               <div
                 key={i}
-                className="absolute right-2 text-[10px] text-[#6f7a70]"
+                className="absolute right-2 text-[10px] text-realtor-muted"
                 style={{ top: i * HOUR_HEIGHT - 6 }}
               >
                 {formatHour(START_HOUR + i)}
@@ -1172,12 +1178,12 @@ export default function CalendarWeekView({
               key={day.key}
               data-calendar-drop-day={day.dateInput}
               data-calendar-drop-mode="desktop"
-              className="relative border-l border-[#d8cab9]/65 bg-[#d7d1c4]/55"
+              className="relative border-l border-realtor-primary/10 bg-realtor-bg/60"
               style={{ height: gridHeight }}
             >
               {day.enabled ? (
                 <div
-                  className="absolute left-0 right-0 bg-[#fffdf8] ring-1 ring-inset ring-[#d8cab9]/80"
+                  className="absolute left-0 right-0 bg-realtor-surface ring-1 ring-inset ring-realtor-primary/10"
                   style={{
                     top:
                       ((day.workStartMinutes - START_HOUR * 60) / 60) *
@@ -1188,12 +1194,12 @@ export default function CalendarWeekView({
                   }}
                 />
               ) : (
-                <div className="absolute inset-0 bg-[#d0cabd]/70" />
+                <div className="absolute inset-0 bg-realtor-soft/70" />
               )}
               {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, i) => (
                 <div
                   key={`hour-line-${i}`}
-                  className="pointer-events-none absolute left-0 right-0 z-[1] border-t border-[#ded6c8]/80"
+                  className="pointer-events-none absolute left-0 right-0 z-[1] border-t border-realtor-primary/10"
                   style={{ top: i * HOUR_HEIGHT }}
                 />
               ))}
@@ -1232,9 +1238,9 @@ export default function CalendarWeekView({
                       onPointerUp={finishEmptyRangeSelection}
                       onPointerCancel={cancelEmptyRangeSelection}
                       className={
-                        "absolute left-0 right-0 z-[2] select-none border-t border-[#ede6d9]/60 transition " +
+                        "absolute left-0 right-0 z-[2] select-none border-t border-realtor-primary/5 transition " +
                         (slotIsWorking
-                          ? "hover:bg-[#3f7356]/10"
+                          ? "hover:bg-realtor-primary/10"
                           : "cursor-not-allowed")
                       }
                       style={{
@@ -1305,18 +1311,18 @@ export default function CalendarWeekView({
           <section
             onTouchStart={handleMobileSwipeStart}
             onTouchEnd={handleMobileSwipeEnd}
-            className="max-w-full overflow-hidden rounded-[28px] border border-[#d8cab9]/80 bg-[#fffdf8] shadow-lg shadow-black/10"
+            className="max-w-full overflow-hidden rounded-2xl border border-realtor-primary/10 bg-realtor-surface shadow-sm shadow-realtor-text/5"
           >
             <div className="flex items-center justify-between gap-2 px-4 py-3">
               <div className="min-w-0">
-                <h2 className="text-base font-semibold text-[#23332b]">
+                <h2 className="text-base font-semibold text-realtor-text">
                   {mobileDay.shortLabel}, {mobileDay.label}
                 </h2>
-                <p className="mt-0.5 text-xs text-[#6f7a70]">
+                <p className="mt-0.5 text-xs text-realtor-muted">
                   {mobileDayItems.length} item{mobileDayItems.length === 1 ? "" : "s"}
                 </p>
               </div>
-              <span className="shrink-0 rounded-full border border-[#d8cab9] bg-[#f7f4ed] px-2 py-1 text-[10px] text-[#6f7a70]">
+              <span className="shrink-0 rounded-full border border-realtor-primary/15 bg-realtor-soft/65 px-2 py-1 text-[10px] text-realtor-muted">
                 {mobileDay.enabled
                   ? `${minutesToLabel(
                       mobileDay.workStartMinutes,
@@ -1325,7 +1331,7 @@ export default function CalendarWeekView({
               </span>
             </div>
 
-            <div className="mt-3 border-t border-[#d8cab9]/70 px-3 pb-3 pt-3">
+            <div className="border-t border-realtor-primary/10 px-3 pb-3 pt-3">
               <div
                 ref={mobileTimelineScrollRef}
                 className="h-[68dvh] min-h-[520px] max-h-[720px] overflow-y-auto overscroll-contain rounded-3xl [-webkit-overflow-scrolling:touch]"
@@ -1333,12 +1339,12 @@ export default function CalendarWeekView({
               <div
                 data-calendar-drop-day={mobileDay.dateInput}
                 data-calendar-drop-mode="mobile"
-                className="relative overflow-hidden rounded-3xl border border-[#d8cab9] bg-[#d7d1c4]/55"
+                className="relative overflow-hidden rounded-2xl border border-realtor-primary/15 bg-realtor-bg/60"
                 style={{ height: mobileTimelineHeight }}
               >
                 {mobileDay.enabled ? (
                   <div
-                    className="absolute left-10 right-0 bg-[#fffdf8] ring-1 ring-inset ring-[#d8cab9]/80"
+                    className="absolute left-10 right-0 bg-realtor-surface ring-1 ring-inset ring-realtor-primary/10"
                     style={{
                       top:
                         ((mobileDay.workStartMinutes - mobileTimelineStart) / 60) *
@@ -1350,18 +1356,18 @@ export default function CalendarWeekView({
                     }}
                   />
                 ) : (
-                  <div className="absolute inset-y-0 left-10 right-0 bg-[#d0cabd]/70" />
+                  <div className="absolute inset-y-0 left-10 right-0 bg-realtor-soft/70" />
                 )}
 
                 {mobileHourMarks.map((minutes) => (
                   <div
                     key={`mobile-hour-${minutes}`}
-                    className="pointer-events-none absolute left-0 right-0 z-[1] border-t border-[#ded6c8]/80"
+                    className="pointer-events-none absolute left-0 right-0 z-[1] border-t border-realtor-primary/10"
                     style={{
                       top: ((minutes - mobileTimelineStart) / 60) * MOBILE_HOUR_HEIGHT,
                     }}
                   >
-                    <span className="absolute left-1 top-0.5 text-[8px] font-semibold text-[#6f7a70]">
+                    <span className="absolute left-1 top-0.5 text-[8px] font-semibold text-realtor-muted">
                       {minutesToLabel(minutes)}
                     </span>
                   </div>
@@ -1389,9 +1395,9 @@ export default function CalendarWeekView({
                         });
                       }}
                       className={
-                        "absolute left-10 right-0 z-[2] border-t border-[#ede6d9]/60 transition " +
+                        "absolute left-10 right-0 z-[2] border-t border-realtor-primary/5 transition " +
                         (slotIsWorking
-                          ? "hover:bg-[#3f7356]/10 active:bg-[#3f7356]/10"
+                          ? "hover:bg-realtor-primary/10 active:bg-realtor-primary/10"
                           : "cursor-not-allowed")
                       }
                       style={{
@@ -1417,7 +1423,7 @@ export default function CalendarWeekView({
                 ) : null}
 
                 {mobileDayItems.length === 0 ? (
-                  <div className="absolute left-12 right-2 top-2 z-[3] rounded-lg border border-dashed border-[#d8cab9] bg-[#f7f4ed]/85 px-2 py-1.5 text-[10px] text-[#6f7a70]">
+                  <div className="absolute left-12 right-2 top-2 z-[3] rounded-lg border border-dashed border-realtor-primary/15 bg-realtor-soft/85 px-2 py-1.5 text-[10px] text-realtor-muted">
                     Nothing booked yet.
                   </div>
                 ) : null}
@@ -2217,7 +2223,7 @@ function CalendarQuickView({
         {item.kind === "booking" && details ? (
           <section
             data-calendar-quick-summary
-            className="mt-4 space-y-3 rounded-2xl border border-realtor-primary/15 bg-white/70 p-3"
+            className="mt-4 space-y-3 rounded-2xl border border-realtor-primary/15 bg-realtor-soft/60 p-3"
           >
             {item.syncWarning ? (
               <p
@@ -2265,7 +2271,7 @@ function CalendarQuickView({
               {item.href ? (
                 <Link
                   href={item.href}
-                  className="inline-flex min-h-10 flex-1 basis-28 items-center justify-center rounded-full bg-realtor-primary px-4 text-xs font-semibold text-white transition hover:bg-realtor-primary-light"
+                  className="inline-flex min-h-10 flex-1 basis-28 items-center justify-center rounded-full bg-realtor-primary px-4 text-xs font-semibold text-white transition hover:opacity-90"
                 >Open job</Link>
               ) : null}
               {mapHref ? (
@@ -2287,7 +2293,7 @@ function CalendarQuickView({
         ) : null}
 
         {item.kind === "booking" ? (
-          <details className="mt-3 rounded-2xl border border-realtor-primary/15 bg-white/70 p-3">
+          <details className="mt-3 rounded-2xl border border-realtor-primary/15 bg-realtor-soft/60 p-3">
             <summary className="cursor-pointer list-none text-sm font-semibold text-realtor-primary marker:hidden">
               <span className="flex items-center justify-between gap-3">
                 Change date & time
@@ -2336,7 +2342,7 @@ function CalendarQuickView({
                 type="button"
                 disabled={reschedulePending || !rescheduleDate || !rescheduleTime}
                 onClick={saveBookingReschedule}
-                className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-realtor-primary px-4 text-sm font-semibold text-white transition hover:bg-realtor-primary-light disabled:opacity-60"
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-realtor-primary px-4 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
               >
                 {reschedulePending ? "Rescheduling..." : "Save new date & time"}
               </button>
@@ -2403,7 +2409,7 @@ function CalendarQuickView({
                 type="button"
                 disabled={blockPending}
                 onClick={saveBlock}
-                className="inline-flex min-h-11 items-center justify-center rounded-full bg-realtor-primary px-4 text-sm font-semibold text-white transition hover:bg-realtor-primary-light disabled:opacity-60"
+                className="inline-flex min-h-11 items-center justify-center rounded-full bg-realtor-primary px-4 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
               >
                 {blockPending ? "Saving..." : "Save changes"}
               </button>
@@ -2498,7 +2504,7 @@ function CalendarQuickView({
             href={item.href}
             target={external ? "_blank" : undefined}
             rel={external ? "noreferrer" : undefined}
-            className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-full bg-realtor-primary px-4 text-sm font-semibold text-white transition hover:bg-realtor-primary-light"
+            className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-full bg-realtor-primary px-4 text-sm font-semibold text-white transition hover:opacity-90"
           >
             {item.kind === "google" ? "Open Google event" : "Open booking"}
           </Link>
@@ -2574,7 +2580,7 @@ function calendarEventSurfaceClass(item: CalendarItem): string {
     case "delivered":
       return "border-[#b6b5ac] bg-[#efeee9] text-[#3f433f] hover:bg-[#e5e4de]";
     default:
-      return "border-[#8ba98f] bg-[#dce9dc] text-[#23332b] hover:bg-[#d2e1d2]";
+      return "border-[#8ba98f] bg-[#dce9dc] text-realtor-text hover:bg-[#d2e1d2]";
   }
 }
 
@@ -2733,30 +2739,30 @@ function MobileTimelineEvent({
       ? calendarEventSurfaceClass(item)
       : item.kind === "google"
         ? "text-[#17465b]"
-        : "border-[#a69d8d]/50 bg-[#d7d1c4] text-[#36423a]";
+        : "border-realtor-primary/15 bg-realtor-soft text-realtor-text";
   const sourceStyle = calendarSourceEventStyle(item);
   const canOpen = item.kind === "block" || Boolean(item.href);
   const body = (
-    <div className="flex h-full min-w-0 flex-col justify-between gap-1">
-      <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70">
+    <div className="h-full min-w-0">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <p className="min-w-0 truncate text-[10px] font-semibold uppercase tracking-wider opacity-70">
           {formatDateTimeRange(item.startsAt, item.endsAt)}
         </p>
-        <p className="mt-1 line-clamp-2 break-words text-[13px] font-semibold leading-tight">
-          {item.title}
-        </p>
-        <p className="mt-1 line-clamp-1 break-words text-[11px] leading-snug opacity-75">
-          {item.subtitle}
-        </p>
+        <span className="shrink-0 rounded-full border border-current/20 bg-white/40 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wider">
+          {item.statusLabel ??
+            (item.kind === "block"
+              ? "Blocked"
+              : item.kind === "google"
+                ? "Google"
+                : "Shoot")}
+        </span>
       </div>
-      <span className="w-fit rounded-full border border-current/25 bg-white/40 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
-        {item.statusLabel ??
-          (item.kind === "block"
-            ? "Blocked"
-            : item.kind === "google"
-              ? "Google"
-              : "Shoot")}
-      </span>
+      <p className="mt-1.5 line-clamp-2 break-words text-[13px] font-semibold leading-tight">
+        {item.title}
+      </p>
+      <p className="mt-1 line-clamp-1 break-words text-[11px] leading-snug opacity-75">
+        {item.subtitle}
+      </p>
     </div>
   );
   const layoutStyle = {
@@ -2944,7 +2950,7 @@ function CalendarDragPreview({
   return (
     <div
       aria-hidden="true"
-      className={`pointer-events-none absolute z-30 overflow-hidden rounded-xl border-2 border-[#3f7356] bg-[#e8f1e8]/95 px-2.5 py-1.5 text-left text-[#23332b] shadow-xl shadow-[#23332b]/20 ring-2 ring-[#3f7356]/20 ${
+      className={`pointer-events-none absolute z-30 overflow-hidden rounded-xl border-2 border-[#3f7356] bg-[#e8f1e8]/95 px-2.5 py-1.5 text-left text-realtor-text shadow-xl shadow-[#23332b]/20 ring-2 ring-[#3f7356]/20 ${
         mobile ? "left-12 right-1.5" : "left-1 right-1"
       }`}
       style={{ top, height }}
