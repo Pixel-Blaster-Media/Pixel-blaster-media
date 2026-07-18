@@ -1334,12 +1334,12 @@ export default function CalendarWeekView({
             <div className="border-t border-realtor-primary/10 px-3 pb-3 pt-3">
               <div
                 ref={mobileTimelineScrollRef}
-                className="h-[68dvh] min-h-[520px] max-h-[720px] overflow-y-auto overscroll-contain rounded-3xl [-webkit-overflow-scrolling:touch]"
+                className="h-[68dvh] min-h-[520px] max-h-[720px] overflow-y-auto overscroll-contain rounded-xl [-webkit-overflow-scrolling:touch]"
               >
               <div
                 data-calendar-drop-day={mobileDay.dateInput}
                 data-calendar-drop-mode="mobile"
-                className="relative overflow-hidden rounded-2xl border border-realtor-primary/15 bg-realtor-bg/60"
+                className="relative overflow-hidden rounded-xl border border-realtor-primary/15 bg-realtor-bg/60"
                 style={{ height: mobileTimelineHeight }}
               >
                 {mobileDay.enabled ? (

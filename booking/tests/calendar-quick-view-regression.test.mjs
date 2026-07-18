@@ -50,7 +50,11 @@ test("calendar hierarchy uses rounder outer surfaces and appointment cards", () 
   );
   assert.match(
     calendarSource,
-    /data-calendar-drop-mode="mobile"[\s\S]{0,160}className="relative overflow-hidden rounded-2xl/,
+    /ref=\{mobileTimelineScrollRef\}[\s\S]{0,180}overflow-y-auto overscroll-contain rounded-xl/,
+  );
+  assert.match(
+    calendarSource,
+    /data-calendar-drop-mode="mobile"[\s\S]{0,160}className="relative overflow-hidden rounded-xl/,
   );
   assert.match(calendarSource, /function CalendarAgendaView[\s\S]*?<section className="overflow-hidden rounded-3xl/);
   const roundedEventCards = calendarSource.match(
