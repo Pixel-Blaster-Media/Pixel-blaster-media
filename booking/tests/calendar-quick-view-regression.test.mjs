@@ -41,7 +41,7 @@ test("mobile calendar heading keeps the week summary beside the title", () => {
   assert.match(calendarPageSource, /appointmentCount} appt/);
 });
 
-test("calendar hierarchy uses rounder outer surfaces and appointment cards", () => {
+test("mobile day schedule uses one unified Apple-inspired canvas", () => {
   assert.match(calendarSource, /sticky top-2[^\n]*rounded-3xl/);
   assert.match(calendarSource, /overflow-auto rounded-3xl[^\n]*md:block/);
   assert.match(
@@ -50,19 +50,27 @@ test("calendar hierarchy uses rounder outer surfaces and appointment cards", () 
   );
   assert.match(
     calendarSource,
-    /ref=\{mobileTimelineScrollRef\}[\s\S]{0,180}overflow-y-auto overscroll-contain rounded-xl/,
+    /<div className="border-t border-realtor-primary\/10">/,
   );
   assert.match(
     calendarSource,
-    /data-calendar-drop-mode="mobile"[\s\S]{0,160}className="relative overflow-hidden rounded-xl/,
+    /ref=\{mobileTimelineScrollRef\}[\s\S]{0,180}className="h-\[68dvh\][^\n]*overflow-y-auto overscroll-contain \[-webkit-overflow-scrolling:touch\]"/,
+  );
+  assert.match(
+    calendarSource,
+    /data-calendar-drop-mode="mobile"[\s\S]{0,160}className="relative overflow-hidden bg-realtor-bg\/60"/,
+  );
+  assert.doesNotMatch(
+    calendarSource,
+    /border-t border-realtor-primary\/10 px-3 pb-3 pt-3/,
   );
   assert.match(calendarSource, /function CalendarAgendaView[\s\S]*?<section className="overflow-hidden rounded-3xl/);
-  const roundedEventCards = calendarSource.match(
-    /overflow-hidden rounded-2xl border px-(?:2\.5|3)/g,
+  const restrainedEventCards = calendarSource.match(
+    /overflow-hidden rounded-xl border border-l-\[3px\] px-(?:2\.5|3)/g,
   );
   assert.ok(
-    roundedEventCards && roundedEventCards.length >= 2,
-    "Mobile and desktop appointment cards should both use rounded-2xl corners",
+    restrainedEventCards && restrainedEventCards.length >= 2,
+    "Mobile and desktop appointment cards should use restrained rounded corners and a leading status edge",
   );
 });
 
