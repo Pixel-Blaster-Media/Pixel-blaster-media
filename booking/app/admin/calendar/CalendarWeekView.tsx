@@ -1339,7 +1339,7 @@ export default function CalendarWeekView({
               <div
                 data-calendar-drop-day={mobileDay.dateInput}
                 data-calendar-drop-mode="mobile"
-                className="relative overflow-hidden rounded-3xl border border-realtor-primary/15 bg-realtor-bg/60"
+                className="relative overflow-hidden rounded-2xl border border-realtor-primary/15 bg-realtor-bg/60"
                 style={{ height: mobileTimelineHeight }}
               >
                 {mobileDay.enabled ? (
