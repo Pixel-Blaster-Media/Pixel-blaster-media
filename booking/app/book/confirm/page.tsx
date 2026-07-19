@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
@@ -239,6 +240,7 @@ export default async function BookStep4Page({
       />
 
       <ConfirmForm
+        requestId={randomUUID()}
         state={scopedState}
         profile={profile}
         items={[...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(

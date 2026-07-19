@@ -24,8 +24,12 @@ interface SendEmailArgs {
   html: string;
   /** Plain-text fallback. Auto-derived from html if omitted. */
   text?: string;
+  /** Immutable sender display-name snapshot for durable job replay. */
+  fromName?: string;
   /** Reply-To override; useful so client replies go to your real inbox. */
-  replyTo?: string;
+  replyTo?: string | null;
+  /** Stable provider key; outbox reclaim is bounded inside Resend's 24-hour window. */
+  idempotencyKey?: string;
   /** Company scope for credentials, sender display name, and reply-to defaults. */
   organizationId: string;
 }
@@ -49,9 +53,11 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   ]);
   const baseFrom = process.env.EMAIL_FROM;
   const from = baseFrom
-    ? formatFromAddress(baseFrom, settings.fromName)
+    ? formatFromAddress(baseFrom, args.fromName ?? settings.fromName)
     : null;
-  const replyTo = args.replyTo ?? settings.replyToEmail ?? undefined;
+  const replyTo = args.replyTo === undefined
+    ? settings.replyToEmail ?? undefined
+    : args.replyTo ?? undefined;
 
   if (!apiKey || !from) {
     console.warn(
@@ -66,8 +72,11 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
       method: "POST",
       signal: AbortSignal.timeout(15_000),
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: "Bearer " + apiKey,
         "Content-Type": "application/json",
+        ...(args.idempotencyKey
+          ? { "Idempotency-Key": args.idempotencyKey }
+          : {}),
       },
       body: JSON.stringify({
         from,

@@ -133,6 +133,8 @@ interface BookingsTable {
     organization_id: string;
     property_id: string;
     owner_id: string;
+    public_request_id: string | null;
+    public_request_fingerprint: string | null;
     status: BookingStatus;
     scheduled_at: string | null;
     scheduled_ends_at: string | null;
@@ -165,6 +167,8 @@ interface BookingsTable {
     organization_id?: string;
     property_id: string;
     owner_id: string;
+    public_request_id?: string | null;
+    public_request_fingerprint?: string | null;
     status?: BookingStatus;
     scheduled_at?: string | null;
     scheduled_ends_at?: string | null;
@@ -610,6 +614,9 @@ interface BookingLineItemsTable {
     id: string;
     booking_id: string;
     catalog_item_id: string;
+    item_name: string;
+    item_slug: string;
+    item_kind: "bundle" | "a_la_carte" | "addon";
     quantity: number;
     unit_price_cents: number;
     unit_duration_minutes: number;
@@ -619,11 +626,76 @@ interface BookingLineItemsTable {
     id?: string;
     booking_id: string;
     catalog_item_id: string;
+    item_name: string;
+    item_slug: string;
+    item_kind: "bundle" | "a_la_carte" | "addon";
     quantity?: number;
     unit_price_cents: number;
     unit_duration_minutes: number;
   };
   Update: Partial<BookingLineItemsTable["Insert"]>;
+  Relationships: [];
+}
+
+interface IntegrationJobsTable {
+  Row: {
+    id: string;
+    organization_id: string;
+    booking_id: string;
+    job_type: string;
+    idempotency_key: string;
+    payload_version: number;
+    payload: Json;
+    status:
+      | "pending"
+      | "processing"
+      | "retryable"
+      | "completed"
+      | "skipped"
+      | "cancelled"
+      | "dead_letter";
+    attempts: number;
+    max_attempts: number;
+    next_attempt_at: string;
+    lease_token: string | null;
+    locked_at: string | null;
+    locked_by: string | null;
+    lease_expires_at: string | null;
+    provider_external_id: string | null;
+    provider_result: Json | null;
+    last_error_code: string | null;
+    last_error_message: string | null;
+    last_error_at: string | null;
+    created_at: string;
+    updated_at: string;
+    completed_at: string | null;
+  };
+  Insert: {
+    id?: string;
+    organization_id: string;
+    booking_id: string;
+    job_type: string;
+    idempotency_key: string;
+    payload_version?: number;
+    payload?: Json;
+    status?: IntegrationJobsTable["Row"]["status"];
+    attempts?: number;
+    max_attempts?: number;
+    next_attempt_at?: string;
+    lease_token?: string | null;
+    locked_at?: string | null;
+    locked_by?: string | null;
+    lease_expires_at?: string | null;
+    provider_external_id?: string | null;
+    provider_result?: Json | null;
+    last_error_code?: string | null;
+    last_error_message?: string | null;
+    last_error_at?: string | null;
+    created_at?: string;
+    updated_at?: string;
+    completed_at?: string | null;
+  };
+  Update: Partial<IntegrationJobsTable["Insert"]>;
   Relationships: [];
 }
 
@@ -911,6 +983,7 @@ export interface Database {
       service_prices: ServicePricesTable;
       catalog_items: CatalogItemsTable;
       booking_line_items: BookingLineItemsTable;
+      integration_jobs: IntegrationJobsTable;
       booking_notifications: BookingNotificationsTable;
       push_subscriptions: PushSubscriptionsTable;
       autoenhance_batches: AutoenhanceBatchesTable;
@@ -976,6 +1049,51 @@ export interface Database {
           p_scheduled_ends_at: string | null;
         };
         Returns: string;
+      };
+      create_public_booking_with_jobs: {
+        Args: {
+          p_request_id: string;
+          p_organization_id: string;
+          p_owner_id: string;
+          p_street_address: string;
+          p_city: string;
+          p_postal_code: string;
+          p_unit_number: string;
+          p_scheduled_at: string;
+          p_square_footage: number | null;
+          p_is_vacant: "vacant" | "occupied" | "partial" | null;
+          p_include_basement: boolean | null;
+          p_client_notes: string;
+          p_service_item_ids: string[];
+          p_add_on_item_ids: string[];
+          p_admin_notification_email: string | null;
+          p_app_url: string;
+        };
+        Returns: Json;
+      };
+      claim_integration_job: {
+        Args: {
+          p_organization_id: string;
+          p_booking_id: string;
+          p_job_type: string;
+          p_worker_id: string;
+          p_lease_token: string;
+        };
+        Returns: Json;
+      };
+      finish_integration_job: {
+        Args: {
+          p_organization_id: string;
+          p_job_id: string;
+          p_lease_token: string;
+          p_status: string;
+          p_provider_external_id: string;
+          p_provider_result: Json;
+          p_error_code: string;
+          p_error_message: string;
+          p_next_attempt_at: string | null;
+        };
+        Returns: boolean;
       };
       quarantine_unbooked_realtor: {
         Args: {

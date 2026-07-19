@@ -29,10 +29,12 @@ interface ProfileLite {
  * deliberately not told whether an email already exists.
  */
 export default function ConfirmForm({
+  requestId,
   state,
   profile,
   items,
 }: {
+  requestId: string;
   state: WizardState;
   profile: ProfileLite | null;
   items: BookingTotalItem[];
@@ -47,6 +49,7 @@ export default function ConfirmForm({
   return (
     <form action={formAction} className="space-y-5">
       {/* Carry wizard state into the action */}
+      <input type="hidden" name="public_request_id" value={requestId} />
       {state.organizationSlug ? (
         <input type="hidden" name="org" value={state.organizationSlug} />
       ) : null}

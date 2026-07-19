@@ -14,15 +14,17 @@ import {
   BUSINESS_TZ,
   isSlotAvailable,
 } from "@/lib/booking/availability";
-import { getActiveCatalog, getCatalogItemPrice } from "@/lib/booking/catalog";
+import { getActiveCatalog } from "@/lib/booking/catalog";
 import { createManageToken } from "@/lib/booking/manage-token";
 import { ccRecipientsFor } from "@/lib/email/recipients";
 import { sendEmail } from "@/lib/email/resend";
-import {
-  getAdminNotificationEmail,
-  getOrganizationEmailSettings,
-} from "@/lib/email/settings";
+import type { SendEmailResult } from "@/lib/email/resend";
+import { getAdminNotificationEmail } from "@/lib/email/settings";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
+import {
+  claimIntegrationJob,
+  finishIntegrationJob,
+} from "@/lib/integrations/jobs";
 import { createInvoiceForBooking } from "@/lib/integrations/quickbooks/invoice";
 import { sendPushBestEffort } from "@/lib/notifications/push";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
@@ -31,9 +33,34 @@ import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
+type BookingCatalogItem = Pick<
+  Database["public"]["Tables"]["catalog_items"]["Row"],
+  | "id"
+  | "slug"
+  | "name"
+  | "kind"
+  | "duration_minutes"
+  | "is_video"
+  | "require_has_video"
+>;
 
-interface InsertedRow {
+interface ExistingRequestRow {
   id: string;
+}
+
+interface BookingLineSnapshot {
+  catalog_item_id: string;
+  item_name: string;
+  item_slug: string;
+  item_kind: "bundle" | "a_la_carte" | "addon";
+  unit_duration_minutes: number;
+}
+
+interface AtomicBookingResult {
+  booking_id: string;
+  property_id: string;
+  scheduled_ends_at: string;
+  replayed: boolean;
 }
 
 export interface BookResult {
@@ -55,9 +82,9 @@ export interface BookResult {
  * Then (in all three paths):
  *   - Re-validate cart slugs against live catalog
  *   - Re-check slot availability (race protection)
- *   - Upsert property, insert booking (status=confirmed)
- *   - Push Google Calendar event (best-effort)
- *   - Send client confirmation + admin notification emails (best-effort)
+ *   - Commit property, confirmed booking, price snapshots, and durable jobs atomically
+ *   - Lease and attempt Calendar, invoice, email, and push jobs after commit
+ *   - Preserve failed/skipped provider outcomes for safe reconciliation
  *   - Redirect the signed-in client to /portal
  */
 export async function createPublicBooking(
@@ -72,6 +99,7 @@ export async function createPublicBooking(
     .map((s) => s.trim())
     .filter(Boolean);
   const organizationSlug = str(formData, "org");
+  const publicRequestId = str(formData, "public_request_id");
   const slotStartRaw = str(formData, "slot");
   const streetAddress = str(formData, "street_address");
   const unitNumber = str(formData, "unit_number");
@@ -112,6 +140,12 @@ export async function createPublicBooking(
   if (serviceSlugs.length === 0) {
     return { ok: false, errors: { _form: "Pick at least one service." } };
   }
+  if (!isUuid(publicRequestId)) {
+    return {
+      ok: false,
+      errors: { _form: "This confirmation page expired. Refresh and try again." },
+    };
+  }
 
   const organization = await resolvePublicBookingOrganization(organizationSlug);
   if (!organization) {
@@ -139,54 +173,126 @@ export async function createPublicBooking(
     };
   }
 
-  // -------- Re-validate catalog items --------
-  const catalog = await getActiveCatalog({ organizationId: organization.id });
-  const bySlug = new Map<string, (typeof catalog.bundles)[number]>();
-  for (const r of catalog.bundles) bySlug.set(r.slug, r);
-  for (const r of catalog.aLaCarte) bySlug.set(r.slug, r);
-  for (const r of catalog.addons) bySlug.set(r.slug, r);
+  // Resolve a committed request before mutable catalog and availability checks.
+  // Its immutable line snapshots let a lost-response replay survive later catalog
+  // deactivation while still rejecting changed service/add-on selections.
+  const supabase = getServiceSupabase();
+  const { data: existingRequest, error: replayLookupError } = await supabase
+    .from("bookings")
+    .select("id")
+    .eq("organization_id", organization.id)
+    .eq("public_request_id", publicRequestId)
+    .limit(1)
+    .maybeSingle<ExistingRequestRow>();
+  if (replayLookupError) {
+    console.error("[book] request replay lookup failed", {
+      code: replayLookupError.code,
+    });
+    return {
+      ok: false,
+      errors: { _form: "Could not verify this booking request. Try again." },
+    };
+  }
 
-  const validServices: typeof catalog.bundles = [];
-  for (const slug of serviceSlugs) {
-    const item = bySlug.get(slug);
-    if (!item || item.kind === "addon") {
+  let validServices: BookingCatalogItem[] = [];
+  let validAddons: BookingCatalogItem[] = [];
+
+  if (existingRequest) {
+    const { data: snapshotData, error: snapshotError } = await supabase
+      .from("booking_line_items")
+      .select(
+        "catalog_item_id,item_name,item_slug,item_kind,unit_duration_minutes",
+      )
+      .eq("booking_id", existingRequest.id);
+    const snapshots = (snapshotData ?? []) as BookingLineSnapshot[];
+    if (snapshotError || snapshots.length === 0) {
+      console.error("[book] replay snapshot lookup failed", {
+        code: snapshotError?.code ?? "missing_snapshots",
+      });
+      return committedBookingNeedsSupport(publicRequestId);
+    }
+
+    const postedSlugs = [...serviceSlugs, ...addOnSlugs].sort();
+    const snapshotSlugs = snapshots.map((item) => item.item_slug).sort();
+    if (
+      postedSlugs.length !== snapshotSlugs.length ||
+      postedSlugs.some((slug, index) => slug !== snapshotSlugs[index])
+    ) {
       return {
         ok: false,
         errors: {
-          _form: `Unknown service "${slug}". Refresh and try again.`,
+          _form:
+            "This confirmation was already used with different details. Refresh and try again.",
         },
       };
     }
-    validServices.push(item);
-  }
 
-  const hasVideo = validServices.some((s) => s.is_video);
-  const validAddons: typeof catalog.bundles = [];
-  for (const slug of addOnSlugs) {
-    const item = bySlug.get(slug);
-    if (!item || item.kind !== "addon") continue;
-    if (item.require_has_video && !hasVideo) continue;
-    validAddons.push(item);
+    const bySnapshotSlug = new Map(
+      snapshots.map((item) => [item.item_slug, item] as const),
+    );
+    const toCatalogItem = (slug: string): BookingCatalogItem => {
+      const item = bySnapshotSlug.get(slug)!;
+      return {
+        id: item.catalog_item_id,
+        slug: item.item_slug,
+        name: item.item_name,
+        kind: item.item_kind,
+        duration_minutes: item.unit_duration_minutes,
+        is_video: false,
+        require_has_video: false,
+      };
+    };
+    validServices = serviceSlugs.map(toCatalogItem);
+    validAddons = addOnSlugs.map(toCatalogItem);
+  } else {
+    // -------- Re-validate active catalog items for a new request --------
+    const catalog = await getActiveCatalog({ organizationId: organization.id });
+    const bySlug = new Map<string, BookingCatalogItem>();
+    for (const item of catalog.bundles) bySlug.set(item.slug, item);
+    for (const item of catalog.aLaCarte) bySlug.set(item.slug, item);
+    for (const item of catalog.addons) bySlug.set(item.slug, item);
+
+    for (const slug of serviceSlugs) {
+      const item = bySlug.get(slug);
+      if (!item || item.kind === "addon") {
+        return {
+          ok: false,
+          errors: {
+            _form: `Unknown service "${slug}". Refresh and try again.`,
+          },
+        };
+      }
+      validServices.push(item);
+    }
+
+    const hasVideo = validServices.some((item) => item.is_video);
+    for (const slug of addOnSlugs) {
+      const item = bySlug.get(slug);
+      if (!item || item.kind !== "addon") continue;
+      if (item.require_has_video && !hasVideo) continue;
+      validAddons.push(item);
+    }
   }
 
   const duration = Math.max(
-    validServices.reduce((n, s) => n + s.duration_minutes, 0) +
-      validAddons.reduce((n, a) => n + a.duration_minutes, 0),
+    validServices.reduce((total, item) => total + item.duration_minutes, 0) +
+      validAddons.reduce((total, item) => total + item.duration_minutes, 0),
     60,
   );
 
-  // -------- Re-check slot availability (defends against races) --------
-  const stillFree = await isSlotAvailable(slotStart, duration, {
-    organizationId: organization.id,
-  });
-  if (!stillFree) {
-    return {
-      ok: false,
-      errors: {
-        _form:
-          "That slot was just taken. Please pick another — the calendar has been refreshed.",
-      },
-    };
+  if (!existingRequest) {
+    const stillFree = await isSlotAvailable(slotStart, duration, {
+      organizationId: organization.id,
+    });
+    if (!stillFree) {
+      return {
+        ok: false,
+        errors: {
+          _form:
+            "That slot was just taken. Please pick another — the calendar has been refreshed.",
+        },
+      };
+    }
   }
 
   // Provision only after every non-transactional validation has passed. A user
@@ -207,86 +313,40 @@ export async function createPublicBooking(
   const organizationId = authResult.organizationId;
   let signedInToPortal = authResult.signedInToPortal;
 
-  const supabase = getServiceSupabase();
+  // -------- Commit property + booking + derived price snapshots + outbox atomically --------
+  const adminNotificationEmail = await getAdminNotificationEmail(organizationId);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
-  // -------- Upsert property (dedup on owner + address) --------
-  const { data: existingProperty } = await supabase
-    .from("properties")
-    .select("id")
-    .eq("owner_id", userId)
-    .eq("organization_id", organizationId)
-    .eq("street_address", streetAddress)
-    .limit(1)
-    .maybeSingle<InsertedRow>();
+  const { data: atomicData, error: bookErr } = await supabase.rpc(
+    "create_public_booking_with_jobs",
+    {
+      p_request_id: publicRequestId,
+      p_organization_id: organizationId,
+      p_owner_id: userId,
+      p_street_address: streetAddress,
+      p_city: city,
+      p_postal_code: postalCode,
+      p_unit_number: unitNumber,
+      p_scheduled_at: slotStart.toISOString(),
+      p_square_footage: squareFootage,
+      p_is_vacant: isVacant,
+      p_include_basement: includeBasement,
+      p_client_notes: combinedNotes,
+      p_service_item_ids: validServices.map((item) => item.id),
+      p_add_on_item_ids: validAddons.map((item) => item.id),
+      p_admin_notification_email: adminNotificationEmail,
+      p_app_url: appUrl,
+    },
+  );
+  const atomic = atomicData as AtomicBookingResult | null;
 
-  let propertyId: string | null = existingProperty?.id ?? null;
-  if (!propertyId) {
-    const { data: created, error: propErr } = await supabase
-      .from("properties")
-      .insert({
-        organization_id: organizationId,
-        owner_id: userId,
-        street_address: streetAddress,
-        city: city || null,
-        postal_code: postalCode || null,
-      })
-      .select("id")
-      .single<InsertedRow>();
-    if (propErr || !created) {
-      console.error("[book] property insert failed", propErr);
-      if (authResult.newlyCreated) {
-        const rollback = await rollbackProvisionedRealtor({
-          userId,
-          provisioningId: authResult.provisioningId!,
-          context: "public-booking-property",
-        });
-        if (rollback.status !== "deleted") {
-          return cleanupNeedsSupport(rollback.reference);
-        }
-      }
-      return {
-        ok: false,
-        errors: { _form: "Could not save property. Try again." },
-      };
-    }
-    propertyId = created.id;
-  }
-
-  // -------- Insert booking --------
-  const legacyServices = validServices.map((s) => s.slug);
-  const legacyAddons = validAddons.map((a) => a.slug);
-
-  const { data: booking, error: bookErr } = await supabase
-    .from("bookings")
-    .insert({
-      organization_id: organizationId,
-      property_id: propertyId,
-      owner_id: userId,
-      status: "confirmed",
-      scheduled_at: slotStart.toISOString(),
-      scheduled_ends_at: new Date(
-        slotStart.getTime() + duration * 60_000,
-      ).toISOString(),
-      allow_schedule_overlap: false,
-      services: legacyServices,
-      add_ons: legacyAddons,
-      client_notes: combinedNotes || null,
-      unit_number: unitNumber || null,
-      square_footage: squareFootage,
-      is_vacant: isVacant,
-      include_basement: includeBasement,
-    })
-    .select("id")
-    .single<InsertedRow>();
-
-  if (bookErr || !booking) {
-    console.error("[book] booking insert failed", bookErr);
+  if (bookErr || !atomic?.booking_id || !atomic.property_id) {
+    console.error("[book] atomic booking commit failed", bookErr);
     if (authResult.newlyCreated) {
       const rollback = await rollbackProvisionedRealtor({
         userId,
-        propertyId,
         provisioningId: authResult.provisioningId!,
-        context: "public-booking-insert",
+        context: "public-booking-atomic",
       });
       if (rollback.status !== "deleted") {
         return cleanupNeedsSupport(rollback.reference);
@@ -301,10 +361,36 @@ export async function createPublicBooking(
         },
       };
     }
+    if (bookErr?.code === "PB002") {
+      return {
+        ok: false,
+        errors: {
+          _form:
+            "Packages changed while you were booking. Refresh and select them again.",
+        },
+      };
+    }
+    if (bookErr?.code === "PB004") {
+      return {
+        ok: false,
+        errors: {
+          _form:
+            "This confirmation was already used with different details. Refresh and try again.",
+        },
+      };
+    }
     return {
       ok: false,
       errors: { _form: "Could not save booking. Try again." },
     };
+  }
+
+  const booking = { id: atomic.booking_id };
+  const propertyId = atomic.property_id;
+  const scheduledEndAt = new Date(atomic.scheduled_ends_at);
+  if (Number.isNaN(scheduledEndAt.getTime())) {
+    console.error("[book] atomic booking returned an invalid schedule", booking.id);
+    return committedBookingNeedsSupport(booking.id);
   }
 
   if (authResult.sessionTokens) {
@@ -316,113 +402,178 @@ export async function createPublicBooking(
     }
   }
 
-  const bookingLineItems = [...validServices, ...validAddons].map((item) => ({
-    booking_id: booking.id,
-    catalog_item_id: item.id,
-    quantity: 1,
-    unit_price_cents: getCatalogItemPrice(item, squareFootage).totalPriceCents,
-    unit_duration_minutes: item.duration_minutes,
-  }));
-  if (bookingLineItems.length > 0) {
-    const { error: lineErr } = await supabase
-      .from("booking_line_items")
-      .insert(bookingLineItems);
-    if (lineErr) {
-      console.warn("[book] booking line items insert failed", lineErr);
-    }
-  }
-
-  const scheduledEndAt = new Date(slotStart.getTime() + duration * 60_000);
-
-  // -------- QuickBooks invoice (best-effort, only when billing at booking) --------
-  // Default is billing after delivery, where the invoice rides along with the
-  // delivery-ready email instead. A billing failure must never break the
-  // booking — worst case the confirmation email just omits the pay link.
-  let invoiceUrl: string | null = null;
-  try {
-    const emailSettings = await getOrganizationEmailSettings(organizationId);
-    if (emailSettings.invoiceTiming === "at_booking") {
+  // -------- QuickBooks invoice (leased durable job; billing-at-booking only) --------
+  const invoiceClaim = await claimIntegrationJob({
+    organizationId,
+    bookingId: booking.id,
+    jobType: "quickbooks.invoice.create",
+  });
+  if (invoiceClaim) {
+    try {
+      const payload = invoiceClaim.payload;
       const invoice = await createInvoiceForBooking({
-        bookingId: booking.id,
-        services: legacyServices,
-        addOns: legacyAddons,
+        bookingId: payload.booking_id,
+        services: payload.line_items
+          .filter((item) => item.kind !== "addon")
+          .map((item) => item.slug),
+        addOns: payload.line_items
+          .filter((item) => item.kind === "addon")
+          .map((item) => item.slug),
         realtor: {
-          email: userEmail,
-          full_name: userDisplayName,
-          phone: contactPhone || null,
-          brokerage: brokerage || null,
+          email: payload.realtor.email,
+          full_name: payload.realtor.full_name,
+          phone: payload.realtor.phone,
+          brokerage: payload.realtor.brokerage,
         },
         property: {
-          street_address: streetAddress,
-          city: city || null,
-          postal_code: postalCode || null,
+          street_address: payload.property.street_address,
+          city: payload.property.city,
+          postal_code: payload.property.postal_code,
         },
+        lineItems: payload.line_items
+          .filter((item) => item.unit_price_cents > 0)
+          .map((item) => ({
+            description: item.name,
+            amountCents: item.unit_price_cents * Math.max(1, item.quantity),
+          })),
       });
       if (invoice.ok) {
-        invoiceUrl = invoice.invoiceUrl ?? null;
+        await finishIntegrationJob({
+          organizationId,
+          claim: invoiceClaim,
+          status: "completed",
+          providerExternalId: invoice.invoiceId,
+          providerResult: {
+            invoice_number: invoice.invoiceNumber ?? null,
+            invoice_url: invoice.invoiceUrl ?? null,
+            total_cents: invoice.totalCents ?? null,
+          },
+        });
       } else {
-        console.warn("[book] invoice auto-create skipped:", invoice.error);
+        // The integration currently collapses transport and provider failures into
+        // ok=false. Treat every such result as ambiguous until QuickBooks exposes a
+        // deterministic idempotency or lookup key; blind retries could duplicate it.
+        await finishIntegrationJob({
+          organizationId,
+          claim: invoiceClaim,
+          status: "dead_letter",
+          errorCode: "ambiguous_provider_result",
+          errorMessage: "QuickBooks result requires operator reconciliation",
+        });
       }
+    } catch {
+      // A thrown provider call may be ambiguous. Keep it visible but terminal so
+      // a future worker cannot blindly create a duplicate invoice.
+      await finishIntegrationJob({
+        organizationId,
+        claim: invoiceClaim,
+        status: "dead_letter",
+        errorCode: "ambiguous_provider_result",
+        errorMessage: "QuickBooks result requires operator reconciliation",
+      });
     }
-  } catch (err) {
-    console.warn("[book] invoice auto-create failed", err);
   }
 
-  // -------- Google Calendar event (best-effort) --------
-  try {
-    const gcal = await getGoogleCalendarClient({ organizationId });
-    if (gcal) {
-      const endAt = scheduledEndAt;
-      const serviceLabels = validServices.map((s) => s.name).join(", ");
-      const addonLabels = validAddons.map((a) => a.name).join(", ");
-      const streetLine = unitNumber
-        ? `${streetAddress}, Unit ${unitNumber}`
-        : streetAddress;
-      const addressLine = [streetLine, city, postalCode]
-        .filter(Boolean)
-        .join(", ");
-      const occupancyLabel =
-        isVacant === "vacant"
-          ? "Vacant"
-          : isVacant === "partial"
-            ? "Partially occupied"
-            : isVacant === "occupied"
-              ? "Occupied"
-              : null;
-      const event = await gcal.createEvent({
-        summary: calendarShootTitle({
-          realtor: userDisplayName,
-          services: serviceLabels,
-          address: streetLine,
-        }),
-        location: addressLine,
-        description:
-          `Realtor: ${userDisplayName}\nEmail: ${userEmail}\n` +
-          (contactPhone ? `Phone: ${contactPhone}\n` : "") +
-          `Services: ${serviceLabels}\n` +
-          (addonLabels ? `Add-ons: ${addonLabels}\n` : "") +
-          (squareFootage ? `Size: ~${squareFootage} sqft\n` : "") +
-          (occupancyLabel ? `Occupancy: ${occupancyLabel}\n` : "") +
-          (includeBasement != null
-            ? `Basement: ${includeBasement ? "include" : "skip"}\n`
-            : "") +
-          (combinedNotes ? `\nNotes:\n${combinedNotes}\n` : ""),
-        startISO: slotStart.toISOString(),
-        endISO: endAt.toISOString(),
-        attendeeEmail: userEmail,
-        attendeeName: userDisplayName,
+  // -------- Google Calendar event (leased durable job) --------
+  const calendarClaim = await claimIntegrationJob({
+    organizationId,
+    bookingId: booking.id,
+    jobType: "google_calendar.event.create",
+  });
+  if (calendarClaim) {
+    try {
+      const payload = calendarClaim.payload;
+      const gcal = await getGoogleCalendarClient({
+        organizationId: payload.organization_id,
       });
-      await supabase
-        .from("bookings")
-        .update({
-          google_calendar_event_id: event.id,
-          google_calendar_event_url: event.htmlLink,
-        })
-        .eq("id", booking.id)
-        .eq("organization_id", organizationId);
+      if (!gcal) {
+        await finishIntegrationJob({
+          organizationId,
+          claim: calendarClaim,
+          status: "skipped",
+          providerResult: { reason: "not_configured" },
+        });
+      } else {
+        const startAt = new Date(payload.booking.scheduled_at);
+        const endAt = new Date(payload.booking.scheduled_ends_at);
+        const serviceLabels = payload.line_items
+          .filter((item) => item.kind !== "addon")
+          .map((item) => item.name)
+          .join(", ");
+        const addonLabels = payload.line_items
+          .filter((item) => item.kind === "addon")
+          .map((item) => item.name)
+          .join(", ");
+        const streetLine = payload.property.unit_number
+          ? `${payload.property.street_address}, Unit ${payload.property.unit_number}`
+          : payload.property.street_address;
+        const addressLine = [streetLine, payload.property.city, payload.property.postal_code]
+          .filter(Boolean)
+          .join(", ");
+        const occupancyLabel =
+          payload.booking.is_vacant === "vacant"
+            ? "Vacant"
+            : payload.booking.is_vacant === "partial"
+              ? "Partially occupied"
+              : payload.booking.is_vacant === "occupied"
+                ? "Occupied"
+                : null;
+        const event = await gcal.createEvent({
+          summary: calendarShootTitle({
+            realtor: payload.realtor.full_name,
+            services: serviceLabels,
+            address: streetLine,
+          }),
+          location: addressLine,
+          description:
+            `Realtor: ${payload.realtor.full_name}\nEmail: ${payload.realtor.email}\n` +
+            (payload.realtor.phone ? `Phone: ${payload.realtor.phone}\n` : "") +
+            `Services: ${serviceLabels}\n` +
+            (addonLabels ? `Add-ons: ${addonLabels}\n` : "") +
+            (payload.booking.square_footage ? `Size: ~${payload.booking.square_footage} sqft\n` : "") +
+            (occupancyLabel ? `Occupancy: ${occupancyLabel}\n` : "") +
+            (payload.booking.include_basement != null
+              ? `Basement: ${payload.booking.include_basement ? "include" : "skip"}\n`
+              : "") +
+            (payload.booking.client_notes ? `\nNotes:\n${payload.booking.client_notes}\n` : ""),
+          startISO: startAt.toISOString(),
+          endISO: endAt.toISOString(),
+          attendeeEmail: payload.realtor.email,
+          attendeeName: payload.realtor.full_name,
+        });
+        const { error: calendarPersistError } = await supabase
+          .from("bookings")
+          .update({
+            google_calendar_event_id: event.id,
+            google_calendar_event_url: event.htmlLink,
+          })
+          .eq("id", payload.booking_id)
+          .eq("organization_id", payload.organization_id);
+
+        await finishIntegrationJob({
+          organizationId,
+          claim: calendarClaim,
+          status: calendarPersistError ? "dead_letter" : "completed",
+          providerExternalId: event.id,
+          providerResult: { event_url: event.htmlLink ?? null },
+          ...(calendarPersistError
+            ? {
+                errorCode: "local_persistence_failed",
+                errorMessage:
+                  "Calendar event exists but its local reference needs reconciliation",
+              }
+            : {}),
+        });
+      }
+    } catch {
+      await finishIntegrationJob({
+        organizationId,
+        claim: calendarClaim,
+        status: "dead_letter",
+        errorCode: "ambiguous_provider_result",
+        errorMessage: "Calendar result requires operator reconciliation",
+      });
     }
-  } catch (err) {
-    console.warn("[book] google calendar event create failed", err);
   }
 
   // -------- Emails (best-effort) --------
@@ -436,14 +587,6 @@ export async function createPublicBooking(
   const emailAddressLine = unitNumber
     ? `${streetAddress}, Unit ${unitNumber}`
     : streetAddress;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-  const calendarLink = googleCalendarTemplateUrl({
-    title: `${organization.name} — media shoot`,
-    start: slotStart,
-    end: scheduledEndAt,
-    location: [emailAddressLine, city, postalCode].filter(Boolean).join(", "),
-    details: `Services: ${serviceLabels}${addonLabels ? `\nAdd-ons: ${addonLabels}` : ""}`,
-  });
   // Signed self-serve link — lets the realtor reschedule/cancel without
   // emailing the photographer. Best-effort: a signing failure shouldn't
   // block the confirmation email.
@@ -453,83 +596,216 @@ export async function createPublicBooking(
   } catch (err) {
     console.warn("[book] manage token creation failed", err);
   }
-  const manageUrl = manageToken
-    ? `${appUrl}/book/manage/${manageToken}`
-    : null;
-  const { data: notificationProfile } = await supabase
-    .from("profiles")
-    .select("delivery_cc_emails")
-    .eq("id", userId)
-    .eq("organization_id", organizationId)
-    .maybeSingle<{ delivery_cc_emails: string[] | null }>();
-  const ccRecipients = ccRecipientsFor(
-    userEmail,
-    notificationProfile?.delivery_cc_emails,
-  );
+  const [customerEmailClaim, adminEmailClaim, pushClaim] = await Promise.all([
+    claimIntegrationJob({
+      organizationId,
+      bookingId: booking.id,
+      jobType: "email.booking.confirmation",
+    }),
+    claimIntegrationJob({
+      organizationId,
+      bookingId: booking.id,
+      jobType: "email.admin.new_booking",
+    }),
+    claimIntegrationJob({
+      organizationId,
+      bookingId: booking.id,
+      jobType: "push.admin.new_booking",
+    }),
+  ]);
+
+  // The claim is database-blocked until the invoice is absent or terminal,
+  // and carries the completed invoice result from that same claim snapshot.
+  const completedInvoiceResult = customerEmailClaim?.dependencyResult;
+  const invoiceUrlCandidate =
+    completedInvoiceResult &&
+    typeof completedInvoiceResult === "object" &&
+    !Array.isArray(completedInvoiceResult) &&
+    typeof completedInvoiceResult.invoice_url === "string"
+      ? completedInvoiceResult.invoice_url
+      : null;
+  const durableInvoiceUrl = safeHttpUrl(invoiceUrlCandidate);
 
   await Promise.all([
-    sendEmail({
-      to: userEmail,
-      ...(ccRecipients.length > 0 ? { cc: ccRecipients } : {}),
-      subject: `Booking confirmed — ${emailAddressLine}`,
-      organizationId,
-      html: `
-        <p>Hi ${escapeHtml(userDisplayName)},</p>
-        <p>Your shoot is booked and on our calendar.</p>
-        <p>
-          <strong>Address:</strong> ${escapeHtml(emailAddressLine)}<br>
-          <strong>When:</strong> ${escapeHtml(whenLabel)}<br>
-          <strong>Services:</strong> ${escapeHtml(serviceLabels)}<br>
-          ${addonLabels ? `<strong>Add-ons:</strong> ${escapeHtml(addonLabels)}<br>` : ""}
-        </p>
-        <p><a href="${calendarLink}">Add this shoot to your Google Calendar</a></p>
-        ${
-          manageUrl
-            ? `<p>Need to reschedule or cancel? <a href="${manageUrl}">Manage this booking</a>.</p>`
-            : ""
-        }
-        ${
-          invoiceUrl
-            ? `<p><strong>Billing:</strong> Your invoice is ready — <a href="${invoiceUrl}">pay your invoice online</a>.</p>`
-            : ""
-        }
-        <p>
+    (async () => {
+      if (!customerEmailClaim) return;
+      const payload = customerEmailClaim.payload;
+      const startAt = new Date(payload.booking.scheduled_at);
+      const endAt = new Date(payload.booking.scheduled_ends_at);
+      const serviceLabels = payload.line_items.filter((item) => item.kind !== "addon").map((item) => item.name).join(", ");
+      const addonLabels = payload.line_items.filter((item) => item.kind === "addon").map((item) => item.name).join(", ");
+      const emailAddressLine = payload.property.unit_number
+        ? `${payload.property.street_address}, Unit ${payload.property.unit_number}`
+        : payload.property.street_address;
+      const whenLabel = new Intl.DateTimeFormat("en-US", {
+        timeZone: BUSINESS_TZ,
+        dateStyle: "full",
+        timeStyle: "short",
+      }).format(startAt);
+      const calendarLink = googleCalendarTemplateUrl({
+        title: `${payload.organization.name} — media shoot`,
+        start: startAt,
+        end: endAt,
+        location: [emailAddressLine, payload.property.city, payload.property.postal_code].filter(Boolean).join(", "),
+        details: `Services: ${serviceLabels}${addonLabels ? `\nAdd-ons: ${addonLabels}` : ""}`,
+      });
+      let manageUrl: string | null = null;
+      try {
+        manageUrl = `${payload.app_url}/book/manage/${createManageToken(payload.booking_id)}`;
+      } catch (error) {
+        console.warn("[book] durable manage token creation failed", error);
+      }
+      const ccRecipients = ccRecipientsFor(payload.realtor.email, payload.realtor.delivery_cc_emails);
+      const result = await sendEmail({
+        to: payload.realtor.email,
+        ...(ccRecipients.length > 0 ? { cc: ccRecipients } : {}),
+        subject: `Booking confirmed — ${emailAddressLine}`,
+        organizationId: payload.organization_id,
+        fromName: payload.organization.from_name,
+        replyTo: payload.organization.reply_to_email,
+        idempotencyKey: customerEmailClaim.idempotencyKey,
+        html: `
+          <p>Hi ${escapeHtml(payload.realtor.full_name)},</p>
+          <p>Your shoot is booked and on our calendar.</p>
+          <p>
+            <strong>Address:</strong> ${escapeHtml(emailAddressLine)}<br>
+            <strong>When:</strong> ${escapeHtml(whenLabel)}<br>
+            <strong>Services:</strong> ${escapeHtml(serviceLabels)}<br>
+            ${addonLabels ? `<strong>Add-ons:</strong> ${escapeHtml(addonLabels)}<br>` : ""}
+          </p>
+          <p><a href="${calendarLink}">Add this shoot to your Google Calendar</a></p>
           ${
-            signedInToPortal
-              ? `You can view and manage this booking anytime at
-          <a href="${appUrl}/portal">${appUrl || "your client portal"}</a>.
-          Sign in with ${escapeHtml(userEmail)} and the password you used when booking.`
-              : `We recognized your realtor profile, so you did not need to sign into
-          the portal just to book. If you want to view media, invoices, or past
-          bookings later, go to
-          <a href="${appUrl}/portal">${appUrl || "your client portal"}</a>
-          and sign in with ${escapeHtml(userEmail)}.`
+            manageUrl
+              ? `<p>Need to reschedule or cancel? <a href="${manageUrl}">Manage this booking</a>.</p>`
+              : ""
           }
-        </p>
-        <p>— ${escapeHtml(organization.name)}</p>
-      `,
-    }),
-    sendAdminNotification({
-      booking: {
-        id: booking.id,
-        address: emailAddressLine,
-        whenLabel,
-        serviceLabels,
-        addonLabels,
-        notes: combinedNotes,
-      },
-      realtor: {
-        email: userEmail,
-        name: userDisplayName,
-      },
-      organizationId,
-    }),
-    sendPushBestEffort(organizationId, {
-      title: "New booking",
-      body: `${userDisplayName} · ${emailAddressLine} · ${whenLabel}`,
-      url: `/admin/bookings/${booking.id}`,
-      tag: `booking-new-${booking.id}`,
-    }),
+          ${
+            durableInvoiceUrl
+              ? `<p><strong>Billing:</strong> Your invoice is ready — <a href="${durableInvoiceUrl}">pay your invoice online</a>.</p>`
+              : ""
+          }
+          <p>
+            View and manage this booking at
+            <a href="${payload.app_url}/portal">${payload.app_url || "your client portal"}</a>.
+            Sign in with ${escapeHtml(payload.realtor.email)}.
+          </p>
+          <p>— ${escapeHtml(payload.organization.name)}</p>
+        `,
+      });
+      await finishIntegrationJob({
+        organizationId,
+        claim: customerEmailClaim,
+        status: result.skipped
+          ? "skipped"
+          : result.ok
+            ? "completed"
+            : "retryable",
+        providerExternalId: result.id,
+        providerResult: result.skipped ? { reason: "not_configured" } : {},
+        ...(!result.ok
+          ? {
+              errorCode: "email_send_failed",
+              errorMessage: "Customer confirmation email was not accepted",
+            }
+          : {}),
+      });
+    })(),
+    (async () => {
+      if (!adminEmailClaim) return;
+      const payload = adminEmailClaim.payload;
+      const address = payload.property.unit_number
+        ? `${payload.property.street_address}, Unit ${payload.property.unit_number}`
+        : payload.property.street_address;
+      const payloadWhenLabel = new Intl.DateTimeFormat("en-US", {
+        timeZone: BUSINESS_TZ,
+        dateStyle: "full",
+        timeStyle: "short",
+      }).format(new Date(payload.booking.scheduled_at));
+      const payloadServiceLabels = payload.line_items
+        .filter((item) => item.kind !== "addon")
+        .map((item) => item.name)
+        .join(", ");
+      const payloadAddonLabels = payload.line_items
+        .filter((item) => item.kind === "addon")
+        .map((item) => item.name)
+        .join(", ");
+      const result = await sendAdminNotification({
+        booking: {
+          id: payload.booking_id,
+          address,
+          whenLabel: payloadWhenLabel,
+          serviceLabels: payloadServiceLabels,
+          addonLabels: payloadAddonLabels,
+          notes: payload.booking.client_notes,
+        },
+        realtor: {
+          email: payload.realtor.email,
+          name: payload.realtor.full_name,
+        },
+        organizationId: payload.organization_id,
+        recipient: payload.organization.admin_notification_email,
+        appUrl: payload.app_url,
+        fromName: payload.organization.from_name,
+        idempotencyKey: adminEmailClaim.idempotencyKey,
+      });
+      await finishIntegrationJob({
+        organizationId,
+        claim: adminEmailClaim,
+        status: result.skipped
+          ? "skipped"
+          : result.ok
+            ? "completed"
+            : "retryable",
+        providerExternalId: result.id,
+        providerResult: result.skipped ? { reason: "no_recipient_or_config" } : {},
+        ...(!result.ok
+          ? {
+              errorCode: "email_send_failed",
+              errorMessage: "Admin booking email was not accepted",
+            }
+          : {}),
+      });
+    })(),
+    (async () => {
+      if (!pushClaim) return;
+      const payload = pushClaim.payload;
+      const address = payload.property.unit_number
+        ? `${payload.property.street_address}, Unit ${payload.property.unit_number}`
+        : payload.property.street_address;
+      const payloadWhenLabel = new Intl.DateTimeFormat("en-US", {
+        timeZone: BUSINESS_TZ,
+        dateStyle: "full",
+        timeStyle: "short",
+      }).format(new Date(payload.booking.scheduled_at));
+      const result = await sendPushBestEffort(payload.organization_id, {
+        title: "New booking",
+        body: `${payload.realtor.full_name} · ${address} · ${payloadWhenLabel}`,
+        url: `/admin/bookings/${payload.booking_id}`,
+        tag: `booking-new-${payload.booking_id}`,
+      });
+      await finishIntegrationJob({
+        organizationId,
+        claim: pushClaim,
+        status: result.skipped
+          ? "skipped"
+          : result.failed > 0
+            ? "dead_letter"
+            : "completed",
+        providerResult: {
+          sent: result.sent,
+          failed: result.failed,
+          removed: result.removed,
+          skipped: result.skipped,
+        },
+        ...(result.failed > 0
+          ? {
+              errorCode: "partial_push_failure",
+              errorMessage:
+                "Push delivery was partially accepted; do not retry without provider review",
+            }
+          : {}),
+      });
+    })(),
   ]);
 
   if (!signedInToPortal) {
@@ -855,6 +1131,17 @@ function cleanupNeedsSupport(reference: string | null): BookResult {
   };
 }
 
+function committedBookingNeedsSupport(reference: string): BookResult {
+  return {
+    ok: false,
+    errors: {
+      _form:
+        "Your booking was saved, but confirmation could not finish. Do not submit a new booking; email info@pixelblastermedia.com and include this reference." +
+        ` Reference: ${reference}`,
+    },
+  };
+}
+
 function companyAccountCannotBook(): ResolveUserErr {
   return {
     ok: false,
@@ -967,14 +1254,18 @@ async function sendAdminNotification(args: {
   };
   realtor: { email: string; name: string };
   organizationId: string;
-}): Promise<void> {
-  const adminTo = await getAdminNotificationEmail(args.organizationId);
-  if (!adminTo) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-  await sendEmail({
-    to: adminTo,
+  recipient: string | null;
+  appUrl: string;
+  fromName: string;
+  idempotencyKey: string;
+}): Promise<SendEmailResult> {
+  if (!args.recipient) return { ok: true, skipped: true };
+  return sendEmail({
+    to: args.recipient,
     subject: `New booking — ${args.booking.address}`,
     organizationId: args.organizationId,
+    fromName: args.fromName,
+    idempotencyKey: args.idempotencyKey,
     html: `
       <p><strong>${escapeHtml(args.realtor.name)}</strong> just booked a shoot.</p>
       <p>
@@ -984,7 +1275,7 @@ async function sendAdminNotification(args: {
         ${args.booking.addonLabels ? `<strong>Add-ons:</strong> ${escapeHtml(args.booking.addonLabels)}<br>` : ""}
         ${args.booking.notes ? `<strong>Notes:</strong> ${escapeHtml(args.booking.notes)}<br>` : ""}
       </p>
-      <p>Open in admin: ${appUrl}/admin/bookings/${args.booking.id}</p>
+      <p>Open in admin: ${args.appUrl}/admin/bookings/${args.booking.id}</p>
     `,
     replyTo: args.realtor.email,
   });
@@ -1001,6 +1292,12 @@ function decodeUserId(token: string): string | null {
   } catch {
     return null;
   }
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }
 
 function str(fd: FormData, key: string): string {
@@ -1040,11 +1337,23 @@ function formatShotRequest(slug: string): string {
   )[slug] ?? slug;
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function safeHttpUrl(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:"
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
+  }
 }

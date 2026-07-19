@@ -13,9 +13,7 @@ type ConnectionRow =
 interface BookingLineItemForInvoice {
   quantity: number;
   unit_price_cents: number;
-  catalog_items: {
-    name: string;
-  } | null;
+  item_name: string;
 }
 
 /**
@@ -47,6 +45,8 @@ export interface CreateInvoiceInput {
     city: string | null;
     postal_code: string | null;
   };
+  /** Exact immutable invoice lines from the claimed durable job. */
+  lineItems?: Array<{ description: string; amountCents: number }>;
 }
 
 export interface CreateInvoiceResult {
@@ -132,51 +132,54 @@ export async function createInvoiceForBooking(
     };
   }
 
-  const lineItems: { description: string; amountCents: number }[] = [];
+  const lineItems: { description: string; amountCents: number }[] =
+    input.lineItems?.map((line) => ({ ...line })) ?? [];
 
-  const { data: snapshotLines, error: snapshotErr } = await supabase
-    .from("booking_line_items")
-    .select("quantity, unit_price_cents, catalog_items(name)")
-    .eq("booking_id", input.bookingId)
-    .returns<BookingLineItemForInvoice[]>();
-  if (snapshotErr) return { ok: false, error: snapshotErr.message };
+  if (!input.lineItems) {
+    const { data: snapshotLines, error: snapshotErr } = await supabase
+      .from("booking_line_items")
+      .select("quantity, unit_price_cents, item_name")
+      .eq("booking_id", input.bookingId)
+      .returns<BookingLineItemForInvoice[]>();
+    if (snapshotErr) return { ok: false, error: snapshotErr.message };
 
-  if (snapshotLines && snapshotLines.length > 0) {
-    for (const line of snapshotLines) {
-      if (line.unit_price_cents > 0) {
-        lineItems.push({
-          description: line.catalog_items?.name ?? "Booking item",
-          amountCents: line.unit_price_cents * Math.max(1, line.quantity),
-        });
+    if (snapshotLines && snapshotLines.length > 0) {
+      for (const line of snapshotLines) {
+        if (line.unit_price_cents > 0) {
+          lineItems.push({
+            description: line.item_name,
+            amountCents: line.unit_price_cents * Math.max(1, line.quantity),
+          });
+        }
       }
-    }
-  } else {
-    // Fallback for old bookings that predate booking_line_items.
-    const { data: priceRows, error: priceErr } = await supabase
-      .from("service_prices")
-      .select("service_id, price_cents, taxable")
-      .eq("organization_id", existing?.organization_id ?? "")
-      .returns<ServicePriceRow[]>();
-    if (priceErr) return { ok: false, error: priceErr.message };
+    } else {
+      // Fallback for old bookings that predate booking_line_items.
+      const { data: priceRows, error: priceErr } = await supabase
+        .from("service_prices")
+        .select("service_id, price_cents, taxable")
+        .eq("organization_id", existing?.organization_id ?? "")
+        .returns<ServicePriceRow[]>();
+      if (priceErr) return { ok: false, error: priceErr.message };
 
-    const priceByService = new Map(
-      (priceRows ?? []).map((r) => [r.service_id, r.price_cents]),
-    );
+      const priceByService = new Map(
+        (priceRows ?? []).map((r) => [r.service_id, r.price_cents]),
+      );
 
-    for (const sid of input.services) {
-      const cents = priceByService.get(sid) ?? 0;
-      if (cents === 0) {
-        return {
-          ok: false,
-          error: `Price for "${labelForService(sid)}" is $0 — set a real price in /admin/settings/pricing first.`,
-        };
+      for (const sid of input.services) {
+        const cents = priceByService.get(sid) ?? 0;
+        if (cents === 0) {
+          return {
+            ok: false,
+            error: `Price for "${labelForService(sid)}" is $0 — set a real price in /admin/settings/pricing first.`,
+          };
+        }
+        lineItems.push({ description: labelForService(sid), amountCents: cents });
       }
-      lineItems.push({ description: labelForService(sid), amountCents: cents });
-    }
-    for (const aid of input.addOns) {
-      const cents = priceByService.get(aid) ?? 0;
-      if (cents > 0) {
-        lineItems.push({ description: labelForAddOn(aid), amountCents: cents });
+      for (const aid of input.addOns) {
+        const cents = priceByService.get(aid) ?? 0;
+        if (cents > 0) {
+          lineItems.push({ description: labelForAddOn(aid), amountCents: cents });
+        }
       }
     }
   }

@@ -57,11 +57,12 @@ export async function sendPushToProfile(
 export async function sendPushBestEffort(
   organizationId: string,
   message: PushMessage,
-): Promise<void> {
+): Promise<PushSendResult> {
   try {
-    await sendPushToOrganization(organizationId, message);
+    return await sendPushToOrganization(organizationId, message);
   } catch (error) {
     console.warn("[push] notification failed", safeErrorMessage(error));
+    return { sent: 0, failed: 1, removed: 0, skipped: false };
   }
 }
 

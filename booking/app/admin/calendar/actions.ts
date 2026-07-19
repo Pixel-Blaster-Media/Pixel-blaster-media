@@ -302,6 +302,9 @@ export async function createAdminShoot(
   const lineItems = selectedItems.map((item) => ({
     booking_id: booking.id,
     catalog_item_id: item.id,
+    item_name: item.name,
+    item_slug: item.slug,
+    item_kind: item.kind,
     quantity: 1,
     unit_price_cents: item.price_cents,
     unit_duration_minutes: item.duration_minutes,

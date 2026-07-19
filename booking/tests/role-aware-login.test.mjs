@@ -433,11 +433,11 @@ test("failed booking workflows revoke identities created in that request", () =>
   );
   assert.match(
     bookingAction,
-    /booking insert failed[\s\S]*rollbackProvisionedRealtor/,
+    /atomic booking commit failed[\s\S]*rollbackProvisionedRealtor/,
   );
   assert.ok(
     bookingAction.indexOf("setSupabaseSessionCookie(authResult.sessionTokens") >
-      bookingAction.indexOf("if (bookErr || !booking)"),
+      bookingAction.indexOf("if (bookErr || !atomic?.booking_id"),
   );
 });
 
