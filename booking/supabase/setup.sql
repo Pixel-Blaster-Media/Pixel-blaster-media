@@ -1,9 +1,10 @@
 -- ============================================================================
 -- Pixel Booking — one-paste Supabase setup
 --
--- Generated from supabase/migrations/*.sql. Keep this file in sync whenever
--- migrations change. For production teams, the migrations folder remains the
--- source of truth; this file exists only as a convenient fresh-project setup.
+-- Generated from the pre-ledger bootstrap history plus canonical migrations
+-- from version 20260716141227 onward. The production migration directory
+-- mirrors the linked production ledger; bootstrap-migrations exists only to
+-- reconstruct fresh projects whose original schema predates that ledger.
 --
 -- First-time use:
 --   1. Paste this whole file into the Supabase SQL Editor.
@@ -12,12 +13,12 @@
 --   4. Follow docs/auth-rollout.md and run the guarded first-company bootstrap.
 --
 -- Do not run this against a live database that already has user/customer data.
--- Apply new files in supabase/migrations/ instead.
+-- Apply only new files from supabase/migrations/ to linked production.
 -- ============================================================================
 
 
 -- ============================================================================
--- Begin supabase/migrations/0001_init.sql
+-- Begin supabase/bootstrap-migrations/0001_init.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -292,11 +293,11 @@ create policy "deliverables: admin write"
   with check (public.is_admin());
 
 -- ============================================================================
--- End supabase/migrations/0001_init.sql
+-- End supabase/bootstrap-migrations/0001_init.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0002_booking_requests.sql
+-- Begin supabase/bootstrap-migrations/0002_booking_requests.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -378,11 +379,11 @@ create policy "booking_requests: admin update"
   with check (public.is_admin());
 
 -- ============================================================================
--- End supabase/migrations/0002_booking_requests.sql
+-- End supabase/bootstrap-migrations/0002_booking_requests.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0003_iguide.sql
+-- Begin supabase/bootstrap-migrations/0003_iguide.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -405,11 +406,11 @@ create unique index if not exists bookings_iguide_id_key
   where iguide_id is not null;
 
 -- ============================================================================
--- End supabase/migrations/0003_iguide.sql
+-- End supabase/bootstrap-migrations/0003_iguide.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0004_calendar.sql
+-- Begin supabase/bootstrap-migrations/0004_calendar.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -513,11 +514,11 @@ create policy "calendar_blocks: admin write"
   with check (public.is_admin());
 
 -- ============================================================================
--- End supabase/migrations/0004_calendar.sql
+-- End supabase/bootstrap-migrations/0004_calendar.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0005_quickbooks.sql
+-- Begin supabase/bootstrap-migrations/0005_quickbooks.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -640,11 +641,11 @@ create unique index if not exists bookings_qb_invoice_id_key
   where quickbooks_invoice_id is not null;
 
 -- ============================================================================
--- End supabase/migrations/0005_quickbooks.sql
+-- End supabase/bootstrap-migrations/0005_quickbooks.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0006_fotello.sql
+-- Begin supabase/bootstrap-migrations/0006_fotello.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -670,11 +671,11 @@ create index if not exists bookings_fotello_listing_idx
   where fotello_listing_id is not null;
 
 -- ============================================================================
--- End supabase/migrations/0006_fotello.sql
+-- End supabase/bootstrap-migrations/0006_fotello.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0007_iguide_portal_api.sql
+-- Begin supabase/bootstrap-migrations/0007_iguide_portal_api.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -705,11 +706,11 @@ comment on column public.bookings.iguide_portal_id is
   'Immutable iGuide Portal ID (e.g. igYGFV5GG6V8DD1). Set by the ready webhook; required for Portal API calls.';
 
 -- ============================================================================
--- End supabase/migrations/0007_iguide_portal_api.sql
+-- End supabase/bootstrap-migrations/0007_iguide_portal_api.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0008_catalog.sql
+-- Begin supabase/bootstrap-migrations/0008_catalog.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -906,11 +907,11 @@ values
   );
 
 -- ============================================================================
--- End supabase/migrations/0008_catalog.sql
+-- End supabase/bootstrap-migrations/0008_catalog.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0009_request_cart.sql
+-- Begin supabase/bootstrap-migrations/0009_request_cart.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -931,11 +932,11 @@ alter table public.booking_requests
   add column if not exists cart jsonb not null default '[]'::jsonb;
 
 -- ============================================================================
--- End supabase/migrations/0009_request_cart.sql
+-- End supabase/bootstrap-migrations/0009_request_cart.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0010_google_calendar.sql
+-- Begin supabase/bootstrap-migrations/0010_google_calendar.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -996,11 +997,11 @@ alter table public.bookings
   add column if not exists google_calendar_event_url  text;
 
 -- ============================================================================
--- End supabase/migrations/0010_google_calendar.sql
+-- End supabase/bootstrap-migrations/0010_google_calendar.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0011_booking_property_details.sql
+-- Begin supabase/bootstrap-migrations/0011_booking_property_details.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -1036,11 +1037,11 @@ comment on column public.bookings.is_vacant        is 'vacant | occupied | parti
 comment on column public.bookings.include_basement is 'Whether the realtor wants the basement included in the shoot.';
 
 -- ============================================================================
--- End supabase/migrations/0011_booking_property_details.sql
+-- End supabase/bootstrap-migrations/0011_booking_property_details.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0012_integration_credentials.sql
+-- Begin supabase/bootstrap-migrations/0012_integration_credentials.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -1088,11 +1089,11 @@ comment on table public.integration_credentials is
   'Per-provider API credentials editable from /admin/settings/integrations. JSONB shape varies by provider (e.g. {api_key: "..."} for Fotello, {app_id: "...", app_token: "...", webhook_secret: "..."} for iGuide).';
 
 -- ============================================================================
--- End supabase/migrations/0012_integration_credentials.sql
+-- End supabase/bootstrap-migrations/0012_integration_credentials.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0013_booking_overlap_guard.sql
+-- Begin supabase/bootstrap-migrations/0013_booking_overlap_guard.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -1145,11 +1146,11 @@ alter table public.bookings
   );
 
 -- ============================================================================
--- End supabase/migrations/0013_booking_overlap_guard.sql
+-- End supabase/bootstrap-migrations/0013_booking_overlap_guard.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0014_iguide_jobs_and_webhook_events.sql
+-- Begin supabase/bootstrap-migrations/0014_iguide_jobs_and_webhook_events.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -1256,11 +1257,11 @@ comment on table public.iguide_webhook_events is
   'Raw iGUIDE webhook inbox. Unmatched portal-created tours stay here for review instead of being dropped.';
 
 -- ============================================================================
--- End supabase/migrations/0014_iguide_jobs_and_webhook_events.sql
+-- End supabase/bootstrap-migrations/0014_iguide_jobs_and_webhook_events.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0015_booking_notifications.sql
+-- Begin supabase/bootstrap-migrations/0015_booking_notifications.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -1299,11 +1300,11 @@ begin
 end $$;
 
 -- ============================================================================
--- End supabase/migrations/0015_booking_notifications.sql
+-- End supabase/bootstrap-migrations/0015_booking_notifications.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0016_catalog_sqft_pricing.sql
+-- Begin supabase/bootstrap-migrations/0016_catalog_sqft_pricing.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -1347,11 +1348,11 @@ where slug in (
 );
 
 -- ============================================================================
--- End supabase/migrations/0016_catalog_sqft_pricing.sql
+-- End supabase/bootstrap-migrations/0016_catalog_sqft_pricing.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0017_catalog_media_badges.sql
+-- Begin supabase/bootstrap-migrations/0017_catalog_media_badges.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -1378,11 +1379,11 @@ where slug in (
 );
 
 -- ============================================================================
--- End supabase/migrations/0017_catalog_media_badges.sql
+-- End supabase/bootstrap-migrations/0017_catalog_media_badges.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0018_property_archive.sql
+-- Begin supabase/bootstrap-migrations/0018_property_archive.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -1399,11 +1400,11 @@ create index if not exists properties_owner_archived_idx
   on public.properties(owner_id, archived_at);
 
 -- ============================================================================
--- End supabase/migrations/0018_property_archive.sql
+-- End supabase/bootstrap-migrations/0018_property_archive.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0019_listing_websites.sql
+-- Begin supabase/bootstrap-migrations/0019_listing_websites.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -1486,11 +1487,11 @@ create policy "listing_websites: owner update"
   with check (owner_id = auth.uid() or public.is_admin());
 
 -- ============================================================================
--- End supabase/migrations/0019_listing_websites.sql
+-- End supabase/bootstrap-migrations/0019_listing_websites.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0020_listing_website_sections.sql
+-- Begin supabase/bootstrap-migrations/0020_listing_website_sections.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -1502,11 +1503,11 @@ alter table public.listing_websites
     '{photos,tour,floor_plans,video,property_websites}'::text[];
 
 -- ============================================================================
--- End supabase/migrations/0020_listing_website_sections.sql
+-- End supabase/bootstrap-migrations/0020_listing_website_sections.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0021_listing_website_gallery_selection.sql
+-- Begin supabase/bootstrap-migrations/0021_listing_website_gallery_selection.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -1517,11 +1518,11 @@ alter table public.listing_websites
   add column if not exists gallery_image_urls text[];
 
 -- ============================================================================
--- End supabase/migrations/0021_listing_website_gallery_selection.sql
+-- End supabase/bootstrap-migrations/0021_listing_website_gallery_selection.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0022_realtor_profile_media.sql
+-- Begin supabase/bootstrap-migrations/0022_realtor_profile_media.sql
 -- ============================================================================
 
 -- Pixel Blaster Booking — admin-managed realtor profile media
@@ -1555,11 +1556,11 @@ set
   allowed_mime_types = excluded.allowed_mime_types;
 
 -- ============================================================================
--- End supabase/migrations/0022_realtor_profile_media.sql
+-- End supabase/bootstrap-migrations/0022_realtor_profile_media.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0023_realtor_delivery_cc_emails.sql
+-- Begin supabase/bootstrap-migrations/0023_realtor_delivery_cc_emails.sql
 -- ============================================================================
 
 -- Pixel Blaster Booking — account-level delivery CC recipients
@@ -1570,11 +1571,11 @@ alter table public.profiles
   add column if not exists delivery_cc_emails text[] not null default '{}';
 
 -- ============================================================================
--- End supabase/migrations/0023_realtor_delivery_cc_emails.sql
+-- End supabase/bootstrap-migrations/0023_realtor_delivery_cc_emails.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0024_saas_calendar_foundation.sql
+-- Begin supabase/bootstrap-migrations/0024_saas_calendar_foundation.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -1787,11 +1788,11 @@ comment on column public.google_calendar_connection.organization_id is
   'Organization/business that owns this Google Calendar OAuth connection.';
 
 -- ============================================================================
--- End supabase/migrations/0024_saas_calendar_foundation.sql
+-- End supabase/bootstrap-migrations/0024_saas_calendar_foundation.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0025_saas_tenant_isolation.sql
+-- Begin supabase/bootstrap-migrations/0025_saas_tenant_isolation.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -2308,11 +2309,11 @@ comment on column public.integration_credentials.organization_id is
   'Organization/business that owns this integration credential.';
 
 -- ============================================================================
--- End supabase/migrations/0025_saas_tenant_isolation.sql
+-- End supabase/bootstrap-migrations/0025_saas_tenant_isolation.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0027_realtor_internal_notes.sql
+-- Begin supabase/bootstrap-migrations/0027_realtor_internal_notes.sql
 -- ============================================================================
 
 -- Pixel Blaster Booking — private agent preference notes
@@ -2324,11 +2325,11 @@ alter table public.profiles
   add column if not exists internal_notes text;
 
 -- ============================================================================
--- End supabase/migrations/0027_realtor_internal_notes.sql
+-- End supabase/bootstrap-migrations/0027_realtor_internal_notes.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0028_organization_email_settings.sql
+-- Begin supabase/bootstrap-migrations/0028_organization_email_settings.sql
 -- ============================================================================
 
 alter table public.organizations
@@ -2350,11 +2351,11 @@ comment on column public.organizations.admin_notification_email is
   'Company inbox that receives booking and cancellation notifications.';
 
 -- ============================================================================
--- End supabase/migrations/0028_organization_email_settings.sql
+-- End supabase/bootstrap-migrations/0028_organization_email_settings.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0029_iguide_tenant_isolation.sql
+-- Begin supabase/bootstrap-migrations/0029_iguide_tenant_isolation.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -2456,11 +2457,11 @@ comment on column public.iguide_webhook_events.organization_id is
   'Organization/business that owns this iGUIDE webhook event.';
 
 -- ============================================================================
--- End supabase/migrations/0029_iguide_tenant_isolation.sql
+-- End supabase/bootstrap-migrations/0029_iguide_tenant_isolation.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0030_assistant_action_logs.sql
+-- Begin supabase/bootstrap-migrations/0030_assistant_action_logs.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -2518,11 +2519,11 @@ comment on table public.assistant_action_logs is
   'Tenant-scoped audit history of confirmed Pixel Assistant actions.';
 
 -- ============================================================================
--- End supabase/migrations/0030_assistant_action_logs.sql
+-- End supabase/bootstrap-migrations/0030_assistant_action_logs.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0031_assistant_action_undo.sql
+-- Begin supabase/bootstrap-migrations/0031_assistant_action_undo.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -2550,11 +2551,11 @@ comment on column public.assistant_action_logs.undone_at is
   'Timestamp when this assistant action was reversed, if applicable.';
 
 -- ============================================================================
--- End supabase/migrations/0031_assistant_action_undo.sql
+-- End supabase/bootstrap-migrations/0031_assistant_action_undo.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0032_realtor_ai_memory.sql
+-- Begin supabase/bootstrap-migrations/0032_realtor_ai_memory.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -2572,11 +2573,11 @@ comment on column public.profiles.ai_memory is
   'Admin-managed structured realtor preferences used by AI booking and workflow assistants.';
 
 -- ============================================================================
--- End supabase/migrations/0032_realtor_ai_memory.sql
+-- End supabase/bootstrap-migrations/0032_realtor_ai_memory.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0033_ai_operator_guardrails.sql
+-- Begin supabase/bootstrap-migrations/0033_ai_operator_guardrails.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -2776,11 +2777,11 @@ comment on function public.create_booking_from_request(uuid, uuid, uuid, timesta
   'Atomically promotes a booking_request into property + confirmed booking + accepted request link.';
 
 -- ============================================================================
--- End supabase/migrations/0033_ai_operator_guardrails.sql
+-- End supabase/bootstrap-migrations/0033_ai_operator_guardrails.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0034_realtor_alternate_phones.sql
+-- Begin supabase/bootstrap-migrations/0034_realtor_alternate_phones.sql
 -- ============================================================================
 
 -- Allow a realtor profile to match more than one phone number.
@@ -2791,11 +2792,11 @@ comment on column public.profiles.alternate_phones is
   'Additional phone numbers that can identify this realtor during public booking lookup.';
 
 -- ============================================================================
--- End supabase/migrations/0034_realtor_alternate_phones.sql
+-- End supabase/bootstrap-migrations/0034_realtor_alternate_phones.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0035_realtor_archive.sql
+-- Begin supabase/bootstrap-migrations/0035_realtor_archive.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -2816,11 +2817,11 @@ comment on column public.profiles.archived_at is
   'Soft-delete marker for realtor profiles removed from active use. Historical bookings remain attached.';
 
 -- ============================================================================
--- End supabase/migrations/0035_realtor_archive.sql
+-- End supabase/bootstrap-migrations/0035_realtor_archive.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0036_organization_booking_hero_media.sql
+-- Begin supabase/bootstrap-migrations/0036_organization_booking_hero_media.sql
 -- ============================================================================
 
 alter table public.organizations
@@ -2834,11 +2835,11 @@ comment on column public.organizations.booking_hero_secondary_image_url is
   'Secondary visual used in the public booking page hero.';
 
 -- ============================================================================
--- End supabase/migrations/0036_organization_booking_hero_media.sql
+-- End supabase/bootstrap-migrations/0036_organization_booking_hero_media.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0037_allow_admin_overlap.sql
+-- Begin supabase/bootstrap-migrations/0037_allow_admin_overlap.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -2861,11 +2862,11 @@ alter table public.bookings
   drop constraint if exists bookings_active_schedule_no_overlap;
 
 -- ============================================================================
--- End supabase/migrations/0037_allow_admin_overlap.sql
+-- End supabase/bootstrap-migrations/0037_allow_admin_overlap.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0038_invoice_timing.sql
+-- Begin supabase/bootstrap-migrations/0038_invoice_timing.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -2889,11 +2890,11 @@ comment on column public.organizations.invoice_timing is
   'When the QuickBooks invoice payment link is emailed automatically: after media delivery (default) or as soon as the booking is made.';
 
 -- ============================================================================
--- End supabase/migrations/0038_invoice_timing.sql
+-- End supabase/bootstrap-migrations/0038_invoice_timing.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0039_booking_reminders.sql
+-- Begin supabase/bootstrap-migrations/0039_booking_reminders.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -2923,11 +2924,11 @@ create index if not exists bookings_reminder_pending_idx
   where reminder_sent_at is null;
 
 -- ============================================================================
--- End supabase/migrations/0039_booking_reminders.sql
+-- End supabase/bootstrap-migrations/0039_booking_reminders.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0040_external_calendar_sources.sql
+-- Begin supabase/bootstrap-migrations/0040_external_calendar_sources.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -2982,11 +2983,11 @@ comment on column public.google_calendar_connection.write_bookings is
   'The one source per organization where newly created Pixel Blaster bookings are written.';
 
 -- ============================================================================
--- End supabase/migrations/0040_external_calendar_sources.sql
+-- End supabase/bootstrap-migrations/0040_external_calendar_sources.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/0041_calendar_source_colours.sql
+-- Begin supabase/bootstrap-migrations/0041_calendar_source_colours.sql
 -- ============================================================================
 
 -- Calendar source colours for the Apple Calendar-style admin sidebar.
@@ -3005,11 +3006,11 @@ comment on column public.google_calendar_connection.source_color is
   'Hex colour used for this Google Calendar source in admin calendar views.';
 
 -- ============================================================================
--- End supabase/migrations/0041_calendar_source_colours.sql
+-- End supabase/bootstrap-migrations/0041_calendar_source_colours.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/20260611175858_autoenhance_booking_workflow.sql
+-- Begin supabase/bootstrap-migrations/20260611175858_autoenhance_booking_workflow.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -3141,11 +3142,11 @@ comment on table public.autoenhance_iguide_uploads is
   'Per-photo Autoenhance-to-iGUIDE upload attempts for idempotency and diagnostics.';
 
 -- ============================================================================
--- End supabase/migrations/20260611175858_autoenhance_booking_workflow.sql
+-- End supabase/bootstrap-migrations/20260611175858_autoenhance_booking_workflow.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/20260709193816_booking_schedule_race_guard.sql
+-- Begin supabase/bootstrap-migrations/20260709193816_booking_schedule_race_guard.sql
 -- ============================================================================
 
 -- Keep public/realtor booking writes race-safe while preserving the admin's
@@ -3264,11 +3265,11 @@ comment on function public.guard_booking_schedule_overlap() is
   'Serializes schedule writes per organization and rejects overlapping non-admin bookings atomically.';
 
 -- ============================================================================
--- End supabase/migrations/20260709193816_booking_schedule_race_guard.sql
+-- End supabase/bootstrap-migrations/20260709193816_booking_schedule_race_guard.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/20260709200031_database_security_and_indexes.sql
+-- Begin supabase/bootstrap-migrations/20260709200031_database_security_and_indexes.sql
 -- ============================================================================
 
 -- Security-advisor cleanup for helper functions. Every referenced relation is
@@ -3353,11 +3354,11 @@ create index if not exists telegram_connections_profile_idx
   on public.telegram_connections(profile_id);
 
 -- ============================================================================
--- End supabase/migrations/20260709200031_database_security_and_indexes.sql
+-- End supabase/bootstrap-migrations/20260709200031_database_security_and_indexes.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/20260710142242_push_notifications.sql
+-- Begin supabase/bootstrap-migrations/20260710142242_push_notifications.sql
 -- ============================================================================
 
 -- One row per browser/device that an authenticated admin explicitly allows to
@@ -3450,11 +3451,11 @@ comment on table public.push_subscriptions is
   'Tenant-scoped Web Push endpoints for admins who enabled app notifications.';
 
 -- ============================================================================
--- End supabase/migrations/20260710142242_push_notifications.sql
+-- End supabase/bootstrap-migrations/20260710142242_push_notifications.sql
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/20260710153500_harden_push_subscription_grants.sql
+-- Begin supabase/bootstrap-migrations/20260710153500_harden_push_subscription_grants.sql
 -- ============================================================================
 
 -- Supabase projects can grant broad table privileges through default
@@ -3464,7 +3465,7 @@ grant select, insert, update, delete on table public.push_subscriptions
   to authenticated;
 
 -- ============================================================================
--- End supabase/migrations/20260710153500_harden_push_subscription_grants.sql
+-- End supabase/bootstrap-migrations/20260710153500_harden_push_subscription_grants.sql
 -- ============================================================================
 
 -- ============================================================================

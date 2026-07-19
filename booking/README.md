@@ -102,25 +102,35 @@ or their existing device subscriptions will stop working.
    - `anon` public key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `service_role` secret key → `SUPABASE_SERVICE_ROLE_KEY` (server only — never expose)
 3. Apply the database schema. Three options (in order of ease):
-   - **Easiest:** paste `supabase/setup.sql` into the SQL Editor once
-     and click Run. That one file is generated from every migration in
-     `supabase/migrations/`. Use it only on a fresh/empty Supabase project.
-   - **Manual per-migration:** paste each file from `supabase/migrations/`
-     in numeric order and run one at a time. Useful when debugging.
-   - **CLI:** install `supabase` CLI, link the project, then
-     `supabase db push`.
+   - **Easiest for a fresh project:** paste `supabase/setup.sql` into the SQL
+     Editor once and click Run. The generated file combines the pre-ledger
+     bootstrap history with canonical migrations from the reconciliation
+     cutover onward. Use it only on a fresh/empty Supabase project.
+   - **Manual fresh-project debugging:** apply the files from
+     `supabase/bootstrap-migrations/` in order, followed by canonical files in
+     `supabase/migrations/` from version `20260716141227` onward.
+   - **Existing linked production:** use `supabase migration list --linked`
+     and `supabase db push --linked --dry-run` before applying a new canonical
+     migration. `supabase/migrations/` mirrors the production ledger, and
+     `supabase/production-migration-ledger.json` preserves the reconciled
+     version/name/statement-count/body-hash baseline. Never use `--include-all`
+     and never run bootstrap files against production.
 4. Deploy the app and visit `/start` to create the first company account.
    That flow creates the company, owner profile, starter catalog, working
    hours, and default settings.
 
-When migrations change, regenerate the one-paste setup file:
+When migrations change, regenerate the one-paste setup file. The generator reads
+all pre-ledger bootstrap files, skips their recovered remote aliases, and then
+includes canonical migrations from the reconciliation cutover onward:
 
 ```bash
 npm run db:setup
 ```
 
-Do not run `supabase/setup.sql` against a live database with customer data.
-For live databases, apply only the new migration files.
+Do not run `supabase/setup.sql` or anything in
+`supabase/bootstrap-migrations/` against a live database with customer data.
+For live databases, create and apply only a new timestamped file in
+`supabase/migrations/` after the linked dry-run names exactly that file.
 
 The schema sets up:
 
@@ -400,13 +410,14 @@ booking/
 │       ├── client.ts · server.ts        # Browser + server + service clients
 │       └── database.types.ts            # Regenerate with `npm run db:types`
 ├── middleware.ts                        # Session refresh + /admin gate
-├── supabase/migrations/
-│   ├── 0001_init.sql
-│   ├── 0002_booking_requests.sql
-│   ├── 0003_iguide.sql                  # iguide_id on bookings + index
-│   ├── 0004_calendar.sql                # business_hours + calendar_blocks
-│   ├── 0005_quickbooks.sql              # qb connection + service_prices + invoice cols
-│   └── 0006_fotello.sql                 # fotello_listing_id on bookings
+├── supabase/
+│   ├── bootstrap-migrations/             # Fresh-project pre-ledger history only
+│   │   ├── 0001_init.sql
+│   │   └── …
+│   ├── migrations/                       # Canonical linked-production ledger
+│   │   ├── 20260505212726_iguide_jobs_and_webhook_events.sql
+│   │   └── …
+│   └── setup.sql                         # Generated fresh-project aggregate
 ├── .env.example · .eslintrc.json · next.config.mjs
 ├── package.json · postcss.config.mjs · tailwind.config.ts · tsconfig.json
 ```

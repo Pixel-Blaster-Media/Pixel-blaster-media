@@ -35,9 +35,11 @@ creation returns an ambiguous response, the command prints a stable
 identity instead of creating another one. Concurrent bootstrap attempts can create
 at most one owner; losing attempts remove their own marker-bound Auth identity.
 
-## Coordinated rollout for migrations `20260717140806` and `20260717211142`
+## Historical rollout record — completed
 
-Do not use `supabase db push --include-all`. Local and linked migration histories may diverge.
+Production's linked migration ledger already contains `20260717140806` and `20260717211142`; their schema and Auth provisioning behavior are installed. **Do not execute the historical apply or migration-repair steps against production.** The numbered procedure below is retained only as an audit record of the completed rollout, not as a current runbook. A different environment must first prove both versions absent from its linked ledger and receive a fresh environment-specific review before applying anything.
+
+Do not use `supabase db push --include-all`. The completed rollout did not use it, and the option remains prohibited.
 
 1. Start a short maintenance window and control all public-booking and admin mutation traffic until the compatibility deployment and migration are fully healthy. Set production `ENABLE_PUBLIC_SIGNUP=0`, redeploy the current build, and verify `/start` plus `/start/oauth/complete` return 404. Do this before changing Supabase so the previous service-role company-creation action is closed too.
 2. **Disable public Auth signup** in the linked Supabase project. Confirm password signup and new OAuth identities are rejected. Service-role admin creation remains available.

@@ -28,16 +28,17 @@ A general scheduled dispatcher and operator outbox UI are intentionally deferred
 
 Run `npm run test:postgres:atomic` to initialize a disposable PostgreSQL 17 cluster, install the fixture and exact migration, execute transactional/replay/tenant/lease regressions, and tear the cluster down. The suite fails if PostgreSQL 17 binaries are unavailable; set `POSTGRES_BIN` when they are not on `PATH`.
 
-## Rollout order
+## Rollout status — completed
 
-1. Inspect local and linked migration history. Never use `supabase db push --include-all`.
-2. Apply only the exact reviewed contents of migration `20260718202432` inside one transaction.
-3. If the divergent remote ledger requires repair, mark only version `20260718202432` applied.
-4. Verify the new columns, compatibility snapshot trigger/backfill, table constraints/indexes, RLS/grants, and all three service-role RPCs.
-5. Deploy the compatible application only after database verification.
-6. If the application rollout fails, roll back the application while leaving the additive migration installed.
+Production already contains migration `20260718202432`, its ledger entry is applied, and the compatible application is deployed. **Do not reapply migration `20260718202432` or repair its production ledger entry.** The sequence below records what was completed; it is not an active production runbook:
 
-The `(organization_id, id)` unique index on `bookings` supports the tenant-qualified outbox foreign key. Build/apply it during a controlled low-traffic window because a normal production index build can briefly block writes.
+1. Local and linked migration history were inspected without `--include-all`.
+2. The exact reviewed migration was applied transactionally.
+3. Only version `20260718202432` was recorded as applied after schema verification.
+4. Columns, snapshot compatibility, constraints/indexes, RLS/grants, and the service-role RPCs were verified.
+5. The compatible application was deployed after database verification.
+
+The `(organization_id, id)` unique index on `bookings` now supports the tenant-qualified outbox foreign key. It has already been created; do not rebuild it as part of routine operations.
 
 ## Reconciliation rules
 
