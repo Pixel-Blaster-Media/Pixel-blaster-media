@@ -35,6 +35,10 @@ const integrationJobsUrl = new URL(
   "../lib/integrations/jobs.ts",
   import.meta.url,
 );
+const dispatcherSource = readFileSync(
+  new URL("../lib/integrations/dispatcher.ts", import.meta.url),
+  "utf8",
+);
 const postgresBehaviorUrl = new URL(
   "./postgres/atomic-booking-outbox.behavior.sql",
   import.meta.url,
@@ -159,12 +163,9 @@ test("public booking aggregate is committed through one service-role-only RPC", 
   assert.doesNotMatch(bookingActionSource, /\.from\("booking_line_items"\)[\s\S]{0,500}\.insert\(/);
 });
 
-test("inline integration attempts settle their durable jobs with stable provider keys", () => {
+test("inline and scheduled integration attempts share the durable dispatcher", () => {
   assert.match(confirmPageSource, /requestId=\{randomUUID\(\)\}/);
-  assert.match(
-    confirmFormSource,
-    /name="public_request_id"\s+value=\{requestId\}/,
-  );
+  assert.match(confirmFormSource, /name="public_request_id"\s+value=\{requestId\}/);
 
   assert.equal(existsSync(integrationJobsUrl), true, "missing integration job helper");
   const jobsSource = readFileSync(integrationJobsUrl, "utf8");
@@ -184,25 +185,28 @@ test("inline integration attempts settle their durable jobs with stable provider
   assert.match(jobsSource, /row\.payload_version !== 1/);
   assert.match(jobsSource, /payload\.organization_id !== organizationId/);
   assert.match(jobsSource, /payload\.booking_id !== bookingId/);
-  for (const claimName of [
-    "invoiceClaim",
-    "calendarClaim",
-    "customerEmailClaim",
-    "adminEmailClaim",
-    "pushClaim",
-  ]) {
-    assert.match(bookingActionSource, new RegExp(`${claimName}\\.payload`));
-  }
-  assert.doesNotMatch(
+
+  assert.match(bookingActionSource, /dispatchBookingIntegrationJobs\(/);
+  assert.match(
     bookingActionSource,
-    /createInvoiceForBooking\([\s\S]{0,300}bookingId:\s*booking\.id/,
+    /buildIntegrationWorkerId\(\s*"inline-public-booking"/,
   );
-  assert.match(bookingActionSource, /lineItems:\s*payload\.line_items/);
-  assert.match(bookingActionSource, /getGoogleCalendarClient\([\s\S]{0,120}payload\.organization_id/);
-  assert.match(bookingActionSource, /recipient:\s*payload\.organization\.admin_notification_email/);
-  assert.match(bookingActionSource, /sendPushBestEffort\(payload\.organization_id/);
-  assert.match(bookingActionSource, /customerEmailClaim\?\.dependencyResult[\s\S]*durableInvoiceUrl/);
-  assert.match(bookingActionSource, /durableInvoiceUrl[\s\S]*pay your invoice online/);
+  assert.doesNotMatch(bookingActionSource, /createInvoiceForBooking\(/);
+  assert.doesNotMatch(bookingActionSource, /getGoogleCalendarClient\(/);
+  assert.doesNotMatch(bookingActionSource, /sendPushBestEffort\(/);
+
+  assert.match(dispatcherSource, /const payload = claim\.payload/g);
+  assert.match(dispatcherSource, /lineItems:\s*payload\.line_items/);
+  assert.match(
+    dispatcherSource,
+    /getGoogleCalendarClient\([\s\S]{0,120}payload\.organization_id/,
+  );
+  assert.match(dispatcherSource, /payload\.organization\.admin_notification_email/);
+  assert.match(dispatcherSource, /sendPushBestEffort\(payload\.organization_id/);
+  assert.match(dispatcherSource, /claim\.dependencyResult[\s\S]*invoiceUrl/);
+  assert.match(dispatcherSource, /invoiceUrl[\s\S]*pay your invoice online/);
+  assert.match(dispatcherSource, /finishIntegrationJob\(/);
+  assert.match(dispatcherSource, /outcome:\s*"settlement_failed"/);
 
   for (const jobType of [
     "quickbooks.invoice.create",
@@ -211,34 +215,28 @@ test("inline integration attempts settle their durable jobs with stable provider
     "email.admin.new_booking",
     "push.admin.new_booking",
   ]) {
-    const escapedType = jobType.replaceAll(".", "\\.");
-    assert.match(
-      bookingActionSource,
-      new RegExp(`claimIntegrationJob\\([\\s\\S]{0,500}${escapedType}`),
-    );
+    assert.match(dispatcherSource, new RegExp(jobType.replaceAll(".", "\\.")));
   }
-  assert.ok(
-    (bookingActionSource.match(/finishIntegrationJob\(/g) ?? []).length >= 5,
-    "every claimed inline side effect must settle its lease",
-  );
 
   assert.match(emailSource, /idempotencyKey\?: string/);
   assert.match(emailSource, /"Idempotency-Key": args\.idempotencyKey/);
-  assert.match(emailSource, /args\.replyTo === undefined[\s\S]*settings\.replyToEmail[\s\S]*args\.replyTo \?\? undefined/);
-  assert.match(bookingActionSource, /replyTo:\s*payload\.organization\.reply_to_email/);
   assert.match(
-    bookingActionSource,
-    /if \(invoice\.ok\)[\s\S]*else \{[\s\S]*claim: invoiceClaim,[\s\S]*status: "dead_letter"/,
+    emailSource,
+    /args\.replyTo === undefined[\s\S]*settings\.replyToEmail[\s\S]*args\.replyTo \?\? undefined/,
+  );
+  assert.match(dispatcherSource, /replyTo:\s*payload\.organization\.reply_to_email/);
+  assert.match(
+    dispatcherSource,
+    /status:\s*"dead_letter"[\s\S]*ambiguous_provider_result/,
+  );
+  assert.ok(
+    (dispatcherSource.match(/idempotencyKey:\s*claim\.idempotencyKey/g) ?? []).length >= 2,
+    "both email jobs must use the durable provider key",
   );
   assert.match(
-    bookingActionSource,
-    /idempotencyKey:\s*customerEmailClaim\.idempotencyKey/,
+    quickBooksInvoiceSource,
+    /\.select\("quantity, unit_price_cents, item_name"\)/,
   );
-  assert.match(
-    bookingActionSource,
-    /idempotencyKey:\s*adminEmailClaim\.idempotencyKey/,
-  );
-  assert.match(quickBooksInvoiceSource, /\.select\("quantity, unit_price_cents, item_name"\)/);
   assert.match(quickBooksInvoiceSource, /description: line\.item_name/);
   assert.doesNotMatch(quickBooksInvoiceSource, /catalog_items\(name\)/);
   assert.match(

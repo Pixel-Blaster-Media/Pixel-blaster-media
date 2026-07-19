@@ -273,10 +273,14 @@ export async function createInvoiceForBooking(
       { method: "POST", body: invoiceBody },
     );
   } catch (err) {
-    const msg = err instanceof QBOError ? `${err.message}: ${err.body.slice(0, 200)}` : String(err);
-    console.error("[qbo.invoice] create failed", msg);
+    const msg = err instanceof QBOError
+      ? `QuickBooks rejected the invoice (status ${err.status})`
+      : "QuickBooks invoice request failed";
+    console.error("[qbo.invoice] create failed", {
+      status: err instanceof QBOError ? err.status : null,
+    });
     await clearInvoiceCreationLock(input.bookingId);
-    return { ok: false, error: `QuickBooks rejected the invoice: ${msg}` };
+    return { ok: false, error: msg };
   }
 
   const inv = created.Invoice;
@@ -394,8 +398,8 @@ async function findOrCreateCustomer(
       );
       const hit = existing.QueryResponse.Customer?.[0];
       if (hit?.Id) return hit.Id;
-    } catch (err) {
-      console.warn("[qbo.invoice] customer lookup failed, will try create", err);
+    } catch {
+      console.warn("[qbo.invoice] customer lookup failed; attempting create");
     }
   } else {
     console.warn("[qbo.invoice] skipped customer lookup for invalid email");

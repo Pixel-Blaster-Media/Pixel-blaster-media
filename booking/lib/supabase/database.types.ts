@@ -1,5 +1,6 @@
-// Hand-authored Supabase types covering the schema in
-// supabase/migrations/. Once you provision Supabase, regenerate this file
+// Schema-synchronized Supabase types covering the schema in
+// supabase/migrations/ through 20260719124500. Once you provision Supabase,
+// regenerate this file
 // from the actual schema to pick up policies, function returns, and any
 // drift:
 //
@@ -669,6 +670,10 @@ interface IntegrationJobsTable {
     created_at: string;
     updated_at: string;
     completed_at: string | null;
+    reconciled_at: string | null;
+    reconciled_by: string | null;
+    reconciliation_category: string | null;
+    reconciliation_note: string | null;
   };
   Insert: {
     id?: string;
@@ -694,6 +699,10 @@ interface IntegrationJobsTable {
     created_at?: string;
     updated_at?: string;
     completed_at?: string | null;
+    reconciled_at?: string | null;
+    reconciled_by?: string | null;
+    reconciliation_category?: string | null;
+    reconciliation_note?: string | null;
   };
   Update: Partial<IntegrationJobsTable["Insert"]>;
   Relationships: [];
@@ -1092,6 +1101,26 @@ export interface Database {
           p_error_code: string;
           p_error_message: string;
           p_next_attempt_at: string | null;
+        };
+        Returns: boolean;
+      };
+      list_due_integration_jobs: {
+        Args: {
+          p_limit: number;
+          p_dispatch_not_before: string;
+        };
+        Returns: Array<{
+          organization_id: string;
+          booking_id: string;
+          job_type: string;
+        }>;
+      };
+      reconcile_integration_job: {
+        Args: {
+          p_organization_id: string;
+          p_job_id: string;
+          p_category: string;
+          p_note: string;
         };
         Returns: boolean;
       };

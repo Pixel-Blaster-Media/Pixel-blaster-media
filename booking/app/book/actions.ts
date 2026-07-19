@@ -1,5 +1,7 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+
 import { redirect } from "next/navigation";
 
 import { emailHasAccount } from "@/lib/auth/email-lookup";
@@ -16,17 +18,9 @@ import {
 } from "@/lib/booking/availability";
 import { getActiveCatalog } from "@/lib/booking/catalog";
 import { createManageToken } from "@/lib/booking/manage-token";
-import { ccRecipientsFor } from "@/lib/email/recipients";
-import { sendEmail } from "@/lib/email/resend";
-import type { SendEmailResult } from "@/lib/email/resend";
 import { getAdminNotificationEmail } from "@/lib/email/settings";
-import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
-import {
-  claimIntegrationJob,
-  finishIntegrationJob,
-} from "@/lib/integrations/jobs";
-import { createInvoiceForBooking } from "@/lib/integrations/quickbooks/invoice";
-import { sendPushBestEffort } from "@/lib/notifications/push";
+import { dispatchBookingIntegrationJobs } from "@/lib/integrations/dispatcher";
+import { buildIntegrationWorkerId } from "@/lib/integrations/dispatcher-core";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
 import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
@@ -402,411 +396,33 @@ export async function createPublicBooking(
     }
   }
 
-  // -------- QuickBooks invoice (leased durable job; billing-at-booking only) --------
-  const invoiceClaim = await claimIntegrationJob({
+  const dispatchWorkerId = buildIntegrationWorkerId(
+    "inline-public-booking",
+    randomUUID(),
+  );
+  await dispatchBookingIntegrationJobs({
     organizationId,
     bookingId: booking.id,
-    jobType: "quickbooks.invoice.create",
+    workerId: dispatchWorkerId,
   });
-  if (invoiceClaim) {
-    try {
-      const payload = invoiceClaim.payload;
-      const invoice = await createInvoiceForBooking({
-        bookingId: payload.booking_id,
-        services: payload.line_items
-          .filter((item) => item.kind !== "addon")
-          .map((item) => item.slug),
-        addOns: payload.line_items
-          .filter((item) => item.kind === "addon")
-          .map((item) => item.slug),
-        realtor: {
-          email: payload.realtor.email,
-          full_name: payload.realtor.full_name,
-          phone: payload.realtor.phone,
-          brokerage: payload.realtor.brokerage,
-        },
-        property: {
-          street_address: payload.property.street_address,
-          city: payload.property.city,
-          postal_code: payload.property.postal_code,
-        },
-        lineItems: payload.line_items
-          .filter((item) => item.unit_price_cents > 0)
-          .map((item) => ({
-            description: item.name,
-            amountCents: item.unit_price_cents * Math.max(1, item.quantity),
-          })),
-      });
-      if (invoice.ok) {
-        await finishIntegrationJob({
-          organizationId,
-          claim: invoiceClaim,
-          status: "completed",
-          providerExternalId: invoice.invoiceId,
-          providerResult: {
-            invoice_number: invoice.invoiceNumber ?? null,
-            invoice_url: invoice.invoiceUrl ?? null,
-            total_cents: invoice.totalCents ?? null,
-          },
-        });
-      } else {
-        // The integration currently collapses transport and provider failures into
-        // ok=false. Treat every such result as ambiguous until QuickBooks exposes a
-        // deterministic idempotency or lookup key; blind retries could duplicate it.
-        await finishIntegrationJob({
-          organizationId,
-          claim: invoiceClaim,
-          status: "dead_letter",
-          errorCode: "ambiguous_provider_result",
-          errorMessage: "QuickBooks result requires operator reconciliation",
-        });
-      }
-    } catch {
-      // A thrown provider call may be ambiguous. Keep it visible but terminal so
-      // a future worker cannot blindly create a duplicate invoice.
-      await finishIntegrationJob({
-        organizationId,
-        claim: invoiceClaim,
-        status: "dead_letter",
-        errorCode: "ambiguous_provider_result",
-        errorMessage: "QuickBooks result requires operator reconciliation",
-      });
-    }
-  }
 
-  // -------- Google Calendar event (leased durable job) --------
-  const calendarClaim = await claimIntegrationJob({
-    organizationId,
-    bookingId: booking.id,
-    jobType: "google_calendar.event.create",
-  });
-  if (calendarClaim) {
-    try {
-      const payload = calendarClaim.payload;
-      const gcal = await getGoogleCalendarClient({
-        organizationId: payload.organization_id,
-      });
-      if (!gcal) {
-        await finishIntegrationJob({
-          organizationId,
-          claim: calendarClaim,
-          status: "skipped",
-          providerResult: { reason: "not_configured" },
-        });
-      } else {
-        const startAt = new Date(payload.booking.scheduled_at);
-        const endAt = new Date(payload.booking.scheduled_ends_at);
-        const serviceLabels = payload.line_items
-          .filter((item) => item.kind !== "addon")
-          .map((item) => item.name)
-          .join(", ");
-        const addonLabels = payload.line_items
-          .filter((item) => item.kind === "addon")
-          .map((item) => item.name)
-          .join(", ");
-        const streetLine = payload.property.unit_number
-          ? `${payload.property.street_address}, Unit ${payload.property.unit_number}`
-          : payload.property.street_address;
-        const addressLine = [streetLine, payload.property.city, payload.property.postal_code]
-          .filter(Boolean)
-          .join(", ");
-        const occupancyLabel =
-          payload.booking.is_vacant === "vacant"
-            ? "Vacant"
-            : payload.booking.is_vacant === "partial"
-              ? "Partially occupied"
-              : payload.booking.is_vacant === "occupied"
-                ? "Occupied"
-                : null;
-        const event = await gcal.createEvent({
-          summary: calendarShootTitle({
-            realtor: payload.realtor.full_name,
-            services: serviceLabels,
-            address: streetLine,
-          }),
-          location: addressLine,
-          description:
-            `Realtor: ${payload.realtor.full_name}\nEmail: ${payload.realtor.email}\n` +
-            (payload.realtor.phone ? `Phone: ${payload.realtor.phone}\n` : "") +
-            `Services: ${serviceLabels}\n` +
-            (addonLabels ? `Add-ons: ${addonLabels}\n` : "") +
-            (payload.booking.square_footage ? `Size: ~${payload.booking.square_footage} sqft\n` : "") +
-            (occupancyLabel ? `Occupancy: ${occupancyLabel}\n` : "") +
-            (payload.booking.include_basement != null
-              ? `Basement: ${payload.booking.include_basement ? "include" : "skip"}\n`
-              : "") +
-            (payload.booking.client_notes ? `\nNotes:\n${payload.booking.client_notes}\n` : ""),
-          startISO: startAt.toISOString(),
-          endISO: endAt.toISOString(),
-          attendeeEmail: payload.realtor.email,
-          attendeeName: payload.realtor.full_name,
-        });
-        const { error: calendarPersistError } = await supabase
-          .from("bookings")
-          .update({
-            google_calendar_event_id: event.id,
-            google_calendar_event_url: event.htmlLink,
-          })
-          .eq("id", payload.booking_id)
-          .eq("organization_id", payload.organization_id);
-
-        await finishIntegrationJob({
-          organizationId,
-          claim: calendarClaim,
-          status: calendarPersistError ? "dead_letter" : "completed",
-          providerExternalId: event.id,
-          providerResult: { event_url: event.htmlLink ?? null },
-          ...(calendarPersistError
-            ? {
-                errorCode: "local_persistence_failed",
-                errorMessage:
-                  "Calendar event exists but its local reference needs reconciliation",
-              }
-            : {}),
-        });
-      }
-    } catch {
-      await finishIntegrationJob({
-        organizationId,
-        claim: calendarClaim,
-        status: "dead_letter",
-        errorCode: "ambiguous_provider_result",
-        errorMessage: "Calendar result requires operator reconciliation",
-      });
-    }
-  }
-
-  // -------- Emails (best-effort) --------
+  // Success-page values are request-local display data only. Every provider
+  // mutation above ran from the claimed immutable payload.
   const whenLabel = new Intl.DateTimeFormat("en-US", {
     timeZone: BUSINESS_TZ,
     dateStyle: "full",
     timeStyle: "short",
   }).format(slotStart);
-  const serviceLabels = validServices.map((s) => s.name).join(", ");
-  const addonLabels = validAddons.map((a) => a.name).join(", ");
+  const serviceLabels = validServices.map((service) => service.name).join(", ");
   const emailAddressLine = unitNumber
     ? `${streetAddress}, Unit ${unitNumber}`
     : streetAddress;
-  // Signed self-serve link — lets the realtor reschedule/cancel without
-  // emailing the photographer. Best-effort: a signing failure shouldn't
-  // block the confirmation email.
   let manageToken: string | null = null;
   try {
     manageToken = createManageToken(booking.id);
-  } catch (err) {
-    console.warn("[book] manage token creation failed", err);
+  } catch (error) {
+    console.warn("[book] manage token creation failed", error);
   }
-  const [customerEmailClaim, adminEmailClaim, pushClaim] = await Promise.all([
-    claimIntegrationJob({
-      organizationId,
-      bookingId: booking.id,
-      jobType: "email.booking.confirmation",
-    }),
-    claimIntegrationJob({
-      organizationId,
-      bookingId: booking.id,
-      jobType: "email.admin.new_booking",
-    }),
-    claimIntegrationJob({
-      organizationId,
-      bookingId: booking.id,
-      jobType: "push.admin.new_booking",
-    }),
-  ]);
-
-  // The claim is database-blocked until the invoice is absent or terminal,
-  // and carries the completed invoice result from that same claim snapshot.
-  const completedInvoiceResult = customerEmailClaim?.dependencyResult;
-  const invoiceUrlCandidate =
-    completedInvoiceResult &&
-    typeof completedInvoiceResult === "object" &&
-    !Array.isArray(completedInvoiceResult) &&
-    typeof completedInvoiceResult.invoice_url === "string"
-      ? completedInvoiceResult.invoice_url
-      : null;
-  const durableInvoiceUrl = safeHttpUrl(invoiceUrlCandidate);
-
-  await Promise.all([
-    (async () => {
-      if (!customerEmailClaim) return;
-      const payload = customerEmailClaim.payload;
-      const startAt = new Date(payload.booking.scheduled_at);
-      const endAt = new Date(payload.booking.scheduled_ends_at);
-      const serviceLabels = payload.line_items.filter((item) => item.kind !== "addon").map((item) => item.name).join(", ");
-      const addonLabels = payload.line_items.filter((item) => item.kind === "addon").map((item) => item.name).join(", ");
-      const emailAddressLine = payload.property.unit_number
-        ? `${payload.property.street_address}, Unit ${payload.property.unit_number}`
-        : payload.property.street_address;
-      const whenLabel = new Intl.DateTimeFormat("en-US", {
-        timeZone: BUSINESS_TZ,
-        dateStyle: "full",
-        timeStyle: "short",
-      }).format(startAt);
-      const calendarLink = googleCalendarTemplateUrl({
-        title: `${payload.organization.name} — media shoot`,
-        start: startAt,
-        end: endAt,
-        location: [emailAddressLine, payload.property.city, payload.property.postal_code].filter(Boolean).join(", "),
-        details: `Services: ${serviceLabels}${addonLabels ? `\nAdd-ons: ${addonLabels}` : ""}`,
-      });
-      let manageUrl: string | null = null;
-      try {
-        manageUrl = `${payload.app_url}/book/manage/${createManageToken(payload.booking_id)}`;
-      } catch (error) {
-        console.warn("[book] durable manage token creation failed", error);
-      }
-      const ccRecipients = ccRecipientsFor(payload.realtor.email, payload.realtor.delivery_cc_emails);
-      const result = await sendEmail({
-        to: payload.realtor.email,
-        ...(ccRecipients.length > 0 ? { cc: ccRecipients } : {}),
-        subject: `Booking confirmed — ${emailAddressLine}`,
-        organizationId: payload.organization_id,
-        fromName: payload.organization.from_name,
-        replyTo: payload.organization.reply_to_email,
-        idempotencyKey: customerEmailClaim.idempotencyKey,
-        html: `
-          <p>Hi ${escapeHtml(payload.realtor.full_name)},</p>
-          <p>Your shoot is booked and on our calendar.</p>
-          <p>
-            <strong>Address:</strong> ${escapeHtml(emailAddressLine)}<br>
-            <strong>When:</strong> ${escapeHtml(whenLabel)}<br>
-            <strong>Services:</strong> ${escapeHtml(serviceLabels)}<br>
-            ${addonLabels ? `<strong>Add-ons:</strong> ${escapeHtml(addonLabels)}<br>` : ""}
-          </p>
-          <p><a href="${calendarLink}">Add this shoot to your Google Calendar</a></p>
-          ${
-            manageUrl
-              ? `<p>Need to reschedule or cancel? <a href="${manageUrl}">Manage this booking</a>.</p>`
-              : ""
-          }
-          ${
-            durableInvoiceUrl
-              ? `<p><strong>Billing:</strong> Your invoice is ready — <a href="${durableInvoiceUrl}">pay your invoice online</a>.</p>`
-              : ""
-          }
-          <p>
-            View and manage this booking at
-            <a href="${payload.app_url}/portal">${payload.app_url || "your client portal"}</a>.
-            Sign in with ${escapeHtml(payload.realtor.email)}.
-          </p>
-          <p>— ${escapeHtml(payload.organization.name)}</p>
-        `,
-      });
-      await finishIntegrationJob({
-        organizationId,
-        claim: customerEmailClaim,
-        status: result.skipped
-          ? "skipped"
-          : result.ok
-            ? "completed"
-            : "retryable",
-        providerExternalId: result.id,
-        providerResult: result.skipped ? { reason: "not_configured" } : {},
-        ...(!result.ok
-          ? {
-              errorCode: "email_send_failed",
-              errorMessage: "Customer confirmation email was not accepted",
-            }
-          : {}),
-      });
-    })(),
-    (async () => {
-      if (!adminEmailClaim) return;
-      const payload = adminEmailClaim.payload;
-      const address = payload.property.unit_number
-        ? `${payload.property.street_address}, Unit ${payload.property.unit_number}`
-        : payload.property.street_address;
-      const payloadWhenLabel = new Intl.DateTimeFormat("en-US", {
-        timeZone: BUSINESS_TZ,
-        dateStyle: "full",
-        timeStyle: "short",
-      }).format(new Date(payload.booking.scheduled_at));
-      const payloadServiceLabels = payload.line_items
-        .filter((item) => item.kind !== "addon")
-        .map((item) => item.name)
-        .join(", ");
-      const payloadAddonLabels = payload.line_items
-        .filter((item) => item.kind === "addon")
-        .map((item) => item.name)
-        .join(", ");
-      const result = await sendAdminNotification({
-        booking: {
-          id: payload.booking_id,
-          address,
-          whenLabel: payloadWhenLabel,
-          serviceLabels: payloadServiceLabels,
-          addonLabels: payloadAddonLabels,
-          notes: payload.booking.client_notes,
-        },
-        realtor: {
-          email: payload.realtor.email,
-          name: payload.realtor.full_name,
-        },
-        organizationId: payload.organization_id,
-        recipient: payload.organization.admin_notification_email,
-        appUrl: payload.app_url,
-        fromName: payload.organization.from_name,
-        idempotencyKey: adminEmailClaim.idempotencyKey,
-      });
-      await finishIntegrationJob({
-        organizationId,
-        claim: adminEmailClaim,
-        status: result.skipped
-          ? "skipped"
-          : result.ok
-            ? "completed"
-            : "retryable",
-        providerExternalId: result.id,
-        providerResult: result.skipped ? { reason: "no_recipient_or_config" } : {},
-        ...(!result.ok
-          ? {
-              errorCode: "email_send_failed",
-              errorMessage: "Admin booking email was not accepted",
-            }
-          : {}),
-      });
-    })(),
-    (async () => {
-      if (!pushClaim) return;
-      const payload = pushClaim.payload;
-      const address = payload.property.unit_number
-        ? `${payload.property.street_address}, Unit ${payload.property.unit_number}`
-        : payload.property.street_address;
-      const payloadWhenLabel = new Intl.DateTimeFormat("en-US", {
-        timeZone: BUSINESS_TZ,
-        dateStyle: "full",
-        timeStyle: "short",
-      }).format(new Date(payload.booking.scheduled_at));
-      const result = await sendPushBestEffort(payload.organization_id, {
-        title: "New booking",
-        body: `${payload.realtor.full_name} · ${address} · ${payloadWhenLabel}`,
-        url: `/admin/bookings/${payload.booking_id}`,
-        tag: `booking-new-${payload.booking_id}`,
-      });
-      await finishIntegrationJob({
-        organizationId,
-        claim: pushClaim,
-        status: result.skipped
-          ? "skipped"
-          : result.failed > 0
-            ? "dead_letter"
-            : "completed",
-        providerResult: {
-          sent: result.sent,
-          failed: result.failed,
-          removed: result.removed,
-          skipped: result.skipped,
-        },
-        ...(result.failed > 0
-          ? {
-              errorCode: "partial_push_failure",
-              errorMessage:
-                "Push delivery was partially accepted; do not retry without provider review",
-            }
-          : {}),
-      });
-    })(),
-  ]);
 
   if (!signedInToPortal) {
     const params = new URLSearchParams({
@@ -825,30 +441,6 @@ export async function createPublicBooking(
 }
 
 // -------- Helpers --------
-
-/**
- * "Add to Google Calendar" template link — no API access needed; it
- * opens a prefilled event the realtor can save into their own calendar.
- */
-function googleCalendarTemplateUrl(args: {
-  title: string;
-  start: Date;
-  end: Date;
-  location: string;
-  details: string;
-}): string {
-  const fmt = (d: Date) =>
-    d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-  const params = new URLSearchParams({
-    action: "TEMPLATE",
-    text: args.title,
-    dates: `${fmt(args.start)}/${fmt(args.end)}`,
-    location: args.location,
-    details: args.details,
-  });
-  return `https://calendar.google.com/calendar/render?${params.toString()}`;
-}
-
 interface ResolveUserOk {
   ok: true;
   userId: string;
@@ -1231,56 +823,6 @@ async function maybeFillProfile(
     .eq("id", userId);
   if (error) console.warn("[book] profile top-up failed", error);
 }
-
-function calendarShootTitle(args: {
-  realtor: string;
-  services: string;
-  address: string;
-}): string {
-  return [args.realtor, args.services, args.address]
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .join(" - ");
-}
-
-async function sendAdminNotification(args: {
-  booking: {
-    id: string;
-    address: string;
-    whenLabel: string;
-    serviceLabels: string;
-    addonLabels: string;
-    notes: string;
-  };
-  realtor: { email: string; name: string };
-  organizationId: string;
-  recipient: string | null;
-  appUrl: string;
-  fromName: string;
-  idempotencyKey: string;
-}): Promise<SendEmailResult> {
-  if (!args.recipient) return { ok: true, skipped: true };
-  return sendEmail({
-    to: args.recipient,
-    subject: `New booking — ${args.booking.address}`,
-    organizationId: args.organizationId,
-    fromName: args.fromName,
-    idempotencyKey: args.idempotencyKey,
-    html: `
-      <p><strong>${escapeHtml(args.realtor.name)}</strong> just booked a shoot.</p>
-      <p>
-        <strong>Address:</strong> ${escapeHtml(args.booking.address)}<br>
-        <strong>When:</strong> ${escapeHtml(args.booking.whenLabel)}<br>
-        <strong>Services:</strong> ${escapeHtml(args.booking.serviceLabels)}<br>
-        ${args.booking.addonLabels ? `<strong>Add-ons:</strong> ${escapeHtml(args.booking.addonLabels)}<br>` : ""}
-        ${args.booking.notes ? `<strong>Notes:</strong> ${escapeHtml(args.booking.notes)}<br>` : ""}
-      </p>
-      <p>Open in admin: ${args.appUrl}/admin/bookings/${args.booking.id}</p>
-    `,
-    replyTo: args.realtor.email,
-  });
-}
-
 function decodeUserId(token: string): string | null {
   try {
     const parts = token.split(".");
@@ -1335,25 +877,4 @@ function formatShotRequest(slug: string): string {
       neighbourhood: "Neighbourhood",
     } satisfies Record<string, string>
   )[slug] ?? slug;
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function safeHttpUrl(value: string | null): string | null {
-  if (!value) return null;
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "https:" || parsed.protocol === "http:"
-      ? parsed.toString()
-      : null;
-  } catch {
-    return null;
-  }
 }

@@ -9,13 +9,9 @@ import {
   parseBookingIntegrationPayload,
   type BookingIntegrationPayload,
 } from "./booking-job-payload";
+import type { IntegrationJobType } from "./dispatcher-core";
 
-export type IntegrationJobType =
-  | "quickbooks.invoice.create"
-  | "google_calendar.event.create"
-  | "email.booking.confirmation"
-  | "email.admin.new_booking"
-  | "push.admin.new_booking";
+export type { IntegrationJobType } from "./dispatcher-core";
 
 export type IntegrationJobCompletionStatus =
   | "completed"
@@ -33,17 +29,74 @@ export interface ClaimedIntegrationJob {
   leaseToken: string;
 }
 
+export type IntegrationJobClaimResult =
+  | { outcome: "claimed"; claim: ClaimedIntegrationJob }
+  | { outcome: "not_claimable" }
+  | { outcome: "claim_failed"; code: string };
+
+export interface DueIntegrationJobIdentity {
+  organizationId: string;
+  bookingId: string;
+  jobType: IntegrationJobType;
+}
+
+export type DueIntegrationJobsResult =
+  | { outcome: "listed"; jobs: DueIntegrationJobIdentity[] }
+  | { outcome: "list_failed"; code: string };
+
+export async function listDueIntegrationJobs({
+  limit,
+  dispatchNotBefore,
+}: {
+  limit: number;
+  dispatchNotBefore: string;
+}): Promise<DueIntegrationJobsResult> {
+  const { data, error } = await getServiceSupabase().rpc("list_due_integration_jobs", {
+    p_limit: limit,
+    p_dispatch_not_before: dispatchNotBefore,
+  });
+  if (error) {
+    console.error("[integration-job] due list failed", { code: error.code });
+    return { outcome: "list_failed", code: error.code };
+  }
+  if (!Array.isArray(data)) {
+    return { outcome: "list_failed", code: "malformed_due_list" };
+  }
+
+  const jobs: DueIntegrationJobIdentity[] = [];
+  for (const candidate of data) {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      return { outcome: "list_failed", code: "malformed_due_identity" };
+    }
+    const row = candidate as Record<string, unknown>;
+    if (
+      typeof row.organization_id !== "string" ||
+      typeof row.booking_id !== "string" ||
+      !isIntegrationJobType(row.job_type)
+    ) {
+      return { outcome: "list_failed", code: "malformed_due_identity" };
+    }
+    jobs.push({
+      organizationId: row.organization_id,
+      bookingId: row.booking_id,
+      jobType: row.job_type,
+    });
+  }
+  return { outcome: "listed", jobs };
+}
+
 export async function claimIntegrationJob({
   organizationId,
   bookingId,
   jobType,
+  workerId,
 }: {
   organizationId: string;
   bookingId: string;
   jobType: IntegrationJobType;
-}): Promise<ClaimedIntegrationJob | null> {
+  workerId: string;
+}): Promise<IntegrationJobClaimResult> {
   const leaseToken = randomUUID();
-  const workerId = `inline-public-booking:${randomUUID()}`;
   const { data, error } = await getServiceSupabase().rpc("claim_integration_job", {
     p_organization_id: organizationId,
     p_booking_id: bookingId,
@@ -54,21 +107,22 @@ export async function claimIntegrationJob({
 
   if (error) {
     console.error("[integration-job] claim failed", {
-      bookingId,
-      jobType,
       code: error.code,
     });
-    return null;
+    return { outcome: "claim_failed", code: error.code };
   }
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  if (!data) return { outcome: "not_claimable" };
+  if (typeof data !== "object" || Array.isArray(data)) {
+    return { outcome: "claim_failed", code: "malformed_claim_response" };
+  }
 
   const row = data as Record<string, Json | undefined>;
   if (
     typeof row.id !== "string" ||
     typeof row.lease_token !== "string"
   ) {
-    console.error("[integration-job] malformed claim identity", { bookingId, jobType });
-    return null;
+    console.error("[integration-job] malformed claim identity");
+    return { outcome: "claim_failed", code: "malformed_claim_identity" };
   }
   if (
     typeof row.idempotency_key !== "string" ||
@@ -84,11 +138,9 @@ export async function claimIntegrationJob({
       organizationId,
       jobId: row.id,
       leaseToken: row.lease_token,
-      bookingId,
-      jobType,
       errorCode: "invalid_claim_envelope",
     });
-    return null;
+    return { outcome: "claim_failed", code: "invalid_claim_envelope" };
   }
 
   const payload = parseBookingIntegrationPayload(row.payload);
@@ -101,21 +153,22 @@ export async function claimIntegrationJob({
       organizationId,
       jobId: row.id,
       leaseToken: row.lease_token,
-      bookingId,
-      jobType,
       errorCode: "invalid_provider_payload",
     });
-    return null;
+    return { outcome: "claim_failed", code: "invalid_provider_payload" };
   }
 
   return {
-    id: row.id,
-    idempotencyKey: row.idempotency_key,
-    payload,
-    dependencyResult: row.dependency_result ?? null,
-    attempts: row.attempts,
-    maxAttempts: row.max_attempts,
-    leaseToken: row.lease_token,
+    outcome: "claimed",
+    claim: {
+      id: row.id,
+      idempotencyKey: row.idempotency_key,
+      payload,
+      dependencyResult: row.dependency_result ?? null,
+      attempts: row.attempts,
+      maxAttempts: row.max_attempts,
+      leaseToken: row.lease_token,
+    },
   };
 }
 
@@ -156,7 +209,6 @@ export async function finishIntegrationJob({
 
   if (error || data !== true) {
     console.error("[integration-job] completion persistence failed", {
-      jobId: claim.id,
       status: finalStatus,
       code: error?.code ?? "lease_mismatch",
     });
@@ -169,15 +221,11 @@ async function deadLetterMalformedClaim({
   organizationId,
   jobId,
   leaseToken,
-  bookingId,
-  jobType,
   errorCode,
 }: {
   organizationId: string;
   jobId: string;
   leaseToken: string;
-  bookingId: string;
-  jobType: IntegrationJobType;
   errorCode: "invalid_claim_envelope" | "invalid_provider_payload";
 }): Promise<void> {
   const { data, error } = await getServiceSupabase().rpc("finish_integration_job", {
@@ -192,9 +240,15 @@ async function deadLetterMalformedClaim({
     p_next_attempt_at: null,
   });
   console.error("[integration-job] malformed claim rejected", {
-    bookingId,
-    jobType,
     errorCode,
     settled: data === true && !error,
   });
+}
+
+function isIntegrationJobType(value: unknown): value is IntegrationJobType {
+  return value === "quickbooks.invoice.create" ||
+    value === "google_calendar.event.create" ||
+    value === "email.booking.confirmation" ||
+    value === "email.admin.new_booking" ||
+    value === "push.admin.new_booking";
 }

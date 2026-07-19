@@ -3,6 +3,17 @@ create role authenticated;
 create role service_role bypassrls;
 grant usage, create on schema public to service_role;
 
+create schema auth;
+create function auth.uid()
+returns uuid
+language sql
+stable
+as $$
+  select nullif(pg_catalog.current_setting('request.jwt.claim.sub', true), '')::uuid
+$$;
+grant usage on schema auth to authenticated;
+grant execute on function auth.uid() to authenticated;
+
 create table public.organizations (
   id uuid primary key,
   name text not null,

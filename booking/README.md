@@ -333,6 +333,8 @@ either way.
    `book.pixelblastermedia.com` at it via your DNS provider and add the
    custom domain in Vercel.
 
+The integration outbox recovery route is intentionally fail-closed. Apply and verify migration `20260719124500` before you deploy the compatible application, configure a reviewed canonical UTC `INTEGRATION_OUTBOX_DISPATCH_NOT_BEFORE` cutoff, and keep `INTEGRATION_OUTBOX_DISPATCH_ENABLED=false` through deployment verification. Enable it only for a supervised bounded run; see [`docs/INTEGRATION_OUTBOX.md`](docs/INTEGRATION_OUTBOX.md) for the exact migration-first rollout, scheduler limits, and reconciliation rules.
+
 The main marketing site (`/index.html`, `/style.css`, etc. at the repo
 root) is **not** part of this Vercel project — it continues to deploy
 however it does today, untouched.

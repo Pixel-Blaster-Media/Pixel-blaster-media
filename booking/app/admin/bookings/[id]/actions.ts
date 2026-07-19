@@ -1534,6 +1534,35 @@ export async function createInvoice(
   return result;
 }
 
+async function hasUnresolvedAmbiguousQuickBooksJob(
+  bookingId: string,
+  organizationId: string,
+): Promise<boolean> {
+  const { data, error } = await getServiceSupabase()
+    .from("integration_jobs")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("booking_id", bookingId)
+    .eq("job_type", "quickbooks.invoice.create")
+    .eq("status", "dead_letter")
+    .is("reconciled_at", null)
+    .in("last_error_code", [
+      "ambiguous_provider_result",
+      "lease_expired_ambiguous",
+      "local_persistence_failed",
+      "unsafe_retryable_status",
+    ])
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+  if (error) {
+    console.warn("[qbo.invoice] ambiguous outbox guard failed closed", {
+      code: error.code,
+    });
+    return true;
+  }
+  return Boolean(data);
+}
+
 /**
  * Load the booking fields QuickBooks needs and create the invoice.
  *
@@ -1552,6 +1581,14 @@ async function createInvoiceForBookingId(
     totalCents?: number;
   }
 > {
+  if (await hasUnresolvedAmbiguousQuickBooksJob(bookingId, organizationId)) {
+    return {
+      ok: false,
+      error:
+        "QuickBooks has an unresolved ambiguous outbox result. Reconcile it in Integration jobs before creating an invoice.",
+    };
+  }
+
   const service = getServiceSupabase();
   const { data: booking, error } = await service
     .from("bookings")

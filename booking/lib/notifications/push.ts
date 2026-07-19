@@ -60,8 +60,8 @@ export async function sendPushBestEffort(
 ): Promise<PushSendResult> {
   try {
     return await sendPushToOrganization(organizationId, message);
-  } catch (error) {
-    console.warn("[push] notification failed", safeErrorMessage(error));
+  } catch {
+    console.warn("[push] notification failed");
     return { sent: 0, failed: 1, removed: 0, skipped: false };
   }
 }
@@ -127,10 +127,7 @@ async function sendPush({
           expiredIds.push(subscription.id);
         } else {
           failed += 1;
-          console.warn("[push] provider rejected notification", {
-            statusCode,
-            message: safeErrorMessage(error),
-          });
+          console.warn("[push] provider rejected notification", { statusCode });
         }
       }
     }),
@@ -177,8 +174,4 @@ function pushStatusCode(error: unknown): number | null {
   return typeof error === "object" && error && "statusCode" in error
     ? Number((error as { statusCode?: unknown }).statusCode) || null
     : null;
-}
-
-function safeErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unknown push error";
 }

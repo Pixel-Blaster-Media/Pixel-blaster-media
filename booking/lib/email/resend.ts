@@ -60,10 +60,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     : args.replyTo ?? undefined;
 
   if (!apiKey || !from) {
-    console.warn(
-      "[email] Resend API key or EMAIL_FROM not set — skipping send to",
-      args.to,
-    );
+    console.warn("[email] send skipped because provider configuration is incomplete");
     return { ok: true, skipped: true };
   }
 
@@ -95,16 +92,15 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     });
 
     if (!res.ok) {
-      const body = await res.text();
-      console.error("[email] Resend send failed", res.status, body);
+      console.error("[email] provider rejected send", { status: res.status });
       return { ok: false, error: `Resend ${res.status}` };
     }
 
     const json = (await res.json()) as { id?: string };
     return { ok: true, id: json.id };
-  } catch (err) {
-    console.error("[email] Resend send threw", err);
-    return { ok: false, error: err instanceof Error ? err.message : "unknown" };
+  } catch {
+    console.error("[email] provider request failed");
+    return { ok: false, error: "Resend request failed" };
   }
 }
 

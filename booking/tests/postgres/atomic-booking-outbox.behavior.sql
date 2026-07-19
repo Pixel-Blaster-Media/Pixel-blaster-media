@@ -520,6 +520,316 @@ begin
 end;
 $$;
 
+do $$
+declare
+  booking_a jsonb;
+  booking_b jsonb;
+  booking_c jsonb;
+  booking_d jsonb;
+  booking_a_id uuid;
+  booking_b_id uuid;
+  booking_c_id uuid;
+  booking_d_id uuid;
+  due_bookings uuid[];
+  due_types text[];
+  booking_a_types text[];
+  cancelled_claim jsonb;
+begin
+  booking_a := public.create_public_booking_with_jobs(
+    '90000000-0000-4000-8000-000000000010',
+    '11111111-1111-4111-8111-111111111111',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    '70 Recovery Invoice Street', 'Toronto', 'M7M 7M7', '',
+    pg_catalog.now() + interval '110 days', 1000, 'vacant', false, '',
+    array['10000000-0000-4000-8000-000000000001']::uuid[], '{}'::uuid[]
+  );
+  booking_b := public.create_public_booking_with_jobs(
+    '90000000-0000-4000-8000-000000000011',
+    '11111111-1111-4111-8111-111111111111',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    '71 Recovery Email Street', 'Toronto', 'M7M 7M8', '',
+    pg_catalog.now() + interval '111 days', 1000, 'vacant', false, '',
+    array['10000000-0000-4000-8000-000000000001']::uuid[], '{}'::uuid[]
+  );
+  booking_c := public.create_public_booking_with_jobs(
+    '90000000-0000-4000-8000-000000000012',
+    '22222222-2222-4222-8222-222222222222',
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    '72 Recovery Lease Street', 'Toronto', 'M7M 7M9', '',
+    pg_catalog.now() + interval '112 days', 1000, 'vacant', false, '',
+    array['20000000-0000-4000-8000-000000000001']::uuid[], '{}'::uuid[]
+  );
+  booking_d := public.create_public_booking_with_jobs(
+    '90000000-0000-4000-8000-000000000013',
+    '11111111-1111-4111-8111-111111111111',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    '73 Cancelled Recovery Street', 'Toronto', 'M7M 7N0', '',
+    pg_catalog.now() + interval '113 days', 1000, 'vacant', false, '',
+    array['10000000-0000-4000-8000-000000000001']::uuid[], '{}'::uuid[]
+  );
+  booking_a_id := (booking_a->>'booking_id')::uuid;
+  booking_b_id := (booking_b->>'booking_id')::uuid;
+  booking_c_id := (booking_c->>'booking_id')::uuid;
+  booking_d_id := (booking_d->>'booking_id')::uuid;
+
+  update public.integration_jobs
+  set status = 'skipped', completed_at = pg_catalog.now(),
+      lease_token = null, locked_by = null, locked_at = null,
+      lease_expires_at = null
+  where booking_id in (booking_a_id, booking_b_id, booking_c_id, booking_d_id);
+
+  update public.integration_jobs
+  set status = 'pending', completed_at = null,
+      next_attempt_at = pg_catalog.now() - interval '5 minutes'
+  where booking_id = booking_a_id
+    and job_type = 'quickbooks.invoice.create';
+  update public.integration_jobs
+  set status = 'pending', completed_at = null,
+      next_attempt_at = pg_catalog.now() - interval '2 minutes'
+  where booking_id = booking_a_id
+    and job_type = 'email.booking.confirmation';
+  update public.integration_jobs
+  set status = 'pending', completed_at = null,
+      next_attempt_at = pg_catalog.now() - interval '4 minutes'
+  where booking_id = booking_b_id
+    and job_type = 'email.booking.confirmation';
+  update public.integration_jobs
+  set status = 'processing', completed_at = null, attempts = 1,
+      lease_token = '71000000-0000-4000-8000-000000000001',
+      locked_by = 'expired-email-worker',
+      locked_at = pg_catalog.now() - interval '10 minutes',
+      lease_expires_at = pg_catalog.now() - interval '6 minutes'
+  where booking_id = booking_c_id
+    and job_type = 'email.admin.new_booking';
+  update public.integration_jobs
+  set status = 'processing', completed_at = null, attempts = max_attempts,
+      lease_token = '71000000-0000-4000-8000-000000000002',
+      locked_by = 'active-cancelled-worker',
+      locked_at = pg_catalog.now(),
+      lease_expires_at = pg_catalog.now() + interval '8 minutes'
+  where booking_id = booking_d_id
+    and job_type = 'email.admin.new_booking';
+  update public.bookings set status = 'cancelled' where id = booking_d_id;
+
+  begin
+    update public.integration_jobs
+    set status = 'retryable', completed_at = null
+    where booking_id = booking_b_id
+      and job_type = 'google_calendar.event.create';
+    raise exception 'non-email retryable work was not prohibited';
+  exception when sqlstate '23514' then null;
+  end;
+
+  if exists (
+    select 1
+    from public.list_due_integration_jobs(
+      5,
+      pg_catalog.now() + interval '1 hour'
+    )
+  ) then raise exception 'pre-rollout jobs crossed the configured watermark'; end if;
+
+  select pg_catalog.array_agg(due.booking_id), pg_catalog.array_agg(due.job_type)
+    into due_bookings, due_types
+  from public.list_due_integration_jobs(3, pg_catalog.now() - interval '1 hour') due;
+
+  if pg_catalog.cardinality(due_bookings) <> 3
+    or due_bookings[1] = due_bookings[2]
+    or (select organization_id from public.bookings where id = due_bookings[1]) =
+       (select organization_id from public.bookings where id = due_bookings[2])
+  then raise exception 'due integration list was not tenant fair'; end if;
+  if pg_catalog.array_position(due_bookings, booking_a_id) >=
+     pg_catalog.array_position(due_bookings, booking_b_id)
+  then raise exception 'invoice was not ordered before customer email'; end if;
+  if pg_catalog.array_position(due_bookings, booking_c_id) is null
+    or due_types[pg_catalog.array_position(due_bookings, booking_c_id)] <>
+       'email.admin.new_booking'
+  then raise exception 'expired processing email was not listed'; end if;
+
+  with ordered_due as materialized (
+    select due.*, pg_catalog.row_number() over () as due_position
+    from public.list_due_integration_jobs(50, pg_catalog.now() - interval '1 hour') due
+  )
+  select pg_catalog.array_agg(job_type order by due_position)
+    into booking_a_types
+  from ordered_due
+  where booking_id = booking_a_id;
+  if pg_catalog.array_position(
+       booking_a_types, 'quickbooks.invoice.create'
+     ) is null
+    or pg_catalog.array_position(
+       booking_a_types, 'email.booking.confirmation'
+     ) is null
+    or pg_catalog.array_position(
+       booking_a_types, 'quickbooks.invoice.create'
+     ) >= pg_catalog.array_position(
+       booking_a_types, 'email.booking.confirmation'
+     )
+  then raise exception 'due list did not preserve exact invoice-before-email scope'; end if;
+
+  if not exists (
+    select 1 from public.integration_jobs
+    where booking_id = booking_d_id
+      and job_type = 'email.admin.new_booking'
+      and status = 'processing'
+      and lease_expires_at > pg_catalog.now()
+  ) then raise exception 'cancelled booking cleared an active provider lease'; end if;
+
+  update public.integration_jobs
+  set lease_expires_at = pg_catalog.now() - interval '1 minute'
+  where booking_id = booking_d_id
+    and job_type = 'email.admin.new_booking';
+  if not exists (
+    select 1
+    from public.list_due_integration_jobs(
+      50,
+      pg_catalog.now() - interval '1 hour'
+    ) due
+    where due.booking_id = booking_d_id
+      and due.job_type = 'email.admin.new_booking'
+  ) then raise exception 'expired final-attempt processing job was not recoverable'; end if;
+  select public.claim_integration_job(
+    '11111111-1111-4111-8111-111111111111',
+    booking_d_id,
+    'email.admin.new_booking',
+    'cancelled-expired-test-worker',
+    '71000000-0000-4000-8000-000000000003'
+  ) into cancelled_claim;
+  if cancelled_claim is not null or not exists (
+    select 1 from public.integration_jobs
+    where booking_id = booking_d_id
+      and job_type = 'email.admin.new_booking'
+      and status = 'dead_letter'
+      and last_error_code = 'lease_expired_ambiguous'
+  ) then raise exception 'cancelled expired lease was not preserved for reconciliation'; end if;
+
+  update public.bookings set status = 'cancelled' where id = booking_b_id;
+  select public.claim_integration_job(
+    '11111111-1111-4111-8111-111111111111',
+    booking_b_id,
+    'email.booking.confirmation',
+    'cancelled-pending-test-worker',
+    '71000000-0000-4000-8000-000000000004'
+  ) into cancelled_claim;
+  if cancelled_claim is not null or not exists (
+    select 1 from public.integration_jobs
+    where booking_id = booking_b_id
+      and job_type = 'email.booking.confirmation'
+      and status = 'cancelled'
+      and last_error_code = 'booking_cancelled'
+  ) then raise exception 'cancelled booking job was claimable'; end if;
+
+  update public.integration_jobs
+  set status = 'dead_letter', completed_at = pg_catalog.now(),
+      last_error_code = 'ambiguous_provider_result',
+      last_error_message = 'Fixture requires reconciliation',
+      last_error_at = pg_catalog.now(),
+      lease_token = null, locked_by = null, locked_at = null,
+      lease_expires_at = null
+  where booking_id = booking_a_id
+    and job_type = 'quickbooks.invoice.create';
+  update public.integration_jobs
+  set status = 'dead_letter', completed_at = pg_catalog.now(),
+      last_error_code = 'lease_expired_ambiguous',
+      last_error_message = 'Fixture requires reconciliation',
+      last_error_at = pg_catalog.now(),
+      lease_token = null, locked_by = null, locked_at = null,
+      lease_expires_at = null
+  where booking_id = booking_c_id
+    and job_type = 'email.admin.new_booking';
+end;
+$$;
+
+select pg_catalog.set_config(
+  'test.tenant_one_reconciliation_job',
+  (
+    select job.id::text
+    from public.integration_jobs job
+    join public.bookings booking on booking.id = job.booking_id
+    where booking.public_request_id = '90000000-0000-4000-8000-000000000010'
+      and job.job_type = 'quickbooks.invoice.create'
+  ),
+  true
+);
+select pg_catalog.set_config(
+  'test.tenant_two_reconciliation_job',
+  (
+    select job.id::text
+    from public.integration_jobs job
+    join public.bookings booking on booking.id = job.booking_id
+    where booking.public_request_id = '90000000-0000-4000-8000-000000000012'
+      and job.job_type = 'email.admin.new_booking'
+  ),
+  true
+);
+
+set local role authenticated;
+select pg_catalog.set_config(
+  'request.jwt.claim.sub',
+  'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+  true
+);
+
+do $$
+declare
+  tenant_one_job uuid;
+  tenant_two_job uuid;
+begin
+  tenant_one_job := pg_catalog.current_setting(
+    'test.tenant_one_reconciliation_job'
+  )::uuid;
+  tenant_two_job := pg_catalog.current_setting(
+    'test.tenant_two_reconciliation_job'
+  )::uuid;
+
+  begin
+    perform public.reconcile_integration_job(
+      '22222222-2222-4222-8222-222222222222', tenant_two_job,
+      'provider_confirmed_absent', 'Checked the provider and found no external mutation.'
+    );
+    raise exception 'cross-tenant reconciliation was authorized';
+  exception when insufficient_privilege then null;
+  end;
+
+  if not public.reconcile_integration_job(
+    '11111111-1111-4111-8111-111111111111', tenant_one_job,
+    'provider_confirmed_completed', 'Confirmed the invoice exists in QuickBooks and matches the booking.'
+  ) then raise exception 'reconciliation audit was not persisted'; end if;
+  if public.reconcile_integration_job(
+    '11111111-1111-4111-8111-111111111111', tenant_one_job,
+    'provider_confirmed_completed', 'A second reconciliation must never overwrite the first audit.'
+  ) then raise exception 'reconciliation was not single-use'; end if;
+end;
+$$;
+
+set local role service_role;
+do $$
+begin
+  if not exists (
+    select 1
+    from public.integration_jobs job
+    join public.bookings booking on booking.id = job.booking_id
+    where booking.public_request_id = '90000000-0000-4000-8000-000000000010'
+      and job.job_type = 'quickbooks.invoice.create'
+      and job.reconciled_at is not null
+      and job.reconciled_by = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+      and job.reconciliation_category = 'provider_confirmed_completed'
+      and job.reconciliation_note =
+        'Confirmed the invoice exists in QuickBooks and matches the booking.'
+  ) then raise exception 'reconciliation audit was not persisted'; end if;
+
+  begin
+    update public.integration_jobs job
+    set reconciliation_note = 'A service-role rewrite must not alter completed audit evidence.'
+    from public.bookings booking
+    where booking.id = job.booking_id
+      and booking.public_request_id = '90000000-0000-4000-8000-000000000010'
+      and job.job_type = 'quickbooks.invoice.create';
+    raise exception 'completed reconciliation audit was mutable';
+  exception when sqlstate '23514' then null;
+  end;
+end;
+$$;
+
 create or replace function public.test_fail_line_insert()
 returns trigger language plpgsql as $$ begin raise exception 'forced line failure'; end $$;
 create trigger test_force_line_failure before insert on public.booking_line_items

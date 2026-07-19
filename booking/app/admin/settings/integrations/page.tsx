@@ -245,6 +245,12 @@ export default async function IntegrationsPage({
           Most photo companies only need Calendar and Email to start. Connect
           the rest only when it earns a place in your workflow.
         </p>
+        <Link
+          href="/admin/integrations/jobs"
+          className="mt-3 inline-flex text-sm font-semibold text-realtor-primary hover:text-realtor-text"
+        >
+          Review integration exceptions →
+        </Link>
       </header>
 
       <section className="overflow-hidden rounded-2xl border border-realtor-primary/12 bg-realtor-surface/75 shadow-sm">
