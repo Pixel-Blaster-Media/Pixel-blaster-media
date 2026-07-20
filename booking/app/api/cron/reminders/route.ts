@@ -31,6 +31,7 @@ interface ReminderBookingRow {
   id: string;
   organization_id: string;
   scheduled_at: string;
+  suppress_realtor_notifications: boolean;
   properties: {
     street_address: string;
     city: string | null;
@@ -73,7 +74,7 @@ export async function GET(request: Request) {
   const { data: bookings, error } = await supabase
     .from("bookings")
     .select(
-      "id, organization_id, scheduled_at, properties(street_address, city), profiles(email, full_name)",
+      "id, organization_id, scheduled_at, suppress_realtor_notifications, properties(street_address, city), profiles(email, full_name)",
     )
     .in("status", ["requested", "confirmed"])
     .is("reminder_sent_at", null)
@@ -123,6 +124,13 @@ export async function GET(request: Request) {
         url: `/admin/bookings/${booking.id}`,
         tag: `shoot-tomorrow-${booking.id}`,
       });
+
+      // Quiet admin bookings still produce the internal operator reminder,
+      // but never send the realtor-facing reminder email.
+      if (booking.suppress_realtor_notifications) {
+        skipped += 1;
+        continue;
+      }
 
       if (!booking.profiles?.email) {
         skipped += 1;

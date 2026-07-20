@@ -159,6 +159,8 @@ export async function createAdminShoot(
   const province = str(formData, "province") || "ON";
   const postalCode = str(formData, "postal_code");
   const notes = str(formData, "notes");
+  const suppressRealtorNotifications =
+    formData.get("suppress_realtor_notifications") === "on";
   const squareFootage = parseOptionalInt(str(formData, "square_footage"));
   const selectedCatalogIds = formData
     .getAll("catalog_item_id")
@@ -272,6 +274,7 @@ export async function createAdminShoot(
       square_footage: squareFootage,
       unit_number: unitNumber || null,
       client_notes: notes || null,
+      suppress_realtor_notifications: suppressRealtorNotifications,
     })
     .select("id")
     .single<InsertedRow>();
@@ -331,22 +334,25 @@ export async function createAdminShoot(
     selectedItems,
     scheduledAt,
     scheduledEndsAt,
+    notifyRealtor: !suppressRealtorNotifications,
   });
 
-  await sendConfirmationBestEffort({
-    email: contactEmail,
-    ccEmails: ccRecipientsFor(
-      contactEmail,
-      notificationProfile?.delivery_cc_emails,
-    ),
-    organizationId: admin.organizationId,
-    name: contactName,
-    streetAddress: unitNumber
-      ? `${streetAddress}, Unit ${unitNumber}`
-      : streetAddress,
-    scheduledAt,
-    services: selectedItems.map((item) => item.name).join(", "),
-  });
+  if (!suppressRealtorNotifications) {
+    await sendConfirmationBestEffort({
+      email: contactEmail,
+      ccEmails: ccRecipientsFor(
+        contactEmail,
+        notificationProfile?.delivery_cc_emails,
+      ),
+      organizationId: admin.organizationId,
+      name: contactName,
+      streetAddress: unitNumber
+        ? `${streetAddress}, Unit ${unitNumber}`
+        : streetAddress,
+      scheduledAt,
+      services: selectedItems.map((item) => item.name).join(", "),
+    });
+  }
 
   revalidatePath("/admin/calendar");
   revalidatePath("/admin/bookings");
@@ -363,6 +369,7 @@ interface BookingForRescheduleRow {
   unit_number: string | null;
   client_notes: string | null;
   google_calendar_event_id: string | null;
+  suppress_realtor_notifications: boolean;
   properties: {
     street_address: string;
     city: string | null;
@@ -417,7 +424,7 @@ export async function rescheduleCalendarShoot(
   const { data: booking, error: bookingError } = await supabase
     .from("bookings")
     .select(
-      "id, status, services, scheduled_at, scheduled_ends_at, owner_id, unit_number, client_notes, google_calendar_event_id, properties(street_address, city, postal_code), profiles(email, full_name, phone, brokerage)",
+      "id, status, services, scheduled_at, scheduled_ends_at, owner_id, unit_number, client_notes, google_calendar_event_id, suppress_realtor_notifications, properties(street_address, city, postal_code), profiles(email, full_name, phone, brokerage)",
     )
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
@@ -533,8 +540,12 @@ export async function rescheduleCalendarShoot(
               : ""),
           startISO: scheduledAt.toISOString(),
           endISO: scheduledEndsAt.toISOString(),
-          attendeeEmail: booking.profiles?.email ?? undefined,
-          attendeeName: booking.profiles?.full_name ?? undefined,
+          ...(booking.suppress_realtor_notifications
+            ? {}
+            : {
+                attendeeEmail: booking.profiles?.email ?? undefined,
+                attendeeName: booking.profiles?.full_name ?? undefined,
+              }),
         });
         createdEventId = event.id;
       }
@@ -840,6 +851,7 @@ async function createGoogleEventBestEffort(args: {
   selectedItems: CatalogItemRow[];
   scheduledAt: Date;
   scheduledEndsAt: string;
+  notifyRealtor: boolean;
 }) {
   try {
     const gcal = await getGoogleCalendarClient({
@@ -870,8 +882,12 @@ async function createGoogleEventBestEffort(args: {
         (args.notes ? `\nNotes:\n${args.notes}\n` : ""),
       startISO: args.scheduledAt.toISOString(),
       endISO: args.scheduledEndsAt,
-      attendeeEmail: args.contactEmail,
-      attendeeName: args.contactName,
+      ...(args.notifyRealtor
+        ? {
+            attendeeEmail: args.contactEmail,
+            attendeeName: args.contactName,
+          }
+        : {}),
     });
     await supabase
       .from("bookings")

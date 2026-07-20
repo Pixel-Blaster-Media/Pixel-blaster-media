@@ -213,6 +213,7 @@ interface BookingsTable {
     is_vacant: "vacant" | "occupied" | "partial" | null;
     include_basement: boolean | null;
     reminder_sent_at: string | null;
+    suppress_realtor_notifications: boolean;
     created_at: string;
     updated_at: string;
   };
@@ -247,6 +248,7 @@ interface BookingsTable {
     is_vacant?: "vacant" | "occupied" | "partial" | null;
     include_basement?: boolean | null;
     reminder_sent_at?: string | null;
+    suppress_realtor_notifications?: boolean;
   };
   Update: Partial<BookingsTable["Insert"]>;
   Relationships: [];

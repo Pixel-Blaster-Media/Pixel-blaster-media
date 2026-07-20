@@ -5,6 +5,10 @@ import { createManageToken } from "@/lib/booking/manage-token";
 import { ccRecipientsFor } from "@/lib/email/recipients";
 import { sendEmail, type SendEmailResult } from "@/lib/email/resend";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
+import {
+  parseRealtorNotificationPolicy,
+  type RealtorNotificationPolicy,
+} from "@/lib/integrations/realtor-notification-policy";
 import { createInvoiceForBooking } from "@/lib/integrations/quickbooks/invoice";
 import { sendPushBestEffort } from "@/lib/notifications/push";
 import { getServiceSupabase } from "@/lib/supabase/server";
@@ -61,6 +65,23 @@ export async function dispatchBookingIntegrationJobs({
       return { jobType, outcome: "deadline_exceeded" };
     }
 
+    let realtorNotificationsSuppressed: boolean | undefined;
+    if (
+      jobType === "google_calendar.event.create" ||
+      jobType === "email.booking.confirmation"
+    ) {
+      const policy = await loadRealtorNotificationPolicy(
+        organizationId,
+        bookingId,
+      );
+      if (!policy.ok) {
+        // Leave the job unclaimed and pending. A later scheduler pass can
+        // safely retry because no provider mutation has started.
+        return { jobType, outcome: "claim_failed" };
+      }
+      realtorNotificationsSuppressed = policy.suppressed;
+    }
+
     const claimed = await claimIntegrationJob({
       organizationId,
       bookingId,
@@ -76,6 +97,7 @@ export async function dispatchBookingIntegrationJobs({
       jobType,
       claim: claimed.claim,
       providerMutationTimeoutMs,
+      realtorNotificationsSuppressed,
     });
   }, jobTypes);
 }
@@ -85,19 +107,33 @@ async function dispatchClaimedJob({
   jobType,
   claim,
   providerMutationTimeoutMs,
+  realtorNotificationsSuppressed,
 }: {
   organizationId: string;
   jobType: IntegrationJobType;
   claim: ClaimedIntegrationJob;
   providerMutationTimeoutMs: number;
+  realtorNotificationsSuppressed?: boolean;
 }): Promise<IntegrationJobDispatchResult> {
   switch (jobType) {
     case "quickbooks.invoice.create":
       return dispatchQuickBooksInvoice(organizationId, jobType, claim, providerMutationTimeoutMs);
     case "google_calendar.event.create":
-      return dispatchCalendarEvent(organizationId, jobType, claim, providerMutationTimeoutMs);
+      return dispatchCalendarEvent(
+        organizationId,
+        jobType,
+        claim,
+        providerMutationTimeoutMs,
+        realtorNotificationsSuppressed === true,
+      );
     case "email.booking.confirmation":
-      return dispatchCustomerEmail(organizationId, jobType, claim, providerMutationTimeoutMs);
+      return dispatchCustomerEmail(
+        organizationId,
+        jobType,
+        claim,
+        providerMutationTimeoutMs,
+        realtorNotificationsSuppressed === true,
+      );
     case "email.admin.new_booking":
       return dispatchAdminEmail(organizationId, jobType, claim, providerMutationTimeoutMs);
     case "push.admin.new_booking":
@@ -181,6 +217,7 @@ async function dispatchCalendarEvent(
   jobType: IntegrationJobType,
   claim: ClaimedIntegrationJob,
   timeoutMs: number,
+  realtorNotificationsSuppressed: boolean,
 ): Promise<IntegrationJobDispatchResult> {
   const payload = claim.payload;
   try {
@@ -219,8 +256,12 @@ async function dispatchCalendarEvent(
             (payload.booking.client_notes ? `\nNotes:\n${payload.booking.client_notes}\n` : ""),
           startISO: startAt.toISOString(),
           endISO: endAt.toISOString(),
-          attendeeEmail: payload.realtor.email,
-          attendeeName: payload.realtor.full_name,
+          ...(realtorNotificationsSuppressed
+            ? {}
+            : {
+                attendeeEmail: payload.realtor.email,
+                attendeeName: payload.realtor.full_name,
+              }),
         });
         const { error } = await getServiceSupabase()
           .from("bookings")
@@ -276,8 +317,18 @@ async function dispatchCustomerEmail(
   jobType: IntegrationJobType,
   claim: ClaimedIntegrationJob,
   timeoutMs: number,
+  realtorNotificationsSuppressed: boolean,
 ): Promise<IntegrationJobDispatchResult> {
   const payload = claim.payload;
+  if (realtorNotificationsSuppressed) {
+    return settle({
+      organizationId,
+      jobType,
+      claim,
+      status: "skipped",
+      providerResult: { reason: "realtor_notifications_suppressed" },
+    });
+  }
   const startAt = new Date(payload.booking.scheduled_at);
   const endAt = new Date(payload.booking.scheduled_ends_at);
   const services = labels(payload, false);
@@ -335,6 +386,22 @@ async function dispatchCustomerEmail(
     skippedReason: "not_configured",
     failureMessage: "Customer confirmation email was not accepted",
   });
+}
+
+async function loadRealtorNotificationPolicy(
+  organizationId: string,
+  bookingId: string,
+): Promise<RealtorNotificationPolicy> {
+  const { data, error } = await getServiceSupabase()
+    .from("bookings")
+    .select("suppress_realtor_notifications")
+    .eq("organization_id", organizationId)
+    .eq("id", bookingId)
+    .maybeSingle<{ suppress_realtor_notifications: boolean }>();
+  if (error || !data) return { ok: false };
+  return parseRealtorNotificationPolicy(
+    data.suppress_realtor_notifications,
+  );
 }
 
 async function dispatchAdminEmail(

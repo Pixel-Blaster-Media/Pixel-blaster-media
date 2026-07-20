@@ -188,6 +188,7 @@ interface BookingForManualEditRow {
   services: string[];
   add_ons: string[];
   google_calendar_event_id: string | null;
+  suppress_realtor_notifications: boolean;
   properties: {
     street_address: string;
     city: string | null;
@@ -357,7 +358,7 @@ export async function updateBookingDetails(
   const { data: booking, error: bookingError } = await service
     .from("bookings")
     .select(
-      "id, organization_id, property_id, owner_id, scheduled_at, scheduled_ends_at, services, add_ons, google_calendar_event_id, properties(street_address, city, province, postal_code), profiles(email, full_name, delivery_cc_emails)",
+      "id, organization_id, property_id, owner_id, scheduled_at, scheduled_ends_at, services, add_ons, google_calendar_event_id, suppress_realtor_notifications, properties(street_address, city, province, postal_code), profiles(email, full_name, delivery_cc_emails)",
     )
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
@@ -535,10 +536,17 @@ export async function updateBookingDetails(
     selectedItems,
     scheduledAt,
     scheduledEndsAt,
+    notifyRealtor: !booking.suppress_realtor_notifications,
   });
 
-  if (shouldSendConfirmation && booking.profiles?.email) {
-    await sendBookingConfirmationEmailBestEffort({
+  let confirmationSent = false;
+  const shouldAttemptConfirmation = Boolean(
+    shouldSendConfirmation &&
+      !booking.suppress_realtor_notifications &&
+      booking.profiles?.email,
+  );
+  if (shouldAttemptConfirmation && booking.profiles?.email) {
+    confirmationSent = await sendBookingConfirmationEmailBestEffort({
       bookingId: booking.id,
       organizationId: admin.organizationId,
       email: booking.profiles.email,
@@ -578,7 +586,7 @@ export async function updateBookingDetails(
   revalidatePath("/admin/bookings");
   revalidatePath("/admin/calendar");
   revalidatePath(`/admin/bookings/${bookingId}`);
-  return { ok: true, confirmationSent: shouldSendConfirmation };
+  return { ok: true, confirmationSent };
 }
 
 /**
@@ -618,11 +626,11 @@ export async function rescheduleBookingFromDetails(
 
   if (!result.ok) return { ok: false, error: result.error };
 
-  if (shouldSendConfirmation) {
-    await sendConfirmationForExistingBookingBestEffort(bookingId);
-  }
+  const confirmationSent = shouldSendConfirmation
+    ? await sendConfirmationForExistingBookingBestEffort(bookingId)
+    : false;
 
-  return { ok: true, confirmationSent: shouldSendConfirmation };
+  return { ok: true, confirmationSent };
 }
 
 /**
@@ -2010,16 +2018,16 @@ function catalogRows(catalog: Catalog): CatalogItemRow[] {
 
 async function sendConfirmationForExistingBookingBestEffort(
   bookingId: string,
-): Promise<void> {
+): Promise<boolean> {
   try {
     const admin = await requireAdminForBooking(bookingId);
-    if (!admin) return;
+    if (!admin) return false;
 
     const service = getServiceSupabase();
     const { data: booking, error } = await service
       .from("bookings")
       .select(
-        "id, organization_id, scheduled_at, services, properties(street_address), profiles(email, full_name, delivery_cc_emails)",
+        "id, organization_id, scheduled_at, services, suppress_realtor_notifications, properties(street_address), profiles(email, full_name, delivery_cc_emails)",
       )
       .eq("id", bookingId)
       .eq("organization_id", admin.organizationId)
@@ -2028,6 +2036,7 @@ async function sendConfirmationForExistingBookingBestEffort(
         organization_id: string;
         scheduled_at: string | null;
         services: string[];
+        suppress_realtor_notifications: boolean;
         properties: { street_address: string } | null;
         profiles: {
           email: string;
@@ -2036,9 +2045,15 @@ async function sendConfirmationForExistingBookingBestEffort(
         } | null;
       }>();
 
-    if (error || !booking?.profiles?.email || !booking.properties) return;
+    if (
+      error ||
+      booking?.suppress_realtor_notifications ||
+      !booking?.profiles?.email ||
+      !booking.properties
+    )
+      return false;
 
-    await sendBookingConfirmationEmailBestEffort({
+    return await sendBookingConfirmationEmailBestEffort({
       bookingId: booking.id,
       organizationId: booking.organization_id,
       email: booking.profiles.email,
@@ -2050,6 +2065,7 @@ async function sendConfirmationForExistingBookingBestEffort(
     });
   } catch (err) {
     console.warn("[booking-edit] confirmation resend failed", err);
+    return false;
   }
 }
 
@@ -2062,7 +2078,7 @@ async function sendBookingConfirmationEmailBestEffort(args: {
   streetAddress: string;
   scheduledAt: string | null;
   services: string[];
-}): Promise<void> {
+}): Promise<boolean> {
   const service = getServiceSupabase();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   const emailSettings = await getOrganizationEmailSettings(args.organizationId);
@@ -2152,6 +2168,7 @@ async function sendBookingConfirmationEmailBestEffort(args: {
   if (!result.ok) {
     console.warn("[booking-edit] confirmation send failed", result.error);
   }
+  return result.ok && !result.skipped;
 }
 
 async function findOrCreatePropertyForBooking(args: {
@@ -2218,6 +2235,7 @@ async function syncGoogleCalendarEventBestEffort(args: {
   selectedItems: CatalogItemRow[];
   scheduledAt: Date | null;
   scheduledEndsAt: Date | null;
+  notifyRealtor: boolean;
 }) {
   try {
     const gcal = await getGoogleCalendarClient({
@@ -2263,8 +2281,12 @@ async function syncGoogleCalendarEventBestEffort(args: {
         (args.notes ? `\nNotes:\n${args.notes}\n` : ""),
       startISO: args.scheduledAt.toISOString(),
       endISO: args.scheduledEndsAt.toISOString(),
-      attendeeEmail: args.contactEmail || undefined,
-      attendeeName: args.contactName,
+      ...(args.notifyRealtor
+        ? {
+            attendeeEmail: args.contactEmail || undefined,
+            attendeeName: args.contactName,
+          }
+        : {}),
     };
     let event: { id: string; htmlLink: string } | null = null;
     if (args.previousEventId) {

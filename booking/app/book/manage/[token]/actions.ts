@@ -33,6 +33,8 @@ export interface ManageActionResult {
   error?: string;
   /** New time label (BUSINESS_TZ) after a successful reschedule. */
   whenLabel?: string;
+  /** Whether this action attempted a realtor-facing confirmation email. */
+  realtorNotified?: boolean;
 }
 
 interface ManagedBookingRow {
@@ -44,6 +46,7 @@ interface ManagedBookingRow {
   services: string[];
   client_notes: string | null;
   google_calendar_event_id: string | null;
+  suppress_realtor_notifications: boolean;
   unit_number: string | null;
   properties: {
     street_address: string;
@@ -69,7 +72,7 @@ async function loadManagedBooking(
   const { data: booking, error } = await service
     .from("bookings")
     .select(
-      "id, organization_id, status, scheduled_at, scheduled_ends_at, services, client_notes, google_calendar_event_id, unit_number, properties(street_address, city, postal_code), profiles(email, full_name, phone)",
+      "id, organization_id, status, scheduled_at, scheduled_ends_at, services, client_notes, google_calendar_event_id, suppress_realtor_notifications, unit_number, properties(street_address, city, postal_code), profiles(email, full_name, phone)",
     )
     .eq("id", bookingId)
     .maybeSingle<ManagedBookingRow>();
@@ -203,8 +206,8 @@ export async function rescheduleManagedBooking(
     booking.organization_id,
   );
   const adminTo = await getAdminNotificationEmail(booking.organization_id);
-  await Promise.all([
-    booking.profiles?.email
+  const [realtorEmailResult] = await Promise.all([
+    !booking.suppress_realtor_notifications && booking.profiles?.email
       ? sendEmail({
           to: booking.profiles.email,
           subject: `Booking rescheduled — ${addressLine}`,
@@ -263,7 +266,13 @@ export async function rescheduleManagedBooking(
   revalidatePath("/admin/calendar");
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${booking.id}`);
-  return { ok: true, whenLabel: newWhenLabel };
+  return {
+    ok: true,
+    whenLabel: newWhenLabel,
+    realtorNotified: Boolean(
+      realtorEmailResult?.ok && !realtorEmailResult.skipped,
+    ),
+  };
 }
 
 async function syncManagedBookingGoogleEvent(
@@ -314,8 +323,12 @@ async function syncManagedBookingGoogleEvent(
         (booking.client_notes ? `\nNotes:\n${booking.client_notes}\n` : ""),
       startISO: newStart.toISOString(),
       endISO: newEnd.toISOString(),
-      attendeeEmail: booking.profiles?.email,
-      attendeeName: booking.profiles?.full_name ?? undefined,
+      ...(booking.suppress_realtor_notifications
+        ? {}
+        : {
+            attendeeEmail: booking.profiles?.email,
+            attendeeName: booking.profiles?.full_name ?? undefined,
+          }),
     });
 
     const { error } = await getServiceSupabase()
@@ -353,13 +366,14 @@ export async function cancelManagedBooking(
 
   // Also confirm to the realtor (best-effort) — the shared helper only
   // notifies the side that didn't press the button.
-  if (booking.profiles?.email) {
+  let realtorNotified = false;
+  if (!booking.suppress_realtor_notifications && booking.profiles?.email) {
     const emailSettings = await getOrganizationEmailSettings(
       booking.organization_id,
     );
     const realtorName =
       booking.profiles.full_name ?? booking.profiles.email;
-    await sendEmail({
+    const emailResult = await sendEmail({
       to: booking.profiles.email,
       subject: `Booking cancelled — ${result.addressLine ?? bookingAddressLine(booking)}`,
       organizationId: booking.organization_id,
@@ -380,12 +394,16 @@ export async function cancelManagedBooking(
         <p>— ${escapeHtml(emailSettings.organizationName)}</p>
       `,
     });
+    realtorNotified = emailResult.ok && !emailResult.skipped;
   }
 
   revalidatePath("/admin/calendar");
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${booking.id}`);
-  return { ok: true };
+  return {
+    ok: true,
+    realtorNotified,
+  };
 }
 
 function escapeHtml(s: string): string {

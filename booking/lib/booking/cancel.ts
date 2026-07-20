@@ -30,6 +30,7 @@ interface BookingRow {
   add_ons: string[];
   property_id: string;
   google_calendar_event_id: string | null;
+  suppress_realtor_notifications: boolean;
   properties: {
     street_address: string;
     city: string | null;
@@ -70,7 +71,7 @@ export async function cancelBooking(
   let bookingQuery = supabase
     .from("bookings")
     .select(
-      "id, organization_id, owner_id, status, scheduled_at, services, add_ons, property_id, google_calendar_event_id, properties(street_address, city, postal_code), profiles(email, full_name)",
+      "id, organization_id, owner_id, status, scheduled_at, services, add_ons, property_id, google_calendar_event_id, suppress_realtor_notifications, properties(street_address, city, postal_code), profiles(email, full_name)",
     )
     .eq("id", bookingId);
 
@@ -153,6 +154,7 @@ export async function cancelBooking(
     addressLine,
     whenLabel,
     organizationId: booking.organization_id,
+    suppressRealtorNotifications: booking.suppress_realtor_notifications,
   });
   await sendPushBestEffort(booking.organization_id, {
     title:
@@ -179,11 +181,13 @@ async function sendCancellationEmail(args: {
   addressLine: string;
   whenLabel: string;
   organizationId: string;
+  suppressRealtorNotifications: boolean;
 }): Promise<void> {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   const emailSettings = await getOrganizationEmailSettings(args.organizationId);
 
   if (args.initiator === "admin") {
+    if (args.suppressRealtorNotifications) return;
     if (!args.realtorEmail) return;
     await sendEmail({
       to: args.realtorEmail,

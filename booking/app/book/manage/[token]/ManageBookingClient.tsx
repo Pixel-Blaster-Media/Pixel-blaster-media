@@ -53,7 +53,7 @@ export default function ManageBookingClient({
         setDone(true);
         setFlash({
           kind: "ok",
-          text: `You're rescheduled${result.whenLabel ? ` for ${result.whenLabel}` : ""}. A confirmation email is on the way.`,
+          text: `You're rescheduled${result.whenLabel ? ` for ${result.whenLabel}` : ""}.${result.realtorNotified ? " A confirmation email is on the way." : ""}`,
         });
         router.refresh();
       } else {
@@ -75,7 +75,7 @@ export default function ManageBookingClient({
         setDone(true);
         setFlash({
           kind: "ok",
-          text: "Your booking has been cancelled. A confirmation email is on the way.",
+          text: `Your booking has been cancelled.${result.realtorNotified ? " A confirmation email is on the way." : ""}`,
         });
         router.refresh();
       } else {

@@ -1809,6 +1809,23 @@ export default function CalendarWeekView({
                 </div>
               </FormSection>
 
+              <label className="flex cursor-pointer gap-3 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
+                <input
+                  type="checkbox"
+                  name="suppress_realtor_notifications"
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-realtor-primary/25"
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-realtor-text">
+                    Do not email or invite the realtor
+                  </span>
+                  <span className="mt-1 block text-xs text-realtor-muted">
+                    Still creates the booking and internal calendar event, but
+                    sends no confirmation email or Google Calendar invitation.
+                  </span>
+                </span>
+              </label>
+
               <label className="block">
                 <span className="text-xs text-realtor-muted">Notes</span>
                 <textarea
