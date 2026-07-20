@@ -74,8 +74,8 @@ export default function CreateCompanyForm() {
             First admin
           </p>
           <p className="mt-2 text-sm leading-6 text-realtor-muted">
-            Use the owner/operator&apos;s real email. We will send a one-time
-            invitation that opens their private setup checklist.
+            Use the owner/operator&apos;s real email. We will send stable sign-in
+            instructions for their private setup checklist.
           </p>
         </div>
 

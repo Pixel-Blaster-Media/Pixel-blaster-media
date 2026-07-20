@@ -29,15 +29,16 @@ const { safeAppOrigin, safeNextPath } = await import(
   "../lib/auth/safe-next-path.ts"
 );
 
-test("platform company onboarding sends a one-time owner invitation instead of collecting a password", () => {
+test("platform company onboarding sends stable owner sign-in instructions without collecting a password", () => {
   assert.doesNotMatch(companyFormSource, /name="admin_password"/);
   assert.doesNotMatch(companyActionSource, /formData\.get\("admin_password"\)/);
   assert.match(companyFormSource, /invitation/i);
   assert.match(companyActionSource, /createCompanyWorkspaceWithInvitation/);
-  assert.match(companySetupSource, /generateLink\(\{/);
-  assert.match(companySetupSource, /type:\s*"magiclink"/);
-  assert.match(companySetupSource, /properties\?\.hashed_token/);
-  assert.match(companySetupSource, /new URL\("\/auth\/confirm",\s*appUrl\)/);
+  assert.doesNotMatch(companySetupSource, /generateLink\(\{/);
+  assert.doesNotMatch(companySetupSource, /properties\?\.hashed_token/);
+  assert.doesNotMatch(companySetupSource, /new URL\("\/auth\/confirm"/);
+  assert.match(companySetupSource, /new URL\("\/auth\/magic",\s*appUrl\)/);
+  assert.match(companySetupSource, /searchParams\.set\("audience",\s*"company"\)/);
   assert.match(
     companySetupSource,
     /sendEmail\(\{[\s\S]*organizationId:\s*DEFAULT_ORGANIZATION_ID[\s\S]*\}\)/,
@@ -59,16 +60,19 @@ test("platform company onboarding sends a one-time owner invitation instead of c
   const createOrganization = invitation.indexOf(
     "createOrganization(input, organizationId)",
   );
-  const generateLink = invitation.indexOf("service.auth.admin.generateLink({");
+  const signInLink = invitation.indexOf('new URL("/auth/magic", appUrl)');
   assert.ok(createUser >= 0 && createUser < createOrganization);
-  assert.ok(createOrganization < generateLink);
+  assert.ok(createOrganization < signInLink);
   assert.doesNotMatch(invitation, /emailHasAccount\(/);
-  assert.match(invitation, /createdUser\.id\s*!==\s*createdUserId/);
+  assert.match(invitation, /createdUserId\s*=\s*created\.user\.id/);
+  assert.match(invitation, /beta_provisioning_key:\s*input\.authProvisioningKey/);
   assert.match(
     invitation,
-    /const \{ invitationId, organizationId \} = invitationRecoveryIds\(input\.adminEmail\)/,
+    /const recoveryIds = input\.invitationId && input\.organizationId[\s\S]*invitationRecoveryIds\(input\.adminEmail\)/,
   );
+  assert.match(invitation, /Incomplete company invitation recovery state/);
   assert.doesNotMatch(invitation, /randomUUID\(/);
+  assert.match(invitation, /idempotencyKey:\s*`company-owner-invite:\$\{invitationId\}`/);
   assert.match(
     invitation,
     /app_metadata:\s*\{\s*company_invitation_id:\s*invitationId\s*\}/,

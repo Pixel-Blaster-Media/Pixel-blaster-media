@@ -1,10 +1,6 @@
 import "server-only";
 
-import {
-  DEFAULT_ORGANIZATION_ID,
-  DEFAULT_ORGANIZATION_NAME,
-  DEFAULT_ORGANIZATION_SLUG,
-} from "@/lib/organizations/default";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
 export interface PublicBookingOrganization {
@@ -45,7 +41,8 @@ export async function resolvePublicBookingOrganization(
     .from("organizations")
     .select(
       "id, name, slug, primary_color, accent_color, logo_url, booking_hero_image_url, booking_hero_secondary_image_url",
-    );
+    )
+    .eq("lifecycle_status", "active");
 
   const { data, error } = slug
     ? await query.eq("slug", slug).maybeSingle<OrganizationRow>()
@@ -55,19 +52,7 @@ export async function resolvePublicBookingOrganization(
     throw new Error(`Failed to load booking company: ${error.message}`);
   }
 
-  if (!data) {
-    if (slug) return null;
-    return {
-      id: DEFAULT_ORGANIZATION_ID,
-      name: DEFAULT_ORGANIZATION_NAME,
-      slug: DEFAULT_ORGANIZATION_SLUG,
-      primaryColor: null,
-      accentColor: null,
-      logoUrl: null,
-      bookingHeroImageUrl: null,
-      bookingHeroSecondaryImageUrl: null,
-    };
-  }
+  if (!data) return null;
 
   return {
     id: data.id,

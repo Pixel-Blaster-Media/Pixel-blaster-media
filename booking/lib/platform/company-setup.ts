@@ -38,7 +38,11 @@ export interface ExistingUserCompanySetupInput {
 export type InvitationCompanySetupInput = Omit<
   CompanySetupInput,
   "adminPassword"
->;
+> & {
+  invitationId?: string;
+  organizationId?: string;
+  authProvisioningKey?: string;
+};
 
 export interface CompanySetupResult {
   ok: boolean;
@@ -153,7 +157,13 @@ export async function createCompanyWorkspaceWithInvitation(
     return { ok: false, error: "Company invitations are not configured." };
   }
 
-  const { invitationId, organizationId } = invitationRecoveryIds(input.adminEmail);
+  if ((input.invitationId && !input.organizationId) || (!input.invitationId && input.organizationId)) {
+    return { ok: false, error: "Incomplete company invitation recovery state." };
+  }
+  const recoveryIds = input.invitationId && input.organizationId
+    ? { invitationId: input.invitationId, organizationId: input.organizationId }
+    : invitationRecoveryIds(input.adminEmail);
+  const { invitationId, organizationId } = recoveryIds;
   const recoveryReference = invitationId.slice(0, 8);
 
   const slugCheck = await ensureSlugAvailable(input.slug, organizationId);
@@ -179,7 +189,12 @@ export async function createCompanyWorkspaceWithInvitation(
       const result = await service.auth.admin.createUser({
         email: input.adminEmail,
         email_confirm: false,
-        user_metadata: { full_name: input.adminName },
+        user_metadata: {
+          full_name: input.adminName,
+          ...(input.authProvisioningKey
+            ? { beta_provisioning_key: input.authProvisioningKey }
+            : {}),
+        },
         app_metadata: { company_invitation_id: invitationId },
       });
       created = result.data;
@@ -219,25 +234,8 @@ export async function createCompanyWorkspaceWithInvitation(
     organization = await createOrganization(input, organizationId);
     await seedStarterWorkspace(input, organization.id, { idempotent: true });
 
-    const generated = await service.auth.admin.generateLink({
-      type: "magiclink",
-      email: input.adminEmail,
-    });
-    const hashedToken = generated.data.properties?.hashed_token;
-    const createdUser = generated.data.user;
-    if (
-      generated.error ||
-      !createdUser ||
-      !hashedToken ||
-      createdUser.id !== createdUserId
-    ) {
-      throw new Error(
-        generated.error?.message ?? "Could not create owner invitation.",
-      );
-    }
-
-    const invitationUrl = new URL("/auth/confirm", appUrl);
-    invitationUrl.searchParams.set("token_hash", hashedToken);
+    const invitationUrl = new URL("/auth/magic", appUrl);
+    invitationUrl.searchParams.set("audience", "company");
     invitationUrl.searchParams.set(
       "next",
       "/admin/settings/business?welcome=1",
@@ -264,6 +262,7 @@ export async function createCompanyWorkspaceWithInvitation(
         actionLink: invitationUrl.toString(),
       }),
       organizationId: DEFAULT_ORGANIZATION_ID,
+      idempotencyKey: `company-owner-invite:${invitationId}`,
     });
     if (!invitation.ok || invitation.skipped) {
       // A mail provider may accept a message while its response is lost. Keep
@@ -416,7 +415,7 @@ function companyOwnerInvitationHtml(input: {
   const name = escapeHtml(input.adminName);
   const company = escapeHtml(input.companyName);
   const link = escapeHtml(input.actionLink);
-  return `<p>Hi ${name},</p><p>Your private ${company} booking workspace is ready.</p><p><a href="${link}">Open your workspace</a></p><p>This is a one-time sign-in link. After signing in, finish the launch checklist and set your password from the sign-in reset flow.</p>`;
+  return `<p>Hi ${name},</p><p>Your private ${company} booking workspace is ready.</p><p><a href="${link}">Open company sign-in</a></p><p>Enter this invited email address to request a fresh one-time sign-in link. Your workspace stays private until the platform owner activates its customer booking page.</p>`;
 }
 
 function escapeHtml(value: string): string {

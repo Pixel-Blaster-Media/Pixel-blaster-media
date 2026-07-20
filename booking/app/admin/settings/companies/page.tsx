@@ -3,7 +3,9 @@ import Link from "next/link";
 import { requirePlatformAdmin } from "@/lib/auth/require-platform-admin";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
+import BetaAdminMutationForm from "./BetaAdminMutationForm";
 import CreateCompanyForm from "./CreateCompanyForm";
+import IssueBetaInviteForm from "./IssueBetaInviteForm";
 
 export const metadata = { title: "Companies" };
 export const dynamic = "force-dynamic";
@@ -14,6 +16,21 @@ interface OrganizationRow {
   slug: string;
   primary_color: string | null;
   accent_color: string | null;
+  lifecycle_status: "onboarding" | "active" | "suspended";
+  beta_invitation_id: string | null;
+  created_at: string;
+}
+
+interface BetaInviteRow {
+  id: string;
+  email: string;
+  expires_at: string;
+  consumed_at: string | null;
+  revoked_at: string | null;
+  organization_id: string | null;
+  status: "issued" | "provisioning" | "completed" | "revoked" | "reconciliation_required";
+  delivery_status: "pending" | "confirmed" | "unconfirmed";
+  provisioning_deadline: string | null;
   created_at: string;
 }
 
@@ -21,15 +38,39 @@ export default async function CompaniesSettingsPage() {
   await requirePlatformAdmin();
 
   const service = getServiceSupabase();
-  const { data: organizations, error } = await service
-    .from("organizations")
-    .select("id, name, slug, primary_color, accent_color, created_at")
-    .order("created_at", { ascending: true })
-    .returns<OrganizationRow[]>();
-
-  if (error) {
-    throw new Error(`Failed to load companies: ${error.message}`);
+  const [organizationsResult, invitesResult] = await Promise.all([
+    service
+      .from("organizations")
+      .select("id, name, slug, primary_color, accent_color, lifecycle_status, beta_invitation_id, created_at")
+      .order("created_at", { ascending: true })
+      .returns<OrganizationRow[]>(),
+    service
+      .from("beta_company_invites")
+      .select("id, email, expires_at, consumed_at, revoked_at, organization_id, status, delivery_status, provisioning_deadline, created_at")
+      .order("created_at", { ascending: false })
+      .returns<BetaInviteRow[]>(),
+  ]);
+  if (organizationsResult.error) {
+    throw new Error(`Failed to load companies: ${organizationsResult.error.message}`);
   }
+  if (invitesResult.error) {
+    throw new Error(`Failed to load beta invitations: ${invitesResult.error.message}`);
+  }
+  const organizations = organizationsResult.data;
+  const invites = invitesResult.data;
+  const completedInvitationIds = new Set(
+    (invites ?? [])
+      .filter((invite) => invite.status === "completed")
+      .map((invite) => invite.id),
+  );
+  const activeInvitationIds = new Set(
+    (organizations ?? [])
+      .filter((organization) => organization.lifecycle_status === "active")
+      .map((organization) => organization.beta_invitation_id)
+      .filter((id): id is string => typeof id === "string"),
+  );
+  const betaInvitationsEnabled =
+    process.env.BETA_COMPANY_ONBOARDING_ENABLED === "true";
 
   return (
     <div className="space-y-6">
@@ -95,12 +136,22 @@ export default async function CompaniesSettingsPage() {
                 />
               </div>
               <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                <Link
-                  href={`/book?org=${org.slug}`}
-                  className="rounded-full border border-realtor-primary/20 px-3 py-1.5 font-semibold text-realtor-primary transition hover:bg-realtor-primary/10"
-                >
-                  Open booking link
-                </Link>
+                {org.lifecycle_status === "active" ? (
+                  <Link
+                    href={`/book?org=${org.slug}`}
+                    className="rounded-full border border-realtor-primary/20 px-3 py-1.5 font-semibold text-realtor-primary transition hover:bg-realtor-primary/10"
+                  >
+                    Open booking link
+                  </Link>
+                ) : null}
+                {org.lifecycle_status === "onboarding" &&
+                org.beta_invitation_id &&
+                completedInvitationIds.has(org.beta_invitation_id) ? (
+                  <BetaAdminMutationForm kind="activate" id={org.id} />
+                ) : null}
+                <span className="rounded-full border border-realtor-primary/10 px-3 py-1.5 text-realtor-muted">
+                  {org.lifecycle_status === "active" ? "Active" : org.lifecycle_status === "onboarding" ? "Needs review" : "Suspended"}
+                </span>
                 <span className="rounded-full border border-realtor-primary/10 px-3 py-1.5 text-realtor-muted">
                   Created {new Date(org.created_at).toLocaleDateString()}
                 </span>
@@ -110,7 +161,96 @@ export default async function CompaniesSettingsPage() {
         </div>
       </section>
 
-      <CreateCompanyForm />
+      {betaInvitationsEnabled ? (
+        <IssueBetaInviteForm />
+      ) : (
+        <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-5 text-sm text-realtor-muted">
+          Private beta invitation issuance is currently disabled.
+        </section>
+      )}
+
+      {(invites?.length ?? 0) > 0 ? (
+        <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-5 shadow-sm shadow-realtor-text/5">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-realtor-primary/80">
+            Recent beta invitations
+          </p>
+          <div className="mt-4 divide-y divide-realtor-primary/10">
+            {(invites ?? []).map((invite) => {
+              const status = betaInviteStatus(invite, activeInvitationIds);
+              const canReconcile =
+                invite.status === "reconciliation_required" ||
+                (invite.status === "provisioning" &&
+                  invite.provisioning_deadline !== null &&
+                  new Date(invite.provisioning_deadline).getTime() <= Date.now());
+              return (
+                <div
+                  key={invite.id}
+                  className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-realtor-text">
+                      {invite.email}
+                    </p>
+                    <p className="mt-1 text-xs text-realtor-muted">
+                      {status.label} · Expires {new Date(invite.expires_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  {canReconcile ? (
+                    <BetaAdminMutationForm kind="reconcile" id={invite.id} />
+                  ) : status.revocable ? (
+                    <BetaAdminMutationForm kind="revoke" id={invite.id} />
+                  ) : (
+                    <span className="rounded-full border border-realtor-primary/15 px-3 py-1 text-xs font-semibold text-realtor-muted">
+                      {status.label}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      <details className="group rounded-2xl border border-realtor-primary/15 bg-realtor-surface/65 p-5">
+        <summary className="cursor-pointer list-none text-sm font-semibold text-realtor-text">
+          Manual company setup
+          <span className="ml-2 text-xs font-normal text-realtor-muted">
+            Use only when an owner cannot use beta onboarding
+          </span>
+        </summary>
+        <div className="mt-5">
+          <CreateCompanyForm />
+        </div>
+      </details>
     </div>
   );
+}
+
+function betaInviteStatus(
+  invite: BetaInviteRow,
+  activeInvitationIds: Set<string>,
+): {
+  label: string;
+  revocable: boolean;
+} {
+  if (invite.status === "completed") {
+    return {
+      label: activeInvitationIds.has(invite.id) ? "Active" : "Needs activation",
+      revocable: false,
+    };
+  }
+  if (invite.status === "revoked") return { label: "Revoked", revocable: false };
+  if (invite.status === "reconciliation_required") {
+    return { label: "Needs reconciliation", revocable: false };
+  }
+  if (invite.status === "provisioning") {
+    return { label: "Provisioning", revocable: false };
+  }
+  if (new Date(invite.expires_at).getTime() <= Date.now()) {
+    return { label: "Expired", revocable: false };
+  }
+  if (invite.delivery_status === "unconfirmed") {
+    return { label: "Delivery unconfirmed", revocable: true };
+  }
+  return { label: invite.delivery_status === "confirmed" ? "Invited" : "Pending delivery", revocable: true };
 }

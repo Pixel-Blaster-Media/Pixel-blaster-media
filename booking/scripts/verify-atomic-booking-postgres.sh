@@ -40,6 +40,8 @@ PSQL=("$PG_BIN/psql" -X -v ON_ERROR_STOP=1 -h "$TMP_DIR" -p "$PORT" -U postgres 
 "${PSQL[@]}" -f "$ROOT/tests/postgres/atomic-booking-bootstrap.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/supabase/migrations/20260718202432_atomic_public_booking_outbox.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/supabase/migrations/20260719124500_integration_outbox_recovery_reconciliation.sql" >/dev/null
+"${PSQL[@]}" -f "$ROOT/supabase/migrations/20260720120000_beta_company_invitations.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/tests/postgres/atomic-booking-outbox.behavior.sql" >/dev/null
+"${PSQL[@]}" -f "$ROOT/tests/postgres/beta-company-invitations.behavior.sql" >/dev/null
 
 echo "Atomic booking PostgreSQL behavior suite passed."

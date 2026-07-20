@@ -97,6 +97,59 @@ interface ProfilesTable {
   Relationships: [];
 }
 
+interface BetaCompanyInvitesTable {
+  Row: {
+    id: string;
+    email: string;
+    token_hash: string;
+    invited_by: string;
+    created_at: string;
+    expires_at: string;
+    delivery_status: "pending" | "confirmed" | "unconfirmed";
+    delivery_attempted_at: string | null;
+    status: "issued" | "provisioning" | "completed" | "revoked" | "reconciliation_required";
+    revoked_at: string | null;
+    consumed_at: string | null;
+    organization_id: string | null;
+    auth_user_id: string | null;
+    auth_provisioning_key: string | null;
+    provisioning_deadline: string | null;
+    admin_name: string | null;
+    company_name: string | null;
+    company_slug: string | null;
+    primary_color: string | null;
+    accent_color: string | null;
+    copy_catalog: boolean | null;
+    source_catalog_organization_id: string | null;
+  };
+  Insert: {
+    id?: string;
+    email: string;
+    token_hash: string;
+    invited_by: string;
+    created_at?: string;
+    expires_at: string;
+    delivery_status?: "pending" | "confirmed" | "unconfirmed";
+    delivery_attempted_at?: string | null;
+    status?: "issued" | "provisioning" | "completed" | "revoked" | "reconciliation_required";
+    revoked_at?: string | null;
+    consumed_at?: string | null;
+    organization_id?: string | null;
+    auth_user_id?: string | null;
+    auth_provisioning_key?: string | null;
+    provisioning_deadline?: string | null;
+    admin_name?: string | null;
+    company_name?: string | null;
+    company_slug?: string | null;
+    primary_color?: string | null;
+    accent_color?: string | null;
+    copy_catalog?: boolean | null;
+    source_catalog_organization_id?: string | null;
+  };
+  Update: Partial<BetaCompanyInvitesTable["Insert"]>;
+  Relationships: [];
+}
+
 interface PropertiesTable {
   Row: {
     id: string;
@@ -252,6 +305,8 @@ interface OrganizationsTable {
     reply_to_email: string | null;
     admin_notification_email: string | null;
     invoice_timing: string;
+    lifecycle_status: "onboarding" | "active" | "suspended";
+    beta_invitation_id: string | null;
     created_at: string;
     updated_at: string;
   };
@@ -268,6 +323,8 @@ interface OrganizationsTable {
     reply_to_email?: string | null;
     admin_notification_email?: string | null;
     invoice_timing?: string;
+    lifecycle_status?: "onboarding" | "active" | "suspended";
+    beta_invitation_id?: string | null;
   };
   Update: Partial<OrganizationsTable["Insert"]>;
   Relationships: [];
@@ -982,6 +1039,7 @@ export interface Database {
       profiles: ProfilesTable;
       organizations: OrganizationsTable;
       organization_members: OrganizationMembersTable;
+      beta_company_invites: BetaCompanyInvitesTable;
       properties: PropertiesTable;
       bookings: BookingsTable;
       deliverables: DeliverablesTable;
@@ -1048,6 +1106,56 @@ export interface Database {
           p_full_name: string;
         };
         Returns: undefined;
+      };
+      issue_beta_company_invite: {
+        Args: {
+          p_email: string;
+          p_token_hash: string;
+          p_invited_by: string;
+          p_expires_at: string;
+        };
+        Returns: Json;
+      };
+      find_beta_auth_user_by_email: {
+        Args: { p_email: string };
+        Returns: Json | null;
+      };
+      is_beta_platform_actor: {
+        Args: { p_actor_id: string };
+        Returns: boolean;
+      };
+      mark_beta_company_invite_delivery: {
+        Args: { p_invite_id: string; p_delivery_status: string };
+        Returns: boolean;
+      };
+      begin_beta_company_onboarding: {
+        Args: {
+          p_token_hash: string;
+          p_admin_name: string;
+          p_company_name: string;
+          p_company_slug: string;
+          p_primary_color: string;
+          p_accent_color: string;
+          p_copy_catalog: boolean;
+          p_source_catalog_organization_id: string;
+        };
+        Returns: Json;
+      };
+      complete_beta_company_onboarding: {
+        Args: { p_token_hash: string; p_auth_user_id: string };
+        Returns: boolean;
+      };
+      resume_beta_company_onboarding: {
+        Args: { p_invite_id: string; p_actor_id: string };
+        Returns: boolean;
+      };
+      revoke_beta_company_invite: {
+        Args: { p_invite_id: string; p_actor_id: string };
+        Returns: boolean;
+      };
+      activate_beta_company: {
+        Args: { p_organization_id: string; p_actor_id: string };
+        Returns: boolean;
       };
       create_booking_from_request: {
         Args: {

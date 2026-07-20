@@ -3,7 +3,16 @@ create role authenticated;
 create role service_role bypassrls;
 grant usage, create on schema public to service_role;
 
+create schema extensions;
+create extension pgcrypto with schema extensions;
+
 create schema auth;
+create table auth.users (
+  id uuid primary key,
+  email text,
+  raw_app_meta_data jsonb not null default '{}'::jsonb,
+  raw_user_meta_data jsonb not null default '{}'::jsonb
+);
 create function auth.uid()
 returns uuid
 language sql
@@ -17,6 +26,9 @@ grant execute on function auth.uid() to authenticated;
 create table public.organizations (
   id uuid primary key,
   name text not null,
+  slug text unique,
+  primary_color text,
+  accent_color text,
   invoice_timing text not null default 'on_delivery',
   email_from_name text,
   reply_to_email text,
