@@ -6,6 +6,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import type { BookingStatus, Json, UserRole } from "@/lib/supabase/database.types";
 import { parseRealtorAIMemory } from "@/lib/realtors/memory";
 
+import AdminPageHeading from "../AdminPageHeading";
 import RealtorProfileCard, {
   type RealtorProfileView,
 } from "./RealtorProfileCard";
@@ -123,24 +124,18 @@ export default async function RealtorsPage({
   );
 
   return (
-    <div className="space-y-6">
-      <header className="realtor-panel rounded-2xl p-4">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
-              Client profiles
-            </p>
-            <h1 className="mt-1 text-2xl font-bold text-realtor-text">
-              Realtors
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm text-realtor-muted">
-              Keep agent names, contact details, headshots, logos, and web
-              links cleaned up for the portal, delivery emails, assistant
-              memory, and future listing page defaults.
-            </p>
-          </div>
+    <div className="space-y-4">
+      <AdminPageHeading
+        eyebrow="Clients"
+        title="Realtors"
+        meta={`${realtorViews.length} profile${realtorViews.length === 1 ? "" : "s"} shown`}
+        actions={
           <form className="flex w-full gap-2 sm:w-auto">
+            <label className="sr-only" htmlFor="realtor-search">
+              Search realtors
+            </label>
             <input
+              id="realtor-search"
               name="q"
               defaultValue={params.q ?? ""}
               className="admin-input min-w-0 sm:w-72"
@@ -148,13 +143,13 @@ export default async function RealtorsPage({
             />
             <button
               type="submit"
-              className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white"
+              className="min-h-11 rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white"
             >
               Search
             </button>
           </form>
-        </div>
-      </header>
+        }
+      />
 
       <div className="grid gap-4">
         {realtorViews.map((realtor) => (

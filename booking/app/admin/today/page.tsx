@@ -20,6 +20,7 @@ import type {
   DeliverableType,
   Json,
 } from "@/lib/supabase/database.types";
+import AdminPageHeading from "../AdminPageHeading";
 import {
   loadTodayCommandPreferences,
 } from "./actions";
@@ -152,10 +153,16 @@ export default async function AdminTodayPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <OfflineTodaySnapshot userId={admin.userId} data={offlineTodayData} />
+      <AdminPageHeading
+        eyebrow="Today"
+        title={formatFullDate(start)}
+        mobileTitle={formatCompactDate(start)}
+        titleLabel={`Today, ${formatFullDate(start)}`}
+        meta={`${(bookings ?? []).length} shoot${(bookings ?? []).length === 1 ? "" : "s"}`}
+      />
       <TodayOverview
-        date={start}
         bookings={bookings ?? []}
         preferences={preferences}
       />
@@ -183,11 +190,9 @@ export default async function AdminTodayPage() {
 }
 
 function TodayOverview({
-  date,
   bookings,
   preferences,
 }: {
-  date: Date;
   bookings: BookingRow[];
   preferences: TodayCommandPreferences;
 }) {
@@ -211,7 +216,7 @@ function TodayOverview({
     <>
       <Link
         href="/admin/calendar"
-        className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+        className="tap-target inline-flex items-center rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
       >
         Calendar
       </Link>
@@ -220,7 +225,7 @@ function TodayOverview({
           href={routeHref}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
+          className="tap-target inline-flex items-center rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
         >
           Open route
         </a>
@@ -229,28 +234,14 @@ function TodayOverview({
   );
 
   return (
-    <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
-      <div>
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
-            {formatFullDate(date)}
-          </p>
-          <h1 className="mt-1 text-2xl font-bold text-realtor-text">
-            Today at a glance
-          </h1>
-          <p className="mt-2 text-sm text-realtor-muted">
-            Shoot-day controls and a quick brief when you need one.
-          </p>
-        </div>
-      </div>
-
+    <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-3 shadow-sm">
       {preferences.showShootBrief ? (
         <DailyAIBriefPanel actions={actionButtons} />
       ) : (
-        <div className="mt-4 flex flex-wrap gap-2">{actionButtons}</div>
+        <div className="flex flex-wrap gap-2">{actionButtons}</div>
       )}
 
-      <div className="mt-4 rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
+      <div className="mt-3 rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
         <div>
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
@@ -984,6 +975,15 @@ function formatFullDate(date: Date): string {
     timeZone: BUSINESS_TZ,
     weekday: "long",
     month: "long",
+    day: "numeric",
+  }).format(date);
+}
+
+function formatCompactDate(date: Date): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: BUSINESS_TZ,
+    weekday: "short",
+    month: "short",
     day: "numeric",
   }).format(date);
 }

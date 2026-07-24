@@ -15,7 +15,7 @@ export default function DailyAIBriefPanel({ actions }: { actions?: ReactNode }) 
   const [isPending, startTransition] = useTransition();
 
   return (
-    <div className="mt-4 space-y-3">
+    <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         {actions}
         {brief ? (
