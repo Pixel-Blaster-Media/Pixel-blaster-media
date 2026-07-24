@@ -16,7 +16,10 @@ export default function AdminPageHeading({
   actions?: ReactNode;
 }) {
   return (
-    <header data-admin-page-heading className="px-1 py-1 md:py-0">
+    <header
+      data-admin-page-heading
+      className="-mb-2 px-1 py-1 md:mb-0 md:py-0"
+    >
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-1">
           <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.22em] text-realtor-primary/75 md:text-xs">

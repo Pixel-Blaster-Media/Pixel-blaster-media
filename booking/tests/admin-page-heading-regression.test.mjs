@@ -27,6 +27,7 @@ test("top-level admin pages share one compact flat heading system", () => {
   assert.match(headingSource, /data-admin-page-heading/);
   assert.match(headingSource, /items-baseline/);
   assert.match(headingSource, /text-2xl font-bold/);
+  assert.match(headingSource, /className="-mb-2 .*md:mb-0/);
   assert.match(headingSource, /mobileTitle\?: ReactNode/);
   assert.match(headingSource, /aria-label=\{titleLabel\}/);
   assert.match(headingSource, /flex w-full flex-wrap items-center gap-2 sm:w-auto/);

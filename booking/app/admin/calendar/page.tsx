@@ -368,7 +368,7 @@ export default async function AdminCalendarPage({
 
   return (
     <div className="max-w-full space-y-4 px-0.5 md:space-y-2">
-      <header className="px-1 py-1 md:py-0">
+      <header className="-mb-2 px-1 py-1 md:mb-0 md:py-0">
         <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-realtor-primary/75 md:hidden">
           Schedule
         </p>
