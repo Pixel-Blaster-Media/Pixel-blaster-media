@@ -45,6 +45,10 @@ test("calendar headings keep the date and appointment count in one compact row",
   );
   assert.match(
     calendarPageSource,
+    /<header className="-mb-2 px-1 py-1 md:mb-0 md:py-0">/,
+  );
+  assert.match(
+    calendarPageSource,
     /data-calendar-desktop-heading[^>]*className="hidden min-w-0 items-baseline gap-2 md:flex"/,
   );
   assert.match(
