@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { hasPlatformAdminAccess } from "@/lib/auth/require-platform-admin";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import CopyBookingLinkButton from "./business/CopyBookingLinkButton";
+import AdminPageHeading from "../AdminPageHeading";
 
 const SETTINGS_GROUPS = [
   {
@@ -72,19 +73,8 @@ export default async function SettingsPage() {
     : SETTINGS_GROUPS;
 
   return (
-    <div className="space-y-6 pb-10">
-      <header className="max-w-3xl">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-realtor-primary/75">
-          Company controls
-        </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-realtor-text">
-          Settings
-        </h1>
-        <p className="mt-2 text-sm leading-6 text-realtor-muted">
-          Set the essentials once. Come back only when your business changes or
-          something needs attention.
-        </p>
-      </header>
+    <div className="space-y-4 pb-10">
+      <AdminPageHeading eyebrow="Company controls" title="Settings" />
 
       <EssentialSetupCard readiness={readiness} />
       <SettingsHub groups={groups} />

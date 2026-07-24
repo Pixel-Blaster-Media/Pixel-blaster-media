@@ -7,10 +7,11 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type { BookingStatus } from "@/lib/supabase/database.types";
 
+import AdminPageHeading from "../AdminPageHeading";
 import CancelBookingButton from "./CancelBookingButton";
 import { ACTIVE_JOB_STATUSES, prioritizeActiveJobs } from "./active-jobs";
 
-export const metadata = { title: "Jobs" };
+export const metadata = { title: "Jobs Board" };
 export const dynamic = "force-dynamic";
 
 interface BookingRow {
@@ -79,30 +80,26 @@ export default async function BookingsPage({
   }
 
   return (
-    <div className="space-y-6">
-      <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
-              Job board
-            </p>
-            <h1 className="mt-1 text-2xl font-bold text-realtor-text">Jobs</h1>
-            <p className="mt-1 max-w-xl text-sm text-realtor-muted">
-              {filter === "active"
-                ? "Unscheduled requests and active production work. Completed jobs live in the status filters."
-                : "Search and review jobs by status, realtor, property, or service."}
-            </p>
-          </div>
+    <div className="space-y-4">
+      <AdminPageHeading
+        eyebrow="Work queue"
+        title="Jobs Board"
+        meta={
+          filter === "active"
+            ? `${bookings.length} active job${bookings.length === 1 ? "" : "s"} shown`
+            : `${bookings.length} job${bookings.length === 1 ? "" : "s"} shown`
+        }
+        actions={
           <Link
             href="/admin/calendar"
-            className="rounded-full border border-realtor-primary/15 px-3 py-2 text-xs font-semibold text-realtor-text transition hover:border-realtor-primary/40"
+            className="tap-target inline-flex items-center rounded-full border border-realtor-primary/15 px-3 py-2 text-xs font-semibold text-realtor-text transition hover:border-realtor-primary/40"
           >
             Open calendar
           </Link>
-        </div>
-      </header>
+        }
+      />
 
-      <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/60 p-3 shadow-lg shadow-realtor-text/10">
+      <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/60 p-2.5 shadow-sm">
         <form className="flex min-w-0 gap-2" action="/admin/bookings">
           <input type="hidden" name="filter" value={filter} />
           <label className="sr-only" htmlFor="booking-search">
@@ -151,22 +148,7 @@ export default async function BookingsPage({
       </section>
 
       {bookings && bookings.length > 0 ? (
-        <section className="space-y-3">
-          {filter === "active" ? (
-            <div className="flex flex-wrap items-end justify-between gap-2">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
-                  Needs attention + in progress
-                </p>
-                <h2 className="mt-1 text-lg font-semibold text-realtor-text">
-                  Unscheduled requests and active jobs
-                </h2>
-              </div>
-              <p className="text-xs text-realtor-muted">
-                {bookings.length} active job{bookings.length === 1 ? "" : "s"}
-              </p>
-            </div>
-          ) : null}
+        <section>
           <ul className="grid gap-3">
             {bookings.map((booking) => (
               <BookingListItem key={booking.id} booking={booking} />
