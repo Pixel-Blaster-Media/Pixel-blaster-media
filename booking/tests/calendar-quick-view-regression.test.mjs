@@ -25,7 +25,7 @@ const quickViewSource = calendarSource.slice(
   calendarSource.indexOf("function QuickViewSection"),
 );
 
-test("mobile calendar heading keeps the week summary beside the title", () => {
+test("calendar headings keep the date and appointment count in one compact row", () => {
   assert.match(
     calendarPageSource,
     /flex min-w-0 items-baseline justify-between gap-2 md:hidden/,
@@ -39,6 +39,18 @@ test("mobile calendar heading keeps the week summary beside the title", () => {
   assert.match(calendarPageSource, /formatCompactWeekRange\(weekStart\)/);
   assert.match(calendarPageSource, /month: "short"/);
   assert.match(calendarPageSource, /appointmentCount} appt/);
+  assert.match(
+    calendarPageSource,
+    /data-calendar-desktop-heading[^>]*className="hidden min-w-0 items-baseline gap-3 md:flex"/,
+  );
+  assert.match(
+    calendarPageSource,
+    /data-calendar-desktop-count[^>]*className="whitespace-nowrap text-sm text-realtor-muted"/,
+  );
+  assert.doesNotMatch(
+    calendarPageSource,
+    /mt-1 hidden text-sm text-realtor-muted md:block/,
+  );
 });
 
 test("mobile day schedule uses one unified Apple-inspired canvas", () => {

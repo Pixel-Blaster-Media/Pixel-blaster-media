@@ -367,39 +367,49 @@ export default async function AdminCalendarPage({
     .length;
 
   return (
-    <div className="max-w-full space-y-4 px-0.5">
-      <header className="px-1 py-1 md:py-2">
-        <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-realtor-primary/75 md:text-xs">
+    <div className="max-w-full space-y-3 px-0.5 md:space-y-2">
+      <header className="px-1 py-1 md:py-0">
+        <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-realtor-primary/75 md:hidden">
           Schedule
         </p>
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-baseline justify-between gap-2 md:hidden">
-              <h1 className="shrink-0 whitespace-nowrap text-[clamp(1.25rem,6vw,1.5rem)] font-bold tracking-tight text-realtor-text">
-                Calendar
-              </h1>
-              <p
-                data-calendar-week-summary
-                aria-label={`${formatWeekRange(weekStart)} · ${appointmentCount} appointment${appointmentCount === 1 ? "" : "s"}`}
-                className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-right text-[clamp(11px,3vw,14px)] leading-none tracking-[-0.015em] text-realtor-muted"
-              >
-                {formatCompactWeekRange(weekStart)} · {appointmentCount} appt
-                {appointmentCount === 1 ? "" : "s"}
-              </p>
-            </div>
-            <div className="hidden flex-wrap items-center gap-2 md:flex">
-              <h1 className="text-3xl font-bold tracking-tight text-realtor-text">
-                {formatWeekRange(weekStart)}
-              </h1>
-              {isCurrentWeek ? (
-                <span className="rounded-full bg-realtor-primary/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">
-                  Current week
-                </span>
-              ) : null}
-            </div>
-            <p className="mt-1 hidden text-sm text-realtor-muted md:block">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-baseline justify-between gap-2 md:hidden">
+            <h1 className="shrink-0 whitespace-nowrap text-[clamp(1.25rem,6vw,1.5rem)] font-bold tracking-tight text-realtor-text">
+              Calendar
+            </h1>
+            <p
+              data-calendar-week-summary
+              aria-label={`${formatWeekRange(weekStart)} · ${appointmentCount} appointment${appointmentCount === 1 ? "" : "s"}`}
+              className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-right text-[clamp(11px,3vw,14px)] leading-none tracking-[-0.015em] text-realtor-muted"
+            >
+              {formatCompactWeekRange(weekStart)} · {appointmentCount} appt
+              {appointmentCount === 1 ? "" : "s"}
+            </p>
+          </div>
+          <div
+            data-calendar-desktop-heading
+            className="hidden min-w-0 items-baseline gap-3 md:flex"
+          >
+            <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.2em] text-realtor-primary/75">
+              Schedule
+            </p>
+            <h1 className="min-w-0 text-2xl font-bold tracking-tight text-realtor-text">
+              {formatWeekRange(weekStart)}
+            </h1>
+            <span aria-hidden="true" className="text-realtor-muted/55">
+              ·
+            </span>
+            <p
+              data-calendar-desktop-count
+              className="whitespace-nowrap text-sm text-realtor-muted"
+            >
               {appointmentCount} appointment{appointmentCount === 1 ? "" : "s"}
             </p>
+            {isCurrentWeek ? (
+              <span className="shrink-0 rounded-full bg-realtor-primary/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">
+                Current week
+              </span>
+            ) : null}
           </div>
         </div>
       </header>
