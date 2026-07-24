@@ -41,7 +41,19 @@ test("calendar headings keep the date and appointment count in one compact row",
   assert.match(calendarPageSource, /appointmentCount} appt/);
   assert.match(
     calendarPageSource,
-    /data-calendar-desktop-heading[^>]*className="hidden min-w-0 items-baseline gap-3 md:flex"/,
+    /max-w-full space-y-4 px-0\.5 md:space-y-2/,
+  );
+  assert.match(
+    calendarPageSource,
+    /data-calendar-desktop-heading[^>]*className="hidden min-w-0 items-baseline gap-2 md:flex"/,
+  );
+  assert.match(
+    calendarPageSource,
+    /className="whitespace-nowrap lg:hidden"[\s\S]{0,100}formatCompactWeekRange\(weekStart\)/,
+  );
+  assert.match(
+    calendarPageSource,
+    /className="hidden whitespace-nowrap lg:inline"[\s\S]{0,100}formatWeekRange\(weekStart\)/,
   );
   assert.match(
     calendarPageSource,

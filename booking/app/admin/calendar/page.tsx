@@ -367,7 +367,7 @@ export default async function AdminCalendarPage({
     .length;
 
   return (
-    <div className="max-w-full space-y-3 px-0.5 md:space-y-2">
+    <div className="max-w-full space-y-4 px-0.5 md:space-y-2">
       <header className="px-1 py-1 md:py-0">
         <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-realtor-primary/75 md:hidden">
           Schedule
@@ -388,13 +388,18 @@ export default async function AdminCalendarPage({
           </div>
           <div
             data-calendar-desktop-heading
-            className="hidden min-w-0 items-baseline gap-3 md:flex"
+            className="hidden min-w-0 items-baseline gap-2 md:flex"
           >
             <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.2em] text-realtor-primary/75">
               Schedule
             </p>
             <h1 className="min-w-0 text-2xl font-bold tracking-tight text-realtor-text">
-              {formatWeekRange(weekStart)}
+              <span className="whitespace-nowrap lg:hidden">
+                {formatCompactWeekRange(weekStart)}
+              </span>
+              <span className="hidden whitespace-nowrap lg:inline">
+                {formatWeekRange(weekStart)}
+              </span>
             </h1>
             <span aria-hidden="true" className="text-realtor-muted/55">
               ·
