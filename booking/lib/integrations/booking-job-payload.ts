@@ -44,6 +44,7 @@ export interface BookingIntegrationPayload {
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const LEGACY_DEFAULT_ORGANIZATION_ID = "00000000-0000-0000-0000-000000000001";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RFC3339_RE = /^([1-9]\d{3})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T([01]\d|2[0-3]):([0-5]\d):([0-5]\d)(?:\.\d+)?(?:Z|[+-](?:(?:0\d|1[0-3]):[0-5]\d|14:00))$/;
 const APP_PATH_RE = String.raw`(?:[/?#][^\s<>"']*)?`;
@@ -63,7 +64,7 @@ export function parseBookingIntegrationPayload(
   if (!isRecord(value) || value.schema_version !== 1) return null;
   if (
     !uuid(value.booking_id) ||
-    !uuid(value.organization_id) ||
+    !organizationId(value.organization_id) ||
     !uuid(value.public_request_id) ||
     typeof value.app_url !== "string" ||
     !safeAppUrl(value.app_url) ||
@@ -129,6 +130,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function uuid(value: unknown): value is string {
   return typeof value === "string" && UUID_RE.test(value);
+}
+
+function organizationId(value: unknown): value is string {
+  return value === LEGACY_DEFAULT_ORGANIZATION_ID || uuid(value);
 }
 
 function email(value: unknown): value is string {

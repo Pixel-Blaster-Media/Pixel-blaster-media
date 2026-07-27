@@ -64,6 +64,14 @@ test("accepts a complete semantically valid booking integration payload", () => 
   );
 });
 
+test("accepts the production legacy default organization id", () => {
+  const payload = changed((p) => {
+    p.organization_id = "00000000-0000-0000-0000-000000000001";
+  });
+
+  assert.deepEqual(parseBookingIntegrationPayload(payload), payload);
+});
+
 test("rejects malformed durable booking payloads before provider consumption", () => {
   const invalid = [
     changed((p) => { delete p.booking_id; }),
