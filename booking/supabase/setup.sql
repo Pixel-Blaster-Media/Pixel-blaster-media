@@ -6799,7 +6799,7 @@ comment on column public.bookings.suppress_realtor_notifications is
 -- ============================================================================
 
 -- ============================================================================
--- Begin supabase/migrations/20260810171515_aerial_addon_catalog_rules.sql
+-- Begin supabase/migrations/20260810173824_aerial_addon_catalog_rules.sql
 -- ============================================================================
 
 alter table public.catalog_items
@@ -7023,5 +7023,5 @@ comment on function public.create_public_booking_with_jobs(
   'Validates tenant catalog and add-on capability rules before delegating to the atomic booking and integration-outbox transaction.';
 
 -- ============================================================================
--- End supabase/migrations/20260810171515_aerial_addon_catalog_rules.sql
+-- End supabase/migrations/20260810173824_aerial_addon_catalog_rules.sql
 -- ============================================================================
