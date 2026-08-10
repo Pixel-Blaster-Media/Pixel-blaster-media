@@ -4,6 +4,12 @@ import { BUSINESS_TZ } from "@/lib/booking/availability";
 import { createManageToken } from "@/lib/booking/manage-token";
 import { ccRecipientsFor } from "@/lib/email/recipients";
 import { sendEmail, type SendEmailResult } from "@/lib/email/resend";
+import {
+  bookingGoogleCalendarLink,
+  bookingIcsCalendarLink,
+  newBookingStaffEmail,
+  shootConfirmedEmail,
+} from "@/lib/email/templates";
 import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
 import {
   parseRealtorNotificationPolicy,
@@ -331,10 +337,12 @@ async function dispatchCustomerEmail(
   }
   const startAt = new Date(payload.booking.scheduled_at);
   const endAt = new Date(payload.booking.scheduled_ends_at);
-  const services = labels(payload, false);
-  const addons = labels(payload, true);
+  const services = itemNames(payload, false);
+  const addons = itemNames(payload, true);
   const street = propertyStreet(payload);
-  const when = formatWhen(startAt);
+  const fullAddress = [street, payload.property.city, payload.property.postal_code]
+    .filter(Boolean)
+    .join(", ");
   const invoiceResult = claim.dependencyResult;
   const invoiceUrl = safeHttpUrl(
     invoiceResult && typeof invoiceResult === "object" && !Array.isArray(invoiceResult) &&
@@ -342,18 +350,48 @@ async function dispatchCustomerEmail(
       ? invoiceResult.invoice_url
       : null,
   );
+  const appUrl = safeHttpUrl(payload.app_url);
   let manageUrl: string | null = null;
-  try {
-    manageUrl = `${payload.app_url}/book/manage/${createManageToken(payload.booking_id)}`;
-  } catch {
-    console.warn("[integration-dispatch] manage token unavailable");
+  if (appUrl) {
+    try {
+      manageUrl = new URL(
+        `/book/manage/${createManageToken(payload.booking_id)}`,
+        appUrl,
+      ).toString();
+    } catch {
+      console.warn("[integration-dispatch] manage token unavailable");
+    }
   }
-  const calendarLink = googleCalendarTemplateUrl({
+  const calendarLink = bookingGoogleCalendarLink({
     title: `${payload.organization.name} — media shoot`,
     start: startAt,
     end: endAt,
-    location: [street, payload.property.city, payload.property.postal_code].filter(Boolean).join(", "),
-    details: `Services: ${services}${addons ? `\nAdd-ons: ${addons}` : ""}`,
+    location: fullAddress,
+    details: `Services: ${services.join(", ")}${addons.length ? `\nAdd-ons: ${addons.join(", ")}` : ""}`,
+  });
+  const calendarDownloadLink = appUrl
+    ? bookingIcsCalendarLink(appUrl, {
+        start: startAt,
+        end: endAt,
+        address: fullAddress,
+        services: [...services, ...addons].join(", "),
+        organizationName: payload.organization.name,
+      })
+    : null;
+  const email = shootConfirmedEmail({
+    contactName: payload.realtor.full_name,
+    streetAddress: street,
+    city: payload.property.city,
+    scheduledAt: payload.booking.scheduled_at,
+    scheduledEndsAt: payload.booking.scheduled_ends_at,
+    services,
+    addOns: addons,
+    portalLink: appUrl ? new URL("/portal", appUrl).toString() : "",
+    manageLink: manageUrl,
+    googleCalendarLink: calendarLink,
+    calendarDownloadLink,
+    invoiceLink: invoiceUrl,
+    companyName: payload.organization.name,
   });
   const cc = ccRecipientsFor(payload.realtor.email, payload.realtor.delivery_cc_emails);
   return dispatchEmailMutation({
@@ -364,24 +402,12 @@ async function dispatchCustomerEmail(
     mutation: sendEmail({
       to: payload.realtor.email,
       ...(cc.length > 0 ? { cc } : {}),
-      subject: `Booking confirmed — ${street}`,
+      subject: email.subject,
       organizationId: payload.organization_id,
       fromName: payload.organization.from_name,
       replyTo: payload.organization.reply_to_email,
       idempotencyKey: claim.idempotencyKey,
-      html: `
-        <p>Hi ${escapeHtml(payload.realtor.full_name)},</p>
-        <p>Your shoot is booked and on our calendar.</p>
-        <p><strong>Address:</strong> ${escapeHtml(street)}<br>
-        <strong>When:</strong> ${escapeHtml(when)}<br>
-        <strong>Services:</strong> ${escapeHtml(services)}<br>
-        ${addons ? `<strong>Add-ons:</strong> ${escapeHtml(addons)}<br>` : ""}</p>
-        <p><a href="${calendarLink}">Add this shoot to your Google Calendar</a></p>
-        ${manageUrl ? `<p>Need to reschedule or cancel? <a href="${manageUrl}">Manage this booking</a>.</p>` : ""}
-        ${invoiceUrl ? `<p><strong>Billing:</strong> Your invoice is ready — <a href="${invoiceUrl}">pay your invoice online</a>.</p>` : ""}
-        <p>View and manage this booking at <a href="${payload.app_url}/portal">${payload.app_url || "your client portal"}</a>.
-        Sign in with ${escapeHtml(payload.realtor.email)}.</p>
-        <p>— ${escapeHtml(payload.organization.name)}</p>`,
+      html: email.html,
     }),
     skippedReason: "not_configured",
     failureMessage: "Customer confirmation email was not accepted",
@@ -413,20 +439,39 @@ async function dispatchAdminEmail(
   const payload = claim.payload;
   const recipient = payload.organization.admin_notification_email;
   const street = propertyStreet(payload);
+  const appUrl = safeHttpUrl(payload.app_url);
+  const fullAddress = [street, payload.property.city, payload.property.postal_code]
+    .filter(Boolean)
+    .join(", ");
+  const email = newBookingStaffEmail({
+    realtorName: payload.realtor.full_name,
+    realtorEmail: payload.realtor.email,
+    realtorPhone: payload.realtor.phone,
+    brokerage: payload.realtor.brokerage,
+    streetAddress: street,
+    city: payload.property.city,
+    scheduledAt: payload.booking.scheduled_at,
+    services: itemNames(payload, false),
+    addOns: itemNames(payload, true),
+    notes: payload.booking.client_notes,
+    squareFootage: payload.booking.square_footage,
+    occupancy: payload.booking.is_vacant,
+    includeBasement: payload.booking.include_basement,
+    bookingLink: appUrl
+      ? new URL(`/admin/bookings/${payload.booking_id}`, appUrl).toString()
+      : null,
+    calendarLink: appUrl ? new URL("/admin/calendar", appUrl).toString() : null,
+    directionsLink: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`,
+    companyName: payload.organization.name,
+  });
   const mutation: Promise<SendEmailResult> = recipient
     ? sendEmail({
         to: recipient,
-        subject: `New booking — ${street}`,
+        subject: email.subject,
         organizationId: payload.organization_id,
         fromName: payload.organization.from_name,
         idempotencyKey: claim.idempotencyKey,
-        html: `<p><strong>${escapeHtml(payload.realtor.full_name)}</strong> just booked a shoot.</p>
-          <p><strong>Address:</strong> ${escapeHtml(street)}<br>
-          <strong>When:</strong> ${escapeHtml(formatWhen(new Date(payload.booking.scheduled_at)))}<br>
-          <strong>Services:</strong> ${escapeHtml(labels(payload, false))}<br>
-          ${labels(payload, true) ? `<strong>Add-ons:</strong> ${escapeHtml(labels(payload, true))}<br>` : ""}
-          ${payload.booking.client_notes ? `<strong>Notes:</strong> ${escapeHtml(payload.booking.client_notes)}<br>` : ""}</p>
-          <p>Open in admin: ${payload.app_url}/admin/bookings/${payload.booking_id}</p>`,
+        html: email.html,
         replyTo: payload.realtor.email,
       })
     : Promise.resolve({ ok: true, skipped: true });
@@ -578,10 +623,16 @@ async function settle({
 }
 
 function labels(payload: ClaimedIntegrationJob["payload"], addons: boolean): string {
+  return itemNames(payload, addons).join(", ");
+}
+
+function itemNames(
+  payload: ClaimedIntegrationJob["payload"],
+  addons: boolean,
+): string[] {
   return payload.line_items
     .filter((item) => addons ? item.kind === "addon" : item.kind !== "addon")
-    .map((item) => item.name)
-    .join(", ");
+    .map((item) => item.name);
 }
 
 function propertyStreet(payload: ClaimedIntegrationJob["payload"]): string {
@@ -596,33 +647,6 @@ function formatWhen(value: Date): string {
     dateStyle: "full",
     timeStyle: "short",
   }).format(value);
-}
-
-function googleCalendarTemplateUrl(args: {
-  title: string;
-  start: Date;
-  end: Date;
-  location: string;
-  details: string;
-}): string {
-  const format = (date: Date) => date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-  const params = new URLSearchParams({
-    action: "TEMPLATE",
-    text: args.title,
-    dates: `${format(args.start)}/${format(args.end)}`,
-    location: args.location,
-    details: args.details,
-  });
-  return `https://calendar.google.com/calendar/render?${params.toString()}`;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }
 
 function safeHttpUrl(value: string | null): string | null {

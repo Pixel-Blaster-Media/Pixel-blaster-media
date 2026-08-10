@@ -17,6 +17,7 @@ import {
   isSlotAvailable,
 } from "@/lib/booking/availability";
 import { getActiveCatalog } from "@/lib/booking/catalog";
+import { isAddonEligible } from "@/lib/booking/catalog-rules";
 import { createManageToken } from "@/lib/booking/manage-token";
 import { getAdminNotificationEmail } from "@/lib/email/settings";
 import { dispatchBookingIntegrationJobs } from "@/lib/integrations/dispatcher";
@@ -34,8 +35,13 @@ type BookingCatalogItem = Pick<
   | "name"
   | "kind"
   | "duration_minutes"
+  | "is_photo"
   | "is_video"
+  | "is_iguide"
+  | "is_aerial"
   | "require_has_video"
+  | "require_has_media"
+  | "exclude_has_aerial"
 >;
 
 interface ExistingRequestRow {
@@ -232,8 +238,13 @@ export async function createPublicBooking(
         name: item.item_name,
         kind: item.item_kind,
         duration_minutes: item.unit_duration_minutes,
+        is_photo: false,
         is_video: false,
+        is_iguide: false,
+        is_aerial: false,
         require_has_video: false,
+        require_has_media: false,
+        exclude_has_aerial: false,
       };
     };
     validServices = serviceSlugs.map(toCatalogItem);
@@ -259,11 +270,10 @@ export async function createPublicBooking(
       validServices.push(item);
     }
 
-    const hasVideo = validServices.some((item) => item.is_video);
     for (const slug of addOnSlugs) {
       const item = bySlug.get(slug);
       if (!item || item.kind !== "addon") continue;
-      if (item.require_has_video && !hasVideo) continue;
+      if (!isAddonEligible(item, validServices)) continue;
       validAddons.push(item);
     }
   }

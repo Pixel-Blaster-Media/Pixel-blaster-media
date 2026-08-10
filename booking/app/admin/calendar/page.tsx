@@ -37,6 +37,8 @@ interface BookingRow {
   scheduled_at: string;
   scheduled_ends_at: string | null;
   google_calendar_event_id: string | null;
+  quickbooks_invoice_id: string | null;
+  suppress_realtor_notifications: boolean;
   services: string[];
   add_ons: string[];
   square_footage: number | null;
@@ -104,6 +106,9 @@ interface CalendarItem {
     squareFootage: number | null;
     occupancy: string | null;
     includeBasement: boolean | null;
+    selectedCatalogItemIds: string[];
+    hasInvoice: boolean;
+    realtorNotificationsSuppressed: boolean;
   };
 }
 
@@ -116,13 +121,24 @@ type DisplayGoogleEvent = GoogleCalendarEvent & {
 
 interface CatalogItemOption {
   id: string;
+  slug: string;
   kind: "bundle" | "a_la_carte" | "addon";
   name: string;
   description: string;
   durationMinutes: number;
   priceCents: number;
   badge: string | null;
+  isPhoto: boolean;
+  isVideo: boolean;
+  isIGuide: boolean;
+  isAerial: boolean;
   requireHasVideo: boolean;
+  requireHasMedia: boolean;
+  excludeHasAerial: boolean;
+  sqftPricingEnabled: boolean;
+  includedSqft: number | null;
+  overageIncrementSqft: number | null;
+  overagePriceCents: number | null;
 }
 
 export default async function AdminCalendarPage({
@@ -148,7 +164,7 @@ export default async function AdminCalendarPage({
     supabase
       .from("bookings")
       .select(
-        "id, status, scheduled_at, scheduled_ends_at, google_calendar_event_id, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, internal_notes, properties(street_address, city, province, postal_code, notes), profiles(full_name, email, phone, brokerage, internal_notes)",
+        "id, status, scheduled_at, scheduled_ends_at, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, internal_notes, properties(street_address, city, province, postal_code, notes), profiles(full_name, email, phone, brokerage, internal_notes)",
       )
       .eq("organization_id", admin.organizationId)
       .not("scheduled_at", "is", null)
@@ -197,6 +213,12 @@ export default async function AdminCalendarPage({
       .map((event) => [event.id, event]),
   );
   const bookingGoogleEventIds = new Set<string>();
+  const catalogItemIdsBySlug = new Map(
+    [...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map((item) => [
+      item.slug,
+      item.id,
+    ]),
+  );
 
   const hoursByDow = new Map(
     (hoursRes.data ?? []).map((row) => [row.day_of_week, row]),
@@ -310,6 +332,12 @@ export default async function AdminCalendarPage({
         squareFootage: booking.square_footage,
         occupancy,
         includeBasement: booking.include_basement,
+        selectedCatalogItemIds: [...booking.services, ...booking.add_ons]
+          .map((slug) => catalogItemIdsBySlug.get(slug))
+          .filter((id): id is string => Boolean(id)),
+        hasInvoice: Boolean(booking.quickbooks_invoice_id),
+        realtorNotificationsSuppressed:
+          booking.suppress_realtor_notifications,
       },
     });
   }
@@ -684,13 +712,24 @@ function catalogToOptions(
   return [...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(
     (item) => ({
       id: item.id,
+      slug: item.slug,
       kind: item.kind,
       name: item.name,
       description: item.description,
       durationMinutes: item.duration_minutes,
       priceCents: item.price_cents,
       badge: item.badge,
+      isPhoto: item.is_photo,
+      isVideo: item.is_video,
+      isIGuide: item.is_iguide,
+      isAerial: item.is_aerial,
       requireHasVideo: item.require_has_video,
+      requireHasMedia: item.require_has_media,
+      excludeHasAerial: item.exclude_has_aerial,
+      sqftPricingEnabled: item.sqft_pricing_enabled,
+      includedSqft: item.included_sqft,
+      overageIncrementSqft: item.overage_increment_sqft,
+      overagePriceCents: item.overage_price_cents,
     }),
   );
 }

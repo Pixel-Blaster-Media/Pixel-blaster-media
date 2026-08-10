@@ -232,6 +232,7 @@ export default async function BookStep4Page({
           (item) => ({
             slug: item.slug,
             name: item.name,
+            kind: item.kind,
             price_cents: item.price_cents,
             duration_minutes: item.duration_minutes,
             require_has_video: item.require_has_video,

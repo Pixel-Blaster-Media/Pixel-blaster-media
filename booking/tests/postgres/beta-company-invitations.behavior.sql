@@ -17,7 +17,9 @@ declare
   lifecycle_blocked boolean := false;
 begin
   insert into public.organizations (id, name, slug)
-  values (platform_org, 'Pixel Blaster Media', 'pixel-blaster-media');
+  values (platform_org, 'Pixel Blaster Media', 'pixel-blaster-media')
+  on conflict (id) do update
+  set name = excluded.name, slug = excluded.slug;
   insert into public.profiles (id, organization_id, role, email, full_name)
   values (actor_id, platform_org, 'admin', 'platform@example.com', 'Platform Owner');
   insert into public.organization_members (organization_id, profile_id, role)

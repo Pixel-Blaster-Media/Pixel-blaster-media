@@ -11,10 +11,14 @@ export interface CatalogItemDTO {
   overage_increment_sqft: number | null;
   overage_price_cents: number | null;
   kind: "bundle" | "a_la_carte" | "addon";
-  is_video: boolean;
-  require_has_video: boolean;
-  display_order: number;
   is_photo: boolean;
+  is_video: boolean;
+  is_iguide: boolean;
+  is_aerial: boolean;
+  require_has_video: boolean;
+  require_has_media: boolean;
+  exclude_has_aerial: boolean;
+  display_order: number;
   badge: string | null;
   highlight: boolean;
   ideal_for: string | null;

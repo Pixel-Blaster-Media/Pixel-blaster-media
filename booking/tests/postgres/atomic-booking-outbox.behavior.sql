@@ -21,7 +21,66 @@ insert into public.catalog_items (
   ('10000000-0000-4000-8000-000000000003', '11111111-1111-4111-8111-111111111111', 'reel', 'Reel', 'addon', true, false, true, 30, 5000, false, null, null, null),
   ('20000000-0000-4000-8000-000000000001', '22222222-2222-4222-8222-222222222222', 'other', 'Other', 'a_la_carte', true, false, false, 60, 10000, false, null, null, null);
 
+update public.catalog_items
+set is_photo = true
+where id = '10000000-0000-4000-8000-000000000001';
+
+insert into public.catalog_items (
+  id, organization_id, slug, name, kind, active, is_aerial,
+  require_has_media, exclude_has_aerial, duration_minutes, price_cents
+) values
+  ('10000000-0000-4000-8000-000000000004', '11111111-1111-4111-8111-111111111111', 'aerial_package', 'Aerial Package', 'a_la_carte', true, true, false, false, 60, 20000),
+  ('10000000-0000-4000-8000-000000000005', '11111111-1111-4111-8111-111111111111', 'aerial_add_on', 'Aerial Add-on', 'addon', true, true, true, true, 30, 10000),
+  ('10000000-0000-4000-8000-000000000006', '11111111-1111-4111-8111-111111111111', 'measure_only', 'Measure Only', 'a_la_carte', true, false, false, false, 30, 5000);
+
 set local role service_role;
+
+do $$
+declare
+  eligible_result jsonb;
+begin
+  eligible_result := public.create_public_booking_with_jobs(
+    '90000000-0000-4000-8000-000000000021',
+    '11111111-1111-4111-8111-111111111111',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    '21 Aerial Street', 'Toronto', 'M2M 2M2', '',
+    pg_catalog.now() + interval '121 days', 1800, 'vacant', true, '',
+    array['10000000-0000-4000-8000-000000000001']::uuid[],
+    array['10000000-0000-4000-8000-000000000005']::uuid[]
+  );
+  if eligible_result->>'booking_id' is null then
+    raise exception 'eligible aerial add-on booking was not created';
+  end if;
+
+  begin
+    perform public.create_public_booking_with_jobs(
+      '90000000-0000-4000-8000-000000000022',
+      '11111111-1111-4111-8111-111111111111',
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      '22 Aerial Street', 'Toronto', 'M2M 2M2', '',
+      pg_catalog.now() + interval '122 days', 1800, 'vacant', true, '',
+      array['10000000-0000-4000-8000-000000000006']::uuid[],
+      array['10000000-0000-4000-8000-000000000005']::uuid[]
+    );
+    raise exception 'aerial add-on without media was accepted';
+  exception when sqlstate 'PB002' then null;
+  end;
+
+  begin
+    perform public.create_public_booking_with_jobs(
+      '90000000-0000-4000-8000-000000000023',
+      '11111111-1111-4111-8111-111111111111',
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      '23 Aerial Street', 'Toronto', 'M2M 2M2', '',
+      pg_catalog.now() + interval '123 days', 1800, 'vacant', true, '',
+      array['10000000-0000-4000-8000-000000000004']::uuid[],
+      array['10000000-0000-4000-8000-000000000005']::uuid[]
+    );
+    raise exception 'duplicate aerial coverage was accepted';
+  exception when sqlstate 'PB002' then null;
+  end;
+end;
+$$;
 
 do $$
 declare

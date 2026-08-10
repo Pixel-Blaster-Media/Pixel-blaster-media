@@ -204,7 +204,7 @@ test("inline and scheduled integration attempts share the durable dispatcher", (
   assert.match(dispatcherSource, /payload\.organization\.admin_notification_email/);
   assert.match(dispatcherSource, /sendPushBestEffort\(payload\.organization_id/);
   assert.match(dispatcherSource, /claim\.dependencyResult[\s\S]*invoiceUrl/);
-  assert.match(dispatcherSource, /invoiceUrl[\s\S]*pay your invoice online/);
+  assert.match(dispatcherSource, /invoiceLink:\s*invoiceUrl/);
   assert.match(dispatcherSource, /finishIntegrationJob\(/);
   assert.match(dispatcherSource, /outcome:\s*"settlement_failed"/);
 

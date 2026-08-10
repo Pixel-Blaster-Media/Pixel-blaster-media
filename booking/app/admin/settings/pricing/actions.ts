@@ -107,8 +107,14 @@ export async function createCatalogItem(
     active: formData.get("active") !== null ? formData.get("active") === "on" : true,
     is_photo: kind !== "addon" && formData.get("is_photo") === "on",
     is_video: kind !== "addon" && formData.get("is_video") === "on",
+    is_iguide: kind !== "addon" && formData.get("is_iguide") === "on",
+    is_aerial: formData.get("is_aerial") === "on",
     require_has_video:
       kind === "addon" && formData.get("require_has_video") === "on",
+    require_has_media:
+      kind === "addon" && formData.get("require_has_media") === "on",
+    exclude_has_aerial:
+      kind === "addon" && formData.get("exclude_has_aerial") === "on",
   };
 
   const supabase = getServiceSupabase();
@@ -171,8 +177,14 @@ export async function updateCatalogItem(
     active: formData.get("active") === "on",
     is_photo: kind !== "addon" && formData.get("is_photo") === "on",
     is_video: kind !== "addon" && formData.get("is_video") === "on",
+    is_iguide: kind !== "addon" && formData.get("is_iguide") === "on",
+    is_aerial: formData.get("is_aerial") === "on",
     require_has_video:
       kind === "addon" && formData.get("require_has_video") === "on",
+    require_has_media:
+      kind === "addon" && formData.get("require_has_media") === "on",
+    exclude_has_aerial:
+      kind === "addon" && formData.get("exclude_has_aerial") === "on",
   };
 
   const supabase = getServiceSupabase();

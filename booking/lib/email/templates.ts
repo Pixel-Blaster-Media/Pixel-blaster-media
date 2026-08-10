@@ -1,5 +1,6 @@
 import "server-only";
 
+import { BUSINESS_TZ } from "@/lib/booking/availability";
 import { labelForService } from "@/lib/booking/services";
 
 import type { DeliveryLinkCategory } from "@/lib/booking/delivery-links";
@@ -19,6 +20,44 @@ const baseStyles = `
   .meta { color:#8a979c; font-size:12px; margin-top:24px; border-top:1px solid rgba(255,255,255,0.08); padding-top:16px; }
 `;
 
+export function bookingGoogleCalendarLink(args: {
+  title: string;
+  start: Date;
+  end: Date;
+  location: string;
+  details: string;
+}): string {
+  const format = (date: Date) =>
+    date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: args.title,
+    dates: `${format(args.start)}/${format(args.end)}`,
+    location: args.location,
+    details: args.details,
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+export function bookingIcsCalendarLink(
+  appUrl: string,
+  args: {
+    start: Date;
+    end: Date;
+    address: string;
+    services: string;
+    organizationName: string;
+  },
+): string {
+  const url = new URL("/book/success/ics", appUrl);
+  url.searchParams.set("start", args.start.toISOString());
+  url.searchParams.set("end", args.end.toISOString());
+  url.searchParams.set("address", args.address);
+  url.searchParams.set("services", args.services);
+  url.searchParams.set("org", args.organizationName);
+  return url.toString();
+}
+
 /**
  * Sent to the realtor when an admin accepts their booking request.
  *
@@ -30,74 +69,196 @@ const baseStyles = `
 export function shootConfirmedEmail({
   contactName,
   streetAddress,
+  city,
   scheduledAt,
+  scheduledEndsAt,
   services,
+  addOns = [],
   portalLink,
+  manageLink,
+  googleCalendarLink,
+  calendarDownloadLink,
+  invoiceLink,
   companyName = "Pixel Blaster Media",
 }: {
   contactName: string;
   streetAddress: string;
+  city?: string | null;
   scheduledAt: string | null;
+  scheduledEndsAt?: string | null;
   services: string[];
+  addOns?: string[];
   portalLink: string;
+  manageLink?: string | null;
+  googleCalendarLink?: string | null;
+  calendarDownloadLink?: string | null;
+  invoiceLink?: string | null;
   companyName?: string;
 }) {
   const firstName = contactName.split(" ")[0] || contactName;
   const when = scheduledAt
     ? new Date(scheduledAt).toLocaleString(undefined, {
-        dateStyle: "full",
-        timeStyle: "short",
+      dateStyle: "full",
+      timeStyle: "short",
+      timeZone: BUSINESS_TZ,
       })
     : null;
-  const serviceList = services.length
-    ? services.map(labelForService).join(", ")
-    : "—";
+  const endTime = scheduledEndsAt
+    ? new Date(scheduledEndsAt).toLocaleTimeString(undefined, {
+        hour: "numeric",
+        minute: "2-digit",
+        timeZone: BUSINESS_TZ,
+      })
+    : null;
+  const serviceList = services.length ? services.map(labelForService) : ["—"];
+  const addOnList = addOns.map(labelForService);
+  const address = [streetAddress, city].filter(Boolean).join(", ");
+  const secondaryActions = [
+    googleCalendarLink
+      ? { label: "Add to Google Calendar", url: googleCalendarLink }
+      : null,
+    calendarDownloadLink
+      ? { label: "Add to iCal / Outlook", url: calendarDownloadLink }
+      : null,
+    portalLink ? { label: "Open client portal", url: portalLink } : null,
+  ].filter((action): action is { label: string; url: string } => Boolean(action));
 
   const html = `
     <!doctype html>
-    <html><head><meta charset="utf-8"><style>${baseStyles}
-      .cta {
-        display: inline-block;
-        padding: 12px 20px;
-        margin: 20px 0;
-        background: ${BRAND_TEAL};
-        color: #fff !important;
-        text-decoration: none;
-        border-radius: 6px;
-        font-weight: 600;
-      }
-      .fallback {
-        word-break: break-all;
-        color: #8a979c;
-        font-size: 12px;
-      }
+    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>
+      body { background:#f3f5f6; color:#25292b; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; margin:0; padding:0; }
+      .wrap { max-width:620px; margin:0 auto; padding:28px 14px; }
+      .card { background:#fff; border:1px solid #dde2e4; border-radius:12px; overflow:hidden; }
+      .header { padding:30px 28px 20px; text-align:center; }
+      .eyebrow { color:#758084; font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+      h1 { color:#202426; font-size:28px; line-height:1.2; margin:8px 0 6px; }
+      .intro { color:#5f686b; font-size:15px; line-height:1.55; margin:0; }
+      .summary { border-top:1px solid #e7ebec; border-bottom:1px solid #e7ebec; padding:22px 28px; }
+      .row { padding:7px 0; }
+      .label { color:#8a9295; display:inline-block; font-size:13px; font-weight:700; width:82px; vertical-align:top; }
+      .value { color:#292e30; display:inline-block; font-size:15px; line-height:1.45; max-width:430px; }
+      .actions { padding:24px 28px 10px; text-align:center; }
+      .primary { background:${BRAND_TEAL}; border-radius:7px; color:#fff !important; display:block; font-size:15px; font-weight:700; margin:0 auto 12px; padding:13px 18px; text-decoration:none; }
+      .secondary { background:#36383a; border-radius:7px; color:#fff !important; display:block; font-size:14px; font-weight:600; margin:0 auto 10px; padding:12px 18px; text-decoration:none; }
+      .note { color:#758084; font-size:12px; line-height:1.55; margin:8px 28px 28px; text-align:center; }
     </style></head>
-    <body><div class="wrap">
-      <p><span class="pill">Booking confirmed</span></p>
-      <h1>You're all set, ${escape(firstName)}.</h1>
-      <p>Your shoot at <strong>${escape(streetAddress)}</strong> is confirmed${
-        when ? ` for <strong>${escape(when)}</strong>` : ""
-      }.</p>
-
-      <h2>Your new portal</h2>
-      <p>We've set up a private portal for you. As we work on your listing, your virtual tour, floor plan, and gallery will appear in one place — no more digging through emails for the right link.</p>
-
-      <p><a href="${escape(portalLink)}" class="cta">Open your portal →</a></p>
-
-      <p class="fallback">
-        If the button doesn't work, paste this link into your browser:<br>
-        ${escape(portalLink)}
-      </p>
-
-      <h2>What you booked</h2>
-      <p>${escape(serviceList)}</p>
-
-      <p class="meta">Reply to this email with anything you'd like to add or change. We'll be in touch as the shoot day approaches.</p>
-    </div></body></html>
+    <body><div class="wrap"><div class="card">
+      <div class="header">
+        <div class="eyebrow">Appointment scheduled</div>
+        <h1>You're all set, ${escape(firstName)}.</h1>
+        <p class="intro">Your ${escape(companyName)} media shoot is confirmed.</p>
+      </div>
+      <div class="summary">
+        <div class="row"><span class="label">What</span><span class="value">${serviceList.map(escape).join(", ")}${addOnList.length ? `<br><span style="color:#667175">Add-ons: ${addOnList.map(escape).join(", ")}</span>` : ""}</span></div>
+        <div class="row"><span class="label">When</span><span class="value">${escape(when ?? "Time to be confirmed")}${endTime ? ` – ${escape(endTime)}` : ""}</span></div>
+        <div class="row"><span class="label">Where</span><span class="value">${escape(address)}</span></div>
+      </div>
+      <div class="actions">
+        ${manageLink ? `<a href="${escape(manageLink)}" class="primary">Change or cancel booking</a>` : ""}
+        ${secondaryActions.map((action) => `<a href="${escape(action.url)}" class="secondary">${escape(action.label)}</a>`).join("")}
+        ${invoiceLink ? `<a href="${escape(invoiceLink)}" class="secondary">View or pay invoice</a>` : ""}
+      </div>
+      <p class="note">Reply to this email if you would like to add something to the package or if any property details change.</p>
+    </div></div></body></html>
   `;
 
   return {
     subject: `Your ${companyName} shoot is confirmed — ${streetAddress}`,
+    html,
+  };
+}
+
+export function newBookingStaffEmail({
+  realtorName,
+  realtorEmail,
+  realtorPhone,
+  brokerage,
+  streetAddress,
+  city,
+  scheduledAt,
+  services,
+  addOns,
+  notes,
+  squareFootage,
+  occupancy,
+  includeBasement,
+  bookingLink,
+  calendarLink,
+  directionsLink,
+  companyName = "Pixel Blaster Media",
+}: {
+  realtorName: string;
+  realtorEmail: string;
+  realtorPhone?: string | null;
+  brokerage?: string | null;
+  streetAddress: string;
+  city?: string | null;
+  scheduledAt: string;
+  services: string[];
+  addOns: string[];
+  notes?: string | null;
+  squareFootage?: number | null;
+  occupancy?: string | null;
+  includeBasement?: boolean | null;
+  bookingLink?: string | null;
+  calendarLink?: string | null;
+  directionsLink?: string | null;
+  companyName?: string;
+}) {
+  const when = new Date(scheduledAt).toLocaleString(undefined, {
+    dateStyle: "full",
+    timeStyle: "short",
+    timeZone: BUSINESS_TZ,
+  });
+  const address = [streetAddress, city].filter(Boolean).join(", ");
+  const propertyDetails = [
+    squareFootage ? `${squareFootage.toLocaleString()} sq ft` : null,
+    occupancy ? occupancyLabel(occupancy) : null,
+    includeBasement === null || includeBasement === undefined
+      ? null
+      : includeBasement
+        ? "Include basement"
+        : "Skip basement",
+  ].filter((value): value is string => Boolean(value));
+
+  const html = `
+    <!doctype html>
+    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>
+      body { background:#f3f5f6; color:#25292b; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; margin:0; padding:0; }
+      .wrap { max-width:620px; margin:0 auto; padding:28px 14px; }
+      .card { background:#fff; border:1px solid #dde2e4; border-radius:12px; overflow:hidden; }
+      .header { padding:26px 28px 18px; }
+      .eyebrow { color:${BRAND_TEAL}; font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+      h1 { color:#202426; font-size:25px; line-height:1.2; margin:8px 0 4px; }
+      .sub { color:#687174; font-size:14px; margin:0; }
+      .summary { border-top:1px solid #e7ebec; padding:18px 28px; }
+      .section { border-top:1px solid #e7ebec; padding:18px 28px; }
+      .label { color:#8a9295; font-size:11px; font-weight:700; letter-spacing:.07em; margin:0 0 5px; text-transform:uppercase; }
+      .value { color:#292e30; font-size:15px; line-height:1.5; margin:0 0 14px; }
+      .actions { padding:4px 28px 18px; }
+      .primary { background:${BRAND_TEAL}; border-radius:7px; color:#fff !important; display:block; font-size:15px; font-weight:700; margin:0 0 10px; padding:13px 18px; text-align:center; text-decoration:none; }
+      .secondary { background:#36383a; border-radius:7px; color:#fff !important; display:block; font-size:14px; font-weight:600; margin:0 0 10px; padding:12px 18px; text-align:center; text-decoration:none; }
+      .contact a { color:#147d8a; }
+    </style></head>
+    <body><div class="wrap"><div class="card">
+      <div class="header"><div class="eyebrow">New booking</div><h1>${escape(address)}</h1><p class="sub">${escape(when)}</p></div>
+      <div class="summary">
+        <p class="label">Package</p><p class="value">${services.map(escape).join(", ") || "—"}${addOns.length ? `<br>Add-ons: ${addOns.map(escape).join(", ")}` : ""}</p>
+        ${propertyDetails.length ? `<p class="label">Property</p><p class="value">${propertyDetails.map(escape).join(" · ")}</p>` : ""}
+        ${notes ? `<p class="label">Realtor notes</p><p class="value">${escape(notes)}</p>` : ""}
+      </div>
+      <div class="section contact">
+        <p class="label">Realtor</p><p class="value"><strong>${escape(realtorName)}</strong>${brokerage ? ` · ${escape(brokerage)}` : ""}<br><a href="mailto:${escape(realtorEmail)}">${escape(realtorEmail)}</a>${realtorPhone ? ` · <a href="tel:${escape(realtorPhone)}">${escape(realtorPhone)}</a>` : ""}</p>
+      </div>
+      <div class="actions">
+        ${bookingLink ? `<a href="${escape(bookingLink)}" class="primary">Open booking</a>` : ""}
+        ${directionsLink ? `<a href="${escape(directionsLink)}" class="secondary">Get directions</a>` : ""}
+        ${calendarLink ? `<a href="${escape(calendarLink)}" class="secondary">Open booking calendar</a>` : ""}
+      </div>
+    </div></div></body></html>`;
+
+  return {
+    subject: `New booking — ${streetAddress} — ${companyName}`,
     html,
   };
 }
@@ -310,6 +471,13 @@ function renderDeliveryLinkGroups(
       return `<div class="link-card"><h2>${escape(titles[category])}</h2><ul>${items}</ul></div>`;
     })
     .join("");
+}
+
+function occupancyLabel(value: string): string {
+  if (value === "vacant") return "Vacant";
+  if (value === "partial") return "Partially occupied";
+  if (value === "occupied") return "Occupied";
+  return value;
 }
 
 function escape(s: string): string {

@@ -7,6 +7,7 @@ import type { WizardState } from "@/lib/booking/wizard-state";
 interface CatalogLite {
   slug: string;
   name: string;
+  kind: "bundle" | "a_la_carte" | "addon";
   price_cents: number;
   duration_minutes: number;
   require_has_video: boolean;
@@ -37,7 +38,8 @@ export default function ConfirmUpsellPanel({
     "social_media_plus",
     "ultimate",
   ]);
-  const hasDrone = hasAny(state.services, [
+  const hasDrone = hasAny([...state.services, ...state.addOns], [
+    "aerial_add_on",
     "aerial_photography",
     "social_media_special",
     "social_media_plus",
@@ -58,6 +60,7 @@ export default function ConfirmUpsellPanel({
     title: string;
     reason: string;
     priority: number;
+    kind?: "service" | "addon";
   }> = [];
 
   if (!hasPhoto && bySlug.has("residential_photography")) {
@@ -84,14 +87,19 @@ export default function ConfirmUpsellPanel({
     });
   }
 
-  if ((hasPhoto || hasIGuide) && !hasDrone && bySlug.has("aerial_photography")) {
+  if (
+    (hasPhoto || hasIGuide || hasVideo) &&
+    !hasDrone &&
+    bySlug.has("aerial_add_on")
+  ) {
     if (!propertySignals.isCondoLike) {
       upgrades.push({
-        slug: "aerial_photography",
+        slug: "aerial_add_on",
         eyebrow: propertySignals.droneStrong ? "Strong fit" : "Exterior context",
         title: "Add drone photos",
         reason: propertySignals.droneReason,
         priority: propertySignals.droneStrong ? 100 : 70,
+        kind: "addon",
       });
     }
   }
@@ -109,16 +117,25 @@ export default function ConfirmUpsellPanel({
   }
 
   const visible = upgrades
-    .filter((u) => !state.services.includes(u.slug))
+    .filter((u) =>
+      u.kind === "addon"
+        ? !state.addOns.includes(u.slug)
+        : !state.services.includes(u.slug),
+    )
     .sort((a, b) => b.priority - a.priority)
     .slice(0, 3);
 
   if (visible.length === 0) return null;
 
-  function addService(slug: string) {
+  function addUpgrade(slug: string, kind: "service" | "addon" = "service") {
     const next = new URLSearchParams(params.toString());
-    const services = [...state.services, slug].filter(unique);
-    next.set("services", services.join(","));
+    if (kind === "addon") {
+      const addOns = [...state.addOns, slug].filter(unique);
+      next.set("add_ons", addOns.join(","));
+    } else {
+      const services = [...state.services, slug].filter(unique);
+      next.set("services", services.join(","));
+    }
     router.replace(`/book/confirm?${next.toString()}`, { scroll: false });
   }
 
@@ -151,7 +168,7 @@ export default function ConfirmUpsellPanel({
             <button
               key={upgrade.slug}
               type="button"
-              onClick={() => addService(upgrade.slug)}
+              onClick={() => addUpgrade(upgrade.slug, upgrade.kind)}
               className="realtor-service-tile rounded-2xl border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 hover:bg-realtor-surface"
             >
               <span className="text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">

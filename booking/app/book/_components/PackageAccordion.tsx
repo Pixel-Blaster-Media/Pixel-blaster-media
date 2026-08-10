@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import type { CatalogItemDTO } from "@/lib/booking/catalog-dto";
+import { isAddonEligible } from "@/lib/booking/catalog-rules";
 import BookingTotalBar from "./BookingTotalBar";
 import {
   findCommonPackageLines,
@@ -13,7 +14,7 @@ import {
 
 /**
  * Step 1 picker — two collapsible sections (Bundles, A-La-Carte) plus
- * auto-revealed Add-ons when a video item is selected.
+ * auto-revealed Add-ons when the selected services satisfy their rules.
  *
  * State is URL-driven so the "Continue" button can just link to
  * /book/property with the same query params. Each toggle updates
@@ -60,9 +61,11 @@ export default function PackageAccordion({
     return m;
   }, [bundles, aLaCarte, addons]);
 
-  const hasVideo = selectedSlugs.some((s) => bySlug.get(s)?.is_video);
-  const visibleAddons = addons.filter(
-    (a) => !a.require_has_video || hasVideo,
+  const selectedServices = selectedSlugs
+    .map((slug) => bySlug.get(slug))
+    .filter((item): item is CatalogItemDTO => Boolean(item));
+  const visibleAddons = addons.filter((addon) =>
+    isAddonEligible(addon, selectedServices),
   );
   const commonPackageLines = useMemo(
     () => findCommonPackageLines(bundles.map((bundle) => bundle.description)),
@@ -72,10 +75,12 @@ export default function PackageAccordion({
   function updateUrl(nextServices: string[], nextAddons: string[]) {
     const next = new URLSearchParams(params.toString());
     // Prune addons that no longer qualify after the service change.
-    const nextHasVideo = nextServices.some((s) => bySlug.get(s)?.is_video);
+    const nextSelectedServices = nextServices
+      .map((slug) => bySlug.get(slug))
+      .filter((item): item is CatalogItemDTO => Boolean(item));
     const cleanedAddons = nextAddons.filter((s) => {
       const a = bySlug.get(s);
-      return a && (!a.require_has_video || nextHasVideo);
+      return a && isAddonEligible(a, nextSelectedServices);
     });
     if (nextServices.length) next.set("services", nextServices.join(","));
     else next.delete("services");
@@ -342,7 +347,7 @@ export default function PackageAccordion({
         </ul>
       </AccordionSection>
 
-      {/* Add-ons — auto-reveal when the cart has a video item */}
+      {/* Add-ons auto-reveal when the selected services satisfy their rules. */}
       {visibleAddons.length > 0 ? (
         <section className="realtor-warm-panel rounded-2xl p-4">
           <div>
