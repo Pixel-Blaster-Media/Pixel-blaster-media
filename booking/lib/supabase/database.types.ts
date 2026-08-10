@@ -635,7 +635,11 @@ interface CatalogItemsTable {
     display_order: number;
     is_photo: boolean;
     is_video: boolean;
+    is_iguide: boolean;
+    is_aerial: boolean;
     require_has_video: boolean;
+    require_has_media: boolean;
+    exclude_has_aerial: boolean;
     badge: string | null;
     highlight: boolean;
     ideal_for: string | null;
@@ -660,7 +664,11 @@ interface CatalogItemsTable {
     display_order?: number;
     is_photo?: boolean;
     is_video?: boolean;
+    is_iguide?: boolean;
+    is_aerial?: boolean;
     require_has_video?: boolean;
+    require_has_media?: boolean;
+    exclude_has_aerial?: boolean;
     badge?: string | null;
     highlight?: boolean;
     ideal_for?: string | null;

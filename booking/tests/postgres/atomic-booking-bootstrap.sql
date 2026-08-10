@@ -66,8 +66,12 @@ create table public.catalog_items (
   organization_id uuid not null references public.organizations(id),
   slug text not null,
   name text not null,
+  description text not null default '',
   kind text not null,
   active boolean not null default true,
+  taxable boolean not null default true,
+  display_order integer not null default 0,
+  is_photo boolean not null default false,
   is_video boolean not null default false,
   require_has_video boolean not null default false,
   duration_minutes integer not null,
@@ -75,7 +79,12 @@ create table public.catalog_items (
   sqft_pricing_enabled boolean not null default false,
   included_sqft integer,
   overage_increment_sqft integer,
-  overage_price_cents integer
+  overage_price_cents integer,
+  badge text,
+  highlight boolean not null default false,
+  ideal_for text,
+  updated_at timestamptz not null default now(),
+  unique (organization_id, slug)
 );
 create type public.booking_status as enum ('requested','confirmed','shot','editing','delivered','completed','cancelled');
 create table public.bookings (
@@ -147,3 +156,6 @@ create trigger bookings_schedule_overlap_guard
 before insert or update of organization_id, status, scheduled_at, scheduled_ends_at, allow_schedule_overlap
 on public.bookings
 for each row execute function public.guard_booking_schedule_overlap();
+
+insert into public.organizations (id, name)
+values ('00000000-0000-0000-0000-000000000001', 'Starter Company');

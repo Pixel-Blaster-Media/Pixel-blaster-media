@@ -178,15 +178,44 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
         </p>
         <div className="mt-3 flex flex-wrap gap-4 text-xs text-realtor-muted">
           {isAddon ? (
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                name="require_has_video"
-                defaultChecked={item.require_has_video}
-                className="h-4 w-4 accent-realtor-primary"
-              />
-              <span>Only show this add-on when video is selected</span>
-            </label>
+            <>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="is_aerial"
+                  defaultChecked={item.is_aerial}
+                  className="h-4 w-4 accent-realtor-primary"
+                />
+                <span>This add-on provides aerial coverage</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="require_has_video"
+                  defaultChecked={item.require_has_video}
+                  className="h-4 w-4 accent-realtor-primary"
+                />
+                <span>Only show when video is selected</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="require_has_media"
+                  defaultChecked={item.require_has_media}
+                  className="h-4 w-4 accent-realtor-primary"
+                />
+                <span>Only show with photos, iGUIDE, or video</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="exclude_has_aerial"
+                  defaultChecked={item.exclude_has_aerial}
+                  className="h-4 w-4 accent-realtor-primary"
+                />
+                <span>Hide when aerial coverage is already included</span>
+              </label>
+            </>
           ) : (
             <>
               <label className="flex items-center gap-2">
@@ -206,6 +235,24 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
                   className="h-4 w-4 accent-realtor-primary"
                 />
                 <span>Show Video label</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="is_iguide"
+                  defaultChecked={item.is_iguide}
+                  className="h-4 w-4 accent-realtor-primary"
+                />
+                <span>Includes iGUIDE</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="is_aerial"
+                  defaultChecked={item.is_aerial}
+                  className="h-4 w-4 accent-realtor-primary"
+                />
+                <span>Includes aerial coverage</span>
               </label>
             </>
           )}

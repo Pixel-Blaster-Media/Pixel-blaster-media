@@ -1,6 +1,7 @@
 "use server";
 
 import { getActiveCatalog, type CatalogItemRow } from "@/lib/booking/catalog";
+import { isAddonEligible } from "@/lib/booking/catalog-rules";
 import { getCredential } from "@/lib/integrations/credentials";
 import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
 import {
@@ -161,7 +162,14 @@ export async function recommendBookingPackage(input: {
   const services = unique(modelResult.services).filter((slug) =>
     serviceSlugs.has(slug),
   );
-  const addOns = unique(modelResult.addOns).filter((slug) => addonSlugs.has(slug));
+  const selectedServices = [...catalog.bundles, ...catalog.aLaCarte].filter(
+    (item) => services.includes(item.slug),
+  );
+  const addOns = unique(modelResult.addOns).filter((slug) => {
+    if (!addonSlugs.has(slug)) return false;
+    const addon = catalog.addons.find((item) => item.slug === slug);
+    return Boolean(addon && isAddonEligible(addon, selectedServices));
+  });
 
   if (services.length === 0) {
     return {
@@ -234,7 +242,11 @@ async function askOpenAIForRecommendation(args: {
               durationMinutes: item.duration_minutes,
               isPhoto: item.is_photo,
               isVideo: item.is_video,
+              isIGuide: item.is_iguide,
+              isAerial: item.is_aerial,
               requiresVideo: item.require_has_video,
+              requiresMedia: item.require_has_media,
+              excludesExistingAerial: item.exclude_has_aerial,
               sqftPricingEnabled: item.sqft_pricing_enabled,
               includedSqft: item.included_sqft,
               overageIncrementSqft: item.overage_increment_sqft,

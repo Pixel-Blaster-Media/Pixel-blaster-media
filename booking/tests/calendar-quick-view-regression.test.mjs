@@ -15,11 +15,16 @@ const calendarPagePath = new URL(
   import.meta.url,
 );
 const bottomNavPath = new URL("../app/admin/AdminBottomNav.tsx", import.meta.url);
+const bookingActionsPath = new URL(
+  "../app/admin/bookings/[id]/actions.ts",
+  import.meta.url,
+);
 
 const calendarSource = await readFile(calendarPath, "utf8");
 const calendarActionsSource = await readFile(calendarActionsPath, "utf8");
 const calendarPageSource = await readFile(calendarPagePath, "utf8");
 const bottomNavSource = await readFile(bottomNavPath, "utf8");
+const bookingActionsSource = await readFile(bookingActionsPath, "utf8");
 const quickViewSource = calendarSource.slice(
   calendarSource.indexOf("function CalendarQuickView"),
   calendarSource.indexOf("function QuickViewSection"),
@@ -110,6 +115,26 @@ test("calendar booking quick view exposes an inline date and time reschedule act
     quickViewSource,
     /rescheduleCalendarShoot\(\s*item\.id,\s*rescheduleDate,\s*startMinutes,?\s*\)/,
   );
+});
+
+test("calendar booking quick view edits packages with impact and notification controls", () => {
+  assert.match(quickViewSource, /data-calendar-package-editor/);
+  assert.match(quickViewSource, /Edit package &amp; add-ons/);
+  assert.match(quickViewSource, /Booking impact/);
+  assert.match(quickViewSource, /data-calendar-package-overlap-warning/);
+  assert.match(quickViewSource, /Email the updated confirmation to the realtor/);
+  assert.match(quickViewSource, /Save package changes/);
+  assert.match(
+    quickViewSource,
+    /updateBookingServicesFromCalendar\(item\.id, formData\)/,
+  );
+  assert.match(
+    bookingActionsSource,
+    /export async function updateBookingServicesFromCalendar/,
+  );
+  assert.match(bookingActionsSource, /allow_schedule_overlap: true/);
+  assert.match(bookingActionsSource, /quickbooks_invoice_id/);
+  assert.match(bookingActionsSource, /syncGoogleCalendarEventBestEffort/);
 });
 
 test("booking quick view defaults to a compact operational summary", () => {
