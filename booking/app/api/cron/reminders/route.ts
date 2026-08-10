@@ -5,6 +5,7 @@ import {
   businessDateTimeLocalToUtc,
 } from "@/lib/booking/availability";
 import { createManageToken } from "@/lib/booking/manage-token";
+import { labelForService } from "@/lib/booking/services";
 import { sendEmail } from "@/lib/email/resend";
 import { getOrganizationEmailSettings } from "@/lib/email/settings";
 import { shootReminderEmail } from "@/lib/email/templates";
@@ -31,6 +32,13 @@ interface ReminderBookingRow {
   id: string;
   organization_id: string;
   scheduled_at: string;
+  services: string[];
+  add_ons: string[];
+  square_footage: number | null;
+  unit_number: string | null;
+  is_vacant: string | null;
+  include_basement: boolean | null;
+  client_notes: string | null;
   suppress_realtor_notifications: boolean;
   properties: {
     street_address: string;
@@ -74,7 +82,7 @@ export async function GET(request: Request) {
   const { data: bookings, error } = await supabase
     .from("bookings")
     .select(
-      "id, organization_id, scheduled_at, suppress_realtor_notifications, properties(street_address, city), profiles(email, full_name)",
+      "id, organization_id, scheduled_at, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, suppress_realtor_notifications, properties(street_address, city), profiles(email, full_name)",
     )
     .in("status", ["requested", "confirmed"])
     .is("reminder_sent_at", null)
@@ -112,8 +120,11 @@ export async function GET(request: Request) {
         "en-CA",
         { timeZone: BUSINESS_TZ, hour: "numeric", minute: "2-digit" },
       );
+      const streetLine = booking.unit_number
+        ? `${booking.properties.street_address}, Unit ${booking.unit_number}`
+        : booking.properties.street_address;
       const addressLine = [
-        booking.properties.street_address,
+        streetLine,
         booking.properties.city,
       ]
         .filter(Boolean)
@@ -149,10 +160,16 @@ export async function GET(request: Request) {
       const email = shootReminderEmail({
         contactName:
           booking.profiles.full_name ?? booking.profiles.email,
-        streetAddress: booking.properties.street_address,
+        streetAddress: streetLine,
         city: booking.properties.city,
         timeLabel,
         manageLink,
+        services: [...booking.services, ...booking.add_ons].map(labelForService),
+        notes: booking.client_notes,
+        squareFootage: booking.square_footage,
+        occupancy: booking.is_vacant,
+        includeBasement: booking.include_basement,
+        directionsLink: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressLine)}`,
         companyName: settings.organizationName,
       });
 

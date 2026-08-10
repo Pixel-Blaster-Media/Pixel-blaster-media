@@ -47,6 +47,8 @@ export function bookingIcsCalendarLink(
     address: string;
     services: string;
     organizationName: string;
+    notes?: string | null;
+    uid?: string | null;
   },
 ): string {
   const url = new URL("/book/success/ics", appUrl);
@@ -55,6 +57,8 @@ export function bookingIcsCalendarLink(
   url.searchParams.set("address", args.address);
   url.searchParams.set("services", args.services);
   url.searchParams.set("org", args.organizationName);
+  if (args.notes) url.searchParams.set("notes", args.notes);
+  if (args.uid) url.searchParams.set("uid", args.uid);
   return url.toString();
 }
 
@@ -79,6 +83,9 @@ export function shootConfirmedEmail({
   googleCalendarLink,
   calendarDownloadLink,
   invoiceLink,
+  notes,
+  totalPriceCents,
+  changes = [],
   companyName = "Pixel Blaster Media",
 }: {
   contactName: string;
@@ -93,6 +100,9 @@ export function shootConfirmedEmail({
   googleCalendarLink?: string | null;
   calendarDownloadLink?: string | null;
   invoiceLink?: string | null;
+  notes?: string | null;
+  totalPriceCents?: number | null;
+  changes?: string[];
   companyName?: string;
 }) {
   const firstName = contactName.split(" ")[0] || contactName;
@@ -134,6 +144,9 @@ export function shootConfirmedEmail({
       h1 { color:#202426; font-size:28px; line-height:1.2; margin:8px 0 6px; }
       .intro { color:#5f686b; font-size:15px; line-height:1.55; margin:0; }
       .summary { border-top:1px solid #e7ebec; border-bottom:1px solid #e7ebec; padding:22px 28px; }
+      .changes { background:#eef9fa; border-top:1px solid #d4ecef; padding:18px 28px; }
+      .changes h2 { color:#202426; font-size:15px; margin:0 0 8px; }
+      .changes ul { color:#3f4a4d; font-size:14px; line-height:1.5; margin:0; padding-left:18px; }
       .row { padding:7px 0; }
       .label { color:#8a9295; display:inline-block; font-size:13px; font-weight:700; width:82px; vertical-align:top; }
       .value { color:#292e30; display:inline-block; font-size:15px; line-height:1.45; max-width:430px; }
@@ -144,14 +157,17 @@ export function shootConfirmedEmail({
     </style></head>
     <body><div class="wrap"><div class="card">
       <div class="header">
-        <div class="eyebrow">Appointment scheduled</div>
-        <h1>You're all set, ${escape(firstName)}.</h1>
-        <p class="intro">Your ${escape(companyName)} media shoot is confirmed.</p>
+        <div class="eyebrow">${changes.length ? "Booking updated" : "Appointment scheduled"}</div>
+        <h1>${changes.length ? `Your booking has been updated, ${escape(firstName)}.` : `You're all set, ${escape(firstName)}.`}</h1>
+        <p class="intro">Your ${escape(companyName)} media shoot ${changes.length ? "has new details" : "is confirmed"}.</p>
       </div>
+      ${changes.length ? `<div class="changes"><h2>What changed</h2><ul>${changes.map((change) => `<li>${escape(change)}</li>`).join("")}</ul></div>` : ""}
       <div class="summary">
         <div class="row"><span class="label">What</span><span class="value">${serviceList.map(escape).join(", ")}${addOnList.length ? `<br><span style="color:#667175">Add-ons: ${addOnList.map(escape).join(", ")}</span>` : ""}</span></div>
         <div class="row"><span class="label">When</span><span class="value">${escape(when ?? "Time to be confirmed")}${endTime ? ` – ${escape(endTime)}` : ""}</span></div>
         <div class="row"><span class="label">Where</span><span class="value">${escape(address)}</span></div>
+        ${notes ? `<div class="row"><span class="label">Your notes</span><span class="value">${escape(notes)}</span></div>` : ""}
+        ${typeof totalPriceCents === "number" ? `<div class="row"><span class="label">Total</span><span class="value"><strong>${escape(formatMoney(totalPriceCents))}</strong></span></div>` : ""}
       </div>
       <div class="actions">
         ${manageLink ? `<a href="${escape(manageLink)}" class="primary">Change or cancel booking</a>` : ""}
@@ -163,7 +179,9 @@ export function shootConfirmedEmail({
   `;
 
   return {
-    subject: `Your ${companyName} shoot is confirmed — ${streetAddress}`,
+    subject: changes.length
+      ? `Booking updated — ${streetAddress}`
+      : `Your ${companyName} shoot is confirmed — ${streetAddress}`,
     html,
   };
 }
@@ -184,7 +202,10 @@ export function newBookingStaffEmail({
   includeBasement,
   bookingLink,
   calendarLink,
+  googleCalendarLink,
+  calendarDownloadLink,
   directionsLink,
+  totalPriceCents,
   companyName = "Pixel Blaster Media",
 }: {
   realtorName: string;
@@ -202,7 +223,10 @@ export function newBookingStaffEmail({
   includeBasement?: boolean | null;
   bookingLink?: string | null;
   calendarLink?: string | null;
+  googleCalendarLink?: string | null;
+  calendarDownloadLink?: string | null;
   directionsLink?: string | null;
+  totalPriceCents?: number | null;
   companyName?: string;
 }) {
   const when = new Date(scheduledAt).toLocaleString(undefined, {
@@ -244,6 +268,7 @@ export function newBookingStaffEmail({
       <div class="header"><div class="eyebrow">New booking</div><h1>${escape(address)}</h1><p class="sub">${escape(when)}</p></div>
       <div class="summary">
         <p class="label">Package</p><p class="value">${services.map(escape).join(", ") || "—"}${addOns.length ? `<br>Add-ons: ${addOns.map(escape).join(", ")}` : ""}</p>
+        ${typeof totalPriceCents === "number" ? `<p class="label">Total</p><p class="value"><strong>${escape(formatMoney(totalPriceCents))}</strong></p>` : ""}
         ${propertyDetails.length ? `<p class="label">Property</p><p class="value">${propertyDetails.map(escape).join(" · ")}</p>` : ""}
         ${notes ? `<p class="label">Realtor notes</p><p class="value">${escape(notes)}</p>` : ""}
       </div>
@@ -253,6 +278,10 @@ export function newBookingStaffEmail({
       <div class="actions">
         ${bookingLink ? `<a href="${escape(bookingLink)}" class="primary">Open booking</a>` : ""}
         ${directionsLink ? `<a href="${escape(directionsLink)}" class="secondary">Get directions</a>` : ""}
+        ${realtorEmail ? `<a href="mailto:${escape(realtorEmail)}" class="secondary">Email realtor</a>` : ""}
+        ${realtorPhone ? `<a href="tel:${escape(realtorPhone)}" class="secondary">Call realtor</a><a href="sms:${escape(realtorPhone)}" class="secondary">Text realtor</a>` : ""}
+        ${googleCalendarLink ? `<a href="${escape(googleCalendarLink)}" class="secondary">Add to another Google Calendar</a>` : ""}
+        ${calendarDownloadLink ? `<a href="${escape(calendarDownloadLink)}" class="secondary">Download for iCal / Outlook</a>` : ""}
         ${calendarLink ? `<a href="${escape(calendarLink)}" class="secondary">Open booking calendar</a>` : ""}
       </div>
     </div></div></body></html>`;
@@ -277,6 +306,12 @@ export function shootReminderEmail({
   city,
   timeLabel,
   manageLink,
+  services = [],
+  notes,
+  squareFootage,
+  occupancy,
+  includeBasement,
+  directionsLink,
   companyName = "Pixel Blaster Media",
 }: {
   contactName: string;
@@ -285,10 +320,25 @@ export function shootReminderEmail({
   /** Already formatted in the business timezone, e.g. "10:30 a.m." */
   timeLabel: string;
   manageLink: string;
+  services?: string[];
+  notes?: string | null;
+  squareFootage?: number | null;
+  occupancy?: string | null;
+  includeBasement?: boolean | null;
+  directionsLink?: string | null;
   companyName?: string;
 }) {
   const firstName = contactName.split(" ")[0] || contactName;
   const address = [streetAddress, city].filter(Boolean).join(", ");
+  const propertyDetails = [
+    squareFootage ? `${squareFootage.toLocaleString()} sq ft` : null,
+    occupancy ? occupancyLabel(occupancy) : null,
+    includeBasement === null || includeBasement === undefined
+      ? null
+      : includeBasement
+        ? "Include basement"
+        : "Skip basement",
+  ].filter((value): value is string => Boolean(value));
 
   const html = `
     <!doctype html>
@@ -308,6 +358,9 @@ export function shootReminderEmail({
       <p><span class="pill">Shoot tomorrow</span></p>
       <h1>See you tomorrow, ${escape(firstName)}.</h1>
       <p>Your shoot at <strong>${escape(address)}</strong> is tomorrow at <strong>${escape(timeLabel)}</strong>.</p>
+      ${services.length ? `<p><strong>Services:</strong> ${services.map(escape).join(", ")}</p>` : ""}
+      ${propertyDetails.length ? `<p><strong>Property:</strong> ${propertyDetails.map(escape).join(" · ")}</p>` : ""}
+      ${notes ? `<h2>Your notes</h2><p>${escape(notes)}</p>` : ""}
 
       <h2>Before we arrive</h2>
       <ul>
@@ -318,6 +371,7 @@ export function shootReminderEmail({
 
       <h2>Need to change the time?</h2>
       <p><a href="${escape(manageLink)}" class="cta">Reschedule your shoot →</a></p>
+      ${directionsLink ? `<p><a href="${escape(directionsLink)}" class="cta">Get directions →</a></p>` : ""}
 
       <p class="meta">Reply to this email if anything else comes up. — ${escape(companyName)}</p>
     </div></body></html>
@@ -325,6 +379,43 @@ export function shootReminderEmail({
 
   return {
     subject: `Reminder: your shoot tomorrow at ${timeLabel} — ${streetAddress}`,
+    html,
+  };
+}
+
+export function shootCompleteEmail({
+  contactName,
+  streetAddress,
+  portalLink,
+  companyName = "Pixel Blaster Media",
+}: {
+  contactName: string;
+  streetAddress: string;
+  portalLink?: string | null;
+  companyName?: string;
+}) {
+  const firstName = contactName.split(" ")[0] || contactName;
+  const html = `
+    <!doctype html>
+    <html><head><meta charset="utf-8"><style>${baseStyles}
+      .cta { display:inline-block; padding:12px 20px; margin:8px 0 20px; background:${BRAND_TEAL}; color:#fff !important; text-decoration:none; border-radius:6px; font-weight:600; }
+    </style></head>
+    <body><div class="wrap">
+      <p><span class="pill">Shoot complete</span></p>
+      <h1>That’s a wrap, ${escape(firstName)}.</h1>
+      <p>The media shoot at <strong>${escape(streetAddress)}</strong> is complete and your files are moving into editing.</p>
+      <h2>What happens next</h2>
+      <ul>
+        <li>We’ll edit and quality-check the media.</li>
+        <li>You’ll receive another email as soon as everything is ready.</li>
+        <li>Your finished media and invoice will be available through your client portal.</li>
+      </ul>
+      ${portalLink ? `<p><a href="${escape(portalLink)}" class="cta">Open client portal →</a></p>` : ""}
+      <p class="meta">Reply to this email if you need anything while we edit. — ${escape(companyName)}</p>
+    </div></body></html>`;
+
+  return {
+    subject: `Shoot complete — ${streetAddress}`,
     html,
   };
 }
@@ -478,6 +569,13 @@ function occupancyLabel(value: string): string {
   if (value === "partial") return "Partially occupied";
   if (value === "occupied") return "Occupied";
   return value;
+}
+
+function formatMoney(cents: number): string {
+  return new Intl.NumberFormat("en-CA", {
+    style: "currency",
+    currency: "CAD",
+  }).format(cents / 100);
 }
 
 function escape(s: string): string {

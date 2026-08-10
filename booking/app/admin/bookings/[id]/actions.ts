@@ -7,12 +7,13 @@ import {
   type AdminContext,
 } from "@/lib/auth/require-admin";
 import {
+  BUSINESS_TZ,
   businessDateTimeLocalToUtc,
 } from "@/lib/booking/availability";
 import { rescheduleCalendarShoot } from "@/app/admin/calendar/actions";
 import { nextBookingStatuses } from "@/lib/booking/booking-status";
 import { cancelBooking } from "@/lib/booking/cancel";
-import { totalDurationMinutes } from "@/lib/booking/services";
+import { labelForService, totalDurationMinutes } from "@/lib/booking/services";
 import {
   computeCartTotals,
   getActiveCatalog,
@@ -29,6 +30,7 @@ import {
   bookingGoogleCalendarLink,
   bookingIcsCalendarLink,
   deliveryReadyEmail,
+  shootCompleteEmail,
   shootConfirmedEmail,
 } from "@/lib/email/templates";
 import {
@@ -193,6 +195,9 @@ interface BookingForManualEditRow {
   scheduled_ends_at: string | null;
   services: string[];
   add_ons: string[];
+  square_footage: number | null;
+  unit_number: string | null;
+  client_notes: string | null;
   google_calendar_event_id: string | null;
   suppress_realtor_notifications: boolean;
   properties: {
@@ -204,6 +209,8 @@ interface BookingForManualEditRow {
   profiles: {
     email: string;
     full_name: string | null;
+    phone: string | null;
+    brokerage: string | null;
     delivery_cc_emails: string[] | null;
   } | null;
 }
@@ -294,6 +301,13 @@ export async function updateBookingStatus(
 
   if (error) return { ok: false, error: error.message };
 
+  if (next === "shot") {
+    await sendShootCompleteEmailBestEffort({
+      bookingId,
+      organizationId: admin.organizationId,
+    });
+  }
+
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true };
@@ -365,7 +379,7 @@ export async function updateBookingDetails(
   const { data: booking, error: bookingError } = await service
     .from("bookings")
     .select(
-      "id, organization_id, property_id, owner_id, scheduled_at, scheduled_ends_at, services, add_ons, google_calendar_event_id, suppress_realtor_notifications, properties(street_address, city, province, postal_code), profiles(email, full_name, delivery_cc_emails)",
+      "id, organization_id, property_id, owner_id, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, unit_number, client_notes, google_calendar_event_id, suppress_realtor_notifications, properties(street_address, city, province, postal_code), profiles(email, full_name, phone, brokerage, delivery_cc_emails)",
     )
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
@@ -440,6 +454,52 @@ export async function updateBookingDetails(
         .filter((item) => item.kind === "addon")
         .map((item) => item.slug)
     : booking.add_ons;
+  const changes: string[] = [];
+  if (
+    scheduledAt &&
+    booking.scheduled_at &&
+    scheduledAt.getTime() !== new Date(booking.scheduled_at).getTime()
+  ) {
+    changes.push(
+      `Time changed from ${formatBookingWhen(booking.scheduled_at)} to ${formatBookingWhen(scheduledAt.toISOString())}.`,
+    );
+  }
+  const previousAddress = [
+    booking.properties?.street_address,
+    booking.unit_number ? `Unit ${booking.unit_number}` : null,
+    booking.properties?.city,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const nextAddress = [
+    streetAddress,
+    unitNumber ? `Unit ${unitNumber}` : null,
+    city,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  if (previousAddress && previousAddress !== nextAddress) {
+    changes.push(`Address changed from ${previousAddress} to ${nextAddress}.`);
+  }
+  if (!sameStringList(booking.services, legacyServices)) {
+    changes.push(
+      `Package changed from ${booking.services.map(labelForService).join(", ") || "none"} to ${legacyServices.map(labelForService).join(", ") || "none"}.`,
+    );
+  }
+  if (!sameStringList(booking.add_ons, legacyAddons)) {
+    changes.push(
+      `Add-ons changed from ${booking.add_ons.map(labelForService).join(", ") || "none"} to ${legacyAddons.map(labelForService).join(", ") || "none"}.`,
+    );
+  }
+  if ((booking.client_notes ?? "") !== (clientNotes ?? "")) {
+    changes.push("Realtor notes updated.");
+  }
+  if (booking.square_footage !== squareFootage) {
+    changes.push("Property size updated.");
+  }
+  if ((booking.profiles?.full_name ?? "") !== contactName) {
+    changes.push("Realtor name updated.");
+  }
 
   const { error: profileError } = await service
     .from("profiles")
@@ -532,6 +592,7 @@ export async function updateBookingDetails(
       email: booking.profiles.email,
       ccEmails: booking.profiles.delivery_cc_emails ?? [],
       contactName,
+      changes,
     });
   }
 
@@ -719,6 +780,12 @@ export async function updateBookingServicesFromCalendar(
       ccEmails: booking.profiles.delivery_cc_emails ?? [],
       contactName:
         booking.profiles.full_name ?? booking.profiles.email,
+      changes: bookingPackageChanges({
+        previousServices: booking.services,
+        previousAddOns: booking.add_ons,
+        nextServices: legacyServices,
+        nextAddOns: legacyAddons,
+      }),
     });
   }
 
@@ -793,7 +860,11 @@ export async function rescheduleBookingFromDetails(
   if (!result.ok) return { ok: false, error: result.error };
 
   const confirmationSent = shouldSendConfirmation
-    ? await sendConfirmationForExistingBookingBestEffort(bookingId)
+    ? await sendConfirmationForExistingBookingBestEffort(bookingId, [
+        result.previousScheduledAt && result.scheduledAt
+          ? `Time changed from ${formatBookingWhen(result.previousScheduledAt)} to ${formatBookingWhen(result.scheduledAt)}.`
+          : "Booking time updated.",
+      ])
     : false;
 
   return { ok: true, confirmationSent };
@@ -2225,6 +2296,7 @@ async function replaceBookingLineItems({
 
 async function sendConfirmationForExistingBookingBestEffort(
   bookingId: string,
+  changes?: string[],
 ): Promise<boolean> {
   try {
     const admin = await requireAdminForBooking(bookingId);
@@ -2266,9 +2338,95 @@ async function sendConfirmationForExistingBookingBestEffort(
       email: booking.profiles.email,
       ccEmails: booking.profiles.delivery_cc_emails ?? [],
       contactName: booking.profiles.full_name ?? booking.profiles.email,
+      changes,
     });
   } catch (err) {
     console.warn("[booking-edit] confirmation resend failed", err);
+    return false;
+  }
+}
+
+async function sendShootCompleteEmailBestEffort(args: {
+  bookingId: string;
+  organizationId: string;
+}): Promise<boolean> {
+  try {
+    const service = getServiceSupabase();
+    const { data: booking, error } = await service
+      .from("bookings")
+      .select(
+        "id, property_id, suppress_realtor_notifications, properties(street_address), profiles(email, full_name, delivery_cc_emails)",
+      )
+      .eq("organization_id", args.organizationId)
+      .eq("id", args.bookingId)
+      .single<{
+        id: string;
+        property_id: string;
+        suppress_realtor_notifications: boolean;
+        properties: { street_address: string } | null;
+        profiles: {
+          email: string;
+          full_name: string | null;
+          delivery_cc_emails: string[] | null;
+        } | null;
+      }>();
+    if (
+      error ||
+      !booking?.properties ||
+      !booking.profiles?.email ||
+      booking.suppress_realtor_notifications
+    ) {
+      return false;
+    }
+
+    const emailSettings = await getOrganizationEmailSettings(args.organizationId);
+    const appUrl = safeEmailAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+    const mail = shootCompleteEmail({
+      contactName: booking.profiles.full_name ?? booking.profiles.email,
+      streetAddress: booking.properties.street_address,
+      portalLink: appUrl
+        ? new URL(`/portal/${booking.property_id}`, appUrl).toString()
+        : null,
+      companyName: emailSettings.organizationName,
+    });
+    const ccRecipients = uniqueEmails(
+      booking.profiles.delivery_cc_emails ?? [],
+    ).filter(
+      (email) => email.toLowerCase() !== booking.profiles!.email.toLowerCase(),
+    );
+    const result = await sendEmail({
+      to: booking.profiles.email,
+      ...(ccRecipients.length > 0 ? { cc: ccRecipients } : {}),
+      subject: mail.subject,
+      html: mail.html,
+      organizationId: args.organizationId,
+      replyTo: emailSettings.replyToEmail ?? undefined,
+    });
+    const status: "sent" | "skipped" | "failed" = result.ok
+      ? result.skipped
+        ? "skipped"
+        : "sent"
+      : "failed";
+    const sentAt = new Date().toISOString();
+    await service.from("booking_notifications").upsert(
+      [booking.profiles.email, ...ccRecipients].map((recipientEmail) => ({
+        booking_id: booking.id,
+        kind: "shoot_complete",
+        recipient_email: recipientEmail,
+        status,
+        provider_message_id: result.id ?? null,
+        error: result.ok ? null : (result.error ?? "Email failed."),
+        metadata: { emailSkipped: Boolean(result.skipped) },
+        sent_at: sentAt,
+      })),
+      { onConflict: "booking_id,kind,recipient_email" },
+    );
+    if (!result.ok) {
+      console.warn("[booking-status] shoot-complete email failed", result.error);
+    }
+    return result.ok && !result.skipped;
+  } catch (error) {
+    console.warn("[booking-status] shoot-complete email failed", error);
     return false;
   }
 }
@@ -2279,6 +2437,7 @@ async function sendBookingConfirmationEmailBestEffort(args: {
   email: string;
   ccEmails: string[];
   contactName: string;
+  changes?: string[];
 }): Promise<boolean> {
   const service = getServiceSupabase();
   const appUrl = safeEmailAppUrl(process.env.NEXT_PUBLIC_APP_URL);
@@ -2288,7 +2447,7 @@ async function sendBookingConfirmationEmailBestEffort(args: {
       service
         .from("bookings")
         .select(
-          "scheduled_at, scheduled_ends_at, services, add_ons, unit_number, quickbooks_invoice_url, properties(street_address, city, postal_code)",
+          "scheduled_at, scheduled_ends_at, services, add_ons, unit_number, client_notes, quickbooks_invoice_url, properties(street_address, city, postal_code)",
         )
         .eq("organization_id", args.organizationId)
         .eq("id", args.bookingId)
@@ -2298,6 +2457,7 @@ async function sendBookingConfirmationEmailBestEffort(args: {
           services: string[];
           add_ons: string[];
           unit_number: string | null;
+          client_notes: string | null;
           quickbooks_invoice_url: string | null;
           properties: {
             street_address: string;
@@ -2307,12 +2467,14 @@ async function sendBookingConfirmationEmailBestEffort(args: {
         }>(),
       service
         .from("booking_line_items")
-        .select("item_name, item_kind")
+        .select("item_name, item_kind, quantity, unit_price_cents")
         .eq("booking_id", args.bookingId)
         .returns<
           Array<{
             item_name: string;
             item_kind: "bundle" | "a_la_carte" | "addon";
+            quantity: number;
+            unit_price_cents: number;
           }>
         >(),
     ]);
@@ -2394,7 +2556,9 @@ async function sendBookingConfirmationEmailBestEffort(args: {
           start: startAt,
           end: endAt,
           location: fullAddress,
-          details: `Services: ${services.join(", ")}${addOns.length ? `\nAdd-ons: ${addOns.join(", ")}` : ""}`,
+          details:
+            `Services: ${services.join(", ")}${addOns.length ? `\nAdd-ons: ${addOns.join(", ")}` : ""}` +
+            (booking.client_notes ? `\nNotes: ${booking.client_notes}` : ""),
         })
       : null;
   const calendarDownloadLink =
@@ -2405,6 +2569,8 @@ async function sendBookingConfirmationEmailBestEffort(args: {
           address: fullAddress,
           services: [...services, ...addOns].join(", "),
           organizationName: emailSettings.organizationName,
+          notes: booking.client_notes,
+          uid: args.bookingId,
         })
       : null;
 
@@ -2421,6 +2587,15 @@ async function sendBookingConfirmationEmailBestEffort(args: {
     googleCalendarLink,
     calendarDownloadLink,
     invoiceLink: booking.quickbooks_invoice_url,
+    notes: booking.client_notes,
+    totalPriceCents: lineItems?.length
+      ? lineItems.reduce(
+          (total, item) =>
+            total + item.unit_price_cents * Math.max(1, item.quantity),
+          0,
+        )
+      : null,
+    changes: args.changes,
     companyName: emailSettings.organizationName,
   });
   const ccRecipients = uniqueEmails(args.ccEmails).filter(
@@ -2625,6 +2800,41 @@ function calendarShootTitle(args: {
     .map((part) => part.trim())
     .filter(Boolean)
     .join(" - ");
+}
+
+function sameStringList(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  const leftSorted = [...left].sort();
+  const rightSorted = [...right].sort();
+  return leftSorted.every((value, index) => value === rightSorted[index]);
+}
+
+function bookingPackageChanges(args: {
+  previousServices: string[];
+  previousAddOns: string[];
+  nextServices: string[];
+  nextAddOns: string[];
+}): string[] {
+  const changes: string[] = [];
+  if (!sameStringList(args.previousServices, args.nextServices)) {
+    changes.push(
+      `Package changed from ${args.previousServices.map(labelForService).join(", ") || "none"} to ${args.nextServices.map(labelForService).join(", ") || "none"}.`,
+    );
+  }
+  if (!sameStringList(args.previousAddOns, args.nextAddOns)) {
+    changes.push(
+      `Add-ons changed from ${args.previousAddOns.map(labelForService).join(", ") || "none"} to ${args.nextAddOns.map(labelForService).join(", ") || "none"}.`,
+    );
+  }
+  return changes;
+}
+
+function formatBookingWhen(value: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TZ,
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 function safeEmailAppUrl(value: string | undefined): string | null {

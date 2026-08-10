@@ -66,13 +66,18 @@ export default function RescheduleBookingForm({
         realtor name, services, notes, or combined edits.
       </p>
       <label className="mt-3 flex items-start gap-2 text-sm text-realtor-text">
-        <input name="send_confirmation" type="checkbox" className="mt-1" />
+        <input
+          name="send_confirmation"
+          type="checkbox"
+          defaultChecked
+          className="mt-1"
+        />
         <span>
           <span className="block font-semibold">
-            Send booking confirmation email again
+            Email the time change to the realtor
           </span>
           <span className="block text-xs text-realtor-muted">
-            Leave unchecked when you are quietly holding or moving a slot.
+            Turn this off only when you are quietly holding or moving a slot.
           </span>
         </span>
       </label>
