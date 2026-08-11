@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import type { ReactElement } from "react";
 
 import {
   buildDeliveryLinks,
@@ -211,7 +212,7 @@ async function loadListing(slug: string): Promise<ListingPageData | null> {
 
 const TEMPLATE_COMPONENTS: Record<
   ListingWebsiteTemplate,
-  (props: { listing: ListingPageData }) => JSX.Element
+  (props: { listing: ListingPageData }) => ReactElement
 > = {
   estate_cinematic: EstateCinematic,
   clean_mls_plus: CleanMLSPlus,
