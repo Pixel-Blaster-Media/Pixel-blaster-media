@@ -36,7 +36,7 @@ test("production ledger evidence has complete body fingerprints", () => {
     productionLedger.hash_definition,
     "md5(array_to_string(statements, E'\\n'))",
   );
-  assert.equal(productionLedger.migrations.length, 28);
+  assert.equal(productionLedger.migrations.length, 32);
   for (const migration of productionLedger.migrations) {
     assert.match(migration.version, /^\d{14}$/);
     assert.match(migration.name, /^[a-z0-9_]+$/);
@@ -44,6 +44,12 @@ test("production ledger evidence has complete body fingerprints", () => {
     assert.ok(migration.statement_count > 0);
     assert.match(migration.body_md5, /^[a-f0-9]{32}$/);
   }
+  assert.deepEqual(productionLedger.migrations.at(-1), {
+    version: "20260810173824",
+    name: "aerial_addon_catalog_rules",
+    statement_count: 1,
+    body_md5: "1236d5cb2fa92cb2390e60a666976060",
+  });
 });
 
 test("canonical migrations contain the reconciled production baseline", () => {
@@ -87,6 +93,26 @@ test("fresh-project setup uses bootstrap history and the canonical cutover", asy
     setupSql,
     /Begin supabase\/migrations\/20260716141227_catalog_merchandising_columns\.sql/,
   );
+  assert.match(
+    setupSql,
+    /Begin supabase\/migrations\/20260810173824_aerial_addon_catalog_rules\.sql/,
+  );
+});
+
+test("generated database types include the current production catalog capabilities", async () => {
+  const databaseTypes = await readFile(
+    new URL("../lib/supabase/database.types.ts", import.meta.url),
+    "utf8",
+  );
+
+  for (const field of [
+    "is_iguide",
+    "is_aerial",
+    "require_has_media",
+    "exclude_has_aerial",
+  ]) {
+    assert.match(databaseTypes, new RegExp(`${field}[?]?: boolean`));
+  }
 });
 
 test("completed auth rollout cannot be mistaken for a current production runbook", async () => {

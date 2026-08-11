@@ -1,6 +1,10 @@
 "use server";
 
 import { getActiveCatalog, type CatalogItemRow } from "@/lib/booking/catalog";
+import {
+  getSelectedServiceCapabilities,
+  isCatalogAddonEligible,
+} from "@/lib/booking/catalog-eligibility";
 import { getCredential } from "@/lib/integrations/credentials";
 import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
 import {
@@ -157,11 +161,26 @@ export async function recommendBookingPackage(input: {
   const serviceSlugs = new Set(
     [...catalog.bundles, ...catalog.aLaCarte].map((item) => item.slug),
   );
-  const addonSlugs = new Set(catalog.addons.map((item) => item.slug));
+  const addonsBySlug = new Map(catalog.addons.map((item) => [item.slug, item]));
   const services = unique(modelResult.services).filter((slug) =>
     serviceSlugs.has(slug),
   );
-  const addOns = unique(modelResult.addOns).filter((slug) => addonSlugs.has(slug));
+  const servicesBySlug = new Map(
+    [...catalog.bundles, ...catalog.aLaCarte].map((item) => [item.slug, item]),
+  );
+  const selectedCapabilities = getSelectedServiceCapabilities(
+    services.flatMap((slug) => {
+      const item = servicesBySlug.get(slug);
+      return item ? [item] : [];
+    }),
+  );
+  const requestedAddOns = unique(modelResult.addOns);
+  const addOns = requestedAddOns.filter((slug) => {
+    const addon = addonsBySlug.get(slug);
+    return Boolean(
+      addon && isCatalogAddonEligible(addon, selectedCapabilities),
+    );
+  });
 
   if (services.length === 0) {
     return {
@@ -179,7 +198,14 @@ export async function recommendBookingPackage(input: {
       title: modelResult.title.slice(0, 120),
       confidence: modelResult.confidence,
       reasoning: modelResult.reasoning.slice(0, 420),
-      notes: modelResult.notes.map((note) => note.slice(0, 180)).slice(0, 5),
+      notes: [
+        ...(addOns.length !== requestedAddOns.length
+          ? ["An unavailable add-on was left out because it did not match the selected services."]
+          : []),
+        ...modelResult.notes,
+      ]
+        .map((note) => note.slice(0, 180))
+        .slice(0, 5),
       missingInfo: unique(modelResult.missingInfo)
         .map((note) => note.slice(0, 120))
         .slice(0, 6),

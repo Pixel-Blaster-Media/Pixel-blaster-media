@@ -3,6 +3,10 @@ import "server-only";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
+import {
+  getSelectedServiceCapabilities,
+  isCatalogAddonEligible,
+} from "./catalog-eligibility";
 
 export type CatalogItemRow =
   Database["public"]["Tables"]["catalog_items"]["Row"];
@@ -132,8 +136,7 @@ export function computeCartTotals(
  * Enforce the cart rules:
  *   - At least one bundle OR one à la carte item.
  *   - At most one bundle (bundles are mutually exclusive).
- *   - Add-ons with `require_has_video` need at least one video item in the
- *     cart (bundle or à la carte flagged `is_video`).
+ *   - Add-on capability requirements mirror the atomic booking RPC.
  * Returns null if valid; otherwise a user-facing error string.
  */
 export function validateCart(
@@ -145,9 +148,17 @@ export function validateCart(
   for (const r of catalog.aLaCarte) byId.set(r.id, r);
   for (const r of catalog.addons) byId.set(r.id, r);
 
+  if (new Set(cart.map((line) => line.catalogItemId)).size !== cart.length) {
+    return "A service or add-on was selected more than once. Refresh and choose again.";
+  }
+
   const items = cart
     .map((l) => ({ row: byId.get(l.catalogItemId), qty: l.quantity }))
     .filter((x): x is { row: CatalogItemRow; qty: number } => !!x.row);
+
+  if (items.length !== cart.length) {
+    return "A selected service or add-on is no longer available. Refresh and choose again.";
+  }
 
   if (items.length === 0) {
     return "Pick at least one package or à la carte item.";
@@ -163,12 +174,22 @@ export function validateCart(
     return "Pick at least one package or à la carte item (add-ons alone are not enough).";
   }
 
-  const hasVideo = nonAddon.some((x) => x.row.is_video);
-  const videoOnlyAddon = items.find(
-    (x) => x.row.kind === "addon" && x.row.require_has_video,
+  const selectedCapabilities = getSelectedServiceCapabilities(
+    nonAddon.map((item) => item.row),
   );
-  if (videoOnlyAddon && !hasVideo) {
-    return `"${videoOnlyAddon.row.name}" requires a video package or à la carte item.`;
+  const ineligibleAddon = items.find(
+    (item) =>
+      item.row.kind === "addon" &&
+      !isCatalogAddonEligible(item.row, selectedCapabilities),
+  );
+  if (ineligibleAddon?.row.require_has_video && !selectedCapabilities.hasVideo) {
+    return `"${ineligibleAddon.row.name}" requires a video package or à la carte item.`;
+  }
+  if (ineligibleAddon?.row.require_has_media && !selectedCapabilities.hasMedia) {
+    return `"${ineligibleAddon.row.name}" requires a photo, video, or iGUIDE service.`;
+  }
+  if (ineligibleAddon?.row.exclude_has_aerial && selectedCapabilities.hasAerial) {
+    return `"${ineligibleAddon.row.name}" cannot be added because aerial coverage is already included.`;
   }
 
   return null;

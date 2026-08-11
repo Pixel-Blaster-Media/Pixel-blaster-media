@@ -1,5 +1,5 @@
 // Schema-synchronized Supabase types covering the schema in
-// supabase/migrations/ through 20260719124500. Once you provision Supabase,
+// supabase/migrations/ through 20260810173824. Once you provision Supabase,
 // regenerate this file
 // from the actual schema to pick up policies, function returns, and any
 // drift:
@@ -635,7 +635,11 @@ interface CatalogItemsTable {
     display_order: number;
     is_photo: boolean;
     is_video: boolean;
+    is_iguide: boolean;
+    is_aerial: boolean;
     require_has_video: boolean;
+    require_has_media: boolean;
+    exclude_has_aerial: boolean;
     badge: string | null;
     highlight: boolean;
     ideal_for: string | null;
@@ -660,7 +664,11 @@ interface CatalogItemsTable {
     display_order?: number;
     is_photo?: boolean;
     is_video?: boolean;
+    is_iguide?: boolean;
+    is_aerial?: boolean;
     require_has_video?: boolean;
+    require_has_media?: boolean;
+    exclude_has_aerial?: boolean;
     badge?: string | null;
     highlight?: boolean;
     ideal_for?: string | null;
@@ -1170,6 +1178,27 @@ export interface Database {
         Returns: string;
       };
       create_public_booking_with_jobs: {
+        Args: {
+          p_request_id: string;
+          p_organization_id: string;
+          p_owner_id: string;
+          p_street_address: string;
+          p_city: string;
+          p_postal_code: string;
+          p_unit_number: string;
+          p_scheduled_at: string;
+          p_square_footage: number | null;
+          p_is_vacant: "vacant" | "occupied" | "partial" | null;
+          p_include_basement: boolean | null;
+          p_client_notes: string;
+          p_service_item_ids: string[];
+          p_add_on_item_ids: string[];
+          p_admin_notification_email: string | null;
+          p_app_url: string;
+        };
+        Returns: Json;
+      };
+      create_public_booking_with_jobs_catalog_v1: {
         Args: {
           p_request_id: string;
           p_organization_id: string;

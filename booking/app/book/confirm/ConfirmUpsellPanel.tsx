@@ -2,6 +2,10 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 
+import {
+  getSelectedServiceCapabilities,
+  isCatalogAddonEligible,
+} from "@/lib/booking/catalog-eligibility";
 import type { WizardState } from "@/lib/booking/wizard-state";
 
 interface CatalogLite {
@@ -9,7 +13,13 @@ interface CatalogLite {
   name: string;
   price_cents: number;
   duration_minutes: number;
+  is_photo: boolean;
+  is_video: boolean;
+  is_iguide: boolean;
+  is_aerial: boolean;
   require_has_video: boolean;
+  require_has_media: boolean;
+  exclude_has_aerial: boolean;
 }
 
 export default function ConfirmUpsellPanel({
@@ -118,7 +128,24 @@ export default function ConfirmUpsellPanel({
   function addService(slug: string) {
     const next = new URLSearchParams(params.toString());
     const services = [...state.services, slug].filter(unique);
+    const selectedCapabilities = getSelectedServiceCapabilities(
+      services.flatMap((serviceSlug) => {
+        const item = bySlug.get(serviceSlug);
+        return item ? [item] : [];
+      }),
+    );
+    const addOns = state.addOns.filter((addonSlug) => {
+      const addon = bySlug.get(addonSlug);
+      return Boolean(
+        addon && isCatalogAddonEligible(addon, selectedCapabilities),
+      );
+    });
     next.set("services", services.join(","));
+    if (addOns.length) next.set("add_ons", addOns.join(","));
+    else next.delete("add_ons");
+    if (addOns.length !== state.addOns.length) {
+      next.set("selection_notice", "addon_changed");
+    }
     router.replace(`/book/confirm?${next.toString()}`, { scroll: false });
   }
 

@@ -12,7 +12,11 @@ export interface CatalogItemDTO {
   overage_price_cents: number | null;
   kind: "bundle" | "a_la_carte" | "addon";
   is_video: boolean;
+  is_iguide: boolean;
+  is_aerial: boolean;
   require_has_video: boolean;
+  require_has_media: boolean;
+  exclude_has_aerial: boolean;
   display_order: number;
   is_photo: boolean;
   badge: string | null;

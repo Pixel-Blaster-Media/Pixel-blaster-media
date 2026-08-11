@@ -181,8 +181,7 @@ export async function createAdminShoot(
   for (const item of catalog.addons) byId.set(item.id, item);
 
   const cart = selectedCatalogIds
-    .map((catalogItemId) => ({ catalogItemId, quantity: 1 }))
-    .filter((line) => byId.has(line.catalogItemId));
+    .map((catalogItemId) => ({ catalogItemId, quantity: 1 }));
   const cartError = validateCart(cart, catalog);
   if (cartError) return { ok: false, error: cartError };
 

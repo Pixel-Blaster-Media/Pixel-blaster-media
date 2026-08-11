@@ -1,6 +1,6 @@
 {
   "project_ref": "szwbvpbljsycozihkmyq",
-  "captured_at": "2026-07-19",
+  "captured_at": "2026-08-11",
   "hash_definition": "md5(array_to_string(statements, E'\\n'))",
   "migrations": [
     { "version": "20260505212726", "name": "iguide_jobs_and_webhook_events", "statement_count": 1, "body_md5": "3149e8c160c298fc7a186927fa7c1c8a" },
@@ -30,6 +30,10 @@
     { "version": "20260716223000", "name": "company_invitation_auth_recovery", "statement_count": 11, "body_md5": "dd0bd87ebb78c5dda487f423c7a123b9" },
     { "version": "20260717140806", "name": "quarantine_unprovisioned_auth_users", "statement_count": 28, "body_md5": "88185e98e1287460cbc50fae02e35918" },
     { "version": "20260717211142", "name": "auth_user_metadata_update_provisioning", "statement_count": 4, "body_md5": "e16da8bfa0cba5acd3a6cb08584f99c2" },
-    { "version": "20260718202432", "name": "atomic_public_booking_outbox", "statement_count": 36, "body_md5": "ec3b29296c28dd98f085a54a4c772050" }
+    { "version": "20260718202432", "name": "atomic_public_booking_outbox", "statement_count": 36, "body_md5": "ec3b29296c28dd98f085a54a4c772050" },
+    { "version": "20260719124500", "name": "integration_outbox_recovery_reconciliation", "statement_count": 18, "body_md5": "f611e3c7200771c2ffd798c0157a3d2c" },
+    { "version": "20260720120000", "name": "beta_company_invitations", "statement_count": 43, "body_md5": "121b8b924b949aaf889de443385893ef" },
+    { "version": "20260720173000", "name": "persist_quiet_admin_bookings", "statement_count": 2, "body_md5": "5e815f5b7bc891bef803555a2f74ad95" },
+    { "version": "20260810173824", "name": "aerial_addon_catalog_rules", "statement_count": 1, "body_md5": "1236d5cb2fa92cb2390e60a666976060" }
   ]
 }

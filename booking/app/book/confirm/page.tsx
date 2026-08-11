@@ -3,6 +3,10 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import { getActiveCatalog, getCatalogItemPrice } from "@/lib/booking/catalog";
+import {
+  getSelectedServiceCapabilities,
+  isCatalogAddonEligible,
+} from "@/lib/booking/catalog-eligibility";
 import { formatSlotLabel } from "@/lib/booking/slot-display";
 import {
   parseWizardState,
@@ -39,12 +43,17 @@ export default async function BookStep4Page({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const state = parseWizardState(await searchParams);
+  const rawSearchParams = await searchParams;
+  const state = parseWizardState(rawSearchParams);
+  const selectionNotice =
+    rawSearchParams.selection_notice === "addon_changed"
+      ? "An add-on was removed because it is not available with the selected services."
+      : null;
   const organization = await resolvePublicBookingOrganization(
     state.organizationSlug,
   );
   if (!organization) notFound();
-  const scopedState = { ...state, organizationSlug: organization.slug };
+  let scopedState = { ...state, organizationSlug: organization.slug };
   const c = stepCompleteness(scopedState);
   if (!c.step1) redirect(`/book?${serializeForRedirect(scopedState)}`);
   if (!c.step2) redirect(`/book/property?${serializeForRedirect(scopedState)}`);
@@ -60,10 +69,39 @@ export default async function BookStep4Page({
 
   const selectedItems = scopedState.services
     .map((s) => bySlug.get(s))
-    .filter((x): x is NonNullable<typeof x> => !!x);
+    .filter((x): x is NonNullable<typeof x> => Boolean(x && x.kind !== "addon"))
+    .filter((item, index, items) =>
+      items.findIndex((candidate) => candidate.id === item.id) === index,
+    );
+  const selectedCapabilities = getSelectedServiceCapabilities(selectedItems);
   const selectedAddons = scopedState.addOns
     .map((s) => bySlug.get(s))
-    .filter((x): x is NonNullable<typeof x> => !!x);
+    .filter((x): x is NonNullable<typeof x> => Boolean(x && x.kind === "addon"))
+    .filter((item, index, items) =>
+      items.findIndex((candidate) => candidate.id === item.id) === index,
+    )
+    .filter((addon) =>
+      isCatalogAddonEligible(addon, selectedCapabilities),
+    );
+  const normalizedServices = selectedItems.map((item) => item.slug);
+  const normalizedAddons = selectedAddons.map((item) => item.slug);
+  if (
+    normalizedServices.length !== scopedState.services.length ||
+    normalizedAddons.length !== scopedState.addOns.length
+  ) {
+    const query = serializeWizardState({
+      ...scopedState,
+      services: normalizedServices,
+      addOns: normalizedAddons,
+    });
+    query.set("selection_notice", "addon_changed");
+    redirect(`/book?${query.toString()}`);
+  }
+  scopedState = {
+    ...scopedState,
+    services: normalizedServices,
+    addOns: normalizedAddons,
+  };
 
   const pricedItems = [...selectedItems, ...selectedAddons].map((item) => ({
     item,
@@ -95,6 +133,12 @@ export default async function BookStep4Page({
     <BookingBrandFrame organization={organization}>
       <BookingBrandHeader organization={organization} compact />
       <Stepper current={4} state={scopedState} />
+
+      {selectionNotice ? (
+        <p role="status" className="rounded-2xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {selectionNotice}
+        </p>
+      ) : null}
 
       <section>
         <h2 className="text-lg font-semibold text-realtor-text md:text-xl">
@@ -234,7 +278,13 @@ export default async function BookStep4Page({
             name: item.name,
             price_cents: item.price_cents,
             duration_minutes: item.duration_minutes,
+            is_photo: item.is_photo,
+            is_video: item.is_video,
+            is_iguide: item.is_iguide,
+            is_aerial: item.is_aerial,
             require_has_video: item.require_has_video,
+            require_has_media: item.require_has_media,
+            exclude_has_aerial: item.exclude_has_aerial,
           }),
         )}
       />

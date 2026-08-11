@@ -373,8 +373,7 @@ export async function updateBookingDetails(
   const byId = new Map(catalogItems.map((item) => [item.id, item]));
   const shouldReplaceCatalogItems = selectedCatalogIds.length > 0;
   const cart = selectedCatalogIds
-    .map((catalogItemId) => ({ catalogItemId, quantity: 1 }))
-    .filter((line) => byId.has(line.catalogItemId));
+    .map((catalogItemId) => ({ catalogItemId, quantity: 1 }));
   if (shouldReplaceCatalogItems) {
     const cartError = validateCart(cart, catalog);
     if (cartError) return { ok: false, error: cartError };
