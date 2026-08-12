@@ -64,6 +64,7 @@ export default function PackageAccordion({
   const selectedServices = selectedSlugs
     .map((slug) => bySlug.get(slug))
     .filter((item): item is CatalogItemDTO => Boolean(item));
+  // isCatalogAddonEligible is the server-side name for this same shared rule.
   const visibleAddons = addons.filter((addon) =>
     isAddonEligible(addon, selectedServices),
   );

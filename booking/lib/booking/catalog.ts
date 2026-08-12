@@ -145,9 +145,17 @@ export function validateCart(
   for (const r of catalog.aLaCarte) byId.set(r.id, r);
   for (const r of catalog.addons) byId.set(r.id, r);
 
+  if (new Set(cart.map((line) => line.catalogItemId)).size !== cart.length) {
+    return "A service or add-on was selected more than once. Refresh and choose again.";
+  }
+
   const items = cart
     .map((l) => ({ row: byId.get(l.catalogItemId), qty: l.quantity }))
     .filter((x): x is { row: CatalogItemRow; qty: number } => !!x.row);
+
+  if (items.length !== cart.length) {
+    return "A selected service or add-on is no longer available. Refresh and choose again.";
+  }
 
   if (items.length === 0) {
     return "Pick at least one package or à la carte item.";

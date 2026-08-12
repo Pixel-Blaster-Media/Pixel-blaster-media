@@ -19,6 +19,8 @@ import {
 import { getActiveCatalog } from "@/lib/booking/catalog";
 import { isAddonEligible } from "@/lib/booking/catalog-rules";
 import { createManageToken } from "@/lib/booking/manage-token";
+
+const isCatalogAddonEligible = isAddonEligible;
 import { getAdminNotificationEmail } from "@/lib/email/settings";
 import { dispatchBookingIntegrationJobs } from "@/lib/integrations/dispatcher";
 import { buildIntegrationWorkerId } from "@/lib/integrations/dispatcher-core";
@@ -273,7 +275,7 @@ export async function createPublicBooking(
     for (const slug of addOnSlugs) {
       const item = bySlug.get(slug);
       if (!item || item.kind !== "addon") continue;
-      if (!isAddonEligible(item, validServices)) continue;
+      if (!isCatalogAddonEligible(item, validServices)) continue;
       validAddons.push(item);
     }
   }

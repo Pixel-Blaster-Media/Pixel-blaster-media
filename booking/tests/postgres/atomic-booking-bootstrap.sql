@@ -34,6 +34,8 @@ create table public.organizations (
   reply_to_email text,
   admin_notification_email text
 );
+insert into public.organizations (id, name, slug)
+values ('00000000-0000-0000-0000-000000000001', 'Fixture Default', 'fixture-default');
 create table public.profiles (
   id uuid primary key,
   organization_id uuid references public.organizations(id),
@@ -156,6 +158,3 @@ create trigger bookings_schedule_overlap_guard
 before insert or update of organization_id, status, scheduled_at, scheduled_ends_at, allow_schedule_overlap
 on public.bookings
 for each row execute function public.guard_booking_schedule_overlap();
-
-insert into public.organizations (id, name)
-values ('00000000-0000-0000-0000-000000000001', 'Starter Company');

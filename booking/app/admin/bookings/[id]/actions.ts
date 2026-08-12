@@ -11,6 +11,7 @@ import {
 } from "@/lib/booking/availability";
 import { rescheduleCalendarShoot } from "@/app/admin/calendar/actions";
 import { nextBookingStatuses } from "@/lib/booking/booking-status";
+import { validateManualDeliveryKind } from "@/lib/booking/manual-delivery-kind";
 import { cancelBooking } from "@/lib/booking/cancel";
 import { totalDurationMinutes } from "@/lib/booking/services";
 import {
@@ -380,8 +381,7 @@ export async function updateBookingDetails(
   const byId = new Map(catalogItems.map((item) => [item.id, item]));
   const shouldReplaceCatalogItems = selectedCatalogIds.length > 0;
   const cart = selectedCatalogIds
-    .map((catalogItemId) => ({ catalogItemId, quantity: 1 }))
-    .filter((line) => byId.has(line.catalogItemId));
+    .map((catalogItemId) => ({ catalogItemId, quantity: 1 }));
   if (shouldReplaceCatalogItems) {
     const cartError = validateCart(cart, catalog);
     if (cartError) return { ok: false, error: cartError };
@@ -633,10 +633,11 @@ export async function updateBookingServicesFromCalendar(
   const catalog = await getActiveCatalog({ organizationId: admin.organizationId });
   const catalogItems = catalogRows(catalog);
   const byId = new Map(catalogItems.map((item) => [item.id, item]));
-  const cart = selectedCatalogIds
-    .map((catalogItemId) => ({ catalogItemId, quantity: 1 }))
-    .filter((line) => byId.has(line.catalogItemId));
-  if (cart.length !== selectedCatalogIds.length) {
+  const cart = selectedCatalogIds.map((catalogItemId) => ({
+    catalogItemId,
+    quantity: 1,
+  }));
+  if (cart.some((line) => !byId.has(line.catalogItemId))) {
     return {
       ok: false,
       error: "One of those services is no longer active. Refresh and try again.",
@@ -829,6 +830,11 @@ export async function addManualDeliverable(
   if (!url) {
     return { ok: false, error: "URL is required." };
   }
+  const deliveryKindError = validateManualDeliveryKind(
+    type as DeliverableType,
+    deliveryKind,
+  );
+  if (deliveryKindError) return { ok: false, error: deliveryKindError };
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:") {

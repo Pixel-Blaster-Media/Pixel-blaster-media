@@ -3,6 +3,10 @@
 import { useRouter, useSearchParams } from "next/navigation";
 
 import type { WizardState } from "@/lib/booking/wizard-state";
+import {
+  getSelectedServiceCapabilities,
+  isCatalogAddonEligible,
+} from "@/lib/booking/catalog-eligibility";
 
 interface CatalogLite {
   slug: string;
@@ -10,7 +14,13 @@ interface CatalogLite {
   kind: "bundle" | "a_la_carte" | "addon";
   price_cents: number;
   duration_minutes: number;
+  is_photo: boolean;
+  is_video: boolean;
+  is_iguide: boolean;
+  is_aerial: boolean;
   require_has_video: boolean;
+  require_has_media: boolean;
+  exclude_has_aerial: boolean;
 }
 
 export default function ConfirmUpsellPanel({
@@ -23,6 +33,10 @@ export default function ConfirmUpsellPanel({
   const router = useRouter();
   const params = useSearchParams();
   const bySlug = new Map(catalog.map((item) => [item.slug, item]));
+  const selectedItems = state.services
+    .map((slug) => bySlug.get(slug))
+    .filter((item): item is CatalogLite => Boolean(item && item.kind !== "addon"));
+  const selectedCapabilities = getSelectedServiceCapabilities(selectedItems);
 
   const hasPhoto = hasAny(state.services, [
     "residential_photography",
@@ -119,7 +133,11 @@ export default function ConfirmUpsellPanel({
   const visible = upgrades
     .filter((u) =>
       u.kind === "addon"
-        ? !state.addOns.includes(u.slug)
+        ? !state.addOns.includes(u.slug) &&
+          Boolean(
+            bySlug.get(u.slug) &&
+              isCatalogAddonEligible(bySlug.get(u.slug)!, selectedCapabilities),
+          )
         : !state.services.includes(u.slug),
     )
     .sort((a, b) => b.priority - a.priority)

@@ -1,0 +1,17 @@
+{
+  "name": "pixel-booking-media-worker-spike",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.9"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "benchmark": "node src/benchmark.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1107.0",
+    "archiver": "8.0.0",
+    "sharp": "0.35.3"
+  }
+}

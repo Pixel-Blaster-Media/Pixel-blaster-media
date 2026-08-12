@@ -1,5 +1,5 @@
 // Schema-synchronized Supabase types covering the schema in
-// supabase/migrations/ through 20260719124500. Once you provision Supabase,
+// supabase/migrations/ through 20260811225000. Once you provision Supabase,
 // regenerate this file
 // from the actual schema to pick up policies, function returns, and any
 // drift:
@@ -1043,6 +1043,99 @@ interface ListingWebsitesTable {
   Relationships: [];
 }
 
+type CanonicalMediaTable<Row, RequiredInsert extends keyof Row> = {
+  Row: Row;
+  Insert: Pick<Row, RequiredInsert> & Partial<Omit<Row, RequiredInsert>>;
+  Update: Partial<Row>;
+  Relationships: [];
+};
+
+type MediaBatchesTable = CanonicalMediaTable<{
+  id: string; organization_id: string; property_id: string; booking_id: string;
+  source_provider: string; provider_connection_key: string; provider_job_id: string;
+  provider_revision: number; created_by: string | null; created_at: string;
+}, "organization_id" | "property_id" | "booking_id" | "source_provider" | "provider_connection_key" | "provider_job_id">;
+type MediaAssetsTable = CanonicalMediaTable<{
+  id: string; organization_id: string; property_id: string; batch_id: string;
+  source_provider: string; provider_connection_key: string; provider_job_id: string;
+  provider_output_id: string; provider_revision: number; media_kind: string;
+  original_filename: string | null; capture_sequence: number | null; created_at: string;
+}, "organization_id" | "property_id" | "batch_id" | "source_provider" | "provider_connection_key" | "provider_job_id" | "provider_output_id">;
+type MediaVersionsTable = CanonicalMediaTable<{
+  id: string; organization_id: string; property_id: string; batch_id: string;
+  asset_id: string; version_number: number; parent_version_id: string | null;
+  ingest_state: string; object_tier: string | null; bucket_name: string | null;
+  object_key: string | null; sha256: string | null; byte_size: number | null;
+  mime_type: string | null; width_px: number | null; height_px: number | null;
+  edit_class: string; disclosure_class: string; rights_effective_at: string | null;
+  rights_expires_at: string | null; accepted_at: string | null; created_at: string;
+}, "organization_id" | "property_id" | "batch_id" | "asset_id" | "version_number">;
+type MediaDerivativesTable = CanonicalMediaTable<{
+  id: string; organization_id: string; property_id: string; batch_id: string;
+  source_version_id: string; profile_id: string; profile_version: number;
+  derivative_class: string; profile_status: string; status: string;
+  bucket_name: string | null; object_key: string | null; sha256: string | null;
+  byte_size: number | null; mime_type: string | null; width_px: number | null;
+  height_px: number | null; ready_at: string | null; created_at: string; updated_at: string;
+}, "organization_id" | "property_id" | "batch_id" | "source_version_id" | "profile_id" | "profile_version" | "derivative_class" | "profile_status">;
+type ProviderEventsTable = CanonicalMediaTable<{
+  id: string; organization_id: string; provider: string; provider_connection_key: string;
+  provider_event_id: string; event_type: string; batch_id: string | null;
+  payload_sha256: string; payload_redacted: Json; occurred_at: string | null; received_at: string;
+}, "organization_id" | "provider" | "provider_connection_key" | "provider_event_id" | "event_type" | "payload_sha256">;
+type MediaIngestJobsTable = CanonicalMediaTable<{
+  id: string; organization_id: string; property_id: string; batch_id: string;
+  provider_event_id: string | null; job_kind: string; idempotency_key: string;
+  state: string; attempts: number; max_attempts: number; next_attempt_at: string;
+  last_error_code: string | null; last_error_at: string | null; completed_at: string | null;
+  created_at: string; updated_at: string;
+}, "organization_id" | "property_id" | "batch_id" | "job_kind" | "idempotency_key">;
+type MediaJobAttemptsTable = CanonicalMediaTable<{
+  id: string; organization_id: string; property_id: string; batch_id: string;
+  job_id: string; attempt_number: number; worker_id: string; outcome: string;
+  error_code: string | null; started_at: string; finished_at: string | null; created_at: string;
+}, "organization_id" | "property_id" | "batch_id" | "job_id" | "attempt_number" | "worker_id" | "outcome" | "started_at">;
+type GalleryReleasesTable = CanonicalMediaTable<{
+  id: string; organization_id: string; property_id: string; batch_id: string;
+  revision_number: number; supersedes_release_id: string | null; state: string;
+  manifest_version: number; manifest: Json | null; manifest_sha256: string | null;
+  approved_by: string | null; approved_at: string | null; withdrawn_at: string | null;
+  created_by: string | null; created_at: string; updated_at: string;
+}, "organization_id" | "property_id" | "batch_id" | "revision_number">;
+type GalleryReleaseItemsTable = CanonicalMediaTable<{
+  id: string; organization_id: string; property_id: string; batch_id: string;
+  release_id: string; media_version_id: string; display_derivative_id: string;
+  download_derivative_id: string | null; position: number; display_filename: string;
+  alt_text: string | null; approval_state: string; approved_by: string | null;
+  approved_at: string | null; created_at: string;
+}, "organization_id" | "property_id" | "batch_id" | "release_id" | "media_version_id" | "display_derivative_id" | "position" | "display_filename">;
+type MediaPackagesTable = CanonicalMediaTable<{
+  id: string; organization_id: string; property_id: string; batch_id: string;
+  release_id: string; package_type: string; manifest_sha256: string; status: string;
+  bucket_name: string | null; object_key: string | null; package_sha256: string | null;
+  byte_size: number | null; entry_count: number | null; ready_at: string | null;
+  created_at: string; updated_at: string;
+}, "organization_id" | "property_id" | "batch_id" | "release_id" | "package_type" | "manifest_sha256">;
+type DownloadGrantsTable = CanonicalMediaTable<{
+  id: string; organization_id: string; property_id: string; batch_id: string;
+  release_id: string; package_id: string; grantee_profile_id: string | null;
+  grantee_email_hash: string | null; token_key_id: string; token_hash: string;
+  expires_at: string; max_resolutions: number; resolution_count: number;
+  revoked_at: string | null; created_by: string | null; created_at: string;
+}, "organization_id" | "property_id" | "batch_id" | "release_id" | "package_id" | "token_key_id" | "token_hash" | "expires_at">;
+type DownloadEventsTable = CanonicalMediaTable<{
+  id: string; organization_id: string; property_id: string; batch_id: string;
+  release_id: string; package_id: string; grant_id: string; event_type: string;
+  actor_profile_id: string | null; request_id: string; ip_hash: string | null;
+  user_agent_hash: string | null; occurred_at: string;
+}, "organization_id" | "property_id" | "batch_id" | "release_id" | "package_id" | "grant_id" | "event_type" | "request_id">;
+type ListingGalleryItemsTable = CanonicalMediaTable<{
+  id: string; organization_id: string; listing_website_id: string; property_id: string;
+  batch_id: string; release_id: string; release_item_id: string;
+  media_version_id: string; derivative_id: string; position: number;
+  created_at: string; removed_at: string | null;
+}, "organization_id" | "listing_website_id" | "property_id" | "batch_id" | "release_id" | "release_item_id" | "media_version_id" | "derivative_id" | "position">;
+
 export interface Database {
   public: {
     Tables: {
@@ -1068,6 +1161,19 @@ export interface Database {
       telegram_connections: TelegramConnectionsTable;
       assistant_action_logs: AssistantActionLogsTable;
       listing_websites: ListingWebsitesTable;
+      media_batches: MediaBatchesTable;
+      media_assets: MediaAssetsTable;
+      media_versions: MediaVersionsTable;
+      media_derivatives: MediaDerivativesTable;
+      provider_events: ProviderEventsTable;
+      media_ingest_jobs: MediaIngestJobsTable;
+      media_job_attempts: MediaJobAttemptsTable;
+      gallery_releases: GalleryReleasesTable;
+      gallery_release_items: GalleryReleaseItemsTable;
+      media_packages: MediaPackagesTable;
+      download_grants: DownloadGrantsTable;
+      download_events: DownloadEventsTable;
+      listing_gallery_items: ListingGalleryItemsTable;
       google_calendar_connection: GoogleCalendarConnectionTable;
       integration_credentials: IntegrationCredentialsTable;
       iguide_jobs: IGuideJobsTable;
@@ -1178,6 +1284,27 @@ export interface Database {
         Returns: string;
       };
       create_public_booking_with_jobs: {
+        Args: {
+          p_request_id: string;
+          p_organization_id: string;
+          p_owner_id: string;
+          p_street_address: string;
+          p_city: string;
+          p_postal_code: string;
+          p_unit_number: string;
+          p_scheduled_at: string;
+          p_square_footage: number | null;
+          p_is_vacant: "vacant" | "occupied" | "partial" | null;
+          p_include_basement: boolean | null;
+          p_client_notes: string;
+          p_service_item_ids: string[];
+          p_add_on_item_ids: string[];
+          p_admin_notification_email: string | null;
+          p_app_url: string;
+        };
+        Returns: Json;
+      };
+      create_public_booking_with_jobs_catalog_v1: {
         Args: {
           p_request_id: string;
           p_organization_id: string;

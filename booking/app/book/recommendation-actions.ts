@@ -3,6 +3,8 @@
 import { getActiveCatalog, type CatalogItemRow } from "@/lib/booking/catalog";
 import { isAddonEligible } from "@/lib/booking/catalog-rules";
 import { getCredential } from "@/lib/integrations/credentials";
+
+const isCatalogAddonEligible = isAddonEligible;
 import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
 import {
   parseRealtorAIMemory,
@@ -165,10 +167,11 @@ export async function recommendBookingPackage(input: {
   const selectedServices = [...catalog.bundles, ...catalog.aLaCarte].filter(
     (item) => services.includes(item.slug),
   );
-  const addOns = unique(modelResult.addOns).filter((slug) => {
+  const requestedAddOns = unique(modelResult.addOns);
+  const addOns = requestedAddOns.filter((slug) => {
     if (!addonSlugs.has(slug)) return false;
     const addon = catalog.addons.find((item) => item.slug === slug);
-    return Boolean(addon && isAddonEligible(addon, selectedServices));
+    return Boolean(addon && isCatalogAddonEligible(addon, selectedServices));
   });
 
   if (services.length === 0) {
@@ -187,7 +190,14 @@ export async function recommendBookingPackage(input: {
       title: modelResult.title.slice(0, 120),
       confidence: modelResult.confidence,
       reasoning: modelResult.reasoning.slice(0, 420),
-      notes: modelResult.notes.map((note) => note.slice(0, 180)).slice(0, 5),
+      notes: [
+        ...(addOns.length !== requestedAddOns.length
+          ? ["An unavailable add-on was left out because it did not match the selected services."]
+          : []),
+        ...modelResult.notes,
+      ]
+        .map((note) => note.slice(0, 180))
+        .slice(0, 5),
       missingInfo: unique(modelResult.missingInfo)
         .map((note) => note.slice(0, 120))
         .slice(0, 6),
