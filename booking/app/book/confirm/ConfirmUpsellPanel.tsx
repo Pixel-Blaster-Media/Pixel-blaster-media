@@ -2,15 +2,16 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 
+import type { WizardState } from "@/lib/booking/wizard-state";
 import {
   getSelectedServiceCapabilities,
   isCatalogAddonEligible,
 } from "@/lib/booking/catalog-eligibility";
-import type { WizardState } from "@/lib/booking/wizard-state";
 
 interface CatalogLite {
   slug: string;
   name: string;
+  kind: "bundle" | "a_la_carte" | "addon";
   price_cents: number;
   duration_minutes: number;
   is_photo: boolean;
@@ -32,6 +33,10 @@ export default function ConfirmUpsellPanel({
   const router = useRouter();
   const params = useSearchParams();
   const bySlug = new Map(catalog.map((item) => [item.slug, item]));
+  const selectedItems = state.services
+    .map((slug) => bySlug.get(slug))
+    .filter((item): item is CatalogLite => Boolean(item && item.kind !== "addon"));
+  const selectedCapabilities = getSelectedServiceCapabilities(selectedItems);
 
   const hasPhoto = hasAny(state.services, [
     "residential_photography",
@@ -47,7 +52,8 @@ export default function ConfirmUpsellPanel({
     "social_media_plus",
     "ultimate",
   ]);
-  const hasDrone = hasAny(state.services, [
+  const hasDrone = hasAny([...state.services, ...state.addOns], [
+    "aerial_add_on",
     "aerial_photography",
     "social_media_special",
     "social_media_plus",
@@ -68,6 +74,7 @@ export default function ConfirmUpsellPanel({
     title: string;
     reason: string;
     priority: number;
+    kind?: "service" | "addon";
   }> = [];
 
   if (!hasPhoto && bySlug.has("residential_photography")) {
@@ -94,14 +101,19 @@ export default function ConfirmUpsellPanel({
     });
   }
 
-  if ((hasPhoto || hasIGuide) && !hasDrone && bySlug.has("aerial_photography")) {
+  if (
+    (hasPhoto || hasIGuide || hasVideo) &&
+    !hasDrone &&
+    bySlug.has("aerial_add_on")
+  ) {
     if (!propertySignals.isCondoLike) {
       upgrades.push({
-        slug: "aerial_photography",
+        slug: "aerial_add_on",
         eyebrow: propertySignals.droneStrong ? "Strong fit" : "Exterior context",
         title: "Add drone photos",
         reason: propertySignals.droneReason,
         priority: propertySignals.droneStrong ? 100 : 70,
+        kind: "addon",
       });
     }
   }
@@ -119,32 +131,28 @@ export default function ConfirmUpsellPanel({
   }
 
   const visible = upgrades
-    .filter((u) => !state.services.includes(u.slug))
+    .filter((u) =>
+      u.kind === "addon"
+        ? !state.addOns.includes(u.slug) &&
+          Boolean(
+            bySlug.get(u.slug) &&
+              isCatalogAddonEligible(bySlug.get(u.slug)!, selectedCapabilities),
+          )
+        : !state.services.includes(u.slug),
+    )
     .sort((a, b) => b.priority - a.priority)
     .slice(0, 3);
 
   if (visible.length === 0) return null;
 
-  function addService(slug: string) {
+  function addUpgrade(slug: string, kind: "service" | "addon" = "service") {
     const next = new URLSearchParams(params.toString());
-    const services = [...state.services, slug].filter(unique);
-    const selectedCapabilities = getSelectedServiceCapabilities(
-      services.flatMap((serviceSlug) => {
-        const item = bySlug.get(serviceSlug);
-        return item ? [item] : [];
-      }),
-    );
-    const addOns = state.addOns.filter((addonSlug) => {
-      const addon = bySlug.get(addonSlug);
-      return Boolean(
-        addon && isCatalogAddonEligible(addon, selectedCapabilities),
-      );
-    });
-    next.set("services", services.join(","));
-    if (addOns.length) next.set("add_ons", addOns.join(","));
-    else next.delete("add_ons");
-    if (addOns.length !== state.addOns.length) {
-      next.set("selection_notice", "addon_changed");
+    if (kind === "addon") {
+      const addOns = [...state.addOns, slug].filter(unique);
+      next.set("add_ons", addOns.join(","));
+    } else {
+      const services = [...state.services, slug].filter(unique);
+      next.set("services", services.join(","));
     }
     router.replace(`/book/confirm?${next.toString()}`, { scroll: false });
   }
@@ -178,7 +186,7 @@ export default function ConfirmUpsellPanel({
             <button
               key={upgrade.slug}
               type="button"
-              onClick={() => addService(upgrade.slug)}
+              onClick={() => addUpgrade(upgrade.slug, upgrade.kind)}
               className="realtor-service-tile rounded-2xl border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 hover:bg-realtor-surface"
             >
               <span className="text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">

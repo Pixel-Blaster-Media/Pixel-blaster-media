@@ -7021,7 +7021,6 @@ comment on function public.create_public_booking_with_jobs(
   text, boolean, text, uuid[], uuid[], text, text
 ) is
   'Validates tenant catalog and add-on capability rules before delegating to the atomic booking and integration-outbox transaction.';
-;
 
 -- ============================================================================
 -- End supabase/migrations/20260810173824_aerial_addon_catalog_rules.sql

@@ -17,11 +17,10 @@ import {
   isSlotAvailable,
 } from "@/lib/booking/availability";
 import { getActiveCatalog } from "@/lib/booking/catalog";
-import {
-  getSelectedServiceCapabilities,
-  isCatalogAddonEligible,
-} from "@/lib/booking/catalog-eligibility";
+import { isAddonEligible } from "@/lib/booking/catalog-rules";
 import { createManageToken } from "@/lib/booking/manage-token";
+
+const isCatalogAddonEligible = isAddonEligible;
 import { getAdminNotificationEmail } from "@/lib/email/settings";
 import { dispatchBookingIntegrationJobs } from "@/lib/integrations/dispatcher";
 import { buildIntegrationWorkerId } from "@/lib/integrations/dispatcher-core";
@@ -101,17 +100,6 @@ export async function createPublicBooking(
   const addOnSlugs = ((formData.getAll("add_ons") as string[]) ?? [])
     .map((s) => s.trim())
     .filter(Boolean);
-  if (
-    new Set(serviceSlugs).size !== serviceSlugs.length ||
-    new Set(addOnSlugs).size !== addOnSlugs.length
-  ) {
-    return {
-      ok: false,
-      errors: {
-        _form: "A service or add-on was selected more than once. Refresh and choose again.",
-      },
-    };
-  }
   const organizationSlug = str(formData, "org");
   const publicRequestId = str(formData, "public_request_id");
   const slotStartRaw = str(formData, "slot");
@@ -284,25 +272,10 @@ export async function createPublicBooking(
       validServices.push(item);
     }
 
-    const selectedCapabilities = getSelectedServiceCapabilities(validServices);
     for (const slug of addOnSlugs) {
       const item = bySlug.get(slug);
-      if (!item || item.kind !== "addon") {
-        return {
-          ok: false,
-          errors: {
-            _form: `Unknown add-on "${slug}". Refresh and try again.`,
-          },
-        };
-      }
-      if (!isCatalogAddonEligible(item, selectedCapabilities)) {
-        return {
-          ok: false,
-          errors: {
-            _form: `"${item.name}" is not available with the selected services. Refresh and choose again.`,
-          },
-        };
-      }
+      if (!item || item.kind !== "addon") continue;
+      if (!isCatalogAddonEligible(item, validServices)) continue;
       validAddons.push(item);
     }
   }

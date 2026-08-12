@@ -23,9 +23,15 @@ import {
   type CatalogItemRow,
 } from "@/lib/booking/catalog";
 import { buildDeliveryLinks } from "@/lib/booking/delivery-links";
+import { createManageToken } from "@/lib/booking/manage-token";
 import { sendEmail } from "@/lib/email/resend";
 import { getOrganizationEmailSettings } from "@/lib/email/settings";
-import { deliveryReadyEmail, shootConfirmedEmail } from "@/lib/email/templates";
+import {
+  bookingGoogleCalendarLink,
+  bookingIcsCalendarLink,
+  deliveryReadyEmail,
+  shootConfirmedEmail,
+} from "@/lib/email/templates";
 import {
   createEnhance,
   createListing,
@@ -215,6 +221,7 @@ export interface ActionResult {
   ok: boolean;
   error?: string;
   confirmationSent?: boolean;
+  warning?: string;
 }
 
 const LISTING_WEBSITE_TEMPLATES: ListingWebsiteTemplate[] = [
@@ -485,39 +492,12 @@ export async function updateBookingDetails(
   }
 
   if (shouldReplaceCatalogItems) {
-    const lineItems = selectedItems.map((item) => ({
-      booking_id: booking.id,
-      catalog_item_id: item.id,
-      item_name: item.name,
-      item_slug: item.slug,
-      item_kind: item.kind,
-      quantity: 1,
-      unit_price_cents: getCatalogItemPrice(item, squareFootage).totalPriceCents,
-      unit_duration_minutes: item.duration_minutes,
-    }));
-
-    const { data: oldLineItems, error: oldLineItemsError } = await service
-      .from("booking_line_items")
-      .select("id")
-      .eq("booking_id", booking.id)
-      .returns<Array<{ id: string }>>();
-    if (oldLineItemsError) return { ok: false, error: oldLineItemsError.message };
-
-    const { error: lineItemError } = await service
-      .from("booking_line_items")
-      .insert(lineItems);
-    if (lineItemError) return { ok: false, error: lineItemError.message };
-
-    const oldLineItemIds = (oldLineItems ?? []).map((item) => item.id);
-    if (oldLineItemIds.length > 0) {
-      const { error: deleteLineItemsError } = await service
-        .from("booking_line_items")
-        .delete()
-        .in("id", oldLineItemIds);
-      if (deleteLineItemsError) {
-        return { ok: false, error: deleteLineItemsError.message };
-      }
-    }
+    const lineItemError = await replaceBookingLineItems({
+      bookingId: booking.id,
+      selectedItems,
+      squareFootage,
+    });
+    if (lineItemError) return { ok: false, error: lineItemError };
   }
 
   await syncGoogleCalendarEventBestEffort({
@@ -552,9 +532,6 @@ export async function updateBookingDetails(
       email: booking.profiles.email,
       ccEmails: booking.profiles.delivery_cc_emails ?? [],
       contactName,
-      streetAddress,
-      scheduledAt: scheduledAt?.toISOString() ?? null,
-      services: legacyServices,
     });
   }
 
@@ -587,6 +564,196 @@ export async function updateBookingDetails(
   revalidatePath("/admin/calendar");
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true, confirmationSent };
+}
+
+/**
+ * Focused package editor used by the calendar quick-view card. It deliberately
+ * changes only the catalog selection and the derived end time; property,
+ * realtor, notes, and start time stay untouched.
+ */
+export async function updateBookingServicesFromCalendar(
+  bookingId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  const admin = await requireAdminForBooking(bookingId);
+  if (!admin) return { ok: false, error: "Booking not found." };
+
+  const shouldSendConfirmation = formData.get("send_confirmation") === "on";
+  const selectedCatalogIds = formData
+    .getAll("catalog_item_id")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+  if (selectedCatalogIds.length === 0) {
+    return { ok: false, error: "Pick at least one package or service." };
+  }
+
+  const service = getServiceSupabase();
+  const { data: booking, error: bookingError } = await service
+    .from("bookings")
+    .select(
+      "id, organization_id, owner_id, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, unit_number, client_notes, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, properties(street_address, city, postal_code), profiles(email, full_name, phone, brokerage, delivery_cc_emails)",
+    )
+    .eq("id", bookingId)
+    .eq("organization_id", admin.organizationId)
+    .single<{
+      id: string;
+      organization_id: string;
+      owner_id: string;
+      scheduled_at: string | null;
+      scheduled_ends_at: string | null;
+      services: string[];
+      add_ons: string[];
+      square_footage: number | null;
+      unit_number: string | null;
+      client_notes: string | null;
+      google_calendar_event_id: string | null;
+      quickbooks_invoice_id: string | null;
+      suppress_realtor_notifications: boolean;
+      properties: {
+        street_address: string;
+        city: string | null;
+        postal_code: string | null;
+      } | null;
+      profiles: {
+        email: string;
+        full_name: string | null;
+        phone: string | null;
+        brokerage: string | null;
+        delivery_cc_emails: string[] | null;
+      } | null;
+    }>();
+
+  if (bookingError || !booking) {
+    return { ok: false, error: "Booking not found." };
+  }
+  if (!booking.properties) {
+    return { ok: false, error: "This booking has no property address." };
+  }
+
+  const catalog = await getActiveCatalog({ organizationId: admin.organizationId });
+  const catalogItems = catalogRows(catalog);
+  const byId = new Map(catalogItems.map((item) => [item.id, item]));
+  const cart = selectedCatalogIds.map((catalogItemId) => ({
+    catalogItemId,
+    quantity: 1,
+  }));
+  if (cart.some((line) => !byId.has(line.catalogItemId))) {
+    return {
+      ok: false,
+      error: "One of those services is no longer active. Refresh and try again.",
+    };
+  }
+  const cartError = validateCart(cart, catalog);
+  if (cartError) return { ok: false, error: cartError };
+
+  const selectedItems = cart
+    .map((line) => byId.get(line.catalogItemId))
+    .filter((item): item is CatalogItemRow => Boolean(item));
+  const totals = computeCartTotals(cart, catalog, booking.square_footage);
+  const durationMinutes = Math.max(totals.totalDurationMinutes, 60);
+  const scheduledAt = booking.scheduled_at
+    ? new Date(booking.scheduled_at)
+    : null;
+  const scheduledEndsAt = scheduledAt
+    ? new Date(scheduledAt.getTime() + durationMinutes * 60_000)
+    : null;
+  const legacyServices = selectedItems
+    .filter((item) => item.kind !== "addon")
+    .map((item) => item.slug);
+  const legacyAddons = selectedItems
+    .filter((item) => item.kind === "addon")
+    .map((item) => item.slug);
+
+  const { error: updateError } = await service
+    .from("bookings")
+    .update({
+      services: legacyServices,
+      add_ons: legacyAddons,
+      ...(scheduledEndsAt
+        ? {
+            scheduled_ends_at: scheduledEndsAt.toISOString(),
+            allow_schedule_overlap: true,
+          }
+        : {}),
+    })
+    .eq("id", booking.id)
+    .eq("organization_id", admin.organizationId);
+  if (updateError) return { ok: false, error: updateError.message };
+
+  const lineItemError = await replaceBookingLineItems({
+    bookingId: booking.id,
+    selectedItems,
+    squareFootage: booking.square_footage,
+  });
+  if (lineItemError) return { ok: false, error: lineItemError };
+
+  await syncGoogleCalendarEventBestEffort({
+    organizationId: admin.organizationId,
+    bookingId: booking.id,
+    previousEventId: booking.google_calendar_event_id,
+    contactEmail: booking.profiles?.email ?? "",
+    contactName:
+      booking.profiles?.full_name ?? booking.profiles?.email ?? "Realtor",
+    contactPhone: booking.profiles?.phone ?? "",
+    brokerage: booking.profiles?.brokerage ?? "",
+    streetAddress: booking.properties.street_address,
+    unitNumber: booking.unit_number ?? "",
+    city: booking.properties.city ?? "",
+    postalCode: booking.properties.postal_code ?? "",
+    notes: booking.client_notes ?? "",
+    selectedItems,
+    scheduledAt,
+    scheduledEndsAt,
+    notifyRealtor: !booking.suppress_realtor_notifications,
+  });
+
+  let confirmationSent = false;
+  if (
+    shouldSendConfirmation &&
+    !booking.suppress_realtor_notifications &&
+    booking.profiles?.email
+  ) {
+    confirmationSent = await sendBookingConfirmationEmailBestEffort({
+      bookingId: booking.id,
+      organizationId: admin.organizationId,
+      email: booking.profiles.email,
+      ccEmails: booking.profiles.delivery_cc_emails ?? [],
+      contactName:
+        booking.profiles.full_name ?? booking.profiles.email,
+    });
+  }
+
+  await service.from("assistant_action_logs").insert({
+    organization_id: admin.organizationId,
+    actor_profile_id: admin.userId,
+    action_type: "calendar_booking_services_edit",
+    target_booking_id: booking.id,
+    target_realtor_id: booking.owner_id,
+    label: "Calendar package edit",
+    details: `Updated package and add-ons for ${booking.properties.street_address}.`,
+    payload: {
+      old_services: booking.services,
+      old_add_ons: booking.add_ons,
+      services: legacyServices,
+      add_ons: legacyAddons,
+      scheduled_ends_at: scheduledEndsAt?.toISOString() ?? null,
+      total_price_cents: totals.totalPriceCents,
+      duration_minutes: durationMinutes,
+    },
+    result_status: "success",
+    result_message: "Booking package updated from the calendar quick view.",
+  });
+
+  revalidatePath("/admin/calendar");
+  revalidatePath("/admin/bookings");
+  revalidatePath(`/admin/bookings/${booking.id}`);
+
+  const warning = booking.quickbooks_invoice_id
+    ? "Package updated. This booking already has an invoice; review it before sending."
+    : shouldSendConfirmation && !confirmationSent
+      ? "Package updated, but the confirmation email was not sent."
+      : undefined;
+  return { ok: true, confirmationSent, warning };
 }
 
 /**
@@ -2021,6 +2188,47 @@ function catalogRows(catalog: Catalog): CatalogItemRow[] {
   return [...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons];
 }
 
+async function replaceBookingLineItems({
+  bookingId,
+  selectedItems,
+  squareFootage,
+}: {
+  bookingId: string;
+  selectedItems: CatalogItemRow[];
+  squareFootage: number | null;
+}): Promise<string | null> {
+  const service = getServiceSupabase();
+  const { data: oldLineItems, error: oldLineItemsError } = await service
+    .from("booking_line_items")
+    .select("id")
+    .eq("booking_id", bookingId)
+    .returns<Array<{ id: string }>>();
+  if (oldLineItemsError) return oldLineItemsError.message;
+
+  const lineItems = selectedItems.map((item) => ({
+    booking_id: bookingId,
+    catalog_item_id: item.id,
+    item_name: item.name,
+    item_slug: item.slug,
+    item_kind: item.kind,
+    quantity: 1,
+    unit_price_cents: getCatalogItemPrice(item, squareFootage).totalPriceCents,
+    unit_duration_minutes: item.duration_minutes,
+  }));
+  const { error: lineItemError } = await service
+    .from("booking_line_items")
+    .insert(lineItems);
+  if (lineItemError) return lineItemError.message;
+
+  const oldLineItemIds = (oldLineItems ?? []).map((item) => item.id);
+  if (oldLineItemIds.length === 0) return null;
+  const { error: deleteLineItemsError } = await service
+    .from("booking_line_items")
+    .delete()
+    .in("id", oldLineItemIds);
+  return deleteLineItemsError?.message ?? null;
+}
+
 async function sendConfirmationForExistingBookingBestEffort(
   bookingId: string,
 ): Promise<boolean> {
@@ -2064,9 +2272,6 @@ async function sendConfirmationForExistingBookingBestEffort(
       email: booking.profiles.email,
       ccEmails: booking.profiles.delivery_cc_emails ?? [],
       contactName: booking.profiles.full_name ?? booking.profiles.email,
-      streetAddress: booking.properties.street_address,
-      scheduledAt: booking.scheduled_at,
-      services: booking.services,
     });
   } catch (err) {
     console.warn("[booking-edit] confirmation resend failed", err);
@@ -2080,14 +2285,73 @@ async function sendBookingConfirmationEmailBestEffort(args: {
   email: string;
   ccEmails: string[];
   contactName: string;
-  streetAddress: string;
-  scheduledAt: string | null;
-  services: string[];
 }): Promise<boolean> {
   const service = getServiceSupabase();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  const appUrl = safeEmailAppUrl(process.env.NEXT_PUBLIC_APP_URL);
   const emailSettings = await getOrganizationEmailSettings(args.organizationId);
-  let portalLink = appUrl ? `${appUrl}/portal` : "/portal";
+  const [{ data: booking, error: bookingError }, { data: lineItems }] =
+    await Promise.all([
+      service
+        .from("bookings")
+        .select(
+          "scheduled_at, scheduled_ends_at, services, add_ons, unit_number, quickbooks_invoice_url, properties(street_address, city, postal_code)",
+        )
+        .eq("organization_id", args.organizationId)
+        .eq("id", args.bookingId)
+        .single<{
+          scheduled_at: string | null;
+          scheduled_ends_at: string | null;
+          services: string[];
+          add_ons: string[];
+          unit_number: string | null;
+          quickbooks_invoice_url: string | null;
+          properties: {
+            street_address: string;
+            city: string | null;
+            postal_code: string | null;
+          } | null;
+        }>(),
+      service
+        .from("booking_line_items")
+        .select("item_name, item_kind")
+        .eq("booking_id", args.bookingId)
+        .returns<
+          Array<{
+            item_name: string;
+            item_kind: "bundle" | "a_la_carte" | "addon";
+          }>
+        >(),
+    ]);
+  if (bookingError || !booking?.properties) {
+    console.warn("[booking-edit] confirmation booking lookup failed");
+    return false;
+  }
+
+  const streetAddress = booking.unit_number
+    ? `${booking.properties.street_address}, Unit ${booking.unit_number}`
+    : booking.properties.street_address;
+  const services = lineItems?.length
+    ? lineItems
+        .filter((item) => item.item_kind !== "addon")
+        .map((item) => item.item_name)
+    : booking.services;
+  const addOns = lineItems?.length
+    ? lineItems
+        .filter((item) => item.item_kind === "addon")
+        .map((item) => item.item_name)
+    : booking.add_ons;
+  let portalLink = appUrl ? new URL("/portal", appUrl).toString() : "";
+  let manageLink: string | null = null;
+  if (appUrl) {
+    try {
+      manageLink = new URL(
+        `/book/manage/${createManageToken(args.bookingId)}`,
+        appUrl,
+      ).toString();
+    } catch (err) {
+      console.warn("[booking-edit] confirmation manage link failed", err);
+    }
+  }
   let usedFallbackLink = false;
 
   if (appUrl) {
@@ -2118,12 +2382,51 @@ async function sendBookingConfirmationEmailBestEffort(args: {
     }
   }
 
+  const startAt = booking.scheduled_at ? new Date(booking.scheduled_at) : null;
+  const endAt = booking.scheduled_ends_at
+    ? new Date(booking.scheduled_ends_at)
+    : null;
+  const fullAddress = [
+    streetAddress,
+    booking.properties.city,
+    booking.properties.postal_code,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const googleCalendarLink =
+    startAt && endAt
+      ? bookingGoogleCalendarLink({
+          title: `${emailSettings.organizationName} — media shoot`,
+          start: startAt,
+          end: endAt,
+          location: fullAddress,
+          details: `Services: ${services.join(", ")}${addOns.length ? `\nAdd-ons: ${addOns.join(", ")}` : ""}`,
+        })
+      : null;
+  const calendarDownloadLink =
+    appUrl && startAt && endAt
+      ? bookingIcsCalendarLink(appUrl, {
+          start: startAt,
+          end: endAt,
+          address: fullAddress,
+          services: [...services, ...addOns].join(", "),
+          organizationName: emailSettings.organizationName,
+        })
+      : null;
+
   const mail = shootConfirmedEmail({
     contactName: args.contactName,
-    streetAddress: args.streetAddress,
-    scheduledAt: args.scheduledAt,
-    services: args.services,
+    streetAddress,
+    city: booking.properties.city,
+    scheduledAt: booking.scheduled_at,
+    scheduledEndsAt: booking.scheduled_ends_at,
+    services,
+    addOns,
     portalLink,
+    manageLink,
+    googleCalendarLink,
+    calendarDownloadLink,
+    invoiceLink: booking.quickbooks_invoice_url,
     companyName: emailSettings.organizationName,
   });
   const ccRecipients = uniqueEmails(args.ccEmails).filter(
@@ -2328,4 +2631,15 @@ function calendarShootTitle(args: {
     .map((part) => part.trim())
     .filter(Boolean)
     .join(" - ");
+}
+
+function safeEmailAppUrl(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
 }

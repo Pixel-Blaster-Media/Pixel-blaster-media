@@ -204,14 +204,40 @@ export default function NewItemForm({ kind }: { kind: CatalogItemKind }) {
           <span>Highlight in booking flow</span>
         </label>
         {isAddon ? (
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              name="require_has_video"
-              className="h-4 w-4 accent-realtor-primary"
-            />
-            <span>Only when cart has video</span>
-          </label>
+          <>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="is_aerial"
+                className="h-4 w-4 accent-realtor-primary"
+              />
+              <span>Provides aerial coverage</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="require_has_video"
+                className="h-4 w-4 accent-realtor-primary"
+              />
+              <span>Only when cart has video</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="require_has_media"
+                className="h-4 w-4 accent-realtor-primary"
+              />
+              <span>Only with photos, iGUIDE, or video</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="exclude_has_aerial"
+                className="h-4 w-4 accent-realtor-primary"
+              />
+              <span>Hide when aerial is already included</span>
+            </label>
+          </>
         ) : (
           <>
             <label className="flex items-center gap-2">
@@ -229,6 +255,22 @@ export default function NewItemForm({ kind }: { kind: CatalogItemKind }) {
                 className="h-4 w-4 accent-realtor-primary"
               />
               <span>Shows Video badge</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="is_iguide"
+                className="h-4 w-4 accent-realtor-primary"
+              />
+              <span>Includes iGUIDE</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="is_aerial"
+                className="h-4 w-4 accent-realtor-primary"
+              />
+              <span>Includes aerial coverage</span>
             </label>
           </>
         )}

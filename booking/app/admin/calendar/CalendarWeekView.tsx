@@ -23,6 +23,11 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import AddressAutocomplete, {
   type PlaceParts,
 } from "@/app/_components/AddressAutocomplete";
+import { updateBookingServicesFromCalendar } from "@/app/admin/bookings/[id]/actions";
+import {
+  isAddonEligible,
+  type CatalogRuleItem,
+} from "@/lib/booking/catalog-rules";
 import {
   addCalendarBlock,
   deleteCalendarBlock,
@@ -68,6 +73,9 @@ interface CalendarItem {
     squareFootage: number | null;
     occupancy: string | null;
     includeBasement: boolean | null;
+    selectedCatalogItemIds: string[];
+    hasInvoice: boolean;
+    realtorNotificationsSuppressed: boolean;
   };
 }
 
@@ -92,13 +100,24 @@ interface DayColumn {
 
 interface CatalogItemOption {
   id: string;
+  slug: string;
   kind: "bundle" | "a_la_carte" | "addon";
   name: string;
   description: string;
   durationMinutes: number;
   priceCents: number;
   badge: string | null;
+  isPhoto: boolean;
+  isVideo: boolean;
+  isIGuide: boolean;
+  isAerial: boolean;
   requireHasVideo: boolean;
+  requireHasMedia: boolean;
+  excludeHasAerial: boolean;
+  sqftPricingEnabled: boolean;
+  includedSqft: number | null;
+  overageIncrementSqft: number | null;
+  overagePriceCents: number | null;
 }
 
 interface DragTarget {
@@ -1456,6 +1475,8 @@ export default function CalendarWeekView({
       {previewItem ? (
         <CalendarQuickView
           item={previewItem}
+          calendarItems={items}
+          catalogItems={catalogItems}
           onClose={() => setPreviewItem(null)}
           onChanged={(warning) => {
             setPreviewItem(null);
@@ -2078,10 +2099,14 @@ function AgendaItemRow({
 
 function CalendarQuickView({
   item,
+  calendarItems,
+  catalogItems,
   onClose,
   onChanged,
 }: {
   item: CalendarItem;
+  calendarItems: CalendarItem[];
+  catalogItems: CatalogItemOption[];
   onClose: () => void;
   onChanged: (warning?: string) => void;
 }) {
@@ -2101,6 +2126,14 @@ function CalendarQuickView({
   );
   const [rescheduleError, setRescheduleError] = useState<string | null>(null);
   const [reschedulePending, startRescheduleTransition] = useTransition();
+  const [selectedCatalogItemIds, setSelectedCatalogItemIds] = useState(
+    details?.selectedCatalogItemIds ?? [],
+  );
+  const [sendUpdatedConfirmation, setSendUpdatedConfirmation] = useState(
+    !details?.realtorNotificationsSuppressed,
+  );
+  const [servicesError, setServicesError] = useState<string | null>(null);
+  const [servicesPending, startServicesTransition] = useTransition();
   const [blockLabel, setBlockLabel] = useState(
     item.kind === "block" && item.title !== "Busy" ? item.title : "",
   );
@@ -2112,6 +2145,55 @@ function CalendarQuickView({
   );
   const [blockError, setBlockError] = useState<string | null>(null);
   const [blockPending, startBlockTransition] = useTransition();
+  const selectedCatalogItems = catalogItems.filter((catalogItem) =>
+    selectedCatalogItemIds.includes(catalogItem.id),
+  );
+  const selectedServices = selectedCatalogItems.filter(
+    (catalogItem) => catalogItem.kind !== "addon",
+  );
+  const proposedDurationMinutes = Math.max(
+    selectedCatalogItems.reduce(
+      (total, catalogItem) => total + catalogItem.durationMinutes,
+      0,
+    ),
+    60,
+  );
+  const currentDurationMinutes = Math.max(
+    Math.round(
+      (new Date(item.endsAt).getTime() - new Date(item.startsAt).getTime()) /
+        60_000,
+    ),
+    30,
+  );
+  const currentCatalogItemIds = details?.selectedCatalogItemIds ?? [];
+  const selectionChanged =
+    [...selectedCatalogItemIds].sort().join(",") !==
+    [...currentCatalogItemIds].sort().join(",");
+  const proposedPriceCents = selectedCatalogItems.reduce(
+    (total, catalogItem) =>
+      total + catalogItemPriceForSquareFootage(catalogItem, details?.squareFootage),
+    0,
+  );
+  const currentPriceCents = catalogItems
+    .filter((catalogItem) => currentCatalogItemIds.includes(catalogItem.id))
+    .reduce(
+      (total, catalogItem) =>
+        total +
+        catalogItemPriceForSquareFootage(catalogItem, details?.squareFootage),
+      0,
+    );
+  const proposedEnd = new Date(
+    new Date(item.startsAt).getTime() + proposedDurationMinutes * 60_000,
+  );
+  const proposedOverlaps = selectionChanged
+    ? calendarItems.filter((candidate) => {
+        if (candidate.kind === "booking" && candidate.id === item.id) return false;
+        return (
+          new Date(candidate.startsAt).getTime() < proposedEnd.getTime() &&
+          new Date(candidate.endsAt).getTime() > new Date(item.startsAt).getTime()
+        );
+      })
+    : [];
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -2155,6 +2237,69 @@ function CalendarQuickView({
       } catch (error) {
         console.error("[admin-calendar] reschedule request failed", error);
         setRescheduleError("Could not reschedule this booking. Please try again.");
+      }
+    });
+  };
+
+  const toggleCatalogItem = (catalogItem: CatalogItemOption) => {
+    setServicesError(null);
+    setSelectedCatalogItemIds((current) => {
+      let next: string[];
+      if (current.includes(catalogItem.id)) {
+        next = current.filter((id) => id !== catalogItem.id);
+      } else if (catalogItem.kind === "bundle") {
+        const bundleIds = new Set(
+          catalogItems
+            .filter((itemOption) => itemOption.kind === "bundle")
+            .map((itemOption) => itemOption.id),
+        );
+        next = [
+          catalogItem.id,
+          ...current.filter((id) => !bundleIds.has(id)),
+        ];
+      } else {
+        next = [...current, catalogItem.id];
+      }
+
+      const nextServices = catalogItems.filter(
+        (itemOption) =>
+          next.includes(itemOption.id) && itemOption.kind !== "addon",
+      );
+      return next.filter((id) => {
+        const itemOption = catalogItems.find((candidate) => candidate.id === id);
+        return (
+          itemOption &&
+          (itemOption.kind !== "addon" ||
+            calendarAddonEligible(itemOption, nextServices))
+        );
+      });
+    });
+  };
+
+  const saveBookingServices = () => {
+    if (!selectionChanged) return;
+    setServicesError(null);
+    startServicesTransition(async () => {
+      try {
+        const formData = new FormData();
+        for (const catalogItemId of selectedCatalogItemIds) {
+          formData.append("catalog_item_id", catalogItemId);
+        }
+        if (
+          sendUpdatedConfirmation &&
+          !details?.realtorNotificationsSuppressed
+        ) {
+          formData.set("send_confirmation", "on");
+        }
+        const result = await updateBookingServicesFromCalendar(item.id, formData);
+        if (!result.ok) {
+          setServicesError(result.error ?? "Could not update this package.");
+          return;
+        }
+        onChanged(result.warning);
+      } catch (error) {
+        console.error("[admin-calendar] package update failed", error);
+        setServicesError("Could not update this package. Please try again.");
       }
     });
   };
@@ -2367,6 +2512,120 @@ function CalendarQuickView({
           </details>
         ) : null}
 
+        {item.kind === "booking" && details ? (
+          <details
+            data-calendar-package-editor
+            className="mt-3 rounded-2xl border border-realtor-primary/15 bg-realtor-soft/60 p-3"
+          >
+            <summary className="cursor-pointer list-none text-sm font-semibold text-realtor-primary marker:hidden">
+              <span className="flex items-center justify-between gap-3">
+                Edit package &amp; add-ons
+                <span aria-hidden="true" className="text-lg leading-none">
+                  +
+                </span>
+              </span>
+            </summary>
+            <div className="mt-3 space-y-3 border-t border-realtor-primary/10 pt-3">
+              <p className="text-xs leading-5 text-realtor-muted">
+                Change what is included without leaving the calendar. The shoot
+                length and connected Google event will update automatically.
+              </p>
+
+              <CalendarQuickCatalogPicker
+                items={catalogItems}
+                selectedIds={selectedCatalogItemIds}
+                selectedServices={selectedServices}
+                squareFootage={details.squareFootage}
+                onToggle={toggleCatalogItem}
+              />
+
+              <div className="rounded-xl border border-realtor-primary/15 bg-white/75 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
+                  Booking impact
+                </p>
+                <div className="mt-2 grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <p className="text-realtor-muted">Price</p>
+                    <p className="mt-0.5 font-semibold text-realtor-text">
+                      {formatPrice(currentPriceCents)}
+                      {selectionChanged
+                        ? ` → ${formatPrice(proposedPriceCents)}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-realtor-muted">Shoot length</p>
+                    <p className="mt-0.5 font-semibold text-realtor-text">
+                      {formatDuration(currentDurationMinutes)}
+                      {selectionChanged
+                        ? ` → ${formatDuration(proposedDurationMinutes)}`
+                        : ""}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {proposedOverlaps.length > 0 ? (
+                <p
+                  data-calendar-package-overlap-warning
+                  className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900"
+                >
+                  The new end time overlaps {proposedOverlaps.length} calendar
+                  item{proposedOverlaps.length === 1 ? "" : "s"}. You can still
+                  save, but check the schedule first.
+                </p>
+              ) : null}
+
+              {details.hasInvoice ? (
+                <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                  This booking already has a QuickBooks invoice. Package changes
+                  do not rewrite a sent invoice, so review it after saving.
+                </p>
+              ) : null}
+
+              {details.realtorNotificationsSuppressed ? (
+                <p className="rounded-xl border border-realtor-primary/15 bg-white/65 px-3 py-2 text-xs leading-5 text-realtor-muted">
+                  Realtor notifications are turned off for this booking. This
+                  update will stay quiet.
+                </p>
+              ) : (
+                <label className="flex items-start gap-3 rounded-xl border border-realtor-primary/15 bg-white/70 p-3 text-xs text-realtor-text">
+                  <input
+                    type="checkbox"
+                    checked={sendUpdatedConfirmation}
+                    onChange={(event) =>
+                      setSendUpdatedConfirmation(event.target.checked)
+                    }
+                    className="mt-0.5 h-4 w-4 shrink-0"
+                  />
+                  <span>
+                    <span className="block font-semibold">
+                      Email the updated confirmation to the realtor
+                    </span>
+                    <span className="mt-0.5 block text-realtor-muted">
+                      Turn this off for a quiet internal correction.
+                    </span>
+                  </span>
+                </label>
+              )}
+
+              {servicesError ? (
+                <p role="alert" className="text-xs text-red-700">
+                  {servicesError}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                disabled={servicesPending || !selectionChanged}
+                onClick={saveBookingServices}
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-realtor-primary px-4 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+              >
+                {servicesPending ? "Saving package..." : "Save package changes"}
+              </button>
+            </div>
+          </details>
+        ) : null}
+
         {item.kind === "block" ? (
           <section className="mt-5 space-y-3 border-t border-realtor-primary/10 pt-4">
             <div>
@@ -2529,6 +2788,136 @@ function CalendarQuickView({
       </aside>
     </>
   );
+}
+
+function CalendarQuickCatalogPicker({
+  items,
+  selectedIds,
+  selectedServices,
+  squareFootage,
+  onToggle,
+}: {
+  items: CatalogItemOption[];
+  selectedIds: string[];
+  selectedServices: CatalogItemOption[];
+  squareFootage: number | null;
+  onToggle: (item: CatalogItemOption) => void;
+}) {
+  const groups: Array<{
+    title: string;
+    kind: CatalogItemOption["kind"];
+  }> = [
+    { title: "Packages", kind: "bundle" },
+    { title: "A-la-carte", kind: "a_la_carte" },
+    { title: "Add-ons", kind: "addon" },
+  ];
+
+  return (
+    <div className="space-y-3">
+      {groups.map((group) => {
+        const groupItems = items.filter((item) => item.kind === group.kind);
+        if (groupItems.length === 0) return null;
+        return (
+          <fieldset key={group.kind}>
+            <legend className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
+              {group.title}
+            </legend>
+            <div className="mt-1.5 space-y-1.5">
+              {groupItems.map((catalogItem) => {
+                const selected = selectedIds.includes(catalogItem.id);
+                const disabled =
+                  catalogItem.kind === "addon" &&
+                  !calendarAddonEligible(catalogItem, selectedServices);
+                return (
+                  <label
+                    key={catalogItem.id}
+                    className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-xs transition ${
+                      selected
+                        ? "border-realtor-primary/40 bg-realtor-primary/10"
+                        : "border-realtor-primary/10 bg-white/70"
+                    } ${disabled ? "cursor-not-allowed opacity-55" : "cursor-pointer"}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      disabled={disabled}
+                      onChange={() => onToggle(catalogItem)}
+                      className="mt-0.5 h-4 w-4 shrink-0"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-semibold text-realtor-text">
+                        {catalogItem.name}
+                      </span>
+                      <span className="mt-0.5 block text-realtor-muted">
+                        {formatPrice(
+                          catalogItemPriceForSquareFootage(
+                            catalogItem,
+                            squareFootage,
+                          ),
+                        )}
+                        {" · "}
+                        {formatDuration(catalogItem.durationMinutes)}
+                        {catalogItem.requireHasVideo ? " · needs video" : ""}
+                        {catalogItem.requireHasMedia
+                          ? " · needs photos, iGUIDE, or video"
+                          : ""}
+                        {catalogItem.excludeHasAerial
+                          ? " · only when aerial is not included"
+                          : ""}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+        );
+      })}
+    </div>
+  );
+}
+
+function catalogItemPriceForSquareFootage(
+  item: CatalogItemOption,
+  squareFootage: number | null | undefined,
+): number {
+  if (
+    !item.sqftPricingEnabled ||
+    !item.includedSqft ||
+    !item.overageIncrementSqft ||
+    !item.overagePriceCents ||
+    !squareFootage ||
+    squareFootage <= item.includedSqft
+  ) {
+    return item.priceCents;
+  }
+  const increments = Math.ceil(
+    (squareFootage - item.includedSqft) / item.overageIncrementSqft,
+  );
+  return item.priceCents + increments * item.overagePriceCents;
+}
+
+function calendarAddonEligible(
+  addon: CatalogItemOption,
+  selectedServices: readonly CatalogItemOption[],
+): boolean {
+  return isAddonEligible(
+    catalogOptionRuleItem(addon),
+    selectedServices.map(catalogOptionRuleItem),
+  );
+}
+
+function catalogOptionRuleItem(item: CatalogItemOption): CatalogRuleItem {
+  return {
+    kind: item.kind,
+    is_photo: item.isPhoto,
+    is_video: item.isVideo,
+    is_iguide: item.isIGuide,
+    is_aerial: item.isAerial,
+    require_has_video: item.requireHasVideo,
+    require_has_media: item.requireHasMedia,
+    exclude_has_aerial: item.excludeHasAerial,
+  };
 }
 
 function QuickViewSection({

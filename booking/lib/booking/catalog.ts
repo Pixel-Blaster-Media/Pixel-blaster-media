@@ -3,10 +3,7 @@ import "server-only";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
-import {
-  getSelectedServiceCapabilities,
-  isCatalogAddonEligible,
-} from "./catalog-eligibility";
+import { addonEligibilityError } from "@/lib/booking/catalog-rules";
 
 export type CatalogItemRow =
   Database["public"]["Tables"]["catalog_items"]["Row"];
@@ -136,7 +133,7 @@ export function computeCartTotals(
  * Enforce the cart rules:
  *   - At least one bundle OR one à la carte item.
  *   - At most one bundle (bundles are mutually exclusive).
- *   - Add-on capability requirements mirror the atomic booking RPC.
+ *   - Add-on capability rules are checked against the selected non-add-ons.
  * Returns null if valid; otherwise a user-facing error string.
  */
 export function validateCart(
@@ -174,22 +171,21 @@ export function validateCart(
     return "Pick at least one package or à la carte item (add-ons alone are not enough).";
   }
 
-  const selectedCapabilities = getSelectedServiceCapabilities(
-    nonAddon.map((item) => item.row),
-  );
-  const ineligibleAddon = items.find(
-    (item) =>
-      item.row.kind === "addon" &&
-      !isCatalogAddonEligible(item.row, selectedCapabilities),
-  );
-  if (ineligibleAddon?.row.require_has_video && !selectedCapabilities.hasVideo) {
-    return `"${ineligibleAddon.row.name}" requires a video package or à la carte item.`;
-  }
-  if (ineligibleAddon?.row.require_has_media && !selectedCapabilities.hasMedia) {
-    return `"${ineligibleAddon.row.name}" requires a photo, video, or iGUIDE service.`;
-  }
-  if (ineligibleAddon?.row.exclude_has_aerial && selectedCapabilities.hasAerial) {
-    return `"${ineligibleAddon.row.name}" cannot be added because aerial coverage is already included.`;
+  for (const { row } of items) {
+    if (row.kind !== "addon") continue;
+    const eligibilityError = addonEligibilityError(
+      row,
+      nonAddon.map((item) => item.row),
+    );
+    if (eligibilityError === "requires_video") {
+      return `"${row.name}" requires a video package or à la carte item.`;
+    }
+    if (eligibilityError === "requires_media") {
+      return `"${row.name}" requires photos, iGUIDE, or video.`;
+    }
+    if (eligibilityError === "already_has_aerial") {
+      return `"${row.name}" cannot be added because aerial coverage is already included.`;
+    }
   }
 
   return null;

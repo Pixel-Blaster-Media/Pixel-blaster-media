@@ -1,11 +1,10 @@
 "use server";
 
 import { getActiveCatalog, type CatalogItemRow } from "@/lib/booking/catalog";
-import {
-  getSelectedServiceCapabilities,
-  isCatalogAddonEligible,
-} from "@/lib/booking/catalog-eligibility";
+import { isAddonEligible } from "@/lib/booking/catalog-rules";
 import { getCredential } from "@/lib/integrations/credentials";
+
+const isCatalogAddonEligible = isAddonEligible;
 import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
 import {
   parseRealtorAIMemory,
@@ -161,25 +160,18 @@ export async function recommendBookingPackage(input: {
   const serviceSlugs = new Set(
     [...catalog.bundles, ...catalog.aLaCarte].map((item) => item.slug),
   );
-  const addonsBySlug = new Map(catalog.addons.map((item) => [item.slug, item]));
+  const addonSlugs = new Set(catalog.addons.map((item) => item.slug));
   const services = unique(modelResult.services).filter((slug) =>
     serviceSlugs.has(slug),
   );
-  const servicesBySlug = new Map(
-    [...catalog.bundles, ...catalog.aLaCarte].map((item) => [item.slug, item]),
-  );
-  const selectedCapabilities = getSelectedServiceCapabilities(
-    services.flatMap((slug) => {
-      const item = servicesBySlug.get(slug);
-      return item ? [item] : [];
-    }),
+  const selectedServices = [...catalog.bundles, ...catalog.aLaCarte].filter(
+    (item) => services.includes(item.slug),
   );
   const requestedAddOns = unique(modelResult.addOns);
   const addOns = requestedAddOns.filter((slug) => {
-    const addon = addonsBySlug.get(slug);
-    return Boolean(
-      addon && isCatalogAddonEligible(addon, selectedCapabilities),
-    );
+    if (!addonSlugs.has(slug)) return false;
+    const addon = catalog.addons.find((item) => item.slug === slug);
+    return Boolean(addon && isCatalogAddonEligible(addon, selectedServices));
   });
 
   if (services.length === 0) {
@@ -260,7 +252,11 @@ async function askOpenAIForRecommendation(args: {
               durationMinutes: item.duration_minutes,
               isPhoto: item.is_photo,
               isVideo: item.is_video,
+              isIGuide: item.is_iguide,
+              isAerial: item.is_aerial,
               requiresVideo: item.require_has_video,
+              requiresMedia: item.require_has_media,
+              excludesExistingAerial: item.exclude_has_aerial,
               sqftPricingEnabled: item.sqft_pricing_enabled,
               includedSqft: item.included_sqft,
               overageIncrementSqft: item.overage_increment_sqft,

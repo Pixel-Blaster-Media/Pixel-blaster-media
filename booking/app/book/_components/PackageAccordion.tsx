@@ -4,10 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import type { CatalogItemDTO } from "@/lib/booking/catalog-dto";
-import {
-  getSelectedServiceCapabilities,
-  isCatalogAddonEligible,
-} from "@/lib/booking/catalog-eligibility";
+import { isAddonEligible } from "@/lib/booking/catalog-rules";
 import BookingTotalBar from "./BookingTotalBar";
 import {
   findCommonPackageLines,
@@ -17,7 +14,7 @@ import {
 
 /**
  * Step 1 picker — two collapsible sections (Bundles, A-La-Carte) plus
- * capability-gated add-ons based on the selected services.
+ * auto-revealed Add-ons when the selected services satisfy their rules.
  *
  * State is URL-driven so the "Continue" button can just link to
  * /book/property with the same query params. Each toggle updates
@@ -64,13 +61,12 @@ export default function PackageAccordion({
     return m;
   }, [bundles, aLaCarte, addons]);
 
-  const selectedCapabilities = getSelectedServiceCapabilities(
-    selectedSlugs
-      .map((slug) => bySlug.get(slug))
-      .filter((item): item is CatalogItemDTO => Boolean(item)),
-  );
+  const selectedServices = selectedSlugs
+    .map((slug) => bySlug.get(slug))
+    .filter((item): item is CatalogItemDTO => Boolean(item));
+  // isCatalogAddonEligible is the server-side name for this same shared rule.
   const visibleAddons = addons.filter((addon) =>
-    isCatalogAddonEligible(addon, selectedCapabilities),
+    isAddonEligible(addon, selectedServices),
   );
   const commonPackageLines = useMemo(
     () => findCommonPackageLines(bundles.map((bundle) => bundle.description)),
@@ -80,20 +76,13 @@ export default function PackageAccordion({
   function updateUrl(nextServices: string[], nextAddons: string[]) {
     const next = new URLSearchParams(params.toString());
     // Prune addons that no longer qualify after the service change.
-    const nextCapabilities = getSelectedServiceCapabilities(
-      nextServices
-        .map((slug) => bySlug.get(slug))
-        .filter((item): item is CatalogItemDTO => Boolean(item)),
-    );
+    const nextSelectedServices = nextServices
+      .map((slug) => bySlug.get(slug))
+      .filter((item): item is CatalogItemDTO => Boolean(item));
     const cleanedAddons = nextAddons.filter((s) => {
       const a = bySlug.get(s);
-      return a && isCatalogAddonEligible(a, nextCapabilities);
+      return a && isAddonEligible(a, nextSelectedServices);
     });
-    if (cleanedAddons.length !== nextAddons.length) {
-      next.set("selection_notice", "addon_changed");
-    } else {
-      next.delete("selection_notice");
-    }
     if (nextServices.length) next.set("services", nextServices.join(","));
     else next.delete("services");
     if (cleanedAddons.length) next.set("add_ons", cleanedAddons.join(","));
@@ -128,15 +117,7 @@ export default function PackageAccordion({
     updateUrl(selectedSlugs, next);
   }
 
-  const continueParams = new URLSearchParams(params.toString());
-  if (selectedSlugs.length) continueParams.set("services", selectedSlugs.join(","));
-  else continueParams.delete("services");
-  if (selectedAddOnSlugs.length) {
-    continueParams.set("add_ons", selectedAddOnSlugs.join(","));
-  } else {
-    continueParams.delete("add_ons");
-  }
-  const continueQuery = continueParams.toString();
+  const continueQuery = params.toString();
   const continueHref = continueQuery
     ? `/book/property?${continueQuery}`
     : "/book/property";
@@ -367,7 +348,7 @@ export default function PackageAccordion({
         </ul>
       </AccordionSection>
 
-      {/* Add-ons — auto-reveal when the cart has a video item */}
+      {/* Add-ons auto-reveal when the selected services satisfy their rules. */}
       {visibleAddons.length > 0 ? (
         <section className="realtor-warm-panel rounded-2xl p-4">
           <div>
