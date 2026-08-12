@@ -29,6 +29,11 @@
       "source": "/auth/",
       "destination": "/auth",
       "permanent": false
+    },
+    {
+      "source": "/_next/:path*",
+      "destination": "https://pixel-blaster-media.vercel.app/_next/:path*",
+      "permanent": false
     }
   ],
   "rewrites": [
@@ -63,10 +68,6 @@
     {
       "source": "/admin/:path*",
       "destination": "https://pixel-blaster-media.vercel.app/admin/:path*"
-    },
-    {
-      "source": "/_next/:path*",
-      "destination": "https://pixel-blaster-media.vercel.app/_next/:path*"
     },
     {
       "source": "/api/:path*",
