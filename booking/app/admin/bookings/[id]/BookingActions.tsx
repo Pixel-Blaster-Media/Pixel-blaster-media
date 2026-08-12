@@ -367,7 +367,7 @@ function ManualDeliverableForm({ bookingId }: { bookingId: string }) {
 
   return (
     <form
-      className="mt-3 grid gap-2 md:grid-cols-[180px_1fr_140px_auto]"
+      className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-[160px_180px_1fr_140px_auto]"
       action={(formData) => {
         setError(null);
         setOkMessage(null);
@@ -399,6 +399,16 @@ function ManualDeliverableForm({ bookingId }: { bookingId: string }) {
           </option>
         ))}
       </select>
+      <select
+        name="delivery_kind"
+        defaultValue=""
+        aria-label="Photo delivery slot"
+        className="rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
+      >
+        <option value="">No photo slot</option>
+        <option value="mls">MLS photos</option>
+        <option value="high_res">High-res photos</option>
+      </select>
       <input
         name="url"
         type="url"
@@ -420,12 +430,12 @@ function ManualDeliverableForm({ bookingId }: { bookingId: string }) {
         {isPending ? "Adding…" : "Add"}
       </button>
       {error ? (
-        <p className="md:col-span-4 text-sm text-red-700" role="alert">
+        <p className="md:col-span-2 xl:col-span-5 text-sm text-red-700" role="alert">
           {error}
         </p>
       ) : null}
       {okMessage ? (
-        <p className="md:col-span-4 text-xs text-emerald-700">{okMessage}</p>
+        <p className="md:col-span-2 xl:col-span-5 text-xs text-emerald-700">{okMessage}</p>
       ) : null}
     </form>
   );

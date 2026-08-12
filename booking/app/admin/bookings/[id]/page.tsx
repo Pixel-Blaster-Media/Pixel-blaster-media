@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 
 import {
   BOOKING_STATUSES,
@@ -58,6 +59,7 @@ import EditBookingForm, {
 import IGuideSection from "./IGuideSection";
 import InvoiceSection from "./InvoiceSection";
 import ListingWebsiteSection from "./ListingWebsiteSection";
+import MediaWorkflow from "./MediaWorkflow";
 import RescheduleBookingForm from "./RescheduleBookingForm";
 import VideoLinksSection from "./VideoLinksSection";
 
@@ -384,26 +386,38 @@ export default async function BookingDetailPage({
           <>
             <SectionIntro
               eyebrow="Media"
-              title="Add the finished media"
-              body="Sync iGUIDE first, then add video links or any extra manual links."
+              title="Prepare the finished media"
+              body="Use the primary source, review the files, and prepare one complete delivery."
             />
-            <IGuideSection
-              bookingId={booking.id}
-              initialIGuideId={booking.iguide_id}
-              initialPortalId={booking.iguide_portal_id}
-              portalApiConfigured={portalApiConfigured}
-              job={iguideJob ?? null}
-              initialPhotoDownloads={iguidePhotoDownloads}
-            />
-            <AutoenhanceSection
-              bookingId={booking.id}
-              iguidePortalId={booking.iguide_portal_id}
-              initialBatches={autoenhanceBatches}
-            />
-            <VideoLinksSection bookingId={booking.id} />
-            <ManualLinksPanel
-              bookingId={booking.id}
-              deliverables={visibleDeliverables}
+            <MediaWorkflow
+              hasIGuidePhotos={Boolean(
+                iguidePhotoDownloads.mls || iguidePhotoDownloads.highRes,
+              )}
+              manualUploadEnabled={false}
+              iGuide={
+                <IGuideSection
+                  bookingId={booking.id}
+                  initialIGuideId={booking.iguide_id}
+                  initialPortalId={booking.iguide_portal_id}
+                  portalApiConfigured={portalApiConfigured}
+                  job={iguideJob ?? null}
+                  initialPhotoDownloads={iguidePhotoDownloads}
+                />
+              }
+              autoenhance={
+                <AutoenhanceSection
+                  bookingId={booking.id}
+                  iguidePortalId={booking.iguide_portal_id}
+                  initialBatches={autoenhanceBatches}
+                />
+              }
+              video={<VideoLinksSection bookingId={booking.id} />}
+              manualLinks={
+                <ManualLinksPanel
+                  bookingId={booking.id}
+                  deliverables={visibleDeliverables}
+                />
+              }
             />
           </>
         }
@@ -460,26 +474,6 @@ export default async function BookingDetailPage({
             <DeliveryLinksPanel links={deliveryLinks} />
           </>
         }
-        billing={
-          <>
-            <SectionIntro
-              eyebrow="Billing"
-              title="Invoice"
-              body="Create or refresh the QuickBooks invoice."
-            />
-            <InvoiceSection
-              bookingId={booking.id}
-              initial={{
-                id: booking.quickbooks_invoice_id,
-                number: booking.quickbooks_invoice_number,
-                url: booking.quickbooks_invoice_url,
-                status: booking.quickbooks_invoice_status,
-                totalCents: booking.quickbooks_invoice_total_cents,
-                syncedAt: booking.quickbooks_invoice_synced_at,
-              }}
-            />
-          </>
-        }
         details={
           <DetailsTab
             booking={booking}
@@ -488,6 +482,19 @@ export default async function BookingDetailPage({
             transitions={transitions}
             catalogItems={catalogItems}
             selectedCatalogItemIds={selectedCatalogItemIds}
+            invoice={
+              <InvoiceSection
+                bookingId={booking.id}
+                initial={{
+                  id: booking.quickbooks_invoice_id,
+                  number: booking.quickbooks_invoice_number,
+                  url: booking.quickbooks_invoice_url,
+                  status: booking.quickbooks_invoice_status,
+                  totalCents: booking.quickbooks_invoice_total_cents,
+                  syncedAt: booking.quickbooks_invoice_synced_at,
+                }}
+              />
+            }
           />
         }
       />
@@ -496,10 +503,10 @@ export default async function BookingDetailPage({
 }
 
 function parseWorkspaceTab(raw: string | undefined): WorkspaceTabId {
+  if (raw === "billing") return "details";
   return raw === "media" ||
     raw === "website" ||
     raw === "delivery" ||
-    raw === "billing" ||
     raw === "details"
     ? raw
     : "media";
@@ -512,6 +519,7 @@ function DetailsTab({
   transitions,
   catalogItems,
   selectedCatalogItemIds,
+  invoice,
 }: {
   booking: BookingDetail;
   profile: BookingDetail["profiles"];
@@ -519,6 +527,7 @@ function DetailsTab({
   transitions: BookingStatus[];
   catalogItems: EditCatalogItem[];
   selectedCatalogItemIds: string[];
+  invoice: ReactNode;
 }) {
   const editableInitial: EditableBookingInitial = {
     scheduledAtLocal: booking.scheduled_at
@@ -552,6 +561,12 @@ function DetailsTab({
           initialScheduledAtLocal={editableInitial.scheduledAtLocal}
         />
       </div>
+      <details className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-realtor-text">
+          Invoice and billing
+        </summary>
+        <div className="mt-4">{invoice}</div>
+      </details>
       <Panel title="Edit booking">
         <EditBookingForm
           bookingId={booking.id}

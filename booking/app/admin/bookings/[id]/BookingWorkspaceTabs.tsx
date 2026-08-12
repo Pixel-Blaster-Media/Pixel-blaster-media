@@ -5,7 +5,6 @@ export type WorkspaceTabId =
   | "media"
   | "website"
   | "delivery"
-  | "billing"
   | "details";
 
 interface WorkspaceTab {
@@ -20,7 +19,6 @@ export default function BookingWorkspaceTabs({
   media,
   website,
   delivery,
-  billing,
   details,
 }: {
   activeTabId: WorkspaceTabId;
@@ -28,7 +26,6 @@ export default function BookingWorkspaceTabs({
   media: ReactNode;
   website: ReactNode;
   delivery: ReactNode;
-  billing: ReactNode;
   details: ReactNode;
 }) {
   const tabs: WorkspaceTab[] = [
@@ -39,7 +36,7 @@ export default function BookingWorkspaceTabs({
     },
     {
       id: "website",
-      label: "Custom page",
+      label: "Website",
       content: website,
     },
     {
@@ -47,11 +44,7 @@ export default function BookingWorkspaceTabs({
       label: "Delivery",
       content: delivery,
     },
-    {
-      id: "billing",
-      label: "Billing",
-      content: billing,
-    },
+
     {
       id: "details",
       label: "Details",
@@ -63,7 +56,7 @@ export default function BookingWorkspaceTabs({
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-2">
-        <div className="flex gap-2 overflow-x-auto sm:grid sm:grid-cols-3 sm:overflow-x-visible lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {tabs.map((tab) => {
             const selected = tab.id === activeTab.id;
             return (

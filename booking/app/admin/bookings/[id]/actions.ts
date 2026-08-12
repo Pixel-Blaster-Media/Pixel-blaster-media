@@ -11,6 +11,7 @@ import {
 } from "@/lib/booking/availability";
 import { rescheduleCalendarShoot } from "@/app/admin/calendar/actions";
 import { nextBookingStatuses } from "@/lib/booking/booking-status";
+import { validateManualDeliveryKind } from "@/lib/booking/manual-delivery-kind";
 import { cancelBooking } from "@/lib/booking/cancel";
 import { totalDurationMinutes } from "@/lib/booking/services";
 import {
@@ -662,6 +663,11 @@ export async function addManualDeliverable(
   if (!url) {
     return { ok: false, error: "URL is required." };
   }
+  const deliveryKindError = validateManualDeliveryKind(
+    type as DeliverableType,
+    deliveryKind,
+  );
+  if (deliveryKindError) return { ok: false, error: deliveryKindError };
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:") {

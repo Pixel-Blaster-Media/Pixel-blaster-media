@@ -11,6 +11,11 @@ import {
   type IGuidePhotoZipKind,
 } from "@/lib/integrations/iguide/photo-downloads";
 import type { DeliverableType, Json } from "@/lib/supabase/database.types";
+import {
+  selectDeliverySources,
+  type DeliverySource,
+  type PhotoDeliverySlot,
+} from "@/lib/booking/delivery-source-policy";
 
 export type DeliveryLinkCategory =
   | "photos"
@@ -32,6 +37,8 @@ export interface DeliveryLink {
   label: string;
   url: string;
   category: DeliveryLinkCategory;
+  source: DeliverySource;
+  slot?: PhotoDeliverySlot;
 }
 
 export function buildDeliveryLinks(
@@ -45,10 +52,12 @@ export function buildDeliveryLinks(
     category: DeliveryLinkCategory,
     label: string,
     url: string | null | undefined,
+    source: DeliverySource,
+    slot?: PhotoDeliverySlot,
   ) {
     if (!url || url === "about:blank" || seen.has(`${label}:${url}`)) return;
     seen.add(`${label}:${url}`);
-    links.push({ category, label, url });
+    links.push({ category, label, url, source, ...(slot ? { slot } : {}) });
   }
 
   const iGuideAlias = findIGuideAlias(deliverables);
@@ -58,6 +67,7 @@ export function buildDeliveryLinks(
         "photos",
         deliveryLinkLabel(deliverable) || "Fotello edited photo gallery",
         proxiedFotelloGalleryUrl(appUrl, deliverable.id),
+        "manual",
       );
       continue;
     }
@@ -70,6 +80,8 @@ export function buildDeliveryLinks(
           appUrl,
           photoDownloadUrlForDeliverable(deliverable, "mls"),
         ),
+        "iguide",
+        "photos_mls",
       );
       add(
         "photos",
@@ -78,6 +90,8 @@ export function buildDeliveryLinks(
           appUrl,
           photoDownloadUrlForDeliverable(deliverable, "high_res"),
         ),
+        "iguide",
+        "photos_full_res",
       );
       continue;
     }
@@ -86,44 +100,59 @@ export function buildDeliveryLinks(
       categoryForDeliverable(deliverable),
       deliveryLinkLabel(deliverable),
       deliverable.url,
+      deliverable.source === "iguide" ? "iguide" : "manual",
+      manualPhotoSlot(deliverable),
     );
   }
 
   if (iGuideAlias) {
-    add("tour", "iGUIDE branded tour", iguideViewerUrl(iGuideAlias));
-    add("tour", "iGUIDE unbranded tour", iguideUnbrandedUrl(iGuideAlias));
-    add("floor_plans", "Floor plan PDF (feet)", iguideFloorplanPdfUrl(iGuideAlias));
+    add("tour", "iGUIDE branded tour", iguideViewerUrl(iGuideAlias), "iguide");
+    add("tour", "iGUIDE unbranded tour", iguideUnbrandedUrl(iGuideAlias), "iguide");
+    add("floor_plans", "Floor plan PDF (feet)", iguideFloorplanPdfUrl(iGuideAlias), "iguide");
     add(
       "floor_plans",
       "Floor plan PDF (meters)",
       iguideFloorplanMetricPdfUrl(iGuideAlias),
+      "iguide",
     );
     add(
       "floor_plans",
       "Property overview PDF (feet)",
       `https://youriguide.com/${iGuideAlias}/doc/branded_property_overview_imperial.pdf`,
+      "iguide",
     );
     add(
       "floor_plans",
       "Property overview PDF (meters)",
       `https://youriguide.com/${iGuideAlias}/doc/branded_property_overview_metric.pdf`,
+      "iguide",
     );
     add(
       "tools",
       "Feature sheet creator",
       `https://manage.youriguide.com/feature_sheet/?g=${iGuideAlias}`,
+      "iguide",
     );
-    add("tools", "iGUIDE embed tool", `https://manage.youriguide.com/embed/${iGuideAlias}/`);
+    add("tools", "iGUIDE embed tool", `https://manage.youriguide.com/embed/${iGuideAlias}/`, "iguide");
     add(
       "tools",
       "Create virtual showing",
       `https://show.youriguide.com/create?url=${encodeURIComponent(
         iguideViewerUrl(iGuideAlias),
       )}`,
+      "iguide",
     );
   }
 
-  return links;
+  return selectDeliverySources(links, { pixelFallbackEnabled: false });
+}
+
+function manualPhotoSlot(deliverable: DeliveryLinkInput): PhotoDeliverySlot | undefined {
+  if (deliverable.type !== "photo_gallery") return undefined;
+  const kind = metadataString(deliverable.metadata, "delivery_kind");
+  if (kind === "mls") return "photos_mls";
+  if (kind === "full_res" || kind === "high_res") return "photos_full_res";
+  return undefined;
 }
 
 export function isStreamingVideoUrl(url: string): boolean {
