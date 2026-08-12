@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 
 import { getCredential } from "@/lib/integrations/credentials";
+import { isPhotoEditingProviderEnabled } from "@/lib/integrations/provider-enablement";
 import { refreshBookingAutoenhanceBatch } from "@/lib/integrations/autoenhance/workflow";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
@@ -19,6 +20,12 @@ export async function POST(request: Request) {
   const organizationId = url.searchParams.get("org")?.trim() ?? "";
   if (!isUuid(organizationId)) {
     return NextResponse.json({ ok: false, error: "Invalid organization." }, { status: 400 });
+  }
+  if (!(await isPhotoEditingProviderEnabled("autoenhance", organizationId))) {
+    return NextResponse.json(
+      { ok: false, error: "Autoenhance is disabled." },
+      { status: 503 },
+    );
   }
 
   const configuredSecret = await getCredential(

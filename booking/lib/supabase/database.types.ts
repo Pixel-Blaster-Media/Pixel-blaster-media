@@ -1205,6 +1205,23 @@ export interface Database {
         Args: { target_org_id: string };
         Returns: boolean;
       };
+      merge_integration_credentials: {
+        Args: {
+          p_organization_id: string;
+          p_provider: string;
+          p_fields: Json;
+          p_updated_by?: string | null;
+        };
+        Returns: Json;
+      };
+      clear_integration_credentials: {
+        Args: {
+          p_organization_id: string;
+          p_provider: string;
+          p_fields: string[];
+        };
+        Returns: Json | null;
+      };
       find_company_invitation_auth_user: {
         Args: { p_invitation_id: string };
         Returns: string | null;

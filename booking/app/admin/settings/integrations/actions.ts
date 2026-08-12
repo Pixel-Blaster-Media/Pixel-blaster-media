@@ -9,9 +9,13 @@ import {
   clearCredentialFields,
   getCredential,
   getCredentialSource,
-  type Provider,
   saveCredentials,
 } from "@/lib/integrations/credentials";
+import {
+  filterIntegrationCredentialFieldNames,
+  filterIntegrationCredentialFields,
+  isIntegrationCredentialProvider,
+} from "@/lib/integrations/credential-policy";
 import { sendEmail } from "@/lib/email/resend";
 import {
   listIGuides,
@@ -184,46 +188,18 @@ export async function sendTestEmail(
 // arbitrary keys.
 // ---------------------------------------------------------------------------
 
-const ALLOWED_FIELDS: Record<Provider, string[]> = {
-  admin_settings: ["today_command_preferences"],
-  autoenhance: ["api_key", "webhook_secret"],
-  fotello: ["api_key"],
-  google_maps: ["api_key"],
-  iguide: ["app_id", "app_token", "webhook_secret"],
-  openai: ["api_key", "model"],
-  resend: ["api_key"],
-};
-
-function isProvider(value: string): value is Provider {
-  return (
-    value === "admin_settings" ||
-    value === "autoenhance" ||
-    value === "fotello" ||
-    value === "google_maps" ||
-    value === "iguide" ||
-    value === "openai" ||
-    value === "resend"
-  );
-}
-
 export async function saveIntegrationCredentials(
   provider: string,
   rawFields: Record<string, string>,
 ): Promise<{ ok: boolean; error?: string }> {
   const admin = await requireAdmin();
-  if (!isProvider(provider)) {
+  if (!isIntegrationCredentialProvider(provider)) {
     return { ok: false, error: `Unknown provider "${provider}".` };
   }
 
-  const allowed = new Set(ALLOWED_FIELDS[provider]);
-  const fields: Record<string, string> = {};
-  for (const [k, v] of Object.entries(rawFields)) {
-    if (!allowed.has(k)) continue;
-    if (typeof v !== "string") continue;
-    fields[k] =
-      provider === "iguide" && k === "webhook_secret"
-        ? normalizeIGuideWebhookSecret(v)
-        : v;
+  const fields = filterIntegrationCredentialFields(provider, rawFields);
+  if (provider === "iguide" && fields.webhook_secret) {
+    fields.webhook_secret = normalizeIGuideWebhookSecret(fields.webhook_secret);
   }
 
   if (Object.keys(fields).length === 0) {
@@ -246,11 +222,10 @@ export async function clearIntegrationCredentials(
   fields: string[],
 ): Promise<{ ok: boolean; error?: string }> {
   const admin = await requireAdmin();
-  if (!isProvider(provider)) {
+  if (!isIntegrationCredentialProvider(provider)) {
     return { ok: false, error: `Unknown provider "${provider}".` };
   }
-  const allowed = new Set(ALLOWED_FIELDS[provider]);
-  const valid = fields.filter((f) => allowed.has(f));
+  const valid = filterIntegrationCredentialFieldNames(provider, fields);
   if (valid.length === 0) {
     return { ok: false, error: "Nothing valid to clear." };
   }

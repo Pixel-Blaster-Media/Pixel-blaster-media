@@ -9,6 +9,7 @@ import {
 } from "@/lib/integrations/google-calendar/client";
 import { googleCalendarRedirectUri } from "@/lib/integrations/google-calendar/redirect-uri";
 import { getCredentialSource } from "@/lib/integrations/credentials";
+import { isPhotoEditingProviderEnabled } from "@/lib/integrations/provider-enablement";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getQBClient, QBOError } from "@/lib/integrations/quickbooks/client";
 import { getServiceSupabase } from "@/lib/supabase/server";
@@ -27,6 +28,7 @@ import GoogleCalendarTester from "./GoogleCalendarTester";
 import IGuideTester from "./IGuideTester";
 import ItemPicker from "./ItemPicker";
 import OpenAITester from "./OpenAITester";
+import ProviderEnablementToggle from "./ProviderEnablementToggle";
 import {
   addExternalGoogleCalendarSource,
   deleteGoogleCalendarSource,
@@ -104,6 +106,7 @@ export default async function IntegrationsPage({
   // show whether each field is set without ever leaking values.
   const [
     resendApiKeyStatus,
+    autoHDRApiKeyStatus,
     autoenhanceApiKeyStatus,
     autoenhanceWebhookStatus,
     openAiApiKeyStatus,
@@ -121,6 +124,12 @@ export default async function IntegrationsPage({
           admin.organizationId,
         )
       : Promise.resolve({ source: "none" as const }),
+    getCredentialSource(
+      "autohdr",
+      "api_key",
+      "AUTOHDR_API_KEY",
+      admin.organizationId,
+    ),
     getCredentialSource(
       "autoenhance",
       "api_key",
@@ -166,7 +175,13 @@ export default async function IntegrationsPage({
     ),
   ]);
 
+  const [autoHDREnabled, autoenhanceEnabled] = await Promise.all([
+    isPhotoEditingProviderEnabled("autohdr", admin.organizationId),
+    isPhotoEditingProviderEnabled("autoenhance", admin.organizationId),
+  ]);
+
   const resendConfigured = resendApiKeyStatus.source !== "none";
+  const autoHDRConfigured = autoHDRApiKeyStatus.source !== "none";
   const autoenhanceConfigured = autoenhanceApiKeyStatus.source !== "none";
   const autoenhanceReady =
     autoenhanceConfigured && autoenhanceWebhookStatus.source !== "none";
@@ -298,11 +313,18 @@ export default async function IntegrationsPage({
               tone={iguideReady ? "ready" : iguideStarted ? "attention" : "neutral"}
             />
             <IntegrationOverviewRow
+              href="#autohdr"
+              name="AutoHDR"
+              purpose="Primary real-estate photo editing"
+              status={!autoHDREnabled ? "Off" : autoHDRConfigured ? "On · gated" : "Needs key"}
+              tone={!autoHDREnabled ? "neutral" : "attention"}
+            />
+            <IntegrationOverviewRow
               href="#autoenhance"
               name="Autoenhance"
               purpose="Photo enhancement workflow"
-              status={autoenhanceReady ? "Ready" : autoenhanceConfigured ? "Needs webhook" : "Optional"}
-              tone={autoenhanceReady ? "ready" : autoenhanceConfigured ? "attention" : "neutral"}
+              status={!autoenhanceEnabled ? "Off" : autoenhanceReady ? "Ready" : autoenhanceConfigured ? "Needs webhook" : "Needs key"}
+              tone={!autoenhanceEnabled ? "neutral" : autoenhanceReady ? "ready" : "attention"}
             />
             <IntegrationOverviewRow
               href="#quickbooks"
@@ -1000,6 +1022,35 @@ export default async function IntegrationsPage({
         </details>
       </section>
 
+      <section id="autohdr" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-realtor-text">AutoHDR</h2>
+            <p className="mt-1 text-sm text-realtor-muted">
+              Preferred HDR editor. The key can be saved now; booking uploads remain gated until AutoHDR confirms its upload and billing contracts and private canonical ingestion is enabled.
+            </p>
+          </div>
+          <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+            {!autoHDREnabled ? "Off" : autoHDRConfigured ? "On · gated" : "API key needed"}
+          </span>
+        </div>
+        <CredentialsForm
+          provider="autohdr"
+          fields={[{
+            name: "api_key",
+            label: "AutoHDR API key",
+            helper: "Paste the partner API key supplied by AutoHDR. It stays server-side and is never shown back in full.",
+          }]}
+          statuses={{ api_key: autoHDRApiKeyStatus }}
+        />
+        <ProviderEnablementToggle
+          provider="autohdr"
+          name="AutoHDR"
+          enabled={autoHDREnabled}
+          helper="Shows AutoHDR as the preferred editor. Its booking upload remains gated until the provider and canonical-storage contracts are verified."
+        />
+      </section>
+
       <section id="autoenhance" className="scroll-mt-24 realtor-elevated-panel rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -1011,7 +1062,11 @@ export default async function IntegrationsPage({
               iGUIDE gallery.
             </p>
           </div>
-          {autoenhanceReady ? (
+          {!autoenhanceEnabled ? (
+            <span className="shrink-0 rounded-full border border-realtor-primary/15 bg-realtor-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
+              Off
+            </span>
+          ) : autoenhanceReady ? (
             <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
               Ready
             </span>
@@ -1026,9 +1081,16 @@ export default async function IntegrationsPage({
           )}
         </div>
 
+        <ProviderEnablementToggle
+          provider="autoenhance"
+          name="Autoenhance"
+          enabled={autoenhanceEnabled}
+          helper="When off, Autoenhance is hidden from booking media tools and new prepare, process, refresh, webhook, and scheduled work is blocked. Saved credentials are retained. An upload already started in an open browser may finish because Autoenhance’s issued upload URL cannot be revoked by Pixel."
+        />
+
         <details
           id="autoenhance-configuration"
-          open={autoenhanceConfigured && !autoenhanceReady}
+          open={autoenhanceEnabled && autoenhanceConfigured && !autoenhanceReady}
           className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
         >
           <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">

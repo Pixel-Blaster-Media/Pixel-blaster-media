@@ -2,6 +2,7 @@ import "server-only";
 
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { resolveCredentialStrict } from "@/lib/integrations/credentials-core";
 
 /**
  * DB-backed credential store with env-var fallback.
@@ -29,6 +30,7 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 
 export type Provider =
   | "admin_settings"
+  | "autohdr"
   | "autoenhance"
   | "fotello"
   | "google_maps"
@@ -54,10 +56,11 @@ function cacheKey(provider: Provider, organizationId: string): string {
 async function loadProvider(
   provider: Provider,
   organizationId: string,
+  failOnReadError = false,
 ): Promise<Record<string, string>> {
   const key = cacheKey(provider, organizationId);
   const cached = cache.get(key);
-  if (cached) return cached;
+  if (cached && !failOnReadError) return cached;
 
   const supabase = getServiceSupabase();
   const { data, error } = await supabase
@@ -72,6 +75,9 @@ async function loadProvider(
       `[credentials] DB read failed for ${provider}`,
       error.message,
     );
+    if (failOnReadError) {
+      throw new Error("Credential state is temporarily unavailable.");
+    }
     return {};
   }
 
@@ -99,6 +105,22 @@ export async function getCredential(
       ? process.env[envVar]?.trim()
       : undefined;
   return fromEnv || null;
+}
+
+/** Provider enablement must distinguish a missing row from a failed DB read. */
+export async function getCredentialStrict(
+  provider: Provider,
+  field: string,
+  envVar: string,
+  organizationId: string,
+): Promise<string | null> {
+  return resolveCredentialStrict({
+    field,
+    organizationId,
+    defaultOrganizationId: DEFAULT_ORGANIZATION_ID,
+    loadProvider: () => loadProvider(provider, organizationId, true),
+    environmentValue: () => process.env[envVar],
+  });
 }
 
 /**
@@ -140,28 +162,27 @@ export async function saveCredentials(
   updatedBy: string | null,
   organizationId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const supabase = getServiceSupabase();
-
-  const existing = await loadProvider(provider, organizationId);
-  const merged: Record<string, string> = { ...existing };
-  for (const [k, v] of Object.entries(fields)) {
-    const trimmed = (v ?? "").trim();
-    if (trimmed) merged[k] = trimmed;
+  const cleaned = Object.fromEntries(
+    Object.entries(fields)
+      .map(([key, value]) => [key, (value ?? "").trim()])
+      .filter((entry): entry is [string, string] => Boolean(entry[1])),
+  );
+  if (Object.keys(cleaned).length === 0) {
+    return { ok: false, error: "No credential fields were provided." };
   }
 
-  const { error } = await supabase
-    .from("integration_credentials")
-    .upsert(
-      {
-        organization_id: organizationId,
-        provider,
-        credentials: merged,
-        updated_by: updatedBy,
-      },
-      { onConflict: "organization_id,provider" },
-    );
-
-  if (error) return { ok: false, error: error.message };
+  const { error } = await getServiceSupabase().rpc(
+    "merge_integration_credentials",
+    {
+      p_organization_id: organizationId,
+      p_provider: provider,
+      p_fields: cleaned,
+      p_updated_by: updatedBy,
+    },
+  );
+  if (error) {
+    return { ok: false, error: "Credentials could not be saved right now." };
+  }
   clearCredentialsCache(provider, organizationId);
   return { ok: true };
 }
@@ -176,26 +197,16 @@ export async function clearCredentialFields(
   fields: string[],
   organizationId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const supabase = getServiceSupabase();
-  const existing = await loadProvider(provider, organizationId);
-  const next: Record<string, string> = { ...existing };
-  for (const f of fields) delete next[f];
-
-  if (Object.keys(next).length === 0) {
-    // Drop the whole row when nothing's left.
-    const { error } = await supabase
-      .from("integration_credentials")
-      .delete()
-      .eq("organization_id", organizationId)
-      .eq("provider", provider);
-    if (error) return { ok: false, error: error.message };
-  } else {
-    const { error } = await supabase
-      .from("integration_credentials")
-      .update({ credentials: next })
-      .eq("organization_id", organizationId)
-      .eq("provider", provider);
-    if (error) return { ok: false, error: error.message };
+  const { error } = await getServiceSupabase().rpc(
+    "clear_integration_credentials",
+    {
+      p_organization_id: organizationId,
+      p_provider: provider,
+      p_fields: fields,
+    },
+  );
+  if (error) {
+    return { ok: false, error: "Credentials could not be cleared right now." };
   }
   clearCredentialsCache(provider, organizationId);
   return { ok: true };

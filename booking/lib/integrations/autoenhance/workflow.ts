@@ -18,6 +18,10 @@ import {
   type AutoenhanceWindowPullType,
 } from "@/lib/integrations/autoenhance/client";
 import { uploadAssetToIGuide } from "@/lib/integrations/iguide/portal-client";
+import {
+  isPhotoEditingProviderEnabled,
+  requirePhotoEditingProviderEnabled,
+} from "@/lib/integrations/provider-enablement";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
 
@@ -163,6 +167,7 @@ export async function createBookingAutoenhanceBatch({
     }
   | { ok: false; error: string }
 > {
+  await requirePhotoEditingProviderEnabled("autoenhance", admin.organizationId);
   if (fileNames.length > 160) {
     return { ok: false, error: "Upload 160 files or fewer in one batch." };
   }
@@ -323,6 +328,7 @@ export async function startBookingAutoenhanceProcessing({
   uploadedBracketIds: string[];
   uploadedImageIds: string[];
 }): Promise<{ ok: true; batch: AutoenhanceBatchSummary } | { ok: false; error: string }> {
+  await requirePhotoEditingProviderEnabled("autoenhance", admin.organizationId);
   const service = getServiceSupabase();
   const batch = await loadBatch(
     service,
@@ -416,6 +422,7 @@ export async function refreshBookingAutoenhanceBatch({
   batchId: string;
   preferredImageId?: string;
 }): Promise<{ ok: true; batch: AutoenhanceBatchSummary } | { ok: false; error: string }> {
+  await requirePhotoEditingProviderEnabled("autoenhance", admin.organizationId);
   const service = getServiceSupabase();
   const batch = await loadBatch(
     service,
@@ -547,6 +554,7 @@ export async function markBookingAutoenhanceBatchAttention({
   batchId: string;
   message: string;
 }): Promise<{ ok: true; batch: AutoenhanceBatchSummary } | { ok: false; error: string }> {
+  await requirePhotoEditingProviderEnabled("autoenhance", admin.organizationId);
   const service = getServiceSupabase();
   const batch = await loadBatch(
     service,
@@ -652,6 +660,9 @@ export async function syncPendingAutoenhanceBatches({
   }> = [];
 
   for (const batch of pending ?? []) {
+    if (!(await isPhotoEditingProviderEnabled("autoenhance", batch.organization_id))) {
+      continue;
+    }
     const result = await refreshBookingAutoenhanceBatch({
       admin: {
         userId: "system:autoenhance",
@@ -1356,7 +1367,5 @@ function errorMessage(error: unknown): string {
       : typeof error.message === "string"
         ? error.message
         : String(error);
-  const body = typeof error.body === "string" ? error.body.trim() : "";
-  if (!body) return base;
-  return `${base}: ${body.slice(0, 500)}`;
+  return base;
 }

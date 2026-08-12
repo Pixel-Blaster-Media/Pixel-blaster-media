@@ -163,7 +163,5 @@ function errorMessage(error: unknown): string {
       : typeof error.message === "string"
         ? error.message
         : String(error);
-  const body = typeof error.body === "string" ? error.body.trim() : "";
-  if (!body) return base;
-  return `${base}: ${body.slice(0, 500)}`;
+  return base;
 }
