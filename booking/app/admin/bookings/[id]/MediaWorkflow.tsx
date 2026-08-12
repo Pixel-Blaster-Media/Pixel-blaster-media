@@ -3,12 +3,16 @@ import type { ReactNode } from "react";
 const PLANNED_FLOW = ["Upload", "Review", "Prepare", "Ready"] as const;
 
 export default function MediaWorkflow({
+  autoHDREnabled,
+  autoenhanceEnabled,
   hasIGuidePhotos,
   iGuide,
   autoenhance,
   video,
   manualLinks,
 }: {
+  autoHDREnabled: boolean;
+  autoenhanceEnabled: boolean;
   hasIGuidePhotos: boolean;
   manualUploadEnabled: boolean;
   iGuide: ReactNode;
@@ -69,22 +73,48 @@ export default function MediaWorkflow({
               Manual JPG upload will appear here
             </p>
             <p className="mt-1 text-xs text-realtor-muted">
-              The planned manual/canonical JPG upload is not enabled in this preview. This card has no file selector and cannot send files to private Pixel storage. Existing Autoenhance tools remain available under Advanced source setup.
+              The planned manual/canonical JPG upload is not enabled in this preview. This card has no file selector and cannot send files to private Pixel storage.{autoenhanceEnabled ? " Autoenhance remains available under source connections." : ""}
             </p>
           </div>
         ) : null}
       </section>
 
+      {autoHDREnabled ? (
+      <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-realtor-primary">
+          Primary photo editor
+        </p>
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-realtor-text">AutoHDR</h2>
+            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-realtor-muted">
+              AutoHDR is Pixel’s preferred editor, but booking uploads stay off until its presigned-upload contract, zero-credit test mode, private canonical storage, and review workflow are verified.
+            </p>
+          </div>
+          <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">
+            Integration gated
+          </span>
+        </div>
+      </section>
+      ) : null}
+
       <details className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4">
         <summary className="cursor-pointer text-sm font-semibold text-realtor-text">
-          Advanced source setup
+          Source connections and fallback
         </summary>
         <p className="mt-2 text-xs text-realtor-muted">
           Connect or repair provider workflows only when the primary source needs attention.
         </p>
         <div className="mt-4 space-y-4">
           {iGuide}
-          {autoenhance}
+          {autoenhanceEnabled ? (
+            <>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-realtor-muted">
+                Autoenhance fallback
+              </p>
+              {autoenhance}
+            </>
+          ) : null}
         </div>
       </details>
 

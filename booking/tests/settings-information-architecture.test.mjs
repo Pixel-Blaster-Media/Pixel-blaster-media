@@ -85,7 +85,7 @@ test("integration readiness includes required workflow configuration", () => {
   assert.match(integrationsPage, /const autoenhanceReady =/);
   assert.match(
     integrationsPage,
-    /open={autoenhanceConfigured && !autoenhanceReady}/,
+    /open={autoenhanceEnabled && autoenhanceConfigured && !autoenhanceReady}/,
   );
   assert.match(integrationsPage, /const quickBooksReady =/);
   assert.match(
@@ -184,7 +184,7 @@ test("connections make core tools prominent and keep untouched optional setup cl
   );
   assert.match(
     integrationsPage,
-    /open={autoenhanceConfigured && !autoenhanceReady}/,
+    /open={autoenhanceEnabled && autoenhanceConfigured && !autoenhanceReady}/,
   );
   const providerOrder = [
     'id="google-calendar"',

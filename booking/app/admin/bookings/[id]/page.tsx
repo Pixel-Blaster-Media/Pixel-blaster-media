@@ -31,6 +31,7 @@ import {
 } from "@/lib/integrations/iguide/photo-downloads";
 import { hasPortalCredentials } from "@/lib/integrations/iguide/portal-client";
 import { listBookingAutoenhanceBatches } from "@/lib/integrations/autoenhance/workflow";
+import { isPhotoEditingProviderEnabled } from "@/lib/integrations/provider-enablement";
 import {
   getServerSupabase,
   getServiceSupabase,
@@ -163,6 +164,10 @@ export default async function BookingDetailPage({
   const activeTabId = parseWorkspaceTab(query.tab);
   const admin = await requireAdmin();
   const supabase = await getServerSupabase();
+  const [autoHDREnabled, autoenhanceEnabled] = await Promise.all([
+    isPhotoEditingProviderEnabled("autohdr", admin.organizationId),
+    isPhotoEditingProviderEnabled("autoenhance", admin.organizationId),
+  ]);
 
   const [
     { data: booking, error: bookErr },
@@ -208,7 +213,9 @@ export default async function BookingDetailPage({
         .select("catalog_item_id")
         .eq("booking_id", id)
         .returns<BookingLineItemSelectionRow[]>(),
-      listBookingAutoenhanceBatches({ admin, bookingId: id }),
+      autoenhanceEnabled
+        ? listBookingAutoenhanceBatches({ admin, bookingId: id })
+        : Promise.resolve([]),
       getActiveCatalog({ organizationId: admin.organizationId }),
     ]);
 
@@ -390,6 +397,8 @@ export default async function BookingDetailPage({
               body="Use the primary source, review the files, and prepare one complete delivery."
             />
             <MediaWorkflow
+              autoHDREnabled={autoHDREnabled}
+              autoenhanceEnabled={autoenhanceEnabled}
               hasIGuidePhotos={Boolean(
                 iguidePhotoDownloads.mls || iguidePhotoDownloads.highRes,
               )}

@@ -35,7 +35,7 @@ export async function GET(
   } catch (err) {
     const message =
       err instanceof AutoenhanceError
-        ? `Autoenhance returned ${err.status}. ${cleanBody(err.body)}`
+        ? `Autoenhance returned ${err.status}. The image may still be processing.`
         : err instanceof Error
           ? err.message
           : "The enhanced image is not ready yet.";
@@ -90,10 +90,7 @@ function normalizeFormat(value: string | null): "jpeg" | "png" | "webp" | "avif"
   return "jpeg";
 }
 
-function cleanBody(value: string): string {
-  if (!value) return "The image may still be processing.";
-  return value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-}
+
 
 function renderNotReadyPage(message: string): string {
   return `<!doctype html>

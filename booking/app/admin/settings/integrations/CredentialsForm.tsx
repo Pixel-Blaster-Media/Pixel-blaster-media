@@ -22,6 +22,7 @@ export interface CredentialFieldStatus {
 
 export interface CredentialsFormProps {
   provider:
+    | "autohdr"
     | "autoenhance"
     | "fotello"
     | "google_maps"

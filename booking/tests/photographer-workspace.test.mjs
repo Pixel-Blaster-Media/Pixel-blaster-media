@@ -25,10 +25,12 @@ test("Media presents one guided workflow and hides provider controls behind setu
   assert.match(workflow, /Planned delivery flow/);
   assert.doesNotMatch(workflow, /index === 0/);
   assert.match(workflow, /Primary media source/);
-  assert.match(workflow, /Advanced source setup/);
+  assert.match(workflow, /Source connections and fallback/);
   assert.match(workflow, /Manual photo upload/);
   assert.match(workflow, /manual\/canonical JPG upload is not enabled in this preview/);
-  assert.match(workflow, /Existing Autoenhance tools remain available/);
+  assert.match(workflow, /autoenhanceEnabled \? " Autoenhance remains available under source connections\."/);
+  assert.match(workflow, /autoHDREnabled \? \(/);
+  assert.match(workflow, /autoenhanceEnabled \? \(/);
   assert.doesNotMatch(workflow, /type="file"/);
 });
 

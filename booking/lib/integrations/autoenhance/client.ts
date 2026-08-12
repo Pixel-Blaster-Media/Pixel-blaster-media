@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getCredential } from "@/lib/integrations/credentials";
+import { requirePhotoEditingProviderEnabled } from "@/lib/integrations/provider-enablement";
 
 const AUTOENHANCE_BASE_URL =
   process.env.AUTOENHANCE_API_BASE ?? "https://api.autoenhance.ai";
@@ -101,6 +102,7 @@ export class AutoenhanceError extends Error {
 }
 
 async function apiKey(organizationId: string): Promise<string> {
+  await requirePhotoEditingProviderEnabled("autoenhance", organizationId);
   const key = await getCredential(
     "autoenhance",
     "api_key",
@@ -148,11 +150,11 @@ async function request<T>(
   });
 
   if (!res.ok) {
-    const body = await res.text();
+    await res.body?.cancel();
     throw new AutoenhanceError(
       `Autoenhance ${method} ${path} -> ${res.status}`,
       res.status,
-      body.slice(0, 600),
+      "",
     );
   }
 
@@ -165,7 +167,7 @@ async function request<T>(
     throw new AutoenhanceError(
       `Autoenhance ${method} ${path} returned invalid JSON`,
       res.status,
-      text.slice(0, 600),
+      "",
     );
   }
 }
@@ -382,11 +384,11 @@ export async function fetchEnhancedImage(
     signal: AbortSignal.timeout(60_000),
   });
   if (!res.ok) {
-    const body = await res.text();
+    await res.body?.cancel();
     throw new AutoenhanceError(
       `Autoenhance GET /v3/images/${imageId}/enhanced -> ${res.status}`,
       res.status,
-      body.slice(0, 600),
+      "",
     );
   }
   return res;
