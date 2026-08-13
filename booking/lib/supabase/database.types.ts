@@ -1172,6 +1172,22 @@ type AutoHDRJobFilesTable = CanonicalMediaTable<{
   source_batch_id: string; filename: string; input_sha256: string; created_at: string;
 }, "organization_id" | "booking_id" | "property_id" | "job_id" | "position" | "source_media_version_id" | "source_batch_id" | "filename" | "input_sha256">;
 
+type AutoHDRClaimRow = AutoHDRJobsTable["Row"] & {
+  newly_created: boolean;
+};
+
+type AutoHDRSafeJobRow = {
+  id: string;
+  organization_id: string;
+  booking_id: string;
+  property_id: string;
+  state: AutoHDRJobState;
+  provider_uid: string | null;
+  provider_status: AutoHDRProviderStatus | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type AutoHDRSourceUploadRow = {
   batch_id: string;
   asset_id: string;
@@ -1293,7 +1309,14 @@ export interface Database {
           p_manifest_sha256: string;
           p_files: Json;
         };
-        Returns: AutoHDRJobsTable["Row"][];
+        Returns: AutoHDRClaimRow[];
+      };
+      list_autohdr_jobs: {
+        Args: {
+          p_organization_id: string;
+          p_booking_id: string;
+        };
+        Returns: AutoHDRSafeJobRow[];
       };
       create_autohdr_source_batch: {
         Args: {

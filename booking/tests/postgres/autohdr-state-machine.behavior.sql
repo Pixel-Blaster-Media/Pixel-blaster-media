@@ -59,9 +59,9 @@ update public.media_versions
 
 do $$
 declare
-  v_job public.autohdr_jobs;
-  v_duplicate public.autohdr_jobs;
-  v_conflicting_job public.autohdr_jobs;
+  v_job record;
+  v_duplicate record;
+  v_conflicting_job record;
 begin
   select * into v_job
     from public.claim_autohdr_job(
@@ -72,6 +72,7 @@ begin
       '[{"position":0,"source_media_version_id":"51111111-1111-4111-8111-111111111101","filename":"Kitchen.jpg"}]'::jsonb
     );
   if v_job.state <> 'claimed' or v_job.file_count <> 1
+     or v_job.newly_created is distinct from true
      or v_job.provider_uid is not null or v_job.retrieval_claim_token is not null then
     raise exception 'new AutoHDR claim did not initialize safely';
   end if;
@@ -84,7 +85,8 @@ begin
       'autohdr-fixture-a', decode(repeat('aa', 32), 'hex'),
       '[{"position":0,"source_media_version_id":"51111111-1111-4111-8111-111111111101","filename":"Kitchen.jpg"}]'::jsonb
     );
-  if v_duplicate.id <> v_job.id then
+  if v_duplicate.id <> v_job.id
+     or v_duplicate.newly_created is distinct from false then
     raise exception 'duplicate AutoHDR idempotency did not return the existing job';
   end if;
 
@@ -205,7 +207,7 @@ begin
        and property_id = v_job.property_id
        and id = v_job.id;
     raise exception 'direct table update bypassed the retrieval state';
-  exception when check_violation then null;
+  exception when check_violation or insufficient_privilege then null;
   end;
 
   begin
@@ -293,20 +295,30 @@ begin
     raise exception 'AutoHDR RPC grants are unsafe';
   end if;
 
+  if has_function_privilege('anon', 'public.list_autohdr_jobs(uuid,uuid)', 'EXECUTE')
+     or not has_function_privilege('authenticated', 'public.list_autohdr_jobs(uuid,uuid)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.list_autohdr_jobs(uuid,uuid)', 'EXECUTE') then
+    raise exception 'AutoHDR safe-read RPC grants are unsafe';
+  end if;
+
   if has_table_privilege('anon', 'public.autohdr_jobs', 'SELECT')
-     or not has_table_privilege('authenticated', 'public.autohdr_jobs', 'SELECT')
+     or has_table_privilege('authenticated', 'public.autohdr_jobs', 'SELECT')
      or has_table_privilege('authenticated', 'public.autohdr_jobs', 'INSERT')
      or has_table_privilege('authenticated', 'public.autohdr_jobs', 'UPDATE')
      or has_table_privilege('authenticated', 'public.autohdr_jobs', 'DELETE')
-     or not has_table_privilege('service_role', 'public.autohdr_jobs', 'SELECT,INSERT,UPDATE')
+     or not has_table_privilege('service_role', 'public.autohdr_jobs', 'SELECT')
+     or has_table_privilege('service_role', 'public.autohdr_jobs', 'INSERT')
+     or has_table_privilege('service_role', 'public.autohdr_jobs', 'UPDATE')
      or has_table_privilege('service_role', 'public.autohdr_jobs', 'DELETE')
      or has_table_privilege('anon', 'public.autohdr_job_files', 'SELECT')
      or not has_table_privilege('authenticated', 'public.autohdr_job_files', 'SELECT')
      or has_table_privilege('authenticated', 'public.autohdr_job_files', 'INSERT')
      or has_table_privilege('authenticated', 'public.autohdr_job_files', 'UPDATE')
      or has_table_privilege('authenticated', 'public.autohdr_job_files', 'DELETE')
-     or not has_table_privilege('service_role', 'public.autohdr_job_files', 'SELECT,INSERT')
-     or has_table_privilege('service_role', 'public.autohdr_job_files', 'UPDATE,DELETE') then
+     or not has_table_privilege('service_role', 'public.autohdr_job_files', 'SELECT')
+     or has_table_privilege('service_role', 'public.autohdr_job_files', 'INSERT')
+     or has_table_privilege('service_role', 'public.autohdr_job_files', 'UPDATE')
+     or has_table_privilege('service_role', 'public.autohdr_job_files', 'DELETE') then
     raise exception 'AutoHDR table grants are unsafe';
   end if;
 
@@ -326,13 +338,31 @@ set local role authenticated;
 do $$
 declare
   v_jobs bigint;
-  v_files bigint;
+  v_has_token_column boolean;
 begin
-  select count(*) into v_jobs from public.autohdr_jobs;
-  select count(*) into v_files from public.autohdr_job_files;
-  if v_jobs <> 1 or v_files <> 1 then
-    raise exception 'admin read policy did not isolate the active tenant';
+  select count(*), coalesce(bool_or(to_jsonb(job) ? 'retrieval_claim_token'), false)
+    into v_jobs, v_has_token_column
+    from public.list_autohdr_jobs(
+      '11111111-1111-4111-8111-111111111111',
+      '11111111-1111-4111-8111-111111111102'
+    ) job;
+  if v_jobs <> 1 or v_has_token_column then
+    raise exception 'safe admin read did not isolate the tenant or exposed the retrieval token';
   end if;
+  begin
+    perform 1
+      from public.list_autohdr_jobs(
+        '22222222-2222-4222-8222-222222222222',
+        '22222222-2222-4222-8222-222222222203'
+      );
+    raise exception 'safe admin read crossed into another tenant';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform 1 from public.autohdr_jobs;
+    raise exception 'authenticated browser read the token-bearing AutoHDR base table';
+  exception when insufficient_privilege then null;
+  end;
   begin
     insert into public.autohdr_jobs (
       organization_id, booking_id, property_id, idempotency_key,
@@ -351,6 +381,49 @@ $$;
 
 reset role;
 
+set local role service_role;
+
+do $$
+declare
+  v_job_id uuid;
+begin
+  select id into v_job_id
+    from public.autohdr_jobs
+   where organization_id = '11111111-1111-4111-8111-111111111111'
+     and idempotency_key = 'autohdr-fixture-a';
+
+  begin
+    update public.autohdr_jobs
+       set provider_status = 'failed', last_error_code = 'forged.evidence'
+     where id = v_job_id;
+    raise exception 'service role rewrote provider or error evidence directly';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.autohdr_job_files (
+      organization_id, booking_id, property_id, job_id, position,
+      source_media_version_id, source_batch_id, filename, input_sha256
+    ) values (
+      '11111111-1111-4111-8111-111111111111',
+      '11111111-1111-4111-8111-111111111102',
+      '11111111-1111-4111-8111-111111111101', v_job_id, 1,
+      '51111111-1111-4111-8111-111111111101',
+      '31111111-1111-4111-8111-111111111101',
+      'Forged.jpg', decode(repeat('11', 32), 'hex')
+    );
+    raise exception 'service role appended an AutoHDR manifest file directly';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.autohdr_job_files where job_id = v_job_id;
+    raise exception 'service role deleted AutoHDR manifest evidence directly';
+  exception when insufficient_privilege then null;
+  end;
+end;
+$$;
+
+reset role;
+
 \if :{?commit_fixture}
 commit;
 \else
@@ -359,7 +432,7 @@ set local role service_role;
 do $$
 declare
   v_job public.autohdr_jobs;
-  v_claim public.autohdr_jobs;
+  v_claim record;
 begin
   select * into v_job
     from public.autohdr_jobs

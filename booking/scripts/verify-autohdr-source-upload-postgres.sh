@@ -4,6 +4,7 @@ export LC_ALL=C
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MIGRATION="$(find "$ROOT/supabase/migrations" -maxdepth 1 -type f -name '*_autohdr_canonical_source_upload.sql' | sort | tail -n 1)"
+REPAIR_MIGRATION="$ROOT/supabase/migrations/20260813023000_autohdr_database_hardening.sql"
 
 if [[ -n "${POSTGRES_BIN:-}" ]]; then
   PG_BIN="$POSTGRES_BIN"
@@ -65,6 +66,7 @@ if [[ -n "$MIGRATION" ]]; then
     exit 1
   fi
   "${PSQL[@]}" -f "$MIGRATION" >/dev/null
+  "${PSQL[@]}" -f "$REPAIR_MIGRATION" >/dev/null
 else
   echo "AutoHDR canonical source-upload migration is intentionally absent for the TDD red run." >&2
 fi
