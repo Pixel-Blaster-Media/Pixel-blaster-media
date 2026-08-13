@@ -147,6 +147,42 @@ test("database boundary centralizes the separately-owned RPC names and never sto
   }
 });
 
+test("source worker contract is additive, lease-fenced through completion, and generated", () => {
+  const migrationName = "20260813040000_autohdr_source_worker_recovery.sql";
+  const migration = read(`supabase/migrations/${migrationName}`);
+  const original = read("supabase/migrations/20260813033000_autohdr_source_worker_contract.sql");
+  const setup = read("supabase/setup.sql");
+  const types = read("lib/supabase/database.types.ts");
+  const runner = read("scripts/verify-autohdr-source-worker-postgres.sh");
+
+  assert.match(migration, /complete_autohdr_source_file/);
+  assert.match(migration, /worker_lease_token\s+is\s+distinct\s+from\s+p_lease_token/i);
+  assert.match(migration, /worker_lease_expires_at\s*<=\s*pg_catalog\.clock_timestamp\(\)/i);
+  assert.match(migration, /reservation_lease_token/);
+  assert.match(migration, /reconciliation_required/);
+  assert.match(original, /competing unaccepted master reservation/);
+  assert.equal(setup.split(`Begin supabase/migrations/${migrationName}`).length - 1, 1);
+  assert.match(types, /complete_autohdr_source_file/);
+  const reservationType = types.slice(
+    types.indexOf("type AutoHDRSourceMasterReservationRow"),
+    types.indexOf("export interface Database"),
+  );
+  assert.match(reservationType, /version_id:\s*string;[\s\S]*reused_accepted:\s*boolean;/);
+  assert.doesNotMatch(reservationType, /reservation_lease_token/);
+  const reservationReturn = migration.match(
+    /create or replace function public\.reserve_or_reuse_autohdr_source_master[\s\S]*?returns table \(([^)]*)\)/i,
+  )?.[1] ?? "";
+  for (const field of [
+    "version_id", "asset_id", "batch_id", "bucket_name", "object_key",
+    "newly_reserved", "reused_accepted",
+  ]) assert.match(reservationReturn, new RegExp(`\\b${field}\\b`));
+  assert.doesNotMatch(reservationReturn, /reservation_lease_token/);
+  assert.match(runner, /same-hash reservation race/i);
+  assert.match(runner, /crash-after-reservation/i);
+  assert.match(runner, /stale token/i);
+  assert.match(runner, /concurrent accepted reuse/i);
+});
+
 test("status never retrieves renders and blocked retrieval never calls the processed endpoint", () => {
   const workflow = read("lib/integrations/autohdr/application-core.ts");
   const refreshStart = workflow.indexOf("async function refresh");

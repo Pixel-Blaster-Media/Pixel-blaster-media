@@ -113,7 +113,8 @@ begin
   if to_regclass('public.autohdr_source_hash_reservations') is null
      or to_regclass('public.autohdr_source_position_refs') is null
      or to_regprocedure('public.claim_autohdr_source_file(uuid,text,integer)') is null
-     or to_regprocedure('public.reserve_or_reuse_autohdr_source_master(uuid,uuid,uuid,text,text,bytea,bigint,text)') is null then
+     or to_regprocedure('public.reserve_or_reuse_autohdr_source_master(uuid,uuid,uuid,text,text,bytea,bigint,text)') is null
+     or to_regprocedure('public.complete_autohdr_source_file(uuid,uuid,uuid,integer,integer)') is null then
     raise exception 'source worker lease/reservation/reuse contract is missing';
   end if;
 
@@ -124,6 +125,14 @@ begin
      or has_function_privilege('authenticated', 'public.claim_autohdr_source_file(uuid,text,integer)', 'execute')
      or not has_function_privilege('service_role', 'public.claim_autohdr_source_file(uuid,text,integer)', 'execute') then
     raise exception 'source worker contract is not forced-RLS and service-only';
+  end if;
+  if exists (
+    select 1 from public.autohdr_source_ingests
+    where request_id in ('00000000-0000-4000-8000-000000000020','00000000-0000-4000-8000-000000000025')
+      and (position not between 0 and 19 or expected_byte_size > 26214400)
+      and lifecycle_state <> 'reconciliation_required'
+  ) then
+    raise exception 'legacy out-of-worker-bounds fixtures were not contained';
   end if;
 end;
 $test$;
@@ -200,17 +209,11 @@ begin
 end;
 $test$;
 
--- Complete the reserved master, then prove a later same-tenant source reuses it
--- instead of creating a competing permanent content identity.
-select public.begin_autohdr_source_validation(
-  organization_id, booking_id, batch_id, asset_id, version_id, ingest_job_id,
-  quarantine_bucket_name, quarantine_object_key, 'worker-etag'
-) from worker_source;
-select public.accept_autohdr_quarantined_source_version(
-  organization_id, booking_id, batch_id, asset_id, version_id, ingest_job_id,
-  quarantine_bucket_name, quarantine_object_key, 'worker-etag',
-  master_bucket_name, master_object_key, sha256, byte_size, mime_type, 100, 100
-) from worker_source;
+-- Complete the reserved master through the lease-fenced atomic completion RPC,
+-- then prove a later same-tenant source reuses it.
+select public.complete_autohdr_source_file(
+  source.organization_id, source.ingest_job_id, claim.lease_token, 100, 100
+) from worker_source source cross join worker_claim claim;
 
 create temporary table reused_source on commit drop as
 select * from public.prepare_autohdr_source_batch(
@@ -319,6 +322,36 @@ select public.mark_autohdr_source_quarantined(
   '00000000-0000-4000-8000-000000000204',
   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
   '[{"filename":"concurrent-worker.jpg","byte_size":13,"mime_type":"image/jpeg","sha256":"3434343434343434343434343434343434343434343434343434343434343434"}]'
+);
+
+-- Durable crash-after-reservation fixture consumed by the runner.
+select public.mark_autohdr_source_quarantined(
+  organization_id, booking_id, batch_id, asset_id, version_id, ingest_job_id,
+  quarantine_bucket_name, quarantine_object_key, 'crash-worker-etag', sha256, byte_size, mime_type
+) from public.prepare_autohdr_source_batch(
+  '11111111-1111-4111-8111-111111111111',
+  '11111111-1111-4111-8111-111111111102',
+  '00000000-0000-4000-8000-000000000205',
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+  '[{"filename":"crash-worker.jpg","byte_size":14,"mime_type":"image/jpeg","sha256":"4545454545454545454545454545454545454545454545454545454545454545"}]'
+);
+
+-- Two distinct sources with identical bytes for the real reservation race.
+select public.mark_autohdr_source_quarantined(
+  organization_id, booking_id, batch_id, asset_id, version_id, ingest_job_id,
+  quarantine_bucket_name, quarantine_object_key, 'race-a-etag', sha256, byte_size, mime_type
+) from public.prepare_autohdr_source_batch(
+  '11111111-1111-4111-8111-111111111111','11111111-1111-4111-8111-111111111102',
+  '00000000-0000-4000-8000-000000000206','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+  '[{"filename":"race-a.jpg","byte_size":15,"mime_type":"image/jpeg","sha256":"5656565656565656565656565656565656565656565656565656565656565656"}]'
+);
+select public.mark_autohdr_source_quarantined(
+  organization_id, booking_id, batch_id, asset_id, version_id, ingest_job_id,
+  quarantine_bucket_name, quarantine_object_key, 'race-b-etag', sha256, byte_size, mime_type
+) from public.prepare_autohdr_source_batch(
+  '11111111-1111-4111-8111-111111111111','11111111-1111-4111-8111-111111111102',
+  '00000000-0000-4000-8000-000000000207','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+  '[{"filename":"race-b.jpg","byte_size":15,"mime_type":"image/jpeg","sha256":"5656565656565656565656565656565656565656565656565656565656565656"}]'
 );
 
 \if :{?commit_fixture}

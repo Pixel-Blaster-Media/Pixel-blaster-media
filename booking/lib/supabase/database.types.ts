@@ -1189,6 +1189,8 @@ type AutoHDRSourceIngestsTable = CanonicalMediaTable<{
   position: number; quarantine_bucket_name: string; quarantine_object_key: string;
   quarantine_etag: string | null; master_bucket_name: string; master_object_key: string;
   expected_sha256: string; expected_byte_size: number; expected_mime_type: string;
+  worker_id: string | null; worker_lease_token: string | null;
+  worker_lease_expires_at: string | null; worker_claimed_at: string | null;
   verified_width_px: number | null; verified_height_px: number | null;
   lifecycle_state: AutoHDRSourceLifecycleState; prepared_at: string;
   quarantined_at: string | null; validation_started_at: string | null;
@@ -1297,6 +1299,18 @@ type AutoHDRQuarantineCleanupSettlementRow = {
   cleanup_next_attempt_at: string;
   cleanup_settled_at: string | null;
   cleanup_outcome: string | null;
+};
+type AutoHDRSourceWorkerClaimRow = {
+  organization_id: string; booking_id: string; property_id: string; batch_id: string;
+  asset_id: string; version_id: string; ingest_job_id: string; request_id: string;
+  position: number; quarantine_bucket_name: string; quarantine_object_key: string;
+  quarantine_etag: string; master_bucket_name: string; master_object_key: string;
+  sha256: string; byte_size: number; mime_type: string; worker_id: string;
+  lease_token: string; lease_expires_at: string;
+};
+type AutoHDRSourceMasterReservationRow = {
+  version_id: string; asset_id: string; batch_id: string; bucket_name: string;
+  object_key: string; newly_reserved: boolean; reused_accepted: boolean;
 };
 
 export interface Database {
@@ -1456,6 +1470,21 @@ export interface Database {
           p_verified_height_px: number;
         };
         Returns: AutoHDRQuarantineAcceptanceRow[];
+      };
+      claim_autohdr_source_file: {
+        Args: { p_organization_id: string; p_worker_id: string; p_lease_seconds: number };
+        Returns: AutoHDRSourceWorkerClaimRow[];
+      };
+      reserve_or_reuse_autohdr_source_master: {
+        Args: { p_organization_id: string; p_ingest_job_id: string; p_lease_token: string;
+          p_master_bucket_name: string; p_master_object_key: string; p_sha256: string;
+          p_byte_size: number; p_mime_type: string };
+        Returns: AutoHDRSourceMasterReservationRow[];
+      };
+      complete_autohdr_source_file: {
+        Args: { p_organization_id: string; p_ingest_job_id: string; p_lease_token: string;
+          p_verified_width_px: number; p_verified_height_px: number };
+        Returns: { source_version_id: string; master_version_id: string; outcome: string }[];
       };
       claim_abandoned_autohdr_source_quarantine: {
         Args: { p_limit: number; p_lease_seconds: number };
