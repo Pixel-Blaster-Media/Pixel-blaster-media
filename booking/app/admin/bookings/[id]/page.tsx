@@ -32,6 +32,8 @@ import {
 import { hasPortalCredentials } from "@/lib/integrations/iguide/portal-client";
 import { listBookingAutoenhanceBatches } from "@/lib/integrations/autoenhance/workflow";
 import { isPhotoEditingProviderEnabled } from "@/lib/integrations/provider-enablement";
+import { getAutoHDRRuntimeReadiness } from "@/lib/integrations/autohdr/readiness";
+import { listBookingAutoHDRJobs } from "@/lib/integrations/autohdr/workflow";
 import {
   getServerSupabase,
   getServiceSupabase,
@@ -53,6 +55,7 @@ import BookingWorkspaceTabs, {
   type WorkspaceTabId,
 } from "./BookingWorkspaceTabs";
 import AutoenhanceSection from "./AutoenhanceSection";
+import AutoHDRSection from "./AutoHDRSection";
 import EditBookingForm, {
   type EditableBookingInitial,
   type EditCatalogItem,
@@ -168,6 +171,9 @@ export default async function BookingDetailPage({
     isPhotoEditingProviderEnabled("autohdr", admin.organizationId),
     isPhotoEditingProviderEnabled("autoenhance", admin.organizationId),
   ]);
+  const autoHDRReadiness = autoHDREnabled
+    ? await getAutoHDRRuntimeReadiness(admin.organizationId)
+    : { ready: false, prerequisites: ["Enable AutoHDR"] };
 
   const [
     { data: booking, error: bookErr },
@@ -176,6 +182,7 @@ export default async function BookingDetailPage({
     { data: listingWebsite },
     { data: bookingLineItems },
     autoenhanceBatches,
+    autoHDRJobs,
     catalog,
   ] =
     await Promise.all([
@@ -215,6 +222,9 @@ export default async function BookingDetailPage({
         .returns<BookingLineItemSelectionRow[]>(),
       autoenhanceEnabled
         ? listBookingAutoenhanceBatches({ admin, bookingId: id })
+        : Promise.resolve([]),
+      autoHDRReadiness.ready
+        ? listBookingAutoHDRJobs({ admin, bookingId: id })
         : Promise.resolve([]),
       getActiveCatalog({ organizationId: admin.organizationId }),
     ]);
@@ -398,6 +408,10 @@ export default async function BookingDetailPage({
             />
             <MediaWorkflow
               autoHDREnabled={autoHDREnabled}
+              autoHDRReadiness={autoHDRReadiness}
+              autoHDR={
+                <AutoHDRSection bookingId={booking.id} initialJobs={autoHDRJobs} />
+              }
               autoenhanceEnabled={autoenhanceEnabled}
               hasIGuidePhotos={Boolean(
                 iguidePhotoDownloads.mls || iguidePhotoDownloads.highRes,

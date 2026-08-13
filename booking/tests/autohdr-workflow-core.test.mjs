@@ -44,6 +44,21 @@ test("rejects duplicate, unsafe, empty, and oversized file manifests", () => {
     () => normalizeAutoHDRFileManifest([{ name: "photo.jpg", size: 101 * 1024 * 1024, lastModified: 1 }]),
     /100 MiB/i,
   );
+  assert.throws(
+    () => normalizeAutoHDRFileManifest([{ name: "photo.jpg", size: "1024", lastModified: 1 }]),
+    /100 MiB/i,
+  );
+  assert.throws(
+    () => normalizeAutoHDRFileManifest([{ name: "photo.jpg", size: 1024, lastModified: "1" }]),
+    /timestamp/i,
+  );
+});
+
+test("preserves the browser filename exactly", () => {
+  const [entry] = normalizeAutoHDRFileManifest([
+    { name: " Kitchen Final.CR3 ", size: 1024, lastModified: 1 },
+  ]);
+  assert.equal(entry.name, " Kitchen Final.CR3 ");
 });
 
 test("allows only the fail-closed AutoHDR job transitions", () => {

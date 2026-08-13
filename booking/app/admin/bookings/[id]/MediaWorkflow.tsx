@@ -1,9 +1,13 @@
 import type { ReactNode } from "react";
 
+import type { AutoHDRRuntimeReadiness } from "@/lib/integrations/autohdr/readiness";
+
 const PLANNED_FLOW = ["Upload", "Review", "Prepare", "Ready"] as const;
 
 export default function MediaWorkflow({
   autoHDREnabled,
+  autoHDRReadiness,
+  autoHDR,
   autoenhanceEnabled,
   hasIGuidePhotos,
   iGuide,
@@ -12,6 +16,8 @@ export default function MediaWorkflow({
   manualLinks,
 }: {
   autoHDREnabled: boolean;
+  autoHDRReadiness: AutoHDRRuntimeReadiness;
+  autoHDR: ReactNode;
   autoenhanceEnabled: boolean;
   hasIGuidePhotos: boolean;
   manualUploadEnabled: boolean;
@@ -88,12 +94,21 @@ export default function MediaWorkflow({
           <div>
             <h2 className="text-base font-semibold text-realtor-text">AutoHDR</h2>
             <p className="mt-1 max-w-2xl text-xs leading-relaxed text-realtor-muted">
-              AutoHDR is Pixel’s preferred editor, but booking uploads stay off until its presigned-upload contract, zero-credit test mode, private canonical storage, and review workflow are verified.
+              AutoHDR jobs stay tenant-bound and require an explicit review step after processing.
             </p>
           </div>
-          <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">
-            Integration gated
-          </span>
+          {!autoHDRReadiness.ready ? (
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">
+              Prerequisite: {autoHDRReadiness.prerequisites.join(", ")}
+            </span>
+          ) : null}
+        </div>
+        <div className="mt-4">
+          {autoHDRReadiness.ready ? autoHDR : (
+            <p className="rounded-xl border border-dashed border-amber-200 bg-amber-50/60 px-3 py-3 text-xs text-amber-900">
+              Booking uploads remain unavailable until every runtime prerequisite above is verified.
+            </p>
+          )}
         </div>
       </section>
       ) : null}
