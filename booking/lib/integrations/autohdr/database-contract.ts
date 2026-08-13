@@ -33,6 +33,15 @@ export type AutoHDRCanonicalSource = AutoHDRSourceManifestEntry & Readonly<{
   quarantineEtag: string | null;
 }>;
 
+export type AutoHDRSourceWorkerClaim = Readonly<{
+  organizationId: string; bookingId: string; propertyId: string; batchId: string;
+  assetId: string; versionId: string; ingestJobId: string; requestId: string;
+  position: number; quarantineBucketName: string; quarantineObjectKey: string;
+  quarantineEtag: string; masterBucketName: string; masterObjectKey: string;
+  sha256: string; byteSize: number; mimeType: "image/jpeg" | "image/png";
+  workerId: string; leaseToken: string; leaseExpiresAt: string;
+}>;
+
 function bytea(hex: string): string {
   return `\\x${hex}`;
 }
@@ -50,6 +59,13 @@ export const AUTOHDR_DATABASE_CONTRACT = Object.freeze({
   jobsTable: "autohdr_jobs",
   rpc: Object.freeze({
     prepareSourceUpload: "prepare_autohdr_source_batch",
+    markSourceQuarantined: "mark_autohdr_source_quarantined",
+    claimSourceFile: "claim_autohdr_source_file",
+    reserveSourceMaster: "reserve_or_reuse_autohdr_source_master",
+    completeSourceFile: "complete_autohdr_source_file",
+    settleSourceFile: "settle_autohdr_source_file",
+    claimQuarantineCleanup: "claim_abandoned_autohdr_source_quarantine",
+    settleQuarantineCleanup: "settle_autohdr_source_quarantine_cleanup",
     acceptSourceUpload: "accept_autohdr_source_version",
     claim: "claim_autohdr_job",
     list: "list_autohdr_jobs",
@@ -71,6 +87,17 @@ export const AUTOHDR_DATABASE_CONTRACT = Object.freeze({
         p_request_id: input.requestId,
         p_created_by: input.createdBy,
         p_files: input.files.map(sourceFile),
+      };
+    },
+    markSourceQuarantined(input: Scope & { file: AutoHDRCanonicalSource; quarantineEtag: string }) {
+      return {
+        p_organization_id: input.organizationId, p_booking_id: input.bookingId,
+        p_batch_id: input.file.mediaBatchId, p_asset_id: input.file.mediaAssetId,
+        p_version_id: input.file.sourceMediaVersionId, p_ingest_job_id: input.file.ingestJobId,
+        p_quarantine_bucket_name: "pixel-blaster-private-media",
+        p_quarantine_object_key: input.file.quarantineObjectKey,
+        p_quarantine_etag: input.quarantineEtag, p_sha256: bytea(input.file.sha256),
+        p_byte_size: input.file.byteSize, p_mime_type: input.file.contentType,
       };
     },
     acceptSourceUpload(input: Scope & AutoHDRCanonicalSource & {

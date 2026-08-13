@@ -7,6 +7,7 @@ import {
   AUTOHDR_DATABASE_CONTRACT,
   type AutoHDRCanonicalSource,
   type AutoHDRSourceManifestEntry,
+  type AutoHDRSourceWorkerClaim,
 } from "./database-contract";
 import { buildQuarantineSourcePutInput } from "./source-upload-core";
 import { AUTOHDR_SOURCE_MAX_FILES } from "./source-limits";
@@ -32,6 +33,88 @@ const JOB_STATES = new Set<AutoHDRJobState>([
   "retrieving", "review_pending", "retryable", "reconciliation_required", "rejected",
 ]);
 const PROVIDER_STATUSES = new Set(["created", "uploading", "processing", "ready", "failed", "unknown"]);
+
+export function createAutoHDRSourceWorkerStore(source: unknown = getServiceSupabase()) {
+  const client = source as DatabaseClient;
+  return Object.freeze({
+    async listSourceOrganizations(limit = 100) {
+      const { data, error } = await client.from("autohdr_source_ingests")
+        .select("organization_id").order("prepared_at", { ascending: true }).limit(limit);
+      if (error || !Array.isArray(data)) throw databaseUnavailable();
+      return [...new Set(data.map((row) => uuid((row as Record<string, unknown>).organization_id)))];
+    },
+    async markSourceQuarantined(input: {
+      organizationId: string; bookingId: string; propertyId: string;
+      file: AutoHDRCanonicalSource; quarantineEtag: string;
+    }) {
+      await call(client, AUTOHDR_DATABASE_CONTRACT.rpc.markSourceQuarantined,
+        AUTOHDR_DATABASE_CONTRACT.args.markSourceQuarantined(input));
+    },
+    async claimSourceFile(input: { organizationId: string; workerId: string; leaseSeconds: number }) {
+      const data = await call(client, AUTOHDR_DATABASE_CONTRACT.rpc.claimSourceFile, {
+        p_organization_id: input.organizationId, p_worker_id: input.workerId,
+        p_lease_seconds: input.leaseSeconds,
+      });
+      if (!Array.isArray(data) || data.length === 0) return null;
+      return parseSourceWorkerClaim(data[0]);
+    },
+    async reserveSourceMaster(input: AutoHDRSourceWorkerClaim) {
+      return parseMasterReservation(await call(client, AUTOHDR_DATABASE_CONTRACT.rpc.reserveSourceMaster, {
+        p_organization_id: input.organizationId, p_ingest_job_id: input.ingestJobId,
+        p_lease_token: input.leaseToken, p_master_bucket_name: input.masterBucketName,
+        p_master_object_key: input.masterObjectKey, p_sha256: byteaArgument(input.sha256),
+        p_byte_size: input.byteSize, p_mime_type: input.mimeType,
+      }));
+    },
+    async completeSourceFile(input: AutoHDRSourceWorkerClaim & {
+      outcome: "accepted" | "reused_accepted";
+      master: { versionId: string; assetId: string; batchId: string; bucketName: string; objectKey: string };
+      verifiedWidthPx: number; verifiedHeightPx: number;
+    }) {
+      return call(client, AUTOHDR_DATABASE_CONTRACT.rpc.completeSourceFile, workerSettlementArgs(input, {
+        p_outcome: input.outcome, p_master_version_id: input.master.versionId,
+        p_master_asset_id: input.master.assetId, p_master_batch_id: input.master.batchId,
+        p_master_bucket_name: input.master.bucketName, p_master_object_key: input.master.objectKey,
+        p_verified_width_px: input.verifiedWidthPx, p_verified_height_px: input.verifiedHeightPx,
+      }));
+    },
+    async settleSourceFile(input: AutoHDRSourceWorkerClaim & {
+      outcome: "retryable" | "reconciliation_required"; errorCode: string;
+    }) {
+      return call(client, AUTOHDR_DATABASE_CONTRACT.rpc.settleSourceFile,
+        workerSettlementArgs(input, { p_outcome: input.outcome, p_error_code: input.errorCode }));
+    },
+    async claimQuarantineCleanup(input: { limit: number; leaseSeconds: number }) {
+      const data = await call(client, AUTOHDR_DATABASE_CONTRACT.rpc.claimQuarantineCleanup, {
+        p_limit: input.limit, p_lease_seconds: input.leaseSeconds,
+      });
+      return Array.isArray(data) ? data.map(parseCleanupClaim) : [];
+    },
+    async settleQuarantineCleanup(input: ReturnType<typeof parseCleanupClaim> & {
+      quarantineEtag: string | null;
+      outcome: "cleaned" | "not_found" | "retryable" | "reconciliation_required";
+      errorCode: string | null;
+    }) {
+      return call(client, AUTOHDR_DATABASE_CONTRACT.rpc.settleQuarantineCleanup, {
+        p_organization_id: input.organizationId, p_booking_id: input.bookingId,
+        p_property_id: input.propertyId, p_ingest_job_id: input.ingestJobId,
+        p_quarantine_object_key: input.quarantineObjectKey,
+        p_quarantine_etag: input.quarantineEtag,
+        p_cleanup_lease_token: input.cleanupLeaseToken,
+        p_outcome: input.outcome, p_error_code: input.errorCode,
+      });
+    },
+  });
+}
+
+function workerSettlementArgs(input: AutoHDRSourceWorkerClaim, extra: Record<string, unknown>) {
+  return {
+    p_organization_id: input.organizationId, p_ingest_job_id: input.ingestJobId,
+    p_lease_token: input.leaseToken, p_quarantine_etag: input.quarantineEtag,
+    ...extra,
+  };
+}
+
 const JOB_COLUMNS = [
   "id", "organization_id", "booking_id", "property_id", "state", "provider_uid",
   "provider_status", "provider_uid_assigned_at", "upload_started_at", "finalize_started_at",
@@ -343,6 +426,63 @@ function byteaHex(value: unknown): string {
   const hex = text.startsWith("\\x") ? text.slice(2) : text;
   if (!/^[0-9a-f]{64}$/.test(hex)) throw new Error("AutoHDR database returned an invalid checksum.");
   return hex;
+}
+
+function byteaArgument(hex: string): string {
+  return `\\x${byteaHex(hex)}`;
+}
+
+function parseSourceWorkerClaim(value: unknown): AutoHDRSourceWorkerClaim {
+  const row = unwrapRow(value);
+  return Object.freeze({
+    organizationId: uuid(row.organization_id), bookingId: uuid(row.booking_id),
+    propertyId: uuid(row.property_id), batchId: uuid(row.batch_id), assetId: uuid(row.asset_id),
+    versionId: uuid(row.version_id), ingestJobId: uuid(row.ingest_job_id), requestId: uuid(row.request_id),
+    position: boundedPosition(row.position), quarantineBucketName: exactBucket(row.quarantine_bucket_name),
+    quarantineObjectKey: safeText(row.quarantine_object_key, 1024),
+    quarantineEtag: nullableEtag(row.quarantine_etag) ?? (() => { throw new Error("Missing quarantine ETag."); })(),
+    masterBucketName: exactBucket(row.master_bucket_name), masterObjectKey: safeText(row.master_object_key, 1024),
+    sha256: byteaHex(row.sha256), byteSize: positiveInteger(row.byte_size),
+    mimeType: exactContentType(row.mime_type), workerId: safeText(row.worker_id, 128),
+    leaseToken: uuid(row.lease_token), leaseExpiresAt: safeText(row.lease_expires_at, 64),
+  });
+}
+
+function parseMasterReservation(value: unknown) {
+  const row = unwrapRow(value);
+  if (typeof row.newly_reserved !== "boolean" || typeof row.reused_accepted !== "boolean") {
+    throw new Error("Invalid AutoHDR master reservation marker.");
+  }
+  return Object.freeze({
+    versionId: uuid(row.version_id), assetId: uuid(row.asset_id), batchId: uuid(row.batch_id),
+    bucketName: exactBucket(row.bucket_name), objectKey: safeText(row.object_key, 1024),
+    newlyReserved: row.newly_reserved, reusedAccepted: row.reused_accepted,
+  });
+}
+
+function parseCleanupClaim(value: unknown) {
+  const row = unwrapRow(value);
+  return Object.freeze({
+    organizationId: uuid(row.organization_id), bookingId: uuid(row.booking_id),
+    propertyId: uuid(row.property_id), ingestJobId: uuid(row.ingest_job_id),
+    quarantineObjectKey: safeText(row.quarantine_object_key, 1024),
+    quarantineEtag: nullableEtag(row.quarantine_etag), cleanupObjectEtag: nullableEtag(row.cleanup_object_etag),
+    cleanupAttempts: positiveInteger(row.cleanup_attempts), cleanupLeaseToken: uuid(row.cleanup_lease_token),
+    cleanupLeaseExpiresAt: safeText(row.cleanup_lease_expires_at, 64),
+    lifecycleState: safeText(row.lifecycle_state, 64),
+  });
+}
+
+function exactBucket(value: unknown): "pixel-blaster-private-media" {
+  if (value !== "pixel-blaster-private-media") throw new Error("AutoHDR database returned an invalid bucket.");
+  return value;
+}
+
+function boundedPosition(value: unknown): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value >= AUTOHDR_SOURCE_MAX_FILES) {
+    throw new Error("AutoHDR database returned an invalid source position.");
+  }
+  return value;
 }
 
 function positiveInteger(value: unknown): number {

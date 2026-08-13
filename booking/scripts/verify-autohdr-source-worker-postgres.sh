@@ -7,6 +7,7 @@ export LANG=C
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKER_MIGRATION="$ROOT/supabase/migrations/20260813033000_autohdr_source_worker_contract.sql"
 RECOVERY_MIGRATION="$ROOT/supabase/migrations/20260813040000_autohdr_source_worker_recovery.sql"
+RUNTIME_MIGRATION="$ROOT/supabase/migrations/20260813041000_autohdr_source_worker_runtime.sql"
 
 if [[ -n "${POSTGRES_BIN:-}" ]]; then
   PG_BIN="$POSTGRES_BIN"
@@ -71,6 +72,7 @@ if [[ -f "$WORKER_MIGRATION" ]]; then
   fi
   "${PSQL[@]}" -f "$WORKER_MIGRATION" >/dev/null
   "${PSQL[@]}" -f "$RECOVERY_MIGRATION" >/dev/null
+  "${PSQL[@]}" -f "$RUNTIME_MIGRATION" >/dev/null
 else
   echo "AutoHDR source worker migration is intentionally absent for the TDD red run." >&2
 fi

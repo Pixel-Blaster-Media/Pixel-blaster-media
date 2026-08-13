@@ -215,6 +215,20 @@ select public.complete_autohdr_source_file(
   source.organization_id, source.ingest_job_id, claim.lease_token, 100, 100
 ) from worker_source source cross join worker_claim claim;
 
+-- The application runtime overload must cross the same trigger-fenced
+-- lifecycle boundary and clear its lease, not merely exist in generated types.
+do $test$
+declare
+  v_source public.autohdr_source_ingests;
+begin
+  select * into v_source from public.autohdr_source_ingests
+   where request_id = '00000000-0000-4000-8000-000000000201';
+  if v_source.lifecycle_state <> 'accepted' or v_source.worker_lease_token is not null then
+    raise exception 'lease-fenced source completion did not accept and clear its lease';
+  end if;
+end;
+$test$;
+
 create temporary table reused_source on commit drop as
 select * from public.prepare_autohdr_source_batch(
   '11111111-1111-4111-8111-111111111111',
@@ -304,6 +318,71 @@ begin
   end if;
 end;
 $test$;
+
+-- Exercise the exact application-runtime completion overload.
+create temporary table runtime_source on commit drop as
+select * from public.prepare_autohdr_source_batch(
+  '11111111-1111-4111-8111-111111111111','11111111-1111-4111-8111-111111111102',
+  '00000000-0000-4000-8000-000000000208','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+  '[{"filename":"runtime.jpg","byte_size":16,"mime_type":"image/jpeg","sha256":"6767676767676767676767676767676767676767676767676767676767676767"}]'
+);
+select public.mark_autohdr_source_quarantined(
+  organization_id,booking_id,batch_id,asset_id,version_id,ingest_job_id,
+  quarantine_bucket_name,quarantine_object_key,'runtime-etag',sha256,byte_size,mime_type
+) from runtime_source;
+create temporary table runtime_claim on commit drop as
+select * from public.claim_autohdr_source_file(
+  '11111111-1111-4111-8111-111111111111','runtime-worker',60
+);
+create temporary table runtime_reservation on commit drop as
+select reserved.* from runtime_source source cross join runtime_claim claim
+cross join lateral public.reserve_or_reuse_autohdr_source_master(
+  source.organization_id,source.ingest_job_id,claim.lease_token,
+  source.master_bucket_name,source.master_object_key,source.sha256,source.byte_size,source.mime_type
+) reserved;
+select public.complete_autohdr_source_file(
+  source.organization_id,source.ingest_job_id,claim.lease_token,'runtime-etag','accepted',
+  reservation.version_id,reservation.asset_id,reservation.batch_id,reservation.bucket_name,
+  reservation.object_key,101,102
+) from runtime_source source cross join runtime_claim claim cross join runtime_reservation reservation;
+
+do $test$
+begin
+  if not exists (select 1 from public.autohdr_source_ingests
+    where request_id='00000000-0000-4000-8000-000000000208'
+      and lifecycle_state='accepted' and worker_lease_token is null) then
+    raise exception 'runtime completion overload did not accept and clear its lease';
+  end if;
+end $test$;
+
+-- Exact runtime reconciliation settlement must cross the same trigger fence.
+create temporary table runtime_settle_source on commit drop as
+select * from public.prepare_autohdr_source_batch(
+  '11111111-1111-4111-8111-111111111111','11111111-1111-4111-8111-111111111102',
+  '00000000-0000-4000-8000-000000000209','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+  '[{"filename":"runtime-settle.jpg","byte_size":17,"mime_type":"image/jpeg","sha256":"7878787878787878787878787878787878787878787878787878787878787878"}]'
+);
+select public.mark_autohdr_source_quarantined(
+  organization_id,booking_id,batch_id,asset_id,version_id,ingest_job_id,
+  quarantine_bucket_name,quarantine_object_key,'runtime-settle-etag',sha256,byte_size,mime_type
+) from runtime_settle_source;
+create temporary table runtime_settle_claim on commit drop as
+select * from public.claim_autohdr_source_file(
+  '11111111-1111-4111-8111-111111111111','runtime-settle-worker',60
+);
+select public.settle_autohdr_source_file(
+  source.organization_id,source.ingest_job_id,claim.lease_token,
+  'runtime-settle-etag','reconciliation_required','runtime_test_reconciliation'
+) from runtime_settle_source source cross join runtime_settle_claim claim;
+
+do $test$
+begin
+  if not exists (select 1 from public.autohdr_source_ingests
+    where request_id='00000000-0000-4000-8000-000000000209'
+      and lifecycle_state='reconciliation_required' and worker_lease_token is null) then
+    raise exception 'runtime reconciliation settlement did not transition and clear its lease';
+  end if;
+end $test$;
 
 -- Durable fixture consumed by the runner's real two-session SKIP LOCKED proof.
 select * from public.prepare_autohdr_source_batch(

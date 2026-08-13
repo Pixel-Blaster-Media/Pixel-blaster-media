@@ -3,17 +3,14 @@ import "server-only";
 import type { AdminContext } from "@/lib/auth/require-admin";
 import { requirePhotoEditingProviderEnabled } from "@/lib/integrations/provider-enablement";
 import { createProductionR2Storage } from "@/lib/media/storage/r2";
+import { inspectMediaObjectKey } from "@/lib/media/storage/keys";
 
 import { AutoHDRWorkflowError, createAutoHDRApplication } from "./application-core";
 import { getAutoHDRClient } from "./client";
-import { createAutoHDRJobStore } from "./database-adapter";
+import { createAutoHDRJobStore, createAutoHDRSourceWorkerStore } from "./database-adapter";
 import { presignCanonicalAutoHDRSources } from "./source-upload";
-import { ingestAutoHDRSourceFiles } from "./source-ingestion-core";
-import { verifyCanonicalImageStream } from "./source-image-verification";
 import { requireAutoHDRSourceMutationEnabled } from "./source-mutation-gate";
 import { normalizeAutoHDRSourceManifest } from "./workflow-core";
-
-const SOURCE_FILE_TIMEOUT_MS = 30_000;
 
 function application() {
   return createAutoHDRApplication({
@@ -97,18 +94,25 @@ export async function acceptBookingAutoHDRSourceUpload(input: {
   });
   const sources = prepared.sources;
   const storage = createProductionR2Storage(input.admin.organizationId);
-  const ingestion = await ingestAutoHDRSourceFiles({
-    organizationId: input.admin.organizationId,
-    bookingId: booking.id,
-    propertyId: booking.propertyId,
-    sources,
-    storage,
-    store,
-    verifyImage: verifyCanonicalImageStream,
-    signal: input.signal,
-    perFileTimeoutMs: SOURCE_FILE_TIMEOUT_MS,
-  });
-  return { ok: true as const, ...ingestion };
+  const workerStore = createAutoHDRSourceWorkerStore();
+  const results = [];
+  for (const source of sources) {
+    input.signal.throwIfAborted();
+    if (source.ingestState === "accepted") {
+      results.push({ position: source.position, sourceMediaVersionId: source.sourceMediaVersionId, status: "accepted" as const });
+      continue;
+    }
+    const quarantineKey = inspectMediaObjectKey(source.quarantineObjectKey, input.admin.organizationId);
+    if (quarantineKey.objectClass !== "quarantine") throw new AutoHDRWorkflowError("quarantine_identity_invalid", "Uploaded source evidence is unavailable.", 409);
+    const head = await storage.head(quarantineKey.key, input.signal);
+    if (!head.etag) throw new AutoHDRWorkflowError("quarantine_evidence_missing", "Uploaded source evidence is unavailable.", 409);
+    await workerStore.markSourceQuarantined({
+      organizationId: input.admin.organizationId, bookingId: booking.id,
+      propertyId: booking.propertyId, file: source, quarantineEtag: head.etag,
+    });
+    results.push({ position: source.position, sourceMediaVersionId: source.sourceMediaVersionId, status: "queued" as const });
+  }
+  return { ok: true as const, status: "queued" as const, results };
 }
 
 export async function finalizeBookingAutoHDR(input: {
