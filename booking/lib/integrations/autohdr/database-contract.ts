@@ -27,7 +27,10 @@ export type AutoHDRCanonicalSource = AutoHDRSourceManifestEntry & Readonly<{
   mediaAssetId: string;
   sourceMediaVersionId: string;
   ingestJobId: string;
+  quarantineObjectKey: string;
   objectKey: string;
+  ingestState: "discovered" | "accepted";
+  quarantineEtag: string | null;
 }>;
 
 function bytea(hex: string): string {
@@ -68,6 +71,7 @@ export const AUTOHDR_DATABASE_CONTRACT = Object.freeze({
       };
     },
     acceptSourceUpload(input: Scope & AutoHDRCanonicalSource & {
+      quarantineEtag: string;
       verifiedWidthPx: number;
       verifiedHeightPx: number;
     }) {
@@ -79,6 +83,8 @@ export const AUTOHDR_DATABASE_CONTRACT = Object.freeze({
         p_version_id: input.sourceMediaVersionId,
         p_ingest_job_id: input.ingestJobId,
         p_bucket_name: "pixel-blaster-private-media",
+        p_quarantine_object_key: input.quarantineObjectKey,
+        p_quarantine_etag: input.quarantineEtag,
         p_object_key: input.objectKey,
         p_sha256: bytea(input.sha256),
         p_byte_size: input.byteSize,

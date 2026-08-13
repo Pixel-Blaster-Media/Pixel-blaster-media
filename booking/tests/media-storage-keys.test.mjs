@@ -66,6 +66,7 @@ class FakeS3Client {
         metadata: input.Metadata,
         etag: '"put-etag"',
       });
+      if (this.onPutAfterWrite) await this.onPutAfterWrite(identity);
       return { ETag: '"put-etag"' };
     }
     if (command.constructor.name === "HeadObjectCommand") {
@@ -432,6 +433,72 @@ test("deletion is restricted to an exact quarantine object and ETag", async () =
 
   const master = buildMasterKey(ORGANIZATION_ID, ASSET_ID, VERSION_ID, SHA256, "jpg");
   await assert.rejects(store.deleteQuarantine({ key: master, expectedEtag: '"etag"' }), /quarantine/i);
+});
+
+test("verified quarantine promotion re-uploads exact bytes create-only and never deletes a master", async () => {
+  const { client, store } = storage();
+  const bytes = Buffer.from("synthetic-media");
+  const quarantine = buildQuarantineKey(ORGANIZATION_ID, JOB_ID);
+  const master = buildMasterKey(ORGANIZATION_ID, ASSET_ID, VERSION_ID, SHA256, "jpg");
+  await store.putBufferCreateOnly({ key: quarantine, bytes, contentType: "image/jpeg", sha256: SHA256 });
+  const sourceHead = await store.head(quarantine);
+  await store.promoteQuarantineCreateOnly({
+    sourceKey: quarantine,
+    destinationKey: master,
+    expectedSourceEtag: sourceHead.etag,
+    expectedBytes: bytes.length,
+    contentType: "image/jpeg",
+    sha256: SHA256,
+  });
+  assert.deepEqual(await consume((await store.getVerified(master)).body), bytes);
+  const masterPut = client.calls.find((call) => call.name === "PutObjectCommand" && call.input.Key === master);
+  assert.equal(masterPut.input.IfNoneMatch, "*");
+  assert.deepEqual(masterPut.input.Metadata, { sha256: SHA256 });
+  assert.equal(masterPut.input.ContentLength, bytes.length);
+  assert.equal(masterPut.input.ContentType, "image/jpeg");
+
+  await assert.rejects(store.promoteQuarantineCreateOnly({
+    sourceKey: quarantine,
+    destinationKey: master,
+    expectedSourceEtag: sourceHead.etag,
+    expectedBytes: bytes.length,
+    contentType: "image/jpeg",
+    sha256: SHA256,
+  }), /already exists/i);
+  await assert.rejects(store.promoteQuarantineCreateOnly({
+    sourceKey: quarantine,
+    destinationKey: master,
+    expectedSourceEtag: '"wrong"',
+    expectedBytes: bytes.length,
+    contentType: "image/jpeg",
+    sha256: SHA256,
+  }), /evidence/i);
+  assert.equal(
+    client.calls.some((call) => call.name === "DeleteObjectCommand" && call.input.Key === master),
+    false,
+  );
+});
+
+test("promotion response loss leaves the immutable master for explicit reconciliation", async () => {
+  const { client, store } = storage();
+  const bytes = Buffer.from("synthetic-media");
+  const quarantine = buildQuarantineKey(ORGANIZATION_ID, JOB_ID);
+  const master = buildMasterKey(ORGANIZATION_ID, ASSET_ID, VERSION_ID, SHA256, "jpg");
+  await store.putBufferCreateOnly({ key: quarantine, bytes, contentType: "image/jpeg", sha256: SHA256 });
+  const sourceHead = await store.head(quarantine);
+  client.onPutAfterWrite = async (identity) => {
+    if (identity.endsWith(`/${master}`)) throw new Error("synthetic response loss");
+  };
+  await assert.rejects(store.promoteQuarantineCreateOnly({
+    sourceKey: quarantine,
+    destinationKey: master,
+    expectedSourceEtag: sourceHead.etag,
+    expectedBytes: bytes.length,
+    contentType: "image/jpeg",
+    sha256: SHA256,
+  }), /response loss/i);
+  assert.deepEqual(await consume((await store.getVerified(master)).body), bytes);
+  assert.equal(client.calls.some((call) => call.name === "DeleteObjectCommand"), false);
 });
 
 test("verified downloads reject altered bytes and destroy the upstream stream on cancellation", async () => {

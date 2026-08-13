@@ -42,6 +42,7 @@ test("canonical source routes authenticate before prepare or acceptance and keep
     assert.doesNotMatch(source, /String\(err(or)?\)|err(or)?\.message/);
   }
   const workflow = read("lib/integrations/autohdr/workflow.ts");
+  const ingestion = read("lib/integrations/autohdr/source-ingestion-core.ts");
   const acceptRoute = read(route("source/accept"));
   const packageJson = JSON.parse(read("package.json"));
   assert.equal(packageJson.dependencies.sharp, "0.35.3");
@@ -49,21 +50,27 @@ test("canonical source routes authenticate before prepare or acceptance and keep
   assert.match(acceptRoute, /export const maxDuration = 300/);
   assert.match(acceptRoute, /request\.signal/);
   assert.match(acceptRoute, /AbortSignal\.timeout/);
-  assert.match(workflow, /AbortSignal\.timeout/);
-  assert.match(workflow, /\.head\(objectKey, fileSignal\)/);
-  assert.match(workflow, /\.getVerified\(objectKey, fileSignal\)/);
+  assert.match(ingestion, /AbortSignal\.timeout/);
+  assert.match(ingestion, /\.head\(quarantineKey, signal\)/);
+  assert.match(ingestion, /\.getVerified\(quarantineKey, signal\)/);
   assert.match(workflow, /createProductionR2Storage/);
-  assert.match(workflow, /\.head\(/);
-  assert.match(workflow, /\.getVerified\(/);
+  assert.match(ingestion, /\.head\(/);
+  assert.match(ingestion, /\.getVerified\(/);
   assert.match(workflow, /verifyCanonicalImageStream/);
-  assert.ok(workflow.indexOf(".head(") < workflow.indexOf(".getVerified("));
-  assert.ok(workflow.indexOf(".getVerified(") < workflow.indexOf("acceptSourceUpload("));
+  assert.ok(ingestion.indexOf(".head(") < ingestion.indexOf(".getVerified("));
+  assert.ok(ingestion.indexOf(".getVerified(") < ingestion.indexOf("await input.store.acceptSourceUpload("));
   assert.doesNotMatch(read("lib/integrations/autohdr/database-adapter.ts"), /uploadUrl|upload_url|presigned/i);
   const requestCore = read("lib/integrations/autohdr/request-core.ts");
   assert.match(requestCore, /requestId/);
   assert.match(requestCore, /UUID\.test\(row\.requestId\)/);
   assert.doesNotMatch(workflow, /randomUUID/);
   assert.match(workflow, /requestId:\s*input\.requestId/);
+  const acceptanceStart = workflow.indexOf("export async function acceptBookingAutoHDRSourceUpload");
+  const acceptanceEnd = workflow.indexOf("export async function finalizeBookingAutoHDR", acceptanceStart);
+  const acceptance = workflow.slice(acceptanceStart, acceptanceEnd);
+  assert.match(acceptance, /store\.prepareSourceUpload/);
+  assert.match(acceptance, /const sources = prepared\.sources/);
+  assert.doesNotMatch(acceptance, /normalizeAcceptedAutoHDRSources/);
   assert.doesNotMatch(workflow, /if \(!prepared\.newlyCreated\)[\s\S]{0,300}source_request_conflict/);
 });
 
@@ -162,6 +169,7 @@ test("MediaWorkflow swaps gated prose for the compact runtime-gated AutoHDR UI",
   assert.match(section, /hashAutoHDRSourceFiles/);
   assert.match(section, /crypto\.randomUUID\(\)/);
   assert.match(section, /requestId/);
+  assert.match(section, /sources:\s*sourcePrepared\.sources\.map\(withoutUploadCapability\),\s*requestId/);
   assert.match(section, /uploadCanonicalAutoHDRSources/);
   assert.match(section, /source\/prepare/);
   assert.match(section, /source\/accept/);

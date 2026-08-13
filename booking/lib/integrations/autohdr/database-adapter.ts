@@ -8,7 +8,7 @@ import {
   type AutoHDRCanonicalSource,
   type AutoHDRSourceManifestEntry,
 } from "./database-contract";
-import { buildCanonicalSourcePutInput } from "./source-upload-core";
+import { buildQuarantineSourcePutInput } from "./source-upload-core";
 import { AUTOHDR_SOURCE_MAX_FILES } from "./source-limits";
 import type { AutoHDRJobState } from "./workflow-core";
 
@@ -66,10 +66,14 @@ export function createAutoHDRJobStore(
       const data = await call(
         client,
         AUTOHDR_DATABASE_CONTRACT.rpc.acceptSourceUpload,
-        AUTOHDR_DATABASE_CONTRACT.args.acceptSourceUpload({ ...input, ...input.file }),
+        AUTOHDR_DATABASE_CONTRACT.args.acceptSourceUpload({ ...input.file, ...input }),
       );
       parseSourceAcceptance(data, input.file);
-      return input.file;
+      return Object.freeze({
+        ...input.file,
+        ingestState: "accepted" as const,
+        quarantineEtag: input.quarantineEtag,
+      });
     },
 
     async claim(input) {
@@ -223,7 +227,10 @@ function parseCanonicalSources(
       mediaAssetId: uuid(row.asset_id),
       sourceMediaVersionId: uuid(row.version_id),
       ingestJobId: uuid(row.ingest_job_id),
+      quarantineObjectKey: safeText(row.quarantine_object_key, 1024),
       objectKey: safeText(row.object_key, 1024),
+      ingestState: exactIngestState(row.ingest_state),
+      quarantineEtag: nullableEtag(row.quarantine_etag),
     });
     if (
       source.filename !== expected.filename ||
@@ -234,8 +241,10 @@ function parseCanonicalSources(
     ) {
       throw new Error("AutoHDR source database contract did not echo the exact manifest.");
     }
-    buildCanonicalSourcePutInput({
+    buildQuarantineSourcePutInput({
       organizationId,
+      ingestJobId: source.ingestJobId,
+      quarantineObjectKey: source.quarantineObjectKey,
       mediaAssetId: source.mediaAssetId,
       sourceMediaVersionId: source.sourceMediaVersionId,
       objectKey: source.objectKey,
@@ -308,6 +317,22 @@ function exactContentType(value: unknown): "image/jpeg" | "image/png" {
     throw new Error("AutoHDR database returned an invalid content type.");
   }
   return value;
+}
+
+function exactIngestState(value: unknown): "discovered" | "accepted" {
+  if (value !== "discovered" && value !== "accepted") {
+    throw new Error("AutoHDR database returned an invalid source ingest state.");
+  }
+  return value;
+}
+
+function nullableEtag(value: unknown): string | null {
+  if (value == null) return null;
+  const text = safeText(value, 130);
+  if (!/^(?:W\/)?"[^"\r\n]{1,126}"$/.test(text)) {
+    throw new Error("AutoHDR database returned an invalid quarantine ETag.");
+  }
+  return text;
 }
 
 function databaseUnavailable(): Error {

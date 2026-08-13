@@ -47,8 +47,25 @@ type CanonicalUploadFetch = (
     };
     body: BrowserFile;
     redirect: "error";
+    signal: AbortSignal;
   },
 ) => Promise<UploadResponse>;
+
+export type CanonicalBrowserUploadResult = Readonly<{
+  position: number;
+  filename: string;
+  attempted: boolean;
+  status: "uploaded" | "reconciliation_candidate" | "accepted" | "cancelled";
+}>;
+
+export class CanonicalBrowserUploadError extends Error {
+  readonly results: CanonicalBrowserUploadResult[];
+
+  constructor(results: CanonicalBrowserUploadResult[]) {
+    super("One or more Pixel source uploads failed; unchanged files may be retried.");
+    this.results = results;
+  }
+}
 
 export async function hashAutoHDRSourceFiles(
   files: BrowserFile[],
@@ -122,14 +139,17 @@ export async function uploadCanonicalAutoHDRSources(
         "If-None-Match": "*";
         "x-amz-meta-sha256": string;
       };
-    };
+    } | null;
   }>,
   options: {
     concurrency?: number;
     fetchImpl?: CanonicalUploadFetch;
     onProgress?: (completed: number, total: number) => void;
+    signal?: AbortSignal;
+    perFileTimeoutMs?: number;
+    operationTimeoutMs?: number;
   } = {},
-): Promise<void> {
+): Promise<CanonicalBrowserUploadResult[]> {
   if (files.length !== sources.length || files.length < 1) {
     throw new Error("AutoHDR files and canonical source identities did not match.");
   }
@@ -140,6 +160,7 @@ export async function uploadCanonicalAutoHDRSources(
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index];
     const source = sources[index];
+    const upload = source.upload;
     if (
       source.position !== index ||
       source.filename !== file.name ||
@@ -147,52 +168,103 @@ export async function uploadCanonicalAutoHDRSources(
       source.lastModified !== file.lastModified ||
       source.contentType !== canonicalBrowserContentType(file) ||
       !SHA256.test(source.sha256) ||
-      source.upload.method !== "PUT" ||
-      source.upload.headers["Content-Type"] !== source.contentType ||
-      source.upload.headers["If-None-Match"] !== "*" ||
-      !hasExactCanonicalSignedHeaders(source.upload.url) ||
-      Object.keys(source.upload.headers).sort().join("\n") !==
+      (source.ingestState === "accepted" ? upload !== null : upload === null) ||
+      (upload !== null && (
+      upload.method !== "PUT" ||
+      upload.headers["Content-Type"] !== source.contentType ||
+      upload.headers["If-None-Match"] !== "*" ||
+      !hasExactCanonicalSignedHeaders(upload.url, source.quarantineObjectKey) ||
+      Object.keys(upload.headers).sort().join("\n") !==
         ["Content-Type", "If-None-Match", "x-amz-meta-sha256"].sort().join("\n") ||
-      source.upload.headers["x-amz-meta-sha256"] !== source.sha256
+      upload.headers["x-amz-meta-sha256"] !== source.sha256))
     ) {
       throw new Error("AutoHDR files and canonical source identities did not match.");
     }
   }
   const fetchImpl = options.fetchImpl ?? (fetch as unknown as CanonicalUploadFetch);
+  const perFileTimeoutMs = validDeadline(options.perFileTimeoutMs ?? 120_000, "file");
+  const operationTimeoutMs = validDeadline(options.operationTimeoutMs ?? 270_000, "operation");
+  const terminalController = new AbortController();
+  const operationSignal = AbortSignal.any([
+    terminalController.signal,
+    AbortSignal.timeout(operationTimeoutMs),
+    ...(options.signal ? [options.signal] : []),
+  ]);
   let next = 0;
   let completed = 0;
+  let terminalFailure = false;
+  const results: CanonicalBrowserUploadResult[] = sources.map((source) => Object.freeze({
+    position: source.position,
+    filename: source.filename,
+    attempted: false,
+    status: source.ingestState === "accepted" ? "accepted" as const : "cancelled" as const,
+  }));
   const worker = async () => {
-    while (next < files.length) {
+    while (!operationSignal.aborted && next < files.length) {
       const index = next++;
       const file = files[index];
       const source = sources[index];
-      const response = await fetchImpl(source.upload.url, {
-        method: "PUT",
-        headers: source.upload.headers,
-        body: file,
-        redirect: "error",
-      });
-      // An idempotent retry may find the exact checksum-addressed key present.
-      // Only server-side HEAD + verified GET may accept that existing object.
-      if (!response.ok && response.status !== 412) {
-        throw new Error(`Pixel source upload failed for ${file.name} (${response.status}).`);
+      if (source.upload === null) {
+        completed += 1;
+        options.onProgress?.(completed, files.length);
+        continue;
+      }
+      const fileTimeout = AbortSignal.timeout(perFileTimeoutMs);
+      const fileSignal = AbortSignal.any([operationSignal, fileTimeout]);
+      results[index] = Object.freeze({ position: index, filename: file.name, attempted: true, status: "reconciliation_candidate" });
+      try {
+        const response = await fetchImpl(source.upload.url, {
+          method: "PUT",
+          headers: source.upload.headers,
+          body: file,
+          redirect: "error",
+          signal: fileSignal,
+        });
+        if (response.ok) {
+          results[index] = Object.freeze({ position: index, filename: file.name, attempted: true, status: "uploaded" });
+        } else if (response.status !== 412) {
+          terminalFailure = true;
+          results[index] = Object.freeze({ position: index, filename: file.name, attempted: true, status: "cancelled" });
+          terminalController.abort(new Error("terminal source upload failure"));
+          return;
+        }
+      } catch {
+        if (terminalController.signal.aborted) {
+          results[index] = Object.freeze({ position: index, filename: file.name, attempted: true, status: "cancelled" });
+          return;
+        }
+        // A network error, deadline, or externally aborted response can arrive
+        // after R2 committed the create-only PUT. Server reconciliation decides.
       }
       completed += 1;
       options.onProgress?.(completed, files.length);
     }
   };
   await Promise.all(Array.from({ length: Math.min(concurrency, files.length) }, () => worker()));
+  if (terminalFailure) throw new CanonicalBrowserUploadError(Object.freeze(results) as CanonicalBrowserUploadResult[]);
+  return Object.freeze(results) as CanonicalBrowserUploadResult[];
 }
 
-function hasExactCanonicalSignedHeaders(value: string): boolean {
+function hasExactCanonicalSignedHeaders(value: string, quarantineObjectKey: string): boolean {
   try {
     const url = new URL(value);
     return url.protocol === "https:" &&
+      !url.username &&
+      !url.password &&
+      Boolean(url.hostname) &&
+      decodeURIComponent(url.pathname) === `/${quarantineObjectKey}` &&
       (url.searchParams.get("X-Amz-SignedHeaders") ?? "") ===
         "content-length;content-type;host;if-none-match;x-amz-meta-sha256";
   } catch {
     return false;
   }
+}
+
+function validDeadline(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 1 || value > 300_000) {
+    throw new Error(`AutoHDR ${label} upload deadline is invalid.`);
+  }
+  return value;
 }
 
 export async function uploadAutoHDRFiles(

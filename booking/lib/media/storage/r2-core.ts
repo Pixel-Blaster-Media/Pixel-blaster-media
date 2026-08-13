@@ -372,6 +372,63 @@ export class R2Storage {
     return { body: verifier, bytes: expectedBytes, contentType: result.ContentType ?? null, sha256: expected };
   }
 
+  async promoteQuarantineCreateOnly({
+    sourceKey,
+    destinationKey,
+    expectedSourceEtag,
+    expectedBytes,
+    contentType,
+    sha256,
+    signal,
+  }: {
+    sourceKey: MediaObjectKey;
+    destinationKey: MediaObjectKey;
+    expectedSourceEtag: string;
+    expectedBytes: number;
+    contentType: string;
+    sha256: string;
+    signal?: AbortSignal;
+  }): Promise<{ etag: string | null; bytes: number; sha256: string }> {
+    const source = this.resolve(sourceKey);
+    const destination = this.resolve(destinationKey);
+    if (source.objectClass !== "quarantine" || destination.objectClass !== "masters") {
+      throw new Error("promotion requires an exact quarantine source and master destination");
+    }
+    const etag = safeEtag(expectedSourceEtag);
+    const expected = safeSha256(sha256);
+    safeContentType(contentType);
+    if (!Number.isSafeInteger(expectedBytes) || expectedBytes < 1 || expectedBytes > MAX_BUFFER_BYTES) {
+      throw new Error("promotion byte length is invalid");
+    }
+    const before = await this.head(source.key, signal);
+    if (
+      before.etag !== etag || before.bytes !== expectedBytes ||
+      before.contentType !== contentType || before.sha256 !== expected
+    ) {
+      throw new Error("quarantine promotion evidence changed before verified re-upload");
+    }
+    const download = await this.getVerified(source.key, signal);
+    const chunks: Buffer[] = [];
+    let bytes = 0;
+    for await (const chunk of download.body) {
+      assertNotAborted(signal);
+      const snapshot = Buffer.from(chunk);
+      bytes += snapshot.length;
+      if (bytes > expectedBytes) throw new Error("quarantine promotion byte length mismatch");
+      chunks.push(snapshot);
+    }
+    if (bytes !== expectedBytes) throw new Error("quarantine promotion byte length mismatch");
+    const after = await this.head(source.key, signal);
+    if (after.etag !== etag) throw new Error("quarantine promotion evidence changed during verified re-upload");
+    return this.putBufferCreateOnly({
+      key: destination.key,
+      bytes: Buffer.concat(chunks, bytes),
+      contentType,
+      sha256: expected,
+      signal,
+    });
+  }
+
   async deleteQuarantine({
     key,
     expectedEtag,

@@ -4,14 +4,17 @@ import { useEffect, useState } from "react";
 
 import type { AutoHDRJob } from "@/lib/integrations/autohdr/application-core";
 import {
+  CanonicalBrowserUploadError,
   hashAutoHDRSourceFiles,
   uploadAutoHDRFiles,
   uploadCanonicalAutoHDRSources,
   validateAutoHDRSourceFiles,
 } from "@/lib/integrations/autohdr/browser-upload";
+import type { CanonicalBrowserUploadResult } from "@/lib/integrations/autohdr/browser-upload";
 import { AUTOHDR_MODELS, type AutoHDRModel } from "@/lib/integrations/autohdr/contract";
 import type { AutoHDRCanonicalSource } from "@/lib/integrations/autohdr/database-contract";
 import type { CanonicalSourcePreparedUpload } from "@/lib/integrations/autohdr/source-upload";
+import type { AutoHDRSourceIngestionResult } from "@/lib/integrations/autohdr/source-ingestion-core";
 import type { AutoHDRPreparedUpload } from "@/lib/integrations/autohdr/upload-contract";
 
 type JobResponse =
@@ -24,7 +27,7 @@ type SourcePrepareResponse =
   | { ok: true; sources: CanonicalSourcePreparedUpload[] }
   | { ok: false; error: string; code: string };
 type SourceAcceptResponse =
-  | { ok: true; sources: AutoHDRCanonicalSource[] }
+  | { ok: true; sources: AutoHDRCanonicalSource[]; results: AutoHDRSourceIngestionResult[] }
   | { ok: false; error: string; code: string };
 
 const ACCEPTED_FILES = "image/jpeg,image/png,.jpg,.jpeg,.png";
@@ -46,6 +49,8 @@ export default function AutoHDRSection({
   const [busy, setBusy] = useState(false);
   const [sourceRequestId, setSourceRequestId] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ completed: number; total: number } | null>(null);
+  const [sourceResults, setSourceResults] = useState<AutoHDRSourceIngestionResult[]>([]);
+  const [browserResults, setBrowserResults] = useState<CanonicalBrowserUploadResult[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const activeJob = jobs[0] ?? null;
@@ -95,16 +100,25 @@ export default function AutoHDRSection({
       if (!sourcePrepared.ok) throw new Error(sourcePrepared.error);
       setMessage("Uploading originals to private Pixel storage…");
       setProgress({ completed: 0, total: files.length });
-      await uploadCanonicalAutoHDRSources(files, sourcePrepared.sources, {
+      const uploadResults = await uploadCanonicalAutoHDRSources(files, sourcePrepared.sources, {
         concurrency: 4,
         onProgress: (completed, total) => setProgress({ completed, total }),
       });
+      setBrowserResults(uploadResults);
       setMessage("Verifying canonical source uploads…");
       const sourceAccepted = await apiJson<SourceAcceptResponse>(
         `/api/admin/bookings/${bookingId}/autohdr/source/accept`,
-        { sources: sourcePrepared.sources.map(withoutUploadCapability) },
+        { sources: sourcePrepared.sources.map(withoutUploadCapability), requestId },
       );
       if (!sourceAccepted.ok) throw new Error(sourceAccepted.error);
+      setSourceResults(sourceAccepted.results);
+      const unresolved = sourceAccepted.results.filter((result) => result.status !== "accepted");
+      if (unresolved.length) {
+        setProgress({ completed: sourceAccepted.sources.length, total: files.length });
+        throw new Error(
+          `${sourceAccepted.sources.length} of ${files.length} sources are accepted. Retry the unchanged selection to reconcile the remainder.`,
+        );
+      }
       setMessage("Preparing secure AutoHDR uploads…");
       const prepared = await apiJson<PrepareResponse>(
         `/api/admin/bookings/${bookingId}/autohdr/prepare`,
@@ -136,6 +150,7 @@ export default function AutoHDRSection({
       setSourceRequestId(null);
       setMessage("Processing at AutoHDR. This panel will refresh automatically.");
     } catch (cause) {
+      if (cause instanceof CanonicalBrowserUploadError) setBrowserResults(cause.results);
       setError(publicClientError(cause));
       setMessage(null);
     } finally {
@@ -195,10 +210,14 @@ export default function AutoHDRSection({
                 validateAutoHDRSourceFiles(selected);
                 setFiles(selected);
                 setSourceRequestId(null);
+                setSourceResults([]);
+                setBrowserResults([]);
                 setError(null);
               } catch (cause) {
                 setFiles([]);
                 setSourceRequestId(null);
+                setSourceResults([]);
+                setBrowserResults([]);
                 setError(publicClientError(cause));
                 event.currentTarget.value = "";
               }
@@ -245,6 +264,18 @@ export default function AutoHDRSection({
       {progress ? (
         <p role="status" className="text-xs text-realtor-muted">
           Uploaded {progress.completed} of {progress.total}
+        </p>
+      ) : null}
+      {sourceResults.length ? (
+        <p role="status" className="text-xs text-realtor-muted">
+          Source storage: {sourceResults.filter((result) => result.status === "accepted").length} accepted,
+          {" "}{sourceResults.filter((result) => result.status === "reconciliation_required").length} awaiting reconciliation.
+        </p>
+      ) : null}
+      {browserResults.length ? (
+        <p role="status" className="text-xs text-realtor-muted">
+          Browser upload: {browserResults.filter((result) => result.attempted).length} attempted,
+          {" "}{browserResults.filter((result) => result.status === "reconciliation_candidate").length} awaiting server reconciliation.
         </p>
       ) : null}
       {message ? <p role="status" className="text-xs text-realtor-muted">{message}</p> : null}

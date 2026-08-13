@@ -9,6 +9,7 @@ import {
 } from "../lib/integrations/autohdr/browser-upload.ts";
 import {
   buildCanonicalSourcePutInput,
+  buildQuarantineSourcePutInput,
   isCanonicalBrowserUploadEnabled,
   validateCanonicalSourceUpload,
 } from "../lib/integrations/autohdr/source-upload-core.ts";
@@ -19,6 +20,7 @@ const ids = {
   mediaBatchId: "22222222-2222-4222-8222-222222222222",
   mediaAssetId: "33333333-3333-4333-8333-333333333333",
   sourceMediaVersionId: "44444444-4444-4444-8444-444444444444",
+  ingestJobId: "55555555-5555-4555-8555-555555555555",
 };
 
 function browserFile(name, bytes, type = "image/jpeg", lastModified = 1234) {
@@ -177,6 +179,28 @@ test("canonical master PUT fixes and signs content type plus checksum metadata w
   );
 });
 
+test("browser PUT is create-only to the exact quarantine identity and never the master", () => {
+  const sha256 = "ab".repeat(32);
+  const quarantineObjectKey = `quarantine/${ids.organizationId}/${ids.ingestJobId}/66666666-6666-4666-8666-666666666666`;
+  const objectKey = `masters/${ids.organizationId}/${ids.mediaAssetId}/${ids.sourceMediaVersionId}/${sha256}.jpg`;
+  const input = buildQuarantineSourcePutInput({
+    ...ids,
+    quarantineObjectKey,
+    objectKey,
+    byteSize: 2048,
+    contentType: "image/jpeg",
+    sha256,
+    bucket: "pixel-blaster-private-media",
+  });
+  assert.equal(input.Key, quarantineObjectKey);
+  assert.equal(input.IfNoneMatch, "*");
+  assert.equal(JSON.stringify(input).includes("masters/"), false);
+  assert.throws(
+    () => buildQuarantineSourcePutInput({ ...ids, quarantineObjectKey: objectKey, objectKey, byteSize: 2048, contentType: "image/jpeg", sha256, bucket: "pixel-blaster-private-media" }),
+    /quarantine/i,
+  );
+});
+
 test("browser uploads only exact canonical identities with signed fields and bounded concurrency", async () => {
   const file = browserFile("Kitchen.jpg", [1, 2, 3]);
   const sha256 = "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81";
@@ -190,9 +214,13 @@ test("browser uploads only exact canonical identities with signed fields and bou
     mediaBatchId: ids.mediaBatchId,
     mediaAssetId: ids.mediaAssetId,
     sourceMediaVersionId: ids.sourceMediaVersionId,
+    ingestJobId: ids.ingestJobId,
+    quarantineObjectKey: `quarantine/${ids.organizationId}/${ids.ingestJobId}/66666666-6666-4666-8666-666666666666`,
     objectKey: `masters/${ids.organizationId}/${ids.mediaAssetId}/${ids.sourceMediaVersionId}/${sha256}.jpg`,
+    ingestState: "discovered",
+    quarantineEtag: null,
     upload: {
-      url: "https://pixel-blaster-private-media.example.invalid/object?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bif-none-match%3Bx-amz-meta-sha256",
+      url: `https://pixel-blaster-private-media.example.invalid/quarantine/${ids.organizationId}/${ids.ingestJobId}/66666666-6666-4666-8666-666666666666?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bif-none-match%3Bx-amz-meta-sha256`,
       method: "PUT",
       headers: {
         "Content-Type": "image/jpeg",
@@ -212,17 +240,15 @@ test("browser uploads only exact canonical identities with signed fields and bou
   assert.equal(seen.length, 1);
   assert.deepEqual(seen[0].init.headers, source.upload.headers);
   assert.equal(seen[0].init.body, file);
-  await assert.doesNotReject(
-    uploadCanonicalAutoHDRSources([file], [source], {
-      fetchImpl: async () => ({ ok: false, status: 412 }),
-    }),
-    "create-only replay must continue to server-side identity and checksum verification",
-  );
+  const replay = await uploadCanonicalAutoHDRSources([file], [source], {
+    fetchImpl: async () => ({ ok: false, status: 412 }),
+  });
+  assert.equal(replay[0].status, "reconciliation_candidate");
   await assert.rejects(
     uploadCanonicalAutoHDRSources([file], [source], {
       fetchImpl: async () => ({ ok: false, status: 409 }),
     }),
-    /409/,
+    /unchanged files/i,
   );
   await assert.rejects(
     uploadCanonicalAutoHDRSources([file], [{ ...source, sha256: "cd".repeat(32) }], {
@@ -237,6 +263,63 @@ test("browser uploads only exact canonical identities with signed fields and bou
     }], { fetchImpl: async () => { throw new Error("must not upload"); } }),
     /match/i,
   );
+});
+
+test("terminal browser failure aborts in-flight siblings while ambiguous failures remain reconciliation candidates", async () => {
+  const files = [0, 1, 2].map((index) => browserFile(`${index}.jpg`, [index + 1]));
+  const sources = files.map((file, index) => {
+    const digest = index.toString(16).padStart(2, "0").repeat(32);
+    const version = `${index + 4}4444444-4444-4444-8444-444444444444`;
+    const asset = `${index + 3}3333333-3333-4333-8333-333333333333`;
+    const ingest = `${index + 5}5555555-5555-4555-8555-555555555555`;
+    const quarantine = `quarantine/${ids.organizationId}/${ingest}/${index + 6}6666666-6666-4666-8666-666666666666`;
+    return {
+      position: index,
+      filename: file.name,
+      byteSize: file.size,
+      lastModified: file.lastModified,
+      contentType: "image/jpeg",
+      sha256: digest,
+      mediaBatchId: ids.mediaBatchId,
+      mediaAssetId: asset,
+      sourceMediaVersionId: version,
+      ingestJobId: ingest,
+      quarantineObjectKey: quarantine,
+      objectKey: `masters/${ids.organizationId}/${asset}/${version}/${digest}.jpg`,
+      ingestState: "discovered",
+      quarantineEtag: null,
+      upload: {
+        url: `https://pixel-blaster-private-media.example.invalid/${quarantine}?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bif-none-match%3Bx-amz-meta-sha256`,
+        method: "PUT",
+        headers: { "Content-Type": "image/jpeg", "If-None-Match": "*", "x-amz-meta-sha256": digest },
+      },
+    };
+  });
+  let siblingAborts = 0;
+  await assert.rejects(
+    uploadCanonicalAutoHDRSources(files, sources, {
+      concurrency: 3,
+      fetchImpl: async (_url, init) => {
+        if (init.body === files[0]) return { ok: false, status: 403 };
+        await new Promise((resolve) => {
+          init.signal.addEventListener("abort", () => { siblingAborts += 1; resolve(); }, { once: true });
+        });
+        throw init.signal.reason;
+      },
+    }),
+    (error) => error?.results?.[0]?.attempted === true,
+  );
+  assert.equal(siblingAborts, 2);
+
+  const ambiguous = await uploadCanonicalAutoHDRSources([files[0]], [sources[0]], {
+    perFileTimeoutMs: 5,
+    operationTimeoutMs: 50,
+    fetchImpl: async (_url, init) => {
+      await new Promise((resolve, reject) => init.signal.addEventListener("abort", () => reject(init.signal.reason), { once: true }));
+      return { ok: true, status: 200 };
+    },
+  });
+  assert.equal(ambiguous[0].status, "reconciliation_candidate");
 });
 
 test("HEAD acceptance rejects any size, image MIME, checksum, extension, key, or identity mismatch", () => {

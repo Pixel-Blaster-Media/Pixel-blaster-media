@@ -8,12 +8,9 @@ import { AutoHDRWorkflowError, createAutoHDRApplication } from "./application-co
 import { getAutoHDRClient } from "./client";
 import { createAutoHDRJobStore } from "./database-adapter";
 import { presignCanonicalAutoHDRSources } from "./source-upload";
+import { ingestAutoHDRSourceFiles } from "./source-ingestion-core";
 import { verifyCanonicalImageStream } from "./source-image-verification";
-import { validateCanonicalSourceUpload } from "./source-upload-core";
-import {
-  normalizeAcceptedAutoHDRSources,
-  normalizeAutoHDRSourceManifest,
-} from "./workflow-core";
+import { normalizeAutoHDRSourceManifest } from "./workflow-core";
 
 const SOURCE_FILE_TIMEOUT_MS = 30_000;
 
@@ -78,50 +75,37 @@ export async function acceptBookingAutoHDRSourceUpload(input: {
   admin: AdminContext;
   bookingId: string;
   sources: unknown;
+  requestId: string;
   signal: AbortSignal;
 }) {
   input.signal.throwIfAborted();
   const store = createAutoHDRJobStore();
   const booking = await requireScopedBooking(store, input.bookingId, input.admin.organizationId);
-  const sources = normalizeAcceptedAutoHDRSources(input.sources);
+  // Browser-returned state and object identities are never authoritative.
+  // Re-run the idempotent prepare RPC so resume decisions use current DB rows.
+  const manifest = normalizeAutoHDRSourceManifest(input.sources);
+  const prepared = await store.prepareSourceUpload({
+    organizationId: input.admin.organizationId,
+    bookingId: booking.id,
+    propertyId: booking.propertyId,
+    requestId: input.requestId,
+    createdBy: input.admin.userId,
+    files: manifest,
+  });
+  const sources = prepared.sources;
   const storage = createProductionR2Storage(input.admin.organizationId);
-  const verified = [];
-  for (const source of sources) {
-    const fileSignal = AbortSignal.any([
-      input.signal,
-      AbortSignal.timeout(SOURCE_FILE_TIMEOUT_MS),
-    ]);
-    const objectKey = source.objectKey as Parameters<typeof storage.head>[0];
-    const head = await storage.head(objectKey, fileSignal);
-    validateCanonicalSourceUpload({ ...source, organizationId: input.admin.organizationId }, head);
-    const download = await storage.getVerified(objectKey, fileSignal);
-    let dimensions: Awaited<ReturnType<typeof verifyCanonicalImageStream>>;
-    try {
-      validateCanonicalSourceUpload(
-        { ...source, organizationId: input.admin.organizationId },
-        { ...download, etag: null },
-      );
-      dimensions = await verifyCanonicalImageStream(download.body, source.contentType, fileSignal);
-    } catch (error) {
-      download.body.destroy(error instanceof Error ? error : undefined);
-      throw error;
-    }
-    verified.push({ source, dimensions });
-  }
-  input.signal.throwIfAborted();
-  const accepted = [];
-  for (const { source, dimensions } of verified) {
-    input.signal.throwIfAborted();
-    accepted.push(await store.acceptSourceUpload({
-      organizationId: input.admin.organizationId,
-      bookingId: booking.id,
-      propertyId: booking.propertyId,
-      file: source,
-      verifiedWidthPx: dimensions.widthPx,
-      verifiedHeightPx: dimensions.heightPx,
-    }));
-  }
-  return { ok: true as const, sources: accepted };
+  const ingestion = await ingestAutoHDRSourceFiles({
+    organizationId: input.admin.organizationId,
+    bookingId: booking.id,
+    propertyId: booking.propertyId,
+    sources,
+    storage,
+    store,
+    verifyImage: verifyCanonicalImageStream,
+    signal: input.signal,
+    perFileTimeoutMs: SOURCE_FILE_TIMEOUT_MS,
+  });
+  return { ok: true as const, ...ingestion };
 }
 
 export async function finalizeBookingAutoHDR(input: {

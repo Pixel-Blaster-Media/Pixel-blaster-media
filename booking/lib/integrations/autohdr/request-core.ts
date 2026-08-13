@@ -70,12 +70,16 @@ export function parseAutoHDRSourcePrepareInput(value: unknown): {
 
 export function parseAutoHDRSourceAcceptInput(value: unknown): {
   sources: Array<Record<string, unknown>>;
+  requestId: string;
 } {
-  const row = exactObject(value, ["sources"]);
+  const row = exactObject(value, ["sources", "requestId"]);
   if (!Array.isArray(row.sources)) {
     throw new AutoHDRWorkflowError("invalid_request", "AutoHDR sources must be an array.");
   }
-  return { sources: row.sources.map((entry) => sourceEntry(entry, true)) };
+  if (typeof row.requestId !== "string" || !UUID.test(row.requestId)) {
+    throw new AutoHDRWorkflowError("invalid_request", "AutoHDR source request ID is invalid.");
+  }
+  return { sources: row.sources.map((entry) => sourceEntry(entry, true)), requestId: row.requestId };
 }
 
 export function parseAutoHDRJobOnlyInput(value: unknown): { jobId: string } {
@@ -117,6 +121,9 @@ function exactObject(value: unknown, allowed: string[]): Record<string, unknown>
 
 function sourceEntry(value: unknown, canonical: boolean): Record<string, unknown> {
   const base = ["position", "filename", "byteSize", "lastModified", "contentType", "sha256"];
-  const identities = ["mediaBatchId", "mediaAssetId", "sourceMediaVersionId", "ingestJobId", "objectKey"];
+  const identities = [
+    "mediaBatchId", "mediaAssetId", "sourceMediaVersionId", "ingestJobId",
+    "quarantineObjectKey", "objectKey", "ingestState", "quarantineEtag",
+  ];
   return exactObject(value, canonical ? [...base, ...identities] : base);
 }

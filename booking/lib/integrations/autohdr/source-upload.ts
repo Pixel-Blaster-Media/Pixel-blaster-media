@@ -9,7 +9,7 @@ import {
 } from "../../media/storage/config-values";
 import type { AutoHDRCanonicalSource } from "./database-contract";
 import {
-  buildCanonicalSourcePutInput,
+  buildQuarantineSourcePutInput,
   isCanonicalBrowserUploadEnabled,
   type CanonicalSourceContentType,
 } from "./source-upload-core";
@@ -25,7 +25,7 @@ export type CanonicalSourcePreparedUpload = AutoHDRCanonicalSource & Readonly<{
       "If-None-Match": "*";
       "x-amz-meta-sha256": string;
     }>;
-  }>;
+  }> | null;
 }>;
 
 export async function presignCanonicalAutoHDRSources(
@@ -46,8 +46,13 @@ export async function presignCanonicalAutoHDRSources(
     requestChecksumCalculation: "WHEN_REQUIRED",
   });
   return Promise.all(sources.map(async (source) => {
-    const command = new PutObjectCommand(buildCanonicalSourcePutInput({
+    if (source.ingestState === "accepted") {
+      return Object.freeze({ ...source, upload: null });
+    }
+    const putInput = buildQuarantineSourcePutInput({
       organizationId,
+      ingestJobId: source.ingestJobId,
+      quarantineObjectKey: source.quarantineObjectKey,
       mediaAssetId: source.mediaAssetId,
       sourceMediaVersionId: source.sourceMediaVersionId,
       objectKey: source.objectKey,
@@ -55,13 +60,14 @@ export async function presignCanonicalAutoHDRSources(
       contentType: source.contentType,
       sha256: source.sha256,
       bucket: config.bucket,
-    }));
+    });
+    const command = new PutObjectCommand(putInput);
     const url = await getSignedUrl(client, command, {
       expiresIn: EXPIRES_SECONDS,
       signableHeaders: new Set(["content-type", "if-none-match", "x-amz-meta-sha256"]),
       unhoistableHeaders: new Set(["if-none-match", "x-amz-meta-sha256"]),
     });
-    validatePresignedUrl(url, config.endpoint);
+    validatePresignedUrl(url, config.endpoint, config.bucket, putInput.Key);
     return Object.freeze({
       ...source,
       upload: Object.freeze({
@@ -77,7 +83,7 @@ export async function presignCanonicalAutoHDRSources(
   }));
 }
 
-function validatePresignedUrl(value: string, endpoint: string): void {
+function validatePresignedUrl(value: string, endpoint: string, bucket: string, key: string): void {
   const url = new URL(value);
   const endpointUrl = new URL(endpoint);
   const expiry = Number(url.searchParams.get("X-Amz-Expires"));
@@ -91,7 +97,8 @@ function validatePresignedUrl(value: string, endpoint: string): void {
   ];
   if (
     url.protocol !== "https:" ||
-    !url.hostname.endsWith(`.${endpointUrl.hostname}`) ||
+    url.hostname !== `${bucket}.${endpointUrl.hostname}` ||
+    decodeURIComponent(url.pathname) !== `/${key}` ||
     url.username ||
     url.password ||
     !Number.isSafeInteger(expiry) ||

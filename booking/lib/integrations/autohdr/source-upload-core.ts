@@ -1,4 +1,4 @@
-import { buildMasterKey } from "../../media/storage/keys.ts";
+import { buildMasterKey, inspectMediaObjectKey } from "../../media/storage/keys.ts";
 import type { AutoHDRCanonicalSource } from "./database-contract.ts";
 import { AUTOHDR_SOURCE_MAX_FILE_BYTES } from "./source-limits.ts";
 
@@ -51,6 +51,47 @@ export function buildCanonicalSourcePutInput(input: {
     Key: expectedKey,
     ContentLength: input.byteSize,
     ContentType: contentType,
+    Metadata: { sha256: input.sha256 },
+    IfNoneMatch: "*",
+  };
+}
+
+export function buildQuarantineSourcePutInput(input: {
+  organizationId: string;
+  ingestJobId: string;
+  quarantineObjectKey: string;
+  objectKey: string;
+  mediaAssetId: string;
+  sourceMediaVersionId: string;
+  byteSize: number;
+  contentType: string;
+  sha256: string;
+  bucket: string;
+}) {
+  buildCanonicalSourcePutInput({
+    organizationId: input.organizationId,
+    mediaAssetId: input.mediaAssetId,
+    sourceMediaVersionId: input.sourceMediaVersionId,
+    objectKey: input.objectKey,
+    byteSize: input.byteSize,
+    contentType: input.contentType,
+    sha256: input.sha256,
+    bucket: input.bucket,
+  });
+  const parsed = inspectMediaObjectKey(input.quarantineObjectKey, input.organizationId);
+  if (
+    parsed.objectClass !== "quarantine" ||
+    !input.quarantineObjectKey.startsWith(
+      `quarantine/${input.organizationId}/${input.ingestJobId}/`,
+    )
+  ) {
+    throw new Error("Canonical source quarantine key does not match its exact tenant and ingest identity.");
+  }
+  return {
+    Bucket: input.bucket,
+    Key: parsed.key,
+    ContentLength: input.byteSize,
+    ContentType: input.contentType as CanonicalSourceContentType,
     Metadata: { sha256: input.sha256 },
     IfNoneMatch: "*",
   };

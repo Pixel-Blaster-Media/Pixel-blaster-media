@@ -67,6 +67,7 @@ export type AutoHDRJobStore = {
     bookingId: string;
     propertyId: string;
     file: AutoHDRCanonicalSource;
+    quarantineEtag: string;
     verifiedWidthPx: number;
     verifiedHeightPx: number;
   }): Promise<AutoHDRCanonicalSource>;

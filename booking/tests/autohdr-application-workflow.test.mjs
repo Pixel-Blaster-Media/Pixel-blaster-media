@@ -16,6 +16,7 @@ const booking = {
 const sourceMediaVersionId = "66666666-6666-4666-8666-666666666666";
 const mediaBatchId = "77777777-7777-4777-8777-777777777777";
 const mediaAssetId = "88888888-8888-4888-8888-888888888888";
+const ingestJobId = "99999999-9999-4999-8999-999999999999";
 const manifest = [{
   position: 0,
   sourceMediaVersionId,
@@ -26,8 +27,11 @@ const manifest = [{
   sha256: "ab".repeat(32),
   mediaBatchId,
   mediaAssetId,
-  ingestJobId: "99999999-9999-4999-8999-999999999999",
+  ingestJobId,
+  quarantineObjectKey: `quarantine/${admin.organizationId}/${ingestJobId}/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`,
   objectKey: `masters/${admin.organizationId}/${mediaAssetId}/${sourceMediaVersionId}/${"ab".repeat(32)}.jpg`,
+  ingestState: "accepted",
+  quarantineEtag: '"q-etag"',
 }];
 const signedUrl =
   "https://image-upload-autohdr-j.s3.amazonaws.com/org/raw/Kitchen.jpg?" +
@@ -175,6 +179,20 @@ test("prepare validates accepted canonical sources, claims exact DB manifest, th
       "x-amz-acl": "private",
     },
   }]);
+});
+
+test("provider preparation rejects browser-claimed identities until DB-backed ingestion is accepted", async () => {
+  const { application, calls } = fixture();
+  await assert.rejects(
+    application.prepare({
+      admin,
+      bookingId: booking.id,
+      manifest: [{ ...manifest[0], ingestState: "discovered", quarantineEtag: null }],
+      style: {},
+    }),
+    /not been accepted/i,
+  );
+  assert.equal(calls.includes("provider_create"), false);
 });
 
 test("every explicit newly_created=false claim and state fails closed before any provider call", async () => {

@@ -164,13 +164,20 @@ export function normalizeAcceptedAutoHDRSources(input: unknown): AutoHDRAccepted
     const sourceMediaVersionId = validUuid(row.sourceMediaVersionId, "source media version");
     if (versions.has(sourceMediaVersionId)) throw new Error("AutoHDR source identity is duplicated.");
     versions.add(sourceMediaVersionId);
+    const ingestState = validSourceIngestState(row.ingestState);
+    if (ingestState !== "accepted") {
+      throw new Error("AutoHDR source has not been accepted into canonical storage.");
+    }
     return Object.freeze({
       ...entry,
       mediaBatchId: validUuid(row.mediaBatchId, "media batch"),
       mediaAssetId: validUuid(row.mediaAssetId, "media asset"),
       sourceMediaVersionId,
       ingestJobId: validUuid(row.ingestJobId, "ingest job"),
+      quarantineObjectKey: safeObjectKey(row.quarantineObjectKey),
       objectKey: safeObjectKey(row.objectKey),
+      ingestState,
+      quarantineEtag: nullableSourceEtag(row.quarantineEtag),
     });
   })) as AutoHDRAcceptedSource[];
 }
@@ -280,5 +287,20 @@ function safeObjectKey(value: unknown): string {
     value.includes("#") || /[\u0000-\u001f\u007f]/.test(value) ||
     value.split("/").some((part) => !part || part === "." || part === "..")
   ) throw new Error("AutoHDR source object key is invalid.");
+  return value;
+}
+
+function validSourceIngestState(value: unknown): "discovered" | "accepted" {
+  if (value !== "discovered" && value !== "accepted") {
+    throw new Error("AutoHDR source ingest state is invalid.");
+  }
+  return value;
+}
+
+function nullableSourceEtag(value: unknown): string | null {
+  if (value == null) return null;
+  if (typeof value !== "string" || !/^(?:W\/)?"[^"\r\n]{1,126}"$/.test(value)) {
+    throw new Error("AutoHDR source quarantine ETag is invalid.");
+  }
   return value;
 }
