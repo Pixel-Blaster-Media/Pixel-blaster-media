@@ -1,11 +1,21 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+
 import type { AdminContext } from "@/lib/auth/require-admin";
 import { requirePhotoEditingProviderEnabled } from "@/lib/integrations/provider-enablement";
+import { createProductionR2Storage } from "@/lib/media/storage/r2";
 
-import { createAutoHDRApplication } from "./application-core";
+import { AutoHDRWorkflowError, createAutoHDRApplication } from "./application-core";
 import { getAutoHDRClient } from "./client";
 import { createAutoHDRJobStore } from "./database-adapter";
+import { presignCanonicalAutoHDRSources } from "./source-upload";
+import { verifyCanonicalImageStream } from "./source-image-verification";
+import { validateCanonicalSourceUpload } from "./source-upload-core";
+import {
+  normalizeAcceptedAutoHDRSources,
+  normalizeAutoHDRSourceManifest,
+} from "./workflow-core";
 
 function application() {
   return createAutoHDRApplication({
@@ -34,10 +44,78 @@ function application() {
 export async function prepareBookingAutoHDR(input: {
   admin: AdminContext;
   bookingId: string;
-  manifest: Array<{ name: unknown; size: unknown; lastModified: unknown }>;
+  manifest: unknown;
   style: unknown;
 }) {
   return application().prepare(input);
+}
+
+export async function prepareBookingAutoHDRSourceUpload(input: {
+  admin: AdminContext;
+  bookingId: string;
+  manifest: unknown;
+}) {
+  const store = createAutoHDRJobStore();
+  const booking = await requireScopedBooking(store, input.bookingId, input.admin.organizationId);
+  await requirePhotoEditingProviderEnabled("autohdr", input.admin.organizationId);
+  const files = normalizeAutoHDRSourceManifest(input.manifest);
+  const prepared = await store.prepareSourceUpload({
+    organizationId: input.admin.organizationId,
+    bookingId: booking.id,
+    propertyId: booking.propertyId,
+    requestId: randomUUID(),
+    createdBy: input.admin.userId,
+    files,
+  });
+  if (!prepared.newlyCreated) {
+    throw new AutoHDRWorkflowError(
+      "source_request_conflict",
+      "This canonical source request already exists and will not be issued fresh upload capabilities.",
+      409,
+    );
+  }
+  return {
+    ok: true as const,
+    sources: await presignCanonicalAutoHDRSources(input.admin.organizationId, prepared.sources),
+  };
+}
+
+export async function acceptBookingAutoHDRSourceUpload(input: {
+  admin: AdminContext;
+  bookingId: string;
+  sources: unknown;
+}) {
+  const store = createAutoHDRJobStore();
+  const booking = await requireScopedBooking(store, input.bookingId, input.admin.organizationId);
+  const sources = normalizeAcceptedAutoHDRSources(input.sources);
+  const storage = createProductionR2Storage(input.admin.organizationId);
+  const accepted = [];
+  for (const source of sources) {
+    const objectKey = source.objectKey as Parameters<typeof storage.head>[0];
+    const head = await storage.head(objectKey);
+    validateCanonicalSourceUpload({ ...source, organizationId: input.admin.organizationId }, head);
+    const download = await storage.getVerified(objectKey);
+    let dimensions: Awaited<ReturnType<typeof verifyCanonicalImageStream>>;
+    try {
+      validateCanonicalSourceUpload(
+        { ...source, organizationId: input.admin.organizationId },
+        { ...download, etag: null },
+      );
+      dimensions = await verifyCanonicalImageStream(download.body, source.contentType);
+    } catch (error) {
+      download.body.destroy(error instanceof Error ? error : undefined);
+      throw error;
+    }
+    accepted.push(await store.acceptSourceUpload({
+      organizationId: input.admin.organizationId,
+      bookingId: booking.id,
+      propertyId: booking.propertyId,
+      file: source,
+      verifiedWidthPx: dimensions.widthPx,
+      verifiedHeightPx: dimensions.heightPx,
+    }));
+  }
+  return { ok: true as const, sources: accepted };
 }
 
 export async function finalizeBookingAutoHDR(input: {
@@ -69,4 +147,16 @@ export async function listBookingAutoHDRJobs(input: {
   bookingId: string;
 }) {
   return createAutoHDRJobStore().listJobs(input.admin.organizationId, input.bookingId);
+}
+
+async function requireScopedBooking(
+  store: ReturnType<typeof createAutoHDRJobStore>,
+  bookingId: string,
+  organizationId: string,
+) {
+  const booking = await store.loadBooking(bookingId, organizationId);
+  if (!booking || booking.id !== bookingId || booking.organizationId !== organizationId) {
+    throw new AutoHDRWorkflowError("booking_not_found", "Booking not found.", 404);
+  }
+  return booking;
 }

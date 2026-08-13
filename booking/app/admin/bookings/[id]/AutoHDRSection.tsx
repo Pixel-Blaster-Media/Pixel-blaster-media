@@ -3,8 +3,15 @@
 import { useEffect, useState } from "react";
 
 import type { AutoHDRJob } from "@/lib/integrations/autohdr/application-core";
-import { uploadAutoHDRFiles } from "@/lib/integrations/autohdr/browser-upload";
+import {
+  hashAutoHDRSourceFiles,
+  uploadAutoHDRFiles,
+  uploadCanonicalAutoHDRSources,
+  validateAutoHDRSourceFiles,
+} from "@/lib/integrations/autohdr/browser-upload";
 import { AUTOHDR_MODELS, type AutoHDRModel } from "@/lib/integrations/autohdr/contract";
+import type { AutoHDRCanonicalSource } from "@/lib/integrations/autohdr/database-contract";
+import type { CanonicalSourcePreparedUpload } from "@/lib/integrations/autohdr/source-upload";
 import type { AutoHDRPreparedUpload } from "@/lib/integrations/autohdr/upload-contract";
 
 type JobResponse =
@@ -13,19 +20,14 @@ type JobResponse =
 type PrepareResponse =
   | { ok: true; job: AutoHDRJob; uploads: AutoHDRPreparedUpload[] }
   | { ok: false; error: string; code: string };
+type SourcePrepareResponse =
+  | { ok: true; sources: CanonicalSourcePreparedUpload[] }
+  | { ok: false; error: string; code: string };
+type SourceAcceptResponse =
+  | { ok: true; sources: AutoHDRCanonicalSource[] }
+  | { ok: false; error: string; code: string };
 
-const ACCEPTED_FILES = [
-  "image/*",
-  ".arw",
-  ".cr2",
-  ".cr3",
-  ".dng",
-  ".nef",
-  ".orf",
-  ".raf",
-  ".raw",
-  ".rw2",
-].join(",");
+const ACCEPTED_FILES = "image/jpeg,image/png,.jpg,.jpeg,.png";
 
 export default function AutoHDRSection({
   bookingId,
@@ -73,16 +75,32 @@ export default function AutoHDRSection({
     }
     setBusy(true);
     setError(null);
-    setMessage("Preparing secure AutoHDR uploads…");
+    setMessage("Hashing source photos…");
     try {
+      const sourceManifest = await hashAutoHDRSourceFiles(files);
+      setMessage("Preparing private Pixel source storage…");
+      const sourcePrepared = await apiJson<SourcePrepareResponse>(
+        `/api/admin/bookings/${bookingId}/autohdr/source/prepare`,
+        { manifest: sourceManifest },
+      );
+      if (!sourcePrepared.ok) throw new Error(sourcePrepared.error);
+      setMessage("Uploading originals to private Pixel storage…");
+      setProgress({ completed: 0, total: files.length });
+      await uploadCanonicalAutoHDRSources(files, sourcePrepared.sources, {
+        concurrency: 4,
+        onProgress: (completed, total) => setProgress({ completed, total }),
+      });
+      setMessage("Verifying canonical source uploads…");
+      const sourceAccepted = await apiJson<SourceAcceptResponse>(
+        `/api/admin/bookings/${bookingId}/autohdr/source/accept`,
+        { sources: sourcePrepared.sources.map(withoutUploadCapability) },
+      );
+      if (!sourceAccepted.ok) throw new Error(sourceAccepted.error);
+      setMessage("Preparing secure AutoHDR uploads…");
       const prepared = await apiJson<PrepareResponse>(
         `/api/admin/bookings/${bookingId}/autohdr/prepare`,
         {
-          manifest: files.map((file) => ({
-            name: file.name,
-            size: file.size,
-            lastModified: file.lastModified,
-          })),
+          manifest: sourceAccepted.sources,
           style: {
             modelSelection,
             perspectiveCorrection,
@@ -92,7 +110,7 @@ export default function AutoHDRSection({
       );
       if (!prepared.ok) throw new Error(prepared.error);
       setJobs((current) => upsertJob(current, prepared.job));
-      setMessage("Uploading directly to AutoHDR…");
+      setMessage("Uploading accepted sources to AutoHDR…");
       setProgress({ completed: 0, total: files.length });
       await uploadAutoHDRFiles(files, prepared.uploads, {
         concurrency: 4,
@@ -181,7 +199,18 @@ export default function AutoHDRSection({
             multiple
             accept={ACCEPTED_FILES}
             disabled={busy}
-            onChange={(event) => setFiles(Array.from(event.currentTarget.files ?? []))}
+            onChange={(event) => {
+              const selected = Array.from(event.currentTarget.files ?? []);
+              try {
+                validateAutoHDRSourceFiles(selected);
+                setFiles(selected);
+                setError(null);
+              } catch (cause) {
+                setFiles([]);
+                setError(publicClientError(cause));
+                event.currentTarget.value = "";
+              }
+            }}
             className="mt-1 w-full rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text file:mr-3 file:rounded-full file:border-0 file:bg-realtor-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
           />
         </label>
@@ -240,7 +269,7 @@ export default function AutoHDRSection({
           onClick={() => void prepareUploadAndFinalize()}
           className="rounded-full bg-realtor-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
         >
-          {busy ? "Working…" : `Send ${files.length || ""} photo${files.length === 1 ? "" : "s"}`}
+          {busy ? "Working…" : `Upload + edit ${files.length || ""} photo${files.length === 1 ? "" : "s"}`}
         </button>
         {activeJob?.state === "processing" ? (
           <button
@@ -265,6 +294,11 @@ export default function AutoHDRSection({
       </div>
     </section>
   );
+}
+
+function withoutUploadCapability(source: CanonicalSourcePreparedUpload): AutoHDRCanonicalSource {
+  const { upload: _upload, ...identity } = source;
+  return identity;
 }
 
 function upsertJob(current: AutoHDRJob[], job: AutoHDRJob): AutoHDRJob[] {

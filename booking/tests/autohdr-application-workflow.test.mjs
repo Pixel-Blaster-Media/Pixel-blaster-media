@@ -13,9 +13,24 @@ const booking = {
   propertyId: "44444444-4444-4444-8444-444444444444",
   address: "10 King Street, Kitchener",
 };
-const manifest = [{ name: "Kitchen.CR3", size: 2048, lastModified: 1234 }];
+const sourceMediaVersionId = "66666666-6666-4666-8666-666666666666";
+const mediaBatchId = "77777777-7777-4777-8777-777777777777";
+const mediaAssetId = "88888888-8888-4888-8888-888888888888";
+const manifest = [{
+  position: 0,
+  sourceMediaVersionId,
+  filename: "Kitchen.jpg",
+  byteSize: 2048,
+  lastModified: 1234,
+  contentType: "image/jpeg",
+  sha256: "ab".repeat(32),
+  mediaBatchId,
+  mediaAssetId,
+  ingestJobId: "99999999-9999-4999-8999-999999999999",
+  objectKey: `masters/${admin.organizationId}/${mediaAssetId}/${sourceMediaVersionId}/${"ab".repeat(32)}.jpg`,
+}];
 const signedUrl =
-  "https://image-upload-autohdr-j.s3.amazonaws.com/org/raw/Kitchen.CR3?" +
+  "https://image-upload-autohdr-j.s3.amazonaws.com/org/raw/Kitchen.jpg?" +
   new URLSearchParams({
     AWSAccessKeyId: "synthetic-access-key",
     Signature: "synthetic-signature",
@@ -31,6 +46,7 @@ function fixture(overrides = {}) {
     id: "55555555-5555-4555-8555-555555555555",
     organizationId: admin.organizationId,
     bookingId: booking.id,
+    propertyId: booking.propertyId,
     state: "claimed",
     providerUid: null,
   };
@@ -39,20 +55,21 @@ function fixture(overrides = {}) {
       calls.push("load_booking");
       return booking;
     },
-    async claim() {
+    async claim(input) {
       calls.push("claim");
-      return { job, newlyClaimed: true };
+      calls.push({ claimInput: input });
+      return { job, newlyCreated: true };
     },
     async loadJob() {
       calls.push("load_job");
       return job;
     },
     async transition(input) {
-      calls.push(`transition:${input.from}:${input.to}`);
-      if (failProcessingTransition && input.to === "processing") {
+      calls.push(`transition:${input.expectedState}:${input.newState}`);
+      if (failProcessingTransition && input.newState === "processing") {
         throw new Error("database response contained internal details");
       }
-      job = { ...job, state: input.to };
+      job = { ...job, state: input.newState };
       return job;
     },
     async assignProviderUid(input) {
@@ -112,10 +129,16 @@ function fixture(overrides = {}) {
     }),
     ...dependencyOverrides,
   });
-  return { application, calls, client, getJob: () => job, setJob: (next) => (job = next) };
+  return {
+    application,
+    calls,
+    client,
+    getJob: () => job,
+    setJob: (next) => (job = { propertyId: booking.propertyId, ...next }),
+  };
 }
 
-test("prepare validates tenant and enablement, claims locally, then creates exactly once", async () => {
+test("prepare validates accepted canonical sources, claims exact DB manifest, then creates exactly once", async () => {
   const { application, calls } = fixture();
   const result = await application.prepare({
     admin,
@@ -127,16 +150,24 @@ test("prepare validates tenant and enablement, claims locally, then creates exac
   assert.deepEqual(calls, [
     "load_booking",
     "require_enabled",
-    "get_client",
     "claim",
+    calls[3],
     "transition:claimed:preparing",
+    "get_client",
     "provider_create",
     "assign_provider_uid",
     "transition:preparing:awaiting_upload",
   ]);
+  assert.deepEqual(calls[3].claimInput.files, [{
+    position: 0,
+    sourceMediaVersionId,
+    filename: "Kitchen.jpg",
+  }]);
+  assert.match(calls[3].claimInput.manifestSha256, /^[0-9a-f]{64}$/);
+  assert.deepEqual(calls[3].claimInput.style, undefined);
   assert.equal(result.job.state, "awaiting_upload");
   assert.deepEqual(result.uploads, [{
-    filename: "Kitchen.CR3",
+    filename: "Kitchen.jpg",
     url: signedUrl,
     method: "PUT",
     headers: {
@@ -144,6 +175,43 @@ test("prepare validates tenant and enablement, claims locally, then creates exac
       "x-amz-acl": "private",
     },
   }]);
+});
+
+test("every explicit newly_created=false claim and state fails closed before any provider call", async () => {
+  for (const state of ["claimed", "preparing", "processing"]) {
+    const { application, calls, setJob } = fixture();
+    setJob({
+      id: "55555555-5555-4555-8555-555555555555",
+      organizationId: admin.organizationId,
+      bookingId: booking.id,
+      propertyId: booking.propertyId,
+      state,
+      providerUid: state === "claimed" ? null : "shoot_existing",
+    });
+    await assert.rejects(
+      createAutoHDRApplication({
+        store: {
+          async loadBooking() { calls.push("load_booking"); return booking; },
+          async claim() { calls.push("claim"); return { job: {
+            id: "55555555-5555-4555-8555-555555555555",
+            organizationId: admin.organizationId,
+            bookingId: booking.id,
+            propertyId: booking.propertyId,
+            state,
+            providerUid: state === "claimed" ? null : "shoot_existing",
+          }, newlyCreated: false }; },
+        },
+        requireEnabled: async () => calls.push("require_enabled"),
+        getClient: async () => { calls.push("get_client"); return {
+          async createPhotoshoot() { calls.push("provider_create"); throw new Error("must not call"); },
+        }; },
+        getCallbackUrls: () => ({ uploadCallbackUrl: "https://pixelblastermedia.com/callback" }),
+      }).prepare({ admin, bookingId: booking.id, manifest, style: {} }),
+      (error) => error?.code === "idempotency_conflict",
+    );
+    assert.equal(calls.includes("provider_create"), false);
+    assert.equal(calls.includes("get_client"), false);
+  }
 });
 
 test("prepare marks an ambiguous provider creation failure for reconciliation and never retries", async () => {

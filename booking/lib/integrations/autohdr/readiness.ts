@@ -14,6 +14,10 @@ export async function getAutoHDRRuntimeReadiness(
   organizationId: string,
 ): Promise<AutoHDRRuntimeReadiness> {
   const prerequisites: string[] = [];
+  const browserUploadsReady = process.env.MEDIA_R2_BROWSER_UPLOADS_ENABLED === "true";
+  if (!browserUploadsReady) {
+    prerequisites.push("Production R2 browser-upload CORS verification");
+  }
   let storageReady = false;
   try {
     createProductionR2Storage(organizationId);
@@ -28,7 +32,7 @@ export async function getAutoHDRRuntimeReadiness(
   if (!apiKey) prerequisites.push("AutoHDR API key");
   if (!schemaReady) prerequisites.push("Canonical media and AutoHDR job schema");
   return Object.freeze({
-    ready: storageReady && Boolean(apiKey) && schemaReady,
+    ready: storageReady && browserUploadsReady && Boolean(apiKey) && schemaReady,
     prerequisites: Object.freeze(prerequisites),
   });
 }

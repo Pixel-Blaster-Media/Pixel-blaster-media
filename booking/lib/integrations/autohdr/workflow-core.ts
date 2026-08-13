@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 
 import { AUTOHDR_MODELS, type AutoHDRStyleInput } from "./contract.ts";
+import type {
+  AutoHDRCanonicalSource,
+  AutoHDRSourceManifestEntry,
+} from "./database-contract.ts";
 
 const MAX_FILES = 160;
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
@@ -13,6 +17,8 @@ export type AutoHDRFileManifestEntry = Readonly<{
   size: number;
   lastModified: number;
 }>;
+
+export type AutoHDRAcceptedSource = AutoHDRCanonicalSource;
 
 const STYLE_KEYS = new Set([
   "modelSelection",
@@ -88,7 +94,7 @@ export function normalizeAutoHDRFileManifest(
 export function buildAutoHDRIdempotencyKey(input: {
   organizationId: string;
   bookingId: string;
-  manifest: AutoHDRFileManifestEntry[];
+  manifest: Array<AutoHDRFileManifestEntry | AutoHDRAcceptedSource>;
   style?: AutoHDRStyleInput;
 }): string {
   if (!UUID.test(input.organizationId) || !UUID.test(input.bookingId)) {
@@ -96,11 +102,83 @@ export function buildAutoHDRIdempotencyKey(input: {
   }
   const digest = createHash("sha256")
     .update(JSON.stringify({
-      manifest: input.manifest.map(({ name, size, lastModified }) => [name, size, lastModified]),
+      manifest: input.manifest.map((file) => "name" in file
+        ? [file.name, file.size, file.lastModified]
+        : [
+            file.position,
+            file.sourceMediaVersionId,
+            file.filename,
+            file.byteSize,
+            file.lastModified,
+            file.sha256,
+          ]),
       style: normalizeAutoHDRStyle(input.style ?? {}),
     }))
     .digest("hex");
   return `autohdr:${input.bookingId}:${digest}`;
+}
+
+export function normalizeAutoHDRSourceManifest(input: unknown): AutoHDRSourceManifestEntry[] {
+  if (!Array.isArray(input) || input.length < 1) throw new Error("Pick at least one AutoHDR image.");
+  if (input.length > MAX_FILES) throw new Error("AutoHDR accepts at most 160 images per job.");
+  let total = 0;
+  const names = new Set<string>();
+  const checksums = new Set<string>();
+  return Object.freeze(input.map((value, position) => {
+    const row = object(value);
+    const filename = safeFilename(row.filename);
+    const folded = filename.toLocaleLowerCase("en-US");
+    if (names.has(folded)) throw new Error("AutoHDR job contains a duplicate filename.");
+    names.add(folded);
+    if (row.position !== position) throw new Error("AutoHDR source positions must be contiguous.");
+    const byteSize = positiveInteger(row.byteSize, MAX_FILE_BYTES, "AutoHDR source byte size");
+    total += byteSize;
+    if (total > MAX_TOTAL_BYTES) throw new Error("The AutoHDR job exceeds the 8 GiB total limit.");
+    const lastModified = nonnegativeInteger(row.lastModified, "AutoHDR source timestamp");
+    const contentType = canonicalSourceContentType(filename, row.contentType);
+    const sha256 = typeof row.sha256 === "string" && /^[0-9a-f]{64}$/.test(row.sha256)
+      ? row.sha256
+      : "";
+    if (!sha256) throw new Error("AutoHDR source checksum is invalid.");
+    if (checksums.has(sha256)) throw new Error("AutoHDR source checksum is duplicated.");
+    checksums.add(sha256);
+    return Object.freeze({
+      position,
+      filename,
+      byteSize,
+      lastModified,
+      contentType,
+      sha256,
+    });
+  })) as AutoHDRSourceManifestEntry[];
+}
+
+export function normalizeAcceptedAutoHDRSources(input: unknown): AutoHDRAcceptedSource[] {
+  const manifest = normalizeAutoHDRSourceManifest(input);
+  const rows = input as Array<Record<string, unknown>>;
+  const versions = new Set<string>();
+  return Object.freeze(manifest.map((entry, index) => {
+    const row = rows[index];
+    const sourceMediaVersionId = validUuid(row.sourceMediaVersionId, "source media version");
+    if (versions.has(sourceMediaVersionId)) throw new Error("AutoHDR source identity is duplicated.");
+    versions.add(sourceMediaVersionId);
+    return Object.freeze({
+      ...entry,
+      mediaBatchId: validUuid(row.mediaBatchId, "media batch"),
+      mediaAssetId: validUuid(row.mediaAssetId, "media asset"),
+      sourceMediaVersionId,
+      ingestJobId: validUuid(row.ingestJobId, "ingest job"),
+      objectKey: safeObjectKey(row.objectKey),
+    });
+  })) as AutoHDRAcceptedSource[];
+}
+
+export function buildAutoHDRManifestSha256(files: AutoHDRAcceptedSource[]): string {
+  return createHash("sha256").update(JSON.stringify(files.map((file) => ({
+    position: file.position,
+    source_media_version_id: file.sourceMediaVersionId,
+    filename: file.filename,
+  })))).digest("hex");
 }
 
 export function normalizeAutoHDRStyle(value: unknown): AutoHDRStyleInput {
@@ -150,4 +228,55 @@ export function assertAutoHDRTransition(from: AutoHDRJobState, to: AutoHDRJobSta
   if (!allowed.includes(to)) {
     throw new Error(`Invalid transition for AutoHDR job from ${from} to ${to}.`);
   }
+}
+
+function object(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("AutoHDR source manifest is invalid.");
+  return value as Record<string, unknown>;
+}
+
+function safeFilename(value: unknown): string {
+  if (typeof value !== "string" || !SAFE_FILENAME.test(value) || value === "." || value === "..") {
+    throw new Error("An AutoHDR filename is invalid.");
+  }
+  return value;
+}
+
+function canonicalSourceContentType(
+  filename: string,
+  value: unknown,
+): "image/jpeg" | "image/png" {
+  const lower = filename.toLowerCase();
+  if ((lower.endsWith(".jpg") || lower.endsWith(".jpeg")) && value === "image/jpeg") {
+    return value;
+  }
+  if (lower.endsWith(".png") && value === "image/png") return value;
+  throw new Error("AutoHDR source must be an exact JPEG or PNG file type.");
+}
+
+function positiveInteger(value: unknown, max: number, label: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1 || value > max) {
+    throw new Error(`${label} is invalid.`);
+  }
+  return value;
+}
+
+function nonnegativeInteger(value: unknown, label: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) throw new Error(`${label} is invalid.`);
+  return value;
+}
+
+function validUuid(value: unknown, label: string): string {
+  if (typeof value !== "string" || !UUID.test(value)) throw new Error(`AutoHDR ${label} identity is invalid.`);
+  return value;
+}
+
+function safeObjectKey(value: unknown): string {
+  if (
+    typeof value !== "string" || value.length < 1 || value.length > 1024 ||
+    value.startsWith("/") || value.includes("\\") || value.includes("?") ||
+    value.includes("#") || /[\u0000-\u001f\u007f]/.test(value) ||
+    value.split("/").some((part) => !part || part === "." || part === "..")
+  ) throw new Error("AutoHDR source object key is invalid.");
+  return value;
 }

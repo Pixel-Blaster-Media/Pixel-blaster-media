@@ -1,12 +1,17 @@
 import type { AdminContext } from "../../auth/require-admin.ts";
-import type { AutoHDRStyleInput } from "./contract.ts";
+import type { AutoHDRNormalizedStatus, AutoHDRStyleInput } from "./contract.ts";
+import type {
+  AutoHDRCanonicalSource,
+  AutoHDRClaimFile,
+  AutoHDRSourceManifestEntry,
+} from "./database-contract.ts";
 import { AUTOHDR_RETRIEVAL_PREREQUISITE } from "./retrieval-prerequisite.ts";
 import { pairAutoHDRUploadDestinations } from "./upload-contract.ts";
 import {
   buildAutoHDRIdempotencyKey,
-  normalizeAutoHDRFileManifest,
   normalizeAutoHDRStyle,
-  type AutoHDRFileManifestEntry,
+  buildAutoHDRManifestSha256,
+  normalizeAcceptedAutoHDRSources,
   type AutoHDRJobState,
 } from "./workflow-core.ts";
 
@@ -21,8 +26,11 @@ export type AutoHDRJob = Readonly<{
   id: string;
   organizationId: string;
   bookingId: string;
+  propertyId: string;
   state: AutoHDRJobState;
   providerUid: string | null;
+  providerStatus?: AutoHDRNormalizedStatus | null;
+  retrievalClaimToken?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }>;
@@ -46,38 +54,60 @@ type AutoHDRClient = {
 
 export type AutoHDRJobStore = {
   loadBooking(bookingId: string, organizationId: string): Promise<AutoHDRBooking | null>;
+  prepareSourceUpload(input: {
+    organizationId: string;
+    bookingId: string;
+    propertyId: string;
+    requestId: string;
+    createdBy: string;
+    files: AutoHDRSourceManifestEntry[];
+  }): Promise<{ sources: AutoHDRCanonicalSource[]; newlyCreated: boolean }>;
+  acceptSourceUpload(input: {
+    organizationId: string;
+    bookingId: string;
+    propertyId: string;
+    file: AutoHDRCanonicalSource;
+    verifiedWidthPx: number;
+    verifiedHeightPx: number;
+  }): Promise<AutoHDRCanonicalSource>;
   claim(input: {
     organizationId: string;
     bookingId: string;
+    propertyId: string;
     idempotencyKey: string;
-    manifest: AutoHDRFileManifestEntry[];
-    style: AutoHDRStyleInput;
-    createdBy: string;
-  }): Promise<{ job: AutoHDRJob; newlyClaimed: boolean }>;
+    manifestSha256: string;
+    files: AutoHDRClaimFile[];
+  }): Promise<{ job: AutoHDRJob; newlyCreated: boolean }>;
   loadJob(input: {
     organizationId: string;
     bookingId: string;
+    propertyId: string;
     jobId: string;
   }): Promise<AutoHDRJob | null>;
   transition(input: {
     organizationId: string;
     bookingId: string;
+    propertyId: string;
     jobId: string;
-    from: AutoHDRJobState;
-    to: AutoHDRJobState;
+    expectedState: AutoHDRJobState;
+    newState: AutoHDRJobState;
+    providerStatus?: AutoHDRNormalizedStatus | null;
     errorCode?: string;
+    retrievalClaimToken?: string | null;
   }): Promise<AutoHDRJob>;
   assignProviderUid(input: {
     organizationId: string;
     bookingId: string;
+    propertyId: string;
     jobId: string;
     providerUid: string;
+    providerStatus: AutoHDRNormalizedStatus;
   }): Promise<AutoHDRJob>;
   claimRetrieval(input: {
     organizationId: string;
     bookingId: string;
+    propertyId: string;
     jobId: string;
-    claimedBy: string;
   }): Promise<AutoHDRJob>;
 };
 
@@ -106,15 +136,13 @@ export function createAutoHDRApplication(dependencies: {
   async function prepare(input: {
     admin: AdminContext;
     bookingId: string;
-    manifest: Array<{ name: unknown; size: unknown; lastModified: unknown }>;
+    manifest: unknown;
     style: unknown;
   }) {
-    const manifest = normalizeAutoHDRFileManifest(input.manifest);
+    const manifest = normalizeAcceptedAutoHDRSources(input.manifest);
     const style = normalizeAutoHDRStyle(input.style);
     const booking = await requireBooking(store, input.bookingId, input.admin.organizationId);
     await dependencies.requireEnabled(input.admin.organizationId);
-    const client = await dependencies.getClient(input.admin.organizationId);
-    const callbacks = dependencies.getCallbackUrls(booking);
     const idempotencyKey = buildAutoHDRIdempotencyKey({
       organizationId: input.admin.organizationId,
       bookingId: booking.id,
@@ -124,12 +152,16 @@ export function createAutoHDRApplication(dependencies: {
     const claimed = await store.claim({
       organizationId: input.admin.organizationId,
       bookingId: booking.id,
+      propertyId: booking.propertyId,
       idempotencyKey,
-      manifest,
-      style,
-      createdBy: input.admin.userId,
+      manifestSha256: buildAutoHDRManifestSha256(manifest),
+      files: manifest.map((file) => ({
+        position: file.position,
+        sourceMediaVersionId: file.sourceMediaVersionId,
+        filename: file.filename,
+      })),
     });
-    if (!claimed.newlyClaimed) {
+    if (!claimed.newlyCreated || claimed.job.state !== "claimed") {
       throw new AutoHDRWorkflowError(
         "idempotency_conflict",
         "This exact AutoHDR job was already claimed. Signed upload destinations are only returned once; reconcile or start a deliberately different job.",
@@ -140,24 +172,31 @@ export function createAutoHDRApplication(dependencies: {
 
     let providerCreated = false;
     try {
+      const client = await dependencies.getClient(input.admin.organizationId);
+      const callbacks = dependencies.getCallbackUrls(booking);
       const created = await client.createPhotoshoot({
-        files: manifest.map((file) => file.name),
+        files: manifest.map((file) => file.filename),
         address: booking.address,
         style,
         ...callbacks,
       });
       providerCreated = true;
       const uploads = pairAutoHDRUploadDestinations(
-        manifest.map((file) => file.name),
+        manifest.map((file) => file.filename),
         created.uploadedFiles,
       );
       await store.assignProviderUid({
         organizationId: input.admin.organizationId,
         bookingId: booking.id,
+        propertyId: booking.propertyId,
         jobId: claimed.job.id,
         providerUid: created.uid,
+        providerStatus: "created",
       });
-      const job = await store.transition(identity(claimed.job, "preparing", "awaiting_upload"));
+      const job = await store.transition({
+        ...identity(claimed.job, "preparing", "awaiting_upload"),
+        providerStatus: "uploading",
+      });
       return { ok: true as const, job, uploads };
     } catch {
       await reconcileQuietly(store, claimed.job, "preparing", "provider_outcome_ambiguous");
@@ -181,10 +220,10 @@ export function createAutoHDRApplication(dependencies: {
     if (!job.providerUid) throw new AutoHDRWorkflowError("job_invalid", "AutoHDR job is missing its provider identity.", 409);
     await dependencies.requireEnabled(input.admin.organizationId);
     const client = await dependencies.getClient(input.admin.organizationId);
-    await store.transition(identity(job, "awaiting_upload", "finalizing"));
+    await store.transition({ ...identity(job, "awaiting_upload", "finalizing"), providerStatus: "uploading" });
     try {
       await client.finalizePhotoshoot(job.providerUid);
-      const updated = await store.transition(identity(job, "finalizing", "processing"));
+      const updated = await store.transition({ ...identity(job, "finalizing", "processing"), providerStatus: "processing" });
       return { ok: true as const, job: updated };
     } catch {
       await reconcileQuietly(store, job, "finalizing", "provider_outcome_ambiguous");
@@ -213,12 +252,16 @@ export function createAutoHDRApplication(dependencies: {
       throw new AutoHDRWorkflowError("provider_unavailable", "AutoHDR status is temporarily unavailable.", 502);
     }
     if (status.normalizedStatus === "ready") {
-      return { ok: true as const, job: await store.transition(identity(job, "processing", "ready")) };
+      return { ok: true as const, job: await store.transition({
+        ...identity(job, "processing", "ready"), providerStatus: "ready",
+      }) };
     }
     if (status.normalizedStatus === "failed") {
       return {
         ok: true as const,
-        job: await store.transition({ ...identity(job, "processing", "rejected"), errorCode: "provider_failed" }),
+        job: await store.transition({
+          ...identity(job, "processing", "rejected"), providerStatus: "failed", errorCode: "provider_failed",
+        }),
       };
     }
     if (status.normalizedStatus === "unknown") {
@@ -226,6 +269,7 @@ export function createAutoHDRApplication(dependencies: {
         ok: true as const,
         job: await store.transition({
           ...identity(job, "processing", "reconciliation_required"),
+          providerStatus: "unknown",
           errorCode: "unknown_provider_status",
         }),
       };
@@ -271,9 +315,13 @@ async function requireBookingAndJob(
   const job = await store.loadJob({
     organizationId: input.admin.organizationId,
     bookingId: booking.id,
+    propertyId: booking.propertyId,
     jobId: input.jobId,
   });
-  if (!job || job.organizationId !== input.admin.organizationId || job.bookingId !== booking.id) {
+  if (
+    !job || job.organizationId !== input.admin.organizationId ||
+    job.bookingId !== booking.id || job.propertyId !== booking.propertyId
+  ) {
     throw new AutoHDRWorkflowError("job_not_found", "AutoHDR job not found.", 404);
   }
   return { booking, job };
@@ -293,9 +341,10 @@ function identity(job: AutoHDRJob, from: AutoHDRJobState, to: AutoHDRJobState) {
   return {
     organizationId: job.organizationId,
     bookingId: job.bookingId,
+    propertyId: job.propertyId,
     jobId: job.id,
-    from,
-    to,
+    expectedState: from,
+    newState: to,
   };
 }
 

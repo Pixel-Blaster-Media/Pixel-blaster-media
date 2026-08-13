@@ -28,18 +28,79 @@ test("AutoHDR routes authenticate before delegated tenant-qualified workflows an
   assert.match(read(route("retrieve")), /parseAutoHDRJobOnlyInput/);
 });
 
+test("canonical source routes authenticate before prepare or acceptance and keep signed URLs out of persistence", () => {
+  const delegates = {
+    "source/prepare": "prepareBookingAutoHDRSourceUpload",
+    "source/accept": "acceptBookingAutoHDRSourceUpload",
+  };
+  for (const [name, delegate] of Object.entries(delegates)) {
+    assert.equal(existsSync(new URL(route(name), root)), true, `missing ${name} route`);
+    const source = read(route(name));
+    assert.ok(source.indexOf("await requireAdmin()") < source.indexOf(`await ${delegate}(`));
+    assert.match(source, /readBoundedAutoHDRJson/);
+    assert.match(source, /toAutoHDRRouteError/);
+    assert.doesNotMatch(source, /String\(err(or)?\)|err(or)?\.message/);
+  }
+  const workflow = read("lib/integrations/autohdr/workflow.ts");
+  assert.match(workflow, /createProductionR2Storage/);
+  assert.match(workflow, /\.head\(/);
+  assert.match(workflow, /\.getVerified\(/);
+  assert.match(workflow, /verifyCanonicalImageStream/);
+  assert.ok(workflow.indexOf(".head(") < workflow.indexOf(".getVerified("));
+  assert.ok(workflow.indexOf(".getVerified(") < workflow.indexOf("acceptSourceUpload("));
+  assert.doesNotMatch(read("lib/integrations/autohdr/database-adapter.ts"), /uploadUrl|upload_url|presigned/i);
+});
+
+test("R2 presigning fixes browser-supplied headers and does not sign an empty SDK checksum", () => {
+  const signer = read("lib/integrations/autohdr/source-upload.ts");
+  const packageJson = JSON.parse(read("package.json"));
+  assert.equal(packageJson.dependencies["@aws-sdk/s3-request-presigner"], "3.1065.0");
+  assert.match(signer, /requestChecksumCalculation:\s*"WHEN_REQUIRED"/);
+  assert.match(signer, /signableHeaders:\s*new Set\(\["content-type", "if-none-match", "x-amz-meta-sha256"\]\)/);
+  assert.match(signer, /unhoistableHeaders:\s*new Set\(\["if-none-match", "x-amz-meta-sha256"\]\)/);
+  assert.match(signer, /"content-length"/);
+  assert.doesNotMatch(signer, /ACL:|x-amz-acl/);
+});
+
 test("database boundary centralizes the separately-owned RPC names and never stores URLs", () => {
   const adapter = read("lib/integrations/autohdr/database-adapter.ts");
+  const contract = read("lib/integrations/autohdr/database-contract.ts");
   for (const rpc of [
+    "create_autohdr_source_batch",
+    "accept_autohdr_source_version",
     "claim_autohdr_job",
     "transition_autohdr_job",
     "assign_autohdr_provider_uid",
     "claim_autohdr_retrieval",
   ]) {
-    assert.match(adapter, new RegExp(rpc));
+    assert.match(contract, new RegExp(rpc));
   }
   assert.match(adapter, /AUTOHDR_DATABASE_CONTRACT/);
   assert.doesNotMatch(adapter, /upload_url|processed_url|uploaded_files/);
+  assert.doesNotMatch(adapter, /newly_claimed/);
+  assert.match(adapter, /newly_created/);
+  assert.doesNotMatch(adapter, /claim_outcome/);
+  assert.match(read("lib/integrations/autohdr/workflow.ts"), /if \(!prepared\.newlyCreated\)/);
+  for (const exactArgument of [
+    "p_property_id",
+    "p_manifest_sha256",
+    "p_files",
+    "p_expected_state",
+    "p_new_state",
+    "p_provider_status",
+    "p_retrieval_claim_token",
+  ]) {
+    assert.match(contract, new RegExp(exactArgument));
+  }
+  for (const obsoleteArgument of [
+    "p_file_manifest",
+    "p_style",
+    "p_from_state",
+    "p_to_state",
+    "p_claimed_by",
+  ]) {
+    assert.doesNotMatch(contract, new RegExp(`${obsoleteArgument}: input`));
+  }
 });
 
 test("status never retrieves renders and blocked retrieval never calls the processed endpoint", () => {
@@ -62,9 +123,19 @@ test("MediaWorkflow swaps gated prose for the compact runtime-gated AutoHDR UI",
   assert.doesNotMatch(mediaWorkflow, /presigned-upload contract, zero-credit test mode/);
   assert.match(page, /getAutoHDRRuntimeReadiness/);
   assert.match(readiness, /createProductionR2Storage/);
+  assert.match(readiness, /MEDIA_R2_BROWSER_UPLOADS_ENABLED/);
+  assert.match(readiness, /===\s*"true"/);
   assert.match(section, /Review pending ingestion/);
+  assert.match(section, /hashAutoHDRSourceFiles/);
+  assert.match(section, /uploadCanonicalAutoHDRSources/);
+  assert.match(section, /source\/prepare/);
+  assert.match(section, /source\/accept/);
+  assert.ok(section.indexOf("source/accept") < section.indexOf("autohdr/prepare"));
+  assert.doesNotMatch(section, /Uploading directly to AutoHDR/);
   assert.doesNotMatch(section, /ready for delivery/i);
   assert.doesNotMatch(section, /iGUIDE/i);
+  assert.match(section, /accept=\{ACCEPTED_FILES\}/);
+  assert.doesNotMatch(section, /\.dng|\.raw|image\/\*/i);
 });
 
 test("retrieval documents the exact safe streaming prerequisite instead of buffering", () => {

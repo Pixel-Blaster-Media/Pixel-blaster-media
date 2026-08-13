@@ -1,0 +1,151 @@
+import type { AutoHDRNormalizedStatus } from "./contract.ts";
+import type { AutoHDRJobState } from "./workflow-core.ts";
+
+type Scope = {
+  organizationId: string;
+  bookingId: string;
+  propertyId: string;
+};
+
+export type AutoHDRClaimFile = Readonly<{
+  position: number;
+  sourceMediaVersionId: string;
+  filename: string;
+}>;
+
+export type AutoHDRSourceManifestEntry = Readonly<{
+  position: number;
+  filename: string;
+  byteSize: number;
+  lastModified: number;
+  contentType: "image/jpeg" | "image/png";
+  sha256: string;
+}>;
+
+export type AutoHDRCanonicalSource = AutoHDRSourceManifestEntry & Readonly<{
+  mediaBatchId: string;
+  mediaAssetId: string;
+  sourceMediaVersionId: string;
+  ingestJobId: string;
+  objectKey: string;
+}>;
+
+function bytea(hex: string): string {
+  return `\\x${hex}`;
+}
+
+function sourceFile(file: AutoHDRSourceManifestEntry) {
+  return {
+    filename: file.filename,
+    byte_size: file.byteSize,
+    mime_type: file.contentType,
+    sha256: file.sha256,
+  };
+}
+
+export const AUTOHDR_DATABASE_CONTRACT = Object.freeze({
+  jobsTable: "autohdr_jobs",
+  rpc: Object.freeze({
+    prepareSourceUpload: "create_autohdr_source_batch",
+    acceptSourceUpload: "accept_autohdr_source_version",
+    claim: "claim_autohdr_job",
+    transition: "transition_autohdr_job",
+    assignProviderUid: "assign_autohdr_provider_uid",
+    claimRetrieval: "claim_autohdr_retrieval",
+  }),
+  args: Object.freeze({
+    prepareSourceUpload(input: Scope & {
+      requestId: string;
+      createdBy: string;
+      files: AutoHDRSourceManifestEntry[];
+    }) {
+      return {
+        p_organization_id: input.organizationId,
+        p_booking_id: input.bookingId,
+        p_request_id: input.requestId,
+        p_created_by: input.createdBy,
+        p_files: input.files.map(sourceFile),
+      };
+    },
+    acceptSourceUpload(input: Scope & AutoHDRCanonicalSource & {
+      verifiedWidthPx: number;
+      verifiedHeightPx: number;
+    }) {
+      return {
+        p_organization_id: input.organizationId,
+        p_booking_id: input.bookingId,
+        p_batch_id: input.mediaBatchId,
+        p_asset_id: input.mediaAssetId,
+        p_version_id: input.sourceMediaVersionId,
+        p_ingest_job_id: input.ingestJobId,
+        p_bucket_name: "pixel-blaster-private-media",
+        p_object_key: input.objectKey,
+        p_sha256: bytea(input.sha256),
+        p_byte_size: input.byteSize,
+        p_mime_type: input.contentType,
+        p_verified_width_px: input.verifiedWidthPx,
+        p_verified_height_px: input.verifiedHeightPx,
+      };
+    },
+    claim(input: Scope & {
+      idempotencyKey: string;
+      manifestSha256: string;
+      files: AutoHDRClaimFile[];
+    }) {
+      return {
+        p_organization_id: input.organizationId,
+        p_booking_id: input.bookingId,
+        p_property_id: input.propertyId,
+        p_idempotency_key: input.idempotencyKey,
+        p_manifest_sha256: bytea(input.manifestSha256),
+        p_files: input.files.map((file) => ({
+          position: file.position,
+          source_media_version_id: file.sourceMediaVersionId,
+          filename: file.filename,
+        })),
+      };
+    },
+    transition(input: Scope & {
+      jobId: string;
+      expectedState: AutoHDRJobState;
+      newState: AutoHDRJobState;
+      providerStatus?: AutoHDRNormalizedStatus | null;
+      errorCode?: string | null;
+      retrievalClaimToken?: string | null;
+    }) {
+      return {
+        p_organization_id: input.organizationId,
+        p_booking_id: input.bookingId,
+        p_property_id: input.propertyId,
+        p_job_id: input.jobId,
+        p_expected_state: input.expectedState,
+        p_new_state: input.newState,
+        p_provider_status: input.providerStatus ?? null,
+        p_error_code: input.errorCode ?? null,
+        p_retrieval_claim_token: input.retrievalClaimToken ?? null,
+      };
+    },
+    assignProviderUid(input: Scope & {
+      jobId: string;
+      providerUid: string;
+      providerStatus: AutoHDRNormalizedStatus;
+    }) {
+      return {
+        p_organization_id: input.organizationId,
+        p_booking_id: input.bookingId,
+        p_property_id: input.propertyId,
+        p_job_id: input.jobId,
+        p_provider_uid: input.providerUid,
+        p_provider_status: input.providerStatus,
+      };
+    },
+    claimRetrieval(input: Scope & { jobId: string }) {
+      return {
+        p_organization_id: input.organizationId,
+        p_booking_id: input.bookingId,
+        p_property_id: input.propertyId,
+        p_job_id: input.jobId,
+      };
+    },
+  }),
+});

@@ -40,18 +40,35 @@ export async function readBoundedAutoHDRJson(request: Request): Promise<unknown>
 }
 
 export function parseAutoHDRPrepareInput(value: unknown): {
-  manifest: Array<{ name: unknown; size: unknown; lastModified: unknown }>;
+  manifest: Array<Record<string, unknown>>;
   style: unknown;
 } {
   const row = exactObject(value, ["manifest", "style"]);
   if (!Array.isArray(row.manifest)) {
     throw new AutoHDRWorkflowError("invalid_request", "AutoHDR manifest must be an array.");
   }
-  const manifest = row.manifest.map((entry) => {
-    const item = exactObject(entry, ["name", "size", "lastModified"]);
-    return { name: item.name, size: item.size, lastModified: item.lastModified };
-  });
+  const manifest = row.manifest.map((entry) => sourceEntry(entry, true));
   return { manifest, style: row.style };
+}
+
+export function parseAutoHDRSourcePrepareInput(value: unknown): {
+  manifest: Array<Record<string, unknown>>;
+} {
+  const row = exactObject(value, ["manifest"]);
+  if (!Array.isArray(row.manifest)) {
+    throw new AutoHDRWorkflowError("invalid_request", "AutoHDR source manifest must be an array.");
+  }
+  return { manifest: row.manifest.map((entry) => sourceEntry(entry, false)) };
+}
+
+export function parseAutoHDRSourceAcceptInput(value: unknown): {
+  sources: Array<Record<string, unknown>>;
+} {
+  const row = exactObject(value, ["sources"]);
+  if (!Array.isArray(row.sources)) {
+    throw new AutoHDRWorkflowError("invalid_request", "AutoHDR sources must be an array.");
+  }
+  return { sources: row.sources.map((entry) => sourceEntry(entry, true)) };
 }
 
 export function parseAutoHDRJobOnlyInput(value: unknown): { jobId: string } {
@@ -89,4 +106,10 @@ function exactObject(value: unknown, allowed: string[]): Record<string, unknown>
     throw new AutoHDRWorkflowError("invalid_request", "AutoHDR request fields are invalid.");
   }
   return row;
+}
+
+function sourceEntry(value: unknown, canonical: boolean): Record<string, unknown> {
+  const base = ["position", "filename", "byteSize", "lastModified", "contentType", "sha256"];
+  const identities = ["mediaBatchId", "mediaAssetId", "sourceMediaVersionId", "ingestJobId", "objectKey"];
+  return exactObject(value, canonical ? [...base, ...identities] : base);
 }

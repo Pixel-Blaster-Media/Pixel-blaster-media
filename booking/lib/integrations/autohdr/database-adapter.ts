@@ -2,11 +2,13 @@ import "server-only";
 
 import { getServiceSupabase } from "@/lib/supabase/server";
 
-import type {
-  AutoHDRBooking,
-  AutoHDRJob,
-  AutoHDRJobStore,
-} from "./application-core";
+import type { AutoHDRBooking, AutoHDRJob, AutoHDRJobStore } from "./application-core";
+import {
+  AUTOHDR_DATABASE_CONTRACT,
+  type AutoHDRCanonicalSource,
+  type AutoHDRSourceManifestEntry,
+} from "./database-contract";
+import { buildCanonicalSourcePutInput } from "./source-upload-core";
 import type { AutoHDRJobState } from "./workflow-core";
 
 type DatabaseError = { code?: string; message?: string } | null;
@@ -25,72 +27,12 @@ type DatabaseClient = {
 };
 
 const JOB_STATES = new Set<AutoHDRJobState>([
-  "claimed",
-  "preparing",
-  "awaiting_upload",
-  "finalizing",
-  "processing",
-  "ready",
-  "retrieving",
-  "review_pending",
-  "retryable",
-  "reconciliation_required",
-  "rejected",
+  "claimed", "preparing", "awaiting_upload", "finalizing", "processing", "ready",
+  "retrieving", "review_pending", "retryable", "reconciliation_required", "rejected",
 ]);
+const PROVIDER_STATUSES = new Set(["created", "uploading", "processing", "ready", "failed", "unknown"]);
 
-/**
- * This is the only coupling to the separately-owned state-machine migration.
- * RPC names, table name, argument names, and result decoding can be adjusted
- * here without changing route or workflow code.
- */
-export const AUTOHDR_DATABASE_CONTRACT = Object.freeze({
-  jobsTable: "autohdr_jobs",
-  rpc: Object.freeze({
-    claim: "claim_autohdr_job",
-    transition: "transition_autohdr_job",
-    assignProviderUid: "assign_autohdr_provider_uid",
-    claimRetrieval: "claim_autohdr_retrieval",
-  }),
-  args: Object.freeze({
-    claim(input: Parameters<AutoHDRJobStore["claim"]>[0]) {
-      return {
-        p_organization_id: input.organizationId,
-        p_booking_id: input.bookingId,
-        p_idempotency_key: input.idempotencyKey,
-        p_file_manifest: input.manifest,
-        p_style: input.style,
-        p_created_by: input.createdBy,
-      };
-    },
-    transition(input: Parameters<AutoHDRJobStore["transition"]>[0]) {
-      return {
-        p_organization_id: input.organizationId,
-        p_booking_id: input.bookingId,
-        p_job_id: input.jobId,
-        p_from_state: input.from,
-        p_to_state: input.to,
-        p_error_code: input.errorCode ?? null,
-      };
-    },
-    assignProviderUid(input: Parameters<AutoHDRJobStore["assignProviderUid"]>[0]) {
-      return {
-        p_organization_id: input.organizationId,
-        p_booking_id: input.bookingId,
-        p_job_id: input.jobId,
-        p_provider_uid: input.providerUid,
-      };
-    },
-    claimRetrieval(input: Parameters<AutoHDRJobStore["claimRetrieval"]>[0]) {
-      return {
-        p_organization_id: input.organizationId,
-        p_booking_id: input.bookingId,
-        p_job_id: input.jobId,
-        p_claimed_by: input.claimedBy,
-      };
-    },
-  }),
-});
-
+/** The only application coupling to the separately-owned database RPC contracts. */
 export function createAutoHDRJobStore(
   source: unknown = getServiceSupabase(),
 ): AutoHDRJobStore & {
@@ -98,7 +40,6 @@ export function createAutoHDRJobStore(
   probeSchema(organizationId: string): Promise<boolean>;
 } {
   const client = source as DatabaseClient;
-
   return Object.freeze({
     async loadBooking(bookingId, organizationId) {
       const { data, error } = await client
@@ -108,30 +49,44 @@ export function createAutoHDRJobStore(
         .eq("organization_id", organizationId)
         .maybeSingle();
       if (error) throw databaseUnavailable();
-      if (!data) return null;
-      return parseBooking(data);
+      return data ? parseBooking(data) : null;
+    },
+
+    async prepareSourceUpload(input) {
+      const data = await call(
+        client,
+        AUTOHDR_DATABASE_CONTRACT.rpc.prepareSourceUpload,
+        AUTOHDR_DATABASE_CONTRACT.args.prepareSourceUpload(input),
+      );
+      return parseCanonicalSources(data, input.organizationId, input.files);
+    },
+
+    async acceptSourceUpload(input) {
+      const data = await call(
+        client,
+        AUTOHDR_DATABASE_CONTRACT.rpc.acceptSourceUpload,
+        AUTOHDR_DATABASE_CONTRACT.args.acceptSourceUpload({ ...input, ...input.file }),
+      );
+      parseSourceAcceptance(data, input.file);
+      return input.file;
     },
 
     async claim(input) {
-      const data = await call(
-        client,
-        AUTOHDR_DATABASE_CONTRACT.rpc.claim,
-        AUTOHDR_DATABASE_CONTRACT.args.claim(input),
-      );
+      const data = await call(client, AUTOHDR_DATABASE_CONTRACT.rpc.claim, AUTOHDR_DATABASE_CONTRACT.args.claim(input));
       const row = unwrapRow(data);
-      const marker = row.newly_claimed;
-      if (typeof marker !== "boolean") {
-        throw new Error("AutoHDR claim RPC must return newly_claimed explicitly.");
+      if (typeof row.newly_created !== "boolean") {
+        throw new Error("AutoHDR claim RPC must return the explicit newly_created marker.");
       }
-      return { job: parseJob(row), newlyClaimed: marker };
+      return { job: parseJob(row), newlyCreated: row.newly_created };
     },
 
     async loadJob(input) {
       const { data, error } = await client
         .from(AUTOHDR_DATABASE_CONTRACT.jobsTable)
-        .select("id, organization_id, booking_id, state, provider_uid, created_at, updated_at")
+        .select("id, organization_id, booking_id, property_id, state, provider_uid, provider_status, retrieval_claim_token, created_at, updated_at")
         .eq("id", input.jobId)
         .eq("booking_id", input.bookingId)
+        .eq("property_id", input.propertyId)
         .eq("organization_id", input.organizationId)
         .maybeSingle();
       if (error) throw databaseUnavailable();
@@ -139,11 +94,7 @@ export function createAutoHDRJobStore(
     },
 
     async transition(input) {
-      const data = await call(
-        client,
-        AUTOHDR_DATABASE_CONTRACT.rpc.transition,
-        AUTOHDR_DATABASE_CONTRACT.args.transition(input),
-      );
+      const data = await call(client, AUTOHDR_DATABASE_CONTRACT.rpc.transition, AUTOHDR_DATABASE_CONTRACT.args.transition(input));
       return parseJob(unwrapRow(data));
     },
 
@@ -168,7 +119,7 @@ export function createAutoHDRJobStore(
     async listJobs(organizationId, bookingId) {
       const { data, error } = await client
         .from(AUTOHDR_DATABASE_CONTRACT.jobsTable)
-        .select("id, organization_id, booking_id, state, provider_uid, created_at, updated_at")
+        .select("id, organization_id, booking_id, property_id, state, provider_uid, provider_status, retrieval_claim_token, created_at, updated_at")
         .eq("organization_id", organizationId)
         .eq("booking_id", bookingId)
         .order("created_at", { ascending: false })
@@ -187,11 +138,7 @@ export function createAutoHDRJobStore(
   });
 }
 
-async function call(
-  client: DatabaseClient,
-  name: string,
-  args: Record<string, unknown>,
-): Promise<unknown> {
+async function call(client: DatabaseClient, name: string, args: Record<string, unknown>): Promise<unknown> {
   const { data, error } = await client.rpc(name, args);
   if (error || data === null || data === undefined) throw databaseUnavailable();
   return data;
@@ -229,11 +176,85 @@ function parseJob(value: unknown): AutoHDRJob {
     id: uuid(row.id),
     organizationId: uuid(row.organization_id),
     bookingId: uuid(row.booking_id),
+    propertyId: uuid(row.property_id),
     state,
     providerUid: nullableText(row.provider_uid, 255),
+    providerStatus: nullableProviderStatus(row.provider_status),
+    retrievalClaimToken: row.retrieval_claim_token == null ? null : uuid(row.retrieval_claim_token),
     ...(row.created_at ? { createdAt: safeText(row.created_at, 64) } : {}),
     ...(row.updated_at ? { updatedAt: safeText(row.updated_at, 64) } : {}),
   });
+}
+
+function parseCanonicalSources(
+  value: unknown,
+  organizationId: string,
+  files: AutoHDRSourceManifestEntry[],
+): { sources: AutoHDRCanonicalSource[]; newlyCreated: boolean } {
+  if (!Array.isArray(value) || value.length !== files.length || value.length < 1 || value.length > 160) {
+    throw new Error("AutoHDR source database contract returned an invalid manifest.");
+  }
+  let newlyCreated: boolean | null = null;
+  const sources = value.map((entry, index) => {
+    const row = unwrapRow(entry);
+    const expected = files[index];
+    if (row.position !== index) throw new Error("AutoHDR source positions are invalid.");
+    if (typeof row.newly_created !== "boolean") {
+      throw new Error("AutoHDR source creation RPC omitted its explicit newly_created marker.");
+    }
+    if (newlyCreated !== null && newlyCreated !== row.newly_created) {
+      throw new Error("AutoHDR source creation markers are inconsistent.");
+    }
+    newlyCreated = row.newly_created;
+    const source = Object.freeze({
+      position: index,
+      filename: safeText(row.filename, 255),
+      byteSize: positiveInteger(row.byte_size),
+      lastModified: expected.lastModified,
+      contentType: exactContentType(row.mime_type),
+      sha256: byteaHex(row.sha256),
+      mediaBatchId: uuid(row.batch_id),
+      mediaAssetId: uuid(row.asset_id),
+      sourceMediaVersionId: uuid(row.version_id),
+      ingestJobId: uuid(row.ingest_job_id),
+      objectKey: safeText(row.object_key, 1024),
+    });
+    if (
+      source.filename !== expected.filename ||
+      source.byteSize !== expected.byteSize ||
+      source.contentType !== expected.contentType ||
+      source.sha256 !== expected.sha256 ||
+      row.bucket_name !== "pixel-blaster-private-media"
+    ) {
+      throw new Error("AutoHDR source database contract did not echo the exact manifest.");
+    }
+    buildCanonicalSourcePutInput({
+      organizationId,
+      mediaAssetId: source.mediaAssetId,
+      sourceMediaVersionId: source.sourceMediaVersionId,
+      objectKey: source.objectKey,
+      byteSize: source.byteSize,
+      contentType: source.contentType,
+      sha256: source.sha256,
+      bucket: "pixel-blaster-private-media",
+    });
+    return source;
+  });
+  return { sources, newlyCreated: newlyCreated === true };
+}
+
+function parseSourceAcceptance(value: unknown, source: AutoHDRCanonicalSource): void {
+  const row = unwrapRow(value);
+  if (
+    uuid(row.version_id) !== source.sourceMediaVersionId ||
+    uuid(row.ingest_job_id) !== source.ingestJobId ||
+    row.ingest_state !== "accepted" ||
+    row.ingest_job_state !== "accepted" ||
+    !safeText(row.accepted_at, 64) ||
+    !safeText(row.ingest_completed_at, 64)
+  ) {
+    throw new Error("AutoHDR source acceptance RPC returned an invalid result.");
+  }
 }
 
 function uuid(value: unknown): string {
@@ -252,7 +273,35 @@ function safeText(value: unknown, max: number): string {
 }
 
 function nullableText(value: unknown, max: number): string | null {
-  return value === null || value === undefined ? null : safeText(value, max);
+  return value == null ? null : safeText(value, max);
+}
+
+function nullableProviderStatus(value: unknown): AutoHDRJob["providerStatus"] {
+  if (value == null) return null;
+  const text = safeText(value, 16);
+  if (!PROVIDER_STATUSES.has(text)) throw new Error("AutoHDR database returned an invalid provider status.");
+  return text as NonNullable<AutoHDRJob["providerStatus"]>;
+}
+
+function byteaHex(value: unknown): string {
+  const text = typeof value === "string" ? value : "";
+  const hex = text.startsWith("\\x") ? text.slice(2) : text;
+  if (!/^[0-9a-f]{64}$/.test(hex)) throw new Error("AutoHDR database returned an invalid checksum.");
+  return hex;
+}
+
+function positiveInteger(value: unknown): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) {
+    throw new Error("AutoHDR database returned an invalid byte size.");
+  }
+  return value;
+}
+
+function exactContentType(value: unknown): "image/jpeg" | "image/png" {
+  if (value !== "image/jpeg" && value !== "image/png") {
+    throw new Error("AutoHDR database returned an invalid content type.");
+  }
+  return value;
 }
 
 function databaseUnavailable(): Error {
