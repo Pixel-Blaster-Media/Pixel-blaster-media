@@ -141,6 +141,7 @@ test("MediaWorkflow swaps gated prose for the compact runtime-gated AutoHDR UI",
   assert.match(page, /getAutoHDRRuntimeReadiness/);
   assert.match(readiness, /createProductionR2Storage/);
   assert.match(readiness, /MEDIA_R2_BROWSER_UPLOADS_ENABLED/);
+  assert.match(readiness, /AUTOHDR_QUARANTINE_WORKFLOW_ENABLED/);
   assert.match(readiness, /===\s*"true"/);
   assert.match(section, /Review pending ingestion/);
   assert.match(section, /hashAutoHDRSourceFiles/);

@@ -18,6 +18,10 @@ export async function getAutoHDRRuntimeReadiness(
   if (!browserUploadsReady) {
     prerequisites.push("Production R2 browser-upload CORS verification");
   }
+  const quarantineWorkflowReady = process.env.AUTOHDR_QUARANTINE_WORKFLOW_ENABLED === "true";
+  if (!quarantineWorkflowReady) {
+    prerequisites.push("Quarantine-first source ingestion and recovery verification");
+  }
   let storageReady = false;
   try {
     createProductionR2Storage(organizationId);
@@ -32,7 +36,7 @@ export async function getAutoHDRRuntimeReadiness(
   if (!apiKey) prerequisites.push("AutoHDR API key");
   if (!schemaReady) prerequisites.push("Canonical media and AutoHDR job schema");
   return Object.freeze({
-    ready: storageReady && browserUploadsReady && Boolean(apiKey) && schemaReady,
+    ready: storageReady && browserUploadsReady && quarantineWorkflowReady && Boolean(apiKey) && schemaReady,
     prerequisites: Object.freeze(prerequisites),
   });
 }
