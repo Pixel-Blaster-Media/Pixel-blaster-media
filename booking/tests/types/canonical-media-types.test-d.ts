@@ -3,7 +3,7 @@ import type { Database } from "../../lib/supabase/database.types";
 type MediaBatchInsert = Database["public"]["Tables"]["media_batches"]["Insert"];
 type MediaPackageInsert = Database["public"]["Tables"]["media_packages"]["Insert"];
 type DownloadGrantInsert = Database["public"]["Tables"]["download_grants"]["Insert"];
-type SourceBatchArgs = Database["public"]["Functions"]["create_autohdr_source_batch"]["Args"];
+type SourceBatchArgs = Database["public"]["Functions"]["prepare_autohdr_source_batch"]["Args"];
 type SourceAcceptArgs = Database["public"]["Functions"]["accept_autohdr_source_version"]["Args"];
 
 // @ts-expect-error Canonical media batches require every tenant and provider identity.

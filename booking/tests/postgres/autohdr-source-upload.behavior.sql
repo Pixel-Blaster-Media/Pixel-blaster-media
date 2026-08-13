@@ -42,7 +42,7 @@ declare
   v_raw record;
 begin
   begin
-    perform public.create_autohdr_source_batch(
+    perform public.prepare_autohdr_source_batch(
       '22222222-2222-4222-8222-222222222222',
       '11111111-1111-4111-8111-111111111102',
       '00000000-0000-4000-8000-000000000001',
@@ -53,7 +53,7 @@ begin
   end;
 
   begin
-    perform public.create_autohdr_source_batch(
+    perform public.prepare_autohdr_source_batch(
       '11111111-1111-4111-8111-111111111111',
       '22222222-2222-4222-8222-222222222203',
       '00000000-0000-4000-8000-000000000002',
@@ -64,7 +64,7 @@ begin
   end;
 
   begin
-    perform public.create_autohdr_source_batch(
+    perform public.prepare_autohdr_source_batch(
       '11111111-1111-4111-8111-111111111111',
       '11111111-1111-4111-8111-111111111102',
       '00000000-0000-4000-8000-000000000003',
@@ -75,7 +75,7 @@ begin
   end;
 
   begin
-    perform public.create_autohdr_source_batch(
+    perform public.prepare_autohdr_source_batch(
       '22222222-2222-4222-8222-222222222222',
       '22222222-2222-4222-8222-222222222203',
       '00000000-0000-4000-8000-000000000004',
@@ -86,7 +86,7 @@ begin
   end;
 
   begin
-    perform public.create_autohdr_source_batch(
+    perform public.prepare_autohdr_source_batch(
       '11111111-1111-4111-8111-111111111111',
       '11111111-1111-4111-8111-111111111102',
       '00000000-0000-4000-8000-000000000005',
@@ -98,7 +98,7 @@ begin
   end;
 
   begin
-    perform public.create_autohdr_source_batch(
+    perform public.prepare_autohdr_source_batch(
       '11111111-1111-4111-8111-111111111111',
       '11111111-1111-4111-8111-111111111102',
       '00000000-0000-4000-8000-000000000006',
@@ -124,7 +124,7 @@ begin
     ) rejected(filename, mime_type)
   loop
     begin
-      perform public.create_autohdr_source_batch(
+      perform public.prepare_autohdr_source_batch(
         '11111111-1111-4111-8111-111111111111',
         '11111111-1111-4111-8111-111111111102',
         '00000000-0000-4000-8000-000000000008',
@@ -142,7 +142,7 @@ begin
   end loop;
 
   -- Both accepted JPEG spellings and PNG are part of the narrow source contract.
-  perform public.create_autohdr_source_batch(
+  perform public.prepare_autohdr_source_batch(
     '11111111-1111-4111-8111-111111111111',
     '11111111-1111-4111-8111-111111111102',
     '00000000-0000-4000-8000-000000000007',
@@ -154,7 +154,7 @@ $test$;
 
 create temporary table source_rows on commit drop as
 select *
-from public.create_autohdr_source_batch(
+from public.prepare_autohdr_source_batch(
   '11111111-1111-4111-8111-111111111111',
   '11111111-1111-4111-8111-111111111102',
   '00000000-0000-4000-8000-000000000010',
@@ -190,7 +190,7 @@ begin
   end if;
 
   select jsonb_agg(to_jsonb(replay) order by replay.position) into v_replay
-  from public.create_autohdr_source_batch(
+  from public.prepare_autohdr_source_batch(
     '11111111-1111-4111-8111-111111111111',
     '11111111-1111-4111-8111-111111111102',
     '00000000-0000-4000-8000-000000000010',
@@ -207,7 +207,7 @@ begin
   end if;
 
   begin
-    perform public.create_autohdr_source_batch(
+    perform public.prepare_autohdr_source_batch(
       '11111111-1111-4111-8111-111111111111',
       '11111111-1111-4111-8111-111111111102',
       '00000000-0000-4000-8000-000000000010',
@@ -255,6 +255,29 @@ begin
   select * into strict v_jpeg from source_rows where position = 0;
   select * into strict v_png from source_rows where position = 1;
 
+  perform public.mark_autohdr_source_quarantined(
+    v_jpeg.organization_id, v_jpeg.booking_id, v_jpeg.batch_id, v_jpeg.asset_id,
+    v_jpeg.version_id, v_jpeg.ingest_job_id, v_jpeg.quarantine_bucket_name,
+    v_jpeg.quarantine_object_key, '"source-jpeg-etag"', v_jpeg.sha256,
+    v_jpeg.byte_size, v_jpeg.mime_type
+  );
+  perform public.begin_autohdr_source_validation(
+    v_jpeg.organization_id, v_jpeg.booking_id, v_jpeg.batch_id, v_jpeg.asset_id,
+    v_jpeg.version_id, v_jpeg.ingest_job_id, v_jpeg.quarantine_bucket_name,
+    v_jpeg.quarantine_object_key, '"source-jpeg-etag"'
+  );
+  perform public.mark_autohdr_source_quarantined(
+    v_png.organization_id, v_png.booking_id, v_png.batch_id, v_png.asset_id,
+    v_png.version_id, v_png.ingest_job_id, v_png.quarantine_bucket_name,
+    v_png.quarantine_object_key, '"source-png-etag"', v_png.sha256,
+    v_png.byte_size, v_png.mime_type
+  );
+  perform public.begin_autohdr_source_validation(
+    v_png.organization_id, v_png.booking_id, v_png.batch_id, v_png.asset_id,
+    v_png.version_id, v_png.ingest_job_id, v_png.quarantine_bucket_name,
+    v_png.quarantine_object_key, '"source-png-etag"'
+  );
+
   begin
     perform public.accept_autohdr_source_version(
       '11111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111102',
@@ -263,7 +286,7 @@ begin
       3000, 2000
     );
     raise exception 'mismatched canonical identity was accepted';
-  exception when foreign_key_violation then null;
+  exception when object_not_in_prerequisite_state then null;
   end;
 
   begin
@@ -461,15 +484,15 @@ do $test$
 begin
   if has_function_privilege(
        'anon',
-       'public.create_autohdr_source_batch(uuid,uuid,uuid,uuid,jsonb)', 'EXECUTE'
+       'public.prepare_autohdr_source_batch(uuid,uuid,uuid,uuid,jsonb)', 'EXECUTE'
      )
      or has_function_privilege(
        'authenticated',
-       'public.create_autohdr_source_batch(uuid,uuid,uuid,uuid,jsonb)', 'EXECUTE'
+       'public.prepare_autohdr_source_batch(uuid,uuid,uuid,uuid,jsonb)', 'EXECUTE'
      )
      or not has_function_privilege(
        'service_role',
-       'public.create_autohdr_source_batch(uuid,uuid,uuid,uuid,jsonb)', 'EXECUTE'
+       'public.prepare_autohdr_source_batch(uuid,uuid,uuid,uuid,jsonb)', 'EXECUTE'
      )
      or has_function_privilege(
        'anon',
@@ -499,7 +522,7 @@ begin
 
   begin
     execute 'set local role authenticated';
-    perform public.create_autohdr_source_batch(
+    perform public.prepare_autohdr_source_batch(
       '11111111-1111-4111-8111-111111111111',
       '11111111-1111-4111-8111-111111111102',
       '00000000-0000-4000-8000-000000000098',

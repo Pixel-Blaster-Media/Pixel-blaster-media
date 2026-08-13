@@ -7,6 +7,11 @@ const migration = readFileSync(
   new URL(`../supabase/migrations/${migrationName}`, import.meta.url),
   "utf8",
 );
+const quarantineMigrationName = "20260813025818_autohdr_quarantine_source_ingestion.sql";
+const quarantineMigration = readFileSync(
+  new URL(`../supabase/migrations/${quarantineMigrationName}`, import.meta.url),
+  "utf8",
+);
 const setup = readFileSync(new URL("../supabase/setup.sql", import.meta.url), "utf8");
 const databaseTypes = readFileSync(
   new URL("../lib/supabase/database.types.ts", import.meta.url),
@@ -34,15 +39,22 @@ test("AutoHDR source upload stays canonical and service-role only", () => {
     /revoke all on function public\.create_autohdr_source_batch[\s\S]*from public, anon, authenticated/i,
   );
   assert.match(
-    migration,
-    /grant execute on function public\.create_autohdr_source_batch[\s\S]*to service_role/i,
+    quarantineMigration,
+    /revoke all on function public\.create_autohdr_source_batch[\s\S]*from service_role/i,
+  );
+  assert.match(
+    quarantineMigration,
+    /grant execute on function public\.prepare_autohdr_source_batch[\s\S]*to service_role/i,
   );
 });
 
 test("fresh setup and database types expose the canonical source RPC slice", () => {
   const marker = `Begin supabase/migrations/${migrationName}`;
   assert.equal(setup.split(marker).length - 1, 1);
+  assert.equal(setup.split(`Begin supabase/migrations/${quarantineMigrationName}`).length - 1, 1);
   assert.match(databaseTypes, /create_autohdr_source_batch:/);
+  assert.match(databaseTypes, /prepare_autohdr_source_batch:/);
+  assert.match(databaseTypes, /autohdr_source_ingests:/);
   assert.match(databaseTypes, /accept_autohdr_source_version:/);
   assert.doesNotMatch(databaseTypes, /dimension_policy/);
   assert.match(databaseTypes, /newly_created: boolean/);

@@ -5,6 +5,7 @@ export LC_ALL=C
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MIGRATION="$(find "$ROOT/supabase/migrations" -maxdepth 1 -type f -name '*_autohdr_canonical_source_upload.sql' | sort | tail -n 1)"
 REPAIR_MIGRATION="$ROOT/supabase/migrations/20260813023000_autohdr_database_hardening.sql"
+QUARANTINE_MIGRATION="$(find "$ROOT/supabase/migrations" -maxdepth 1 -type f -name '*_autohdr_quarantine_source_ingestion.sql' | sort | tail -n 1)"
 
 if [[ -n "${POSTGRES_BIN:-}" ]]; then
   PG_BIN="$POSTGRES_BIN"
@@ -67,6 +68,11 @@ if [[ -n "$MIGRATION" ]]; then
   fi
   "${PSQL[@]}" -f "$MIGRATION" >/dev/null
   "${PSQL[@]}" -f "$REPAIR_MIGRATION" >/dev/null
+  if [[ -z "$QUARANTINE_MIGRATION" ]]; then
+    echo "AutoHDR quarantine migration is required for the source suite." >&2
+    exit 1
+  fi
+  "${PSQL[@]}" -f "$QUARANTINE_MIGRATION" >/dev/null
 else
   echo "AutoHDR canonical source-upload migration is intentionally absent for the TDD red run." >&2
 fi
@@ -92,7 +98,7 @@ PGAPPNAME=autohdr-source-winner "${PSQL[@]}" -qAt -c "
   set role service_role;
   begin;
   select jsonb_agg(to_jsonb(result) order by result.position)
-  from public.create_autohdr_source_batch(
+  from public.prepare_autohdr_source_batch(
     '11111111-1111-4111-8111-111111111111',
     '11111111-1111-4111-8111-111111111102',
     '00000000-0000-4000-8000-000000000020',
@@ -108,7 +114,7 @@ sleep 0.1
 PGAPPNAME=autohdr-source-contender "${PSQL[@]}" -qAt -c "
   set role service_role;
   select jsonb_agg(to_jsonb(result) order by result.position)
-  from public.create_autohdr_source_batch(
+  from public.prepare_autohdr_source_batch(
     '11111111-1111-4111-8111-111111111111',
     '11111111-1111-4111-8111-111111111102',
     '00000000-0000-4000-8000-000000000020',
@@ -157,6 +163,7 @@ if [[ "$("${PSQL[@]}" -Atc "
     and (select count(*) from public.media_assets where batch_id = (select id from target)) = 1
     and (select count(*) from public.media_versions where batch_id = (select id from target)) = 1
     and (select count(*) from public.media_ingest_jobs where batch_id = (select id from target)) = 1
+    and (select count(*) from public.autohdr_source_ingests where batch_id = (select id from target)) = 1
 ")" != "t" ]]; then
   echo "Concurrent idempotent source request created duplicate canonical rows." >&2
   exit 1

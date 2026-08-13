@@ -1,5 +1,5 @@
 // Schema-synchronized Supabase types covering the schema in
-// supabase/migrations/ through 20260811225000. Once you provision Supabase,
+// supabase/migrations/ through 20260813025818. Once you provision Supabase,
 // regenerate this file
 // from the actual schema to pick up policies, function returns, and any
 // drift:
@@ -1172,6 +1172,33 @@ type AutoHDRJobFilesTable = CanonicalMediaTable<{
   source_batch_id: string; filename: string; input_sha256: string; created_at: string;
 }, "organization_id" | "booking_id" | "property_id" | "job_id" | "position" | "source_media_version_id" | "source_batch_id" | "filename" | "input_sha256">;
 
+type AutoHDRSourceLifecycleState =
+  | "prepared"
+  | "quarantined"
+  | "validating"
+  | "accepted"
+  | "reconciliation_required";
+type AutoHDRSourceIngestsTable = CanonicalMediaTable<{
+  organization_id: string; booking_id: string; property_id: string; batch_id: string;
+  asset_id: string; version_id: string; ingest_job_id: string; request_id: string;
+  position: number; quarantine_bucket_name: string; quarantine_object_key: string;
+  quarantine_etag: string | null; master_bucket_name: string; master_object_key: string;
+  expected_sha256: string; expected_byte_size: number; expected_mime_type: string;
+  verified_width_px: number | null; verified_height_px: number | null;
+  lifecycle_state: AutoHDRSourceLifecycleState; prepared_at: string;
+  quarantined_at: string | null; validation_started_at: string | null;
+  master_promoted_at: string | null; accepted_at: string | null;
+  reconciliation_required_at: string | null; quarantine_expires_at: string;
+  cleanup_next_attempt_at: string; cleanup_attempts: number;
+  cleanup_lease_token: string | null; cleanup_lease_expires_at: string | null;
+  cleanup_settled_at: string | null; cleanup_outcome: string | null;
+  cleanup_object_etag: string | null; last_error_code: string | null;
+  last_error_at: string | null; updated_at: string;
+}, "organization_id" | "booking_id" | "property_id" | "batch_id" | "asset_id" |
+  "version_id" | "ingest_job_id" | "request_id" | "position" |
+  "quarantine_bucket_name" | "quarantine_object_key" | "master_bucket_name" |
+  "master_object_key" | "expected_sha256" | "expected_byte_size" | "expected_mime_type">;
+
 type AutoHDRClaimRow = AutoHDRJobsTable["Row"] & {
   newly_created: boolean;
 };
@@ -1203,6 +1230,18 @@ type AutoHDRSourceUploadRow = {
   newly_created: boolean;
 };
 
+type AutoHDRPreparedSourceUploadRow = AutoHDRSourceUploadRow & {
+  organization_id: string;
+  booking_id: string;
+  property_id: string;
+  quarantine_bucket_name: string;
+  quarantine_object_key: string;
+  master_bucket_name: string;
+  master_object_key: string;
+  prepared_at: string;
+  quarantine_expires_at: string;
+};
+
 type AutoHDRSourceAcceptanceRow = {
   version_id: string;
   ingest_state: string;
@@ -1210,6 +1249,38 @@ type AutoHDRSourceAcceptanceRow = {
   ingest_job_id: string;
   ingest_job_state: string;
   ingest_completed_at: string;
+};
+
+type AutoHDRQuarantineAcceptanceRow = AutoHDRSourceAcceptanceRow & {
+  quarantined_at: string;
+  validation_started_at: string;
+  master_promoted_at: string;
+};
+
+type AutoHDRSourceLifecycleRow = {
+  version_id: string;
+  ingest_job_id: string;
+  lifecycle_state: AutoHDRSourceLifecycleState;
+  quarantined_at: string | null;
+  validation_started_at: string | null;
+  accepted_at: string | null;
+};
+
+type AutoHDRQuarantineCleanupClaimRow = {
+  organization_id: string; booking_id: string; property_id: string; batch_id: string;
+  asset_id: string; version_id: string; ingest_job_id: string;
+  quarantine_bucket_name: string; quarantine_object_key: string;
+  quarantine_etag: string | null; cleanup_object_etag: string | null;
+  cleanup_attempts: number; cleanup_lease_token: string;
+  cleanup_lease_expires_at: string;
+};
+
+type AutoHDRQuarantineCleanupSettlementRow = {
+  ingest_job_id: string;
+  lifecycle_state: AutoHDRSourceLifecycleState;
+  cleanup_next_attempt_at: string;
+  cleanup_settled_at: string | null;
+  cleanup_outcome: string | null;
 };
 
 export interface Database {
@@ -1252,6 +1323,7 @@ export interface Database {
       listing_gallery_items: ListingGalleryItemsTable;
       autohdr_jobs: AutoHDRJobsTable;
       autohdr_job_files: AutoHDRJobFilesTable;
+      autohdr_source_ingests: AutoHDRSourceIngestsTable;
       google_calendar_connection: GoogleCalendarConnectionTable;
       integration_credentials: IntegrationCredentialsTable;
       iguide_jobs: IGuideJobsTable;
@@ -1327,6 +1399,60 @@ export interface Database {
           p_files: Json;
         };
         Returns: AutoHDRSourceUploadRow[];
+      };
+      prepare_autohdr_source_batch: {
+        Args: {
+          p_organization_id: string;
+          p_booking_id: string;
+          p_request_id: string;
+          p_created_by: string;
+          p_files: Json;
+        };
+        Returns: AutoHDRPreparedSourceUploadRow[];
+      };
+      mark_autohdr_source_quarantined: {
+        Args: {
+          p_organization_id: string; p_booking_id: string; p_batch_id: string;
+          p_asset_id: string; p_version_id: string; p_ingest_job_id: string;
+          p_quarantine_bucket_name: string; p_quarantine_object_key: string;
+          p_quarantine_etag: string; p_sha256: string; p_byte_size: number;
+          p_mime_type: string;
+        };
+        Returns: AutoHDRSourceLifecycleRow[];
+      };
+      begin_autohdr_source_validation: {
+        Args: {
+          p_organization_id: string; p_booking_id: string; p_batch_id: string;
+          p_asset_id: string; p_version_id: string; p_ingest_job_id: string;
+          p_quarantine_bucket_name: string; p_quarantine_object_key: string;
+          p_quarantine_etag: string;
+        };
+        Returns: AutoHDRSourceLifecycleRow[];
+      };
+      accept_autohdr_quarantined_source_version: {
+        Args: {
+          p_organization_id: string; p_booking_id: string; p_batch_id: string;
+          p_asset_id: string; p_version_id: string; p_ingest_job_id: string;
+          p_quarantine_bucket_name: string; p_quarantine_object_key: string;
+          p_quarantine_etag: string; p_master_bucket_name: string;
+          p_master_object_key: string; p_sha256: string; p_byte_size: number;
+          p_mime_type: string; p_verified_width_px: number;
+          p_verified_height_px: number;
+        };
+        Returns: AutoHDRQuarantineAcceptanceRow[];
+      };
+      claim_abandoned_autohdr_source_quarantine: {
+        Args: { p_limit: number; p_lease_seconds: number };
+        Returns: AutoHDRQuarantineCleanupClaimRow[];
+      };
+      settle_autohdr_source_quarantine_cleanup: {
+        Args: {
+          p_organization_id: string; p_booking_id: string; p_property_id: string;
+          p_ingest_job_id: string; p_quarantine_object_key: string;
+          p_quarantine_etag: string | null; p_cleanup_lease_token: string;
+          p_outcome: string; p_error_code: string | null;
+        };
+        Returns: AutoHDRQuarantineCleanupSettlementRow[];
       };
       accept_autohdr_source_version: {
         Args: {

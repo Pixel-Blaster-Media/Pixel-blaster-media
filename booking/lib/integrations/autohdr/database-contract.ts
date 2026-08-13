@@ -46,7 +46,7 @@ function sourceFile(file: AutoHDRSourceManifestEntry) {
 export const AUTOHDR_DATABASE_CONTRACT = Object.freeze({
   jobsTable: "autohdr_jobs",
   rpc: Object.freeze({
-    prepareSourceUpload: "create_autohdr_source_batch",
+    prepareSourceUpload: "prepare_autohdr_source_batch",
     acceptSourceUpload: "accept_autohdr_source_version",
     claim: "claim_autohdr_job",
     transition: "transition_autohdr_job",

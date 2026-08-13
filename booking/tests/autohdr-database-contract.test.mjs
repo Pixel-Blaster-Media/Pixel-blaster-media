@@ -122,6 +122,6 @@ test("source RPC arguments exactly match the corrected database functions and ne
     p_verified_height_px: 2000,
   });
   assert.equal(JSON.stringify({ prepared, accepted }).includes("url"), false);
-  assert.equal(AUTOHDR_DATABASE_CONTRACT.rpc.prepareSourceUpload, "create_autohdr_source_batch");
+  assert.equal(AUTOHDR_DATABASE_CONTRACT.rpc.prepareSourceUpload, "prepare_autohdr_source_batch");
   assert.equal(AUTOHDR_DATABASE_CONTRACT.rpc.acceptSourceUpload, "accept_autohdr_source_version");
 });

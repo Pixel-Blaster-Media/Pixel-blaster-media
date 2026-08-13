@@ -82,7 +82,7 @@ test("database boundary centralizes the separately-owned RPC names and never sto
   const adapter = read("lib/integrations/autohdr/database-adapter.ts");
   const contract = read("lib/integrations/autohdr/database-contract.ts");
   for (const rpc of [
-    "create_autohdr_source_batch",
+    "prepare_autohdr_source_batch",
     "accept_autohdr_source_version",
     "claim_autohdr_job",
     "transition_autohdr_job",
