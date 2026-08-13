@@ -13,6 +13,7 @@
     "test:postgres:media": "bash scripts/verify-canonical-media-postgres.sh",
     "test:postgres:autohdr-source": "bash scripts/verify-autohdr-source-upload-postgres.sh",
     "test:postgres:autohdr-quarantine": "bash scripts/verify-autohdr-quarantine-ingestion-postgres.sh",
+    "test:postgres:autohdr-worker": "bash scripts/verify-autohdr-source-worker-postgres.sh",
     "test:postgres:credentials": "bash scripts/verify-integration-credentials-postgres.sh",
     "verify:r2:development": "node scripts/verify-development-r2.mjs",
     "lint": "eslint .",
