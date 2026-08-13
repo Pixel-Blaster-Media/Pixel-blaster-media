@@ -1,5 +1,6 @@
 const ACCOUNT_ID = /^[0-9a-f]{32}$/;
 const DEVELOPMENT_BUCKET = "pixel-blaster-dev-synthetic-media" as const;
+const PRODUCTION_BUCKET = "pixel-blaster-private-media" as const;
 
 export interface DevelopmentMediaStorageConfig {
   readonly enabled: boolean;
@@ -11,6 +12,18 @@ export interface DevelopmentMediaStorageConfig {
     secretAccessKey: string;
   }>;
   readonly bucket: typeof DEVELOPMENT_BUCKET;
+}
+
+export interface ProductionMediaStorageConfig {
+  readonly enabled: true;
+  readonly environment: "production";
+  readonly endpoint: string;
+  readonly region: "auto";
+  readonly credentials: Readonly<{
+    accessKeyId: string;
+    secretAccessKey: string;
+  }>;
+  readonly bucket: typeof PRODUCTION_BUCKET;
 }
 
 function required(env: NodeJS.ProcessEnv | Record<string, string | undefined>, name: string): string {
@@ -65,6 +78,42 @@ export function loadDevelopmentMediaStorageConfig(
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     region: "auto",
     credentials: Object.freeze({ accessKeyId, secretAccessKey }),
+    bucket,
+  };
+  return Object.freeze(config);
+}
+
+export function loadProductionMediaStorageConfig(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): ProductionMediaStorageConfig {
+  if (required(env, "MEDIA_STORAGE_ENVIRONMENT") !== "production") {
+    throw new Error("canonical production media storage requires the production environment");
+  }
+  if (env.VERCEL_ENV !== "production") {
+    throw new Error("production media storage is restricted to Vercel production");
+  }
+  if (required(env, "MEDIA_STORAGE_ENABLED") !== "true") {
+    throw new Error("production media storage must be enabled explicitly");
+  }
+  const accountId = required(env, "MEDIA_R2_ACCOUNT_ID");
+  if (!ACCOUNT_ID.test(accountId)) {
+    throw new Error("MEDIA_R2_ACCOUNT_ID must be 32 lowercase hexadecimal characters");
+  }
+  const bucket = required(env, "MEDIA_R2_BUCKET");
+  if (bucket !== PRODUCTION_BUCKET) {
+    throw new Error(
+      `MEDIA_R2_BUCKET must name the exact private production bucket ${PRODUCTION_BUCKET}`,
+    );
+  }
+  const config: ProductionMediaStorageConfig = {
+    enabled: true,
+    environment: "production",
+    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    region: "auto",
+    credentials: Object.freeze({
+      accessKeyId: required(env, "MEDIA_R2_ACCESS_KEY_ID"),
+      secretAccessKey: required(env, "MEDIA_R2_SECRET_ACCESS_KEY"),
+    }),
     bucket,
   };
   return Object.freeze(config);
