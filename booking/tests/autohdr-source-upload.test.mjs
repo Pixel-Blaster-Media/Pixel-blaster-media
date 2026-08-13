@@ -267,8 +267,16 @@ test("server image policy rejects malformed, oversized-dimension, and excessive-
 });
 
 test("production browser uploads require the explicit exact acknowledgement", () => {
-  assert.equal(isCanonicalBrowserUploadEnabled({ MEDIA_R2_BROWSER_UPLOADS_ENABLED: "true" }), true);
+  assert.equal(isCanonicalBrowserUploadEnabled({
+    MEDIA_R2_BROWSER_UPLOADS_ENABLED: "true",
+    AUTOHDR_QUARANTINE_WORKFLOW_ENABLED: "true",
+  }), true);
+  assert.equal(isCanonicalBrowserUploadEnabled({ MEDIA_R2_BROWSER_UPLOADS_ENABLED: "true" }), false);
+  assert.equal(isCanonicalBrowserUploadEnabled({ AUTOHDR_QUARANTINE_WORKFLOW_ENABLED: "true" }), false);
   for (const value of [undefined, "false", "TRUE", " true", "true "]) {
-    assert.equal(isCanonicalBrowserUploadEnabled({ MEDIA_R2_BROWSER_UPLOADS_ENABLED: value }), false);
+    assert.equal(isCanonicalBrowserUploadEnabled({
+      MEDIA_R2_BROWSER_UPLOADS_ENABLED: value,
+      AUTOHDR_QUARANTINE_WORKFLOW_ENABLED: "true",
+    }), false);
   }
 });

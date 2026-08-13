@@ -104,11 +104,12 @@ export default function MediaWorkflow({
           ) : null}
         </div>
         <div className="mt-4">
-          {autoHDRReadiness.ready ? autoHDR : (
-            <p className="rounded-xl border border-dashed border-amber-200 bg-amber-50/60 px-3 py-3 text-xs text-amber-900">
-              Booking uploads remain unavailable until every runtime prerequisite above is verified.
+          {autoHDR}
+          {!autoHDRReadiness.ready ? (
+            <p className="mt-3 rounded-xl border border-dashed border-amber-200 bg-amber-50/60 px-3 py-3 text-xs text-amber-900">
+              Existing job history remains visible. Uploads and provider mutations stay disabled until every runtime prerequisite above is verified.
             </p>
-          )}
+          ) : null}
         </div>
       </section>
       ) : null}

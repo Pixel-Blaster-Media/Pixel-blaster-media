@@ -15,7 +15,8 @@ export function canonicalSourceExtension(contentType: string): "jpg" | "png" {
 export function isCanonicalBrowserUploadEnabled(
   env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
 ): boolean {
-  return env.MEDIA_R2_BROWSER_UPLOADS_ENABLED === "true";
+  return env.MEDIA_R2_BROWSER_UPLOADS_ENABLED === "true" &&
+    env.AUTOHDR_QUARANTINE_WORKFLOW_ENABLED === "true";
 }
 
 export function buildCanonicalSourcePutInput(input: {

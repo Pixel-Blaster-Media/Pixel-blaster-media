@@ -223,7 +223,7 @@ export default async function BookingDetailPage({
       autoenhanceEnabled
         ? listBookingAutoenhanceBatches({ admin, bookingId: id })
         : Promise.resolve([]),
-      autoHDRReadiness.ready
+      autoHDREnabled
         ? listBookingAutoHDRJobs({ admin, bookingId: id })
         : Promise.resolve([]),
       getActiveCatalog({ organizationId: admin.organizationId }),
@@ -410,7 +410,11 @@ export default async function BookingDetailPage({
               autoHDREnabled={autoHDREnabled}
               autoHDRReadiness={autoHDRReadiness}
               autoHDR={
-                <AutoHDRSection bookingId={booking.id} initialJobs={autoHDRJobs} />
+                <AutoHDRSection
+                  bookingId={booking.id}
+                  initialJobs={autoHDRJobs}
+                  mutationEnabled={autoHDRReadiness.ready}
+                />
               }
               autoenhanceEnabled={autoenhanceEnabled}
               hasIGuidePhotos={Boolean(

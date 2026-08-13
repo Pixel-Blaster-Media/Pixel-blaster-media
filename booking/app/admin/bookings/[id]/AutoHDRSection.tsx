@@ -32,9 +32,11 @@ const ACCEPTED_FILES = "image/jpeg,image/png,.jpg,.jpeg,.png";
 export default function AutoHDRSection({
   bookingId,
   initialJobs,
+  mutationEnabled,
 }: {
   bookingId: string;
   initialJobs: AutoHDRJob[];
+  mutationEnabled: boolean;
 }) {
   const [files, setFiles] = useState<File[]>([]);
   const [jobs, setJobs] = useState(initialJobs);
@@ -70,6 +72,10 @@ export default function AutoHDRSection({
   }, [activeJob?.id, activeJob?.state, bookingId]);
 
   async function prepareUploadAndFinalize() {
+    if (!mutationEnabled) {
+      setError("AutoHDR uploads are disabled until every production prerequisite is verified.");
+      return;
+    }
     if (!files.length) {
       setError("Pick at least one photo first.");
       return;
@@ -182,7 +188,7 @@ export default function AutoHDRSection({
             type="file"
             multiple
             accept={ACCEPTED_FILES}
-            disabled={busy}
+            disabled={!mutationEnabled || busy}
             onChange={(event) => {
               const selected = Array.from(event.currentTarget.files ?? []);
               try {
@@ -206,7 +212,7 @@ export default function AutoHDRSection({
           </span>
           <select
             value={modelSelection}
-            disabled={busy}
+            disabled={!mutationEnabled || busy}
             onChange={(event) => setModelSelection(event.currentTarget.value as AutoHDRModel)}
             className="admin-input mt-1"
           >
@@ -220,7 +226,7 @@ export default function AutoHDRSection({
           <input
             type="checkbox"
             checked={perspectiveCorrection}
-            disabled={busy}
+            disabled={!mutationEnabled || busy}
             onChange={(event) => setPerspectiveCorrection(event.currentTarget.checked)}
           />
           Perspective correction
@@ -229,7 +235,7 @@ export default function AutoHDRSection({
           <input
             type="checkbox"
             checked={retainOriginalSky}
-            disabled={busy}
+            disabled={!mutationEnabled || busy}
             onChange={(event) => setRetainOriginalSky(event.currentTarget.checked)}
           />
           Retain original sky
@@ -251,13 +257,13 @@ export default function AutoHDRSection({
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          disabled={busy || files.length === 0}
+          disabled={!mutationEnabled || busy || files.length === 0}
           onClick={() => void prepareUploadAndFinalize()}
           className="rounded-full bg-realtor-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
         >
           {busy ? "Working…" : `Upload + edit ${files.length || ""} photo${files.length === 1 ? "" : "s"}`}
         </button>
-        {activeJob?.state === "processing" ? (
+        {mutationEnabled && activeJob?.state === "processing" ? (
           <button
             type="button"
             disabled={busy}
