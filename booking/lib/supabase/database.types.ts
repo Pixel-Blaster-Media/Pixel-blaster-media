@@ -1085,7 +1085,8 @@ type ProviderEventsTable = CanonicalMediaTable<{
 }, "organization_id" | "provider" | "provider_connection_key" | "provider_event_id" | "event_type" | "payload_sha256">;
 type MediaIngestJobsTable = CanonicalMediaTable<{
   id: string; organization_id: string; property_id: string; batch_id: string;
-  provider_event_id: string | null; job_kind: string; idempotency_key: string;
+  provider_event_id: string | null; source_version_id: string | null;
+  job_kind: string; idempotency_key: string;
   state: string; attempts: number; max_attempts: number; next_attempt_at: string;
   last_error_code: string | null; last_error_at: string | null; completed_at: string | null;
   created_at: string; updated_at: string;
@@ -1170,6 +1171,30 @@ type AutoHDRJobFilesTable = CanonicalMediaTable<{
   job_id: string; position: number; source_media_version_id: string;
   source_batch_id: string; filename: string; input_sha256: string; created_at: string;
 }, "organization_id" | "booking_id" | "property_id" | "job_id" | "position" | "source_media_version_id" | "source_batch_id" | "filename" | "input_sha256">;
+
+type AutoHDRSourceUploadRow = {
+  batch_id: string;
+  asset_id: string;
+  version_id: string;
+  ingest_job_id: string;
+  position: number;
+  filename: string;
+  bucket_name: string;
+  object_key: string;
+  sha256: string;
+  byte_size: number;
+  mime_type: string;
+  newly_created: boolean;
+};
+
+type AutoHDRSourceAcceptanceRow = {
+  version_id: string;
+  ingest_state: string;
+  accepted_at: string;
+  ingest_job_id: string;
+  ingest_job_state: string;
+  ingest_completed_at: string;
+};
 
 export interface Database {
   public: {
@@ -1269,6 +1294,34 @@ export interface Database {
           p_files: Json;
         };
         Returns: AutoHDRJobsTable["Row"][];
+      };
+      create_autohdr_source_batch: {
+        Args: {
+          p_organization_id: string;
+          p_booking_id: string;
+          p_request_id: string;
+          p_created_by: string;
+          p_files: Json;
+        };
+        Returns: AutoHDRSourceUploadRow[];
+      };
+      accept_autohdr_source_version: {
+        Args: {
+          p_organization_id: string;
+          p_booking_id: string;
+          p_batch_id: string;
+          p_asset_id: string;
+          p_version_id: string;
+          p_ingest_job_id: string;
+          p_bucket_name: string;
+          p_object_key: string;
+          p_sha256: string;
+          p_byte_size: number;
+          p_mime_type: string;
+          p_verified_width_px: number;
+          p_verified_height_px: number;
+        };
+        Returns: AutoHDRSourceAcceptanceRow[];
       };
       transition_autohdr_job: {
         Args: {
