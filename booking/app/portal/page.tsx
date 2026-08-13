@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 import { BOOKING_STATUSES } from "@/lib/booking/booking-status";
+import { BUSINESS_TZ } from "@/lib/booking/availability";
 import { requireUser } from "@/lib/auth/require-user";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type {
@@ -314,6 +315,7 @@ function MediaChips({ media }: { media: PropertyMediaSummary }) {
 
 function formatDate(iso: string): string {
   return new Intl.DateTimeFormat("en-US", {
+    timeZone: BUSINESS_TZ,
     month: "short",
     day: "numeric",
     hour: "numeric",
