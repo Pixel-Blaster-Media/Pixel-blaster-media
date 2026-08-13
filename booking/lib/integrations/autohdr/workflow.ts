@@ -124,6 +124,23 @@ export async function refreshBookingAutoHDR(input: {
   return application().refresh(input);
 }
 
+export async function reconcileBookingAutoHDR(input: {
+  admin: AdminContext;
+  bookingId: string;
+  jobId: string;
+}) {
+  return application().reconcile(input);
+}
+
+export async function abandonBookingAutoHDR(input: {
+  admin: AdminContext;
+  bookingId: string;
+  jobId: string;
+  reason: string;
+}) {
+  return application().abandon(input);
+}
+
 export async function retrieveBookingAutoHDR(input: {
   admin: AdminContext;
   bookingId: string;
@@ -136,7 +153,9 @@ export async function listBookingAutoHDRJobs(input: {
   admin: AdminContext;
   bookingId: string;
 }) {
-  return createAutoHDRJobStore().listJobs(input.admin.organizationId, input.bookingId);
+  const store = createAutoHDRJobStore();
+  await requireScopedBooking(store, input.bookingId, input.admin.organizationId);
+  return store.listJobs(input.admin.organizationId, input.bookingId);
 }
 
 async function requireScopedBooking(

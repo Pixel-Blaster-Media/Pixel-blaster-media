@@ -4,6 +4,10 @@ const MAX_BODY_BYTES = 96 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 export async function readBoundedAutoHDRJson(request: Request): Promise<unknown> {
+  const contentType = request.headers.get("content-type")?.toLowerCase().split(";", 1)[0].trim();
+  if (contentType !== "application/json") {
+    throw new AutoHDRWorkflowError("invalid_request", "AutoHDR request content type must be application/json.", 415);
+  }
   const declared = request.headers.get("content-length");
   if (declared && (!/^\d+$/.test(declared) || Number(declared) > MAX_BODY_BYTES)) {
     throw new AutoHDRWorkflowError("invalid_request", "AutoHDR request is too large.", 413);
@@ -88,6 +92,20 @@ export function parseAutoHDRJobOnlyInput(value: unknown): { jobId: string } {
     throw new AutoHDRWorkflowError("invalid_request", "AutoHDR job ID is invalid.");
   }
   return { jobId: row.jobId };
+}
+
+export function parseAutoHDRAbandonInput(value: unknown): { jobId: string; reason: string } {
+  const row = exactObject(value, ["jobId", "reason"]);
+  if (typeof row.jobId !== "string" || !UUID.test(row.jobId)) {
+    throw new AutoHDRWorkflowError("invalid_request", "AutoHDR job ID is invalid.");
+  }
+  if (
+    typeof row.reason !== "string" || row.reason !== row.reason.trim() ||
+    row.reason.length < 1 || row.reason.length > 500 || /[\u0000-\u001f\u007f]/.test(row.reason)
+  ) {
+    throw new AutoHDRWorkflowError("invalid_request", "AutoHDR abandonment reason is invalid.");
+  }
+  return { jobId: row.jobId, reason: row.reason };
 }
 
 export function toAutoHDRRouteError(error: unknown): {

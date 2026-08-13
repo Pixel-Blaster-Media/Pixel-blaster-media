@@ -134,7 +134,7 @@ function validatedUid(value: string): string {
 
 async function readBoundedJson(response: Response): Promise<unknown> {
   const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim();
-  if (contentType && contentType !== "application/json") {
+  if (contentType !== "application/json") {
     throw new AutoHDRRequestError("AutoHDR returned an unexpected response type.", 502);
   }
   const declared = response.headers.get("content-length");

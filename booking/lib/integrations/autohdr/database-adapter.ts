@@ -32,6 +32,13 @@ const JOB_STATES = new Set<AutoHDRJobState>([
   "retrieving", "review_pending", "retryable", "reconciliation_required", "rejected",
 ]);
 const PROVIDER_STATUSES = new Set(["created", "uploading", "processing", "ready", "failed", "unknown"]);
+const JOB_COLUMNS = [
+  "id", "organization_id", "booking_id", "property_id", "state", "provider_uid",
+  "provider_status", "provider_uid_assigned_at", "upload_started_at", "finalize_started_at",
+  "reconciliation_required_at", "reconciliation_source_state", "last_error_code",
+  "last_error_evidence", "last_error_at", "abandoned_at", "abandoned_by",
+  "abandon_reason", "retrieval_claim_token", "created_at", "updated_at",
+].join(", ");
 
 /** The only application coupling to the separately-owned database RPC contracts. */
 export function createAutoHDRJobStore(
@@ -88,7 +95,7 @@ export function createAutoHDRJobStore(
     async loadJob(input) {
       const { data, error } = await client
         .from(AUTOHDR_DATABASE_CONTRACT.jobsTable)
-        .select("id, organization_id, booking_id, property_id, state, provider_uid, provider_status, retrieval_claim_token, created_at, updated_at")
+        .select(JOB_COLUMNS)
         .eq("id", input.jobId)
         .eq("booking_id", input.bookingId)
         .eq("property_id", input.propertyId)
@@ -103,11 +110,29 @@ export function createAutoHDRJobStore(
       return parseJob(unwrapRow(data));
     },
 
-    async assignProviderUid(input) {
+    async activateProviderJob(input) {
       const data = await call(
         client,
-        AUTOHDR_DATABASE_CONTRACT.rpc.assignProviderUid,
-        AUTOHDR_DATABASE_CONTRACT.args.assignProviderUid(input),
+        AUTOHDR_DATABASE_CONTRACT.rpc.activateProviderJob,
+        AUTOHDR_DATABASE_CONTRACT.args.activateProviderJob(input),
+      );
+      return parseJob(unwrapRow(data));
+    },
+
+    async reconcileProviderJob(input) {
+      const data = await call(
+        client,
+        AUTOHDR_DATABASE_CONTRACT.rpc.reconcileProviderJob,
+        AUTOHDR_DATABASE_CONTRACT.args.reconcileProviderJob(input),
+      );
+      return parseJob(unwrapRow(data));
+    },
+
+    async abandonProviderJob(input) {
+      const data = await call(
+        client,
+        AUTOHDR_DATABASE_CONTRACT.rpc.abandonProviderJob,
+        AUTOHDR_DATABASE_CONTRACT.args.abandonProviderJob(input),
       );
       return parseJob(unwrapRow(data));
     },
@@ -122,14 +147,10 @@ export function createAutoHDRJobStore(
     },
 
     async listJobs(organizationId, bookingId) {
-      const { data, error } = await client
-        .from(AUTOHDR_DATABASE_CONTRACT.jobsTable)
-        .select("id, organization_id, booking_id, property_id, state, provider_uid, provider_status, retrieval_claim_token, created_at, updated_at")
-        .eq("organization_id", organizationId)
-        .eq("booking_id", bookingId)
-        .order("created_at", { ascending: false })
-        .limit(10);
-      if (error) throw databaseUnavailable();
+      const data = await call(client, AUTOHDR_DATABASE_CONTRACT.rpc.list, {
+        p_organization_id: organizationId,
+        p_booking_id: bookingId,
+      });
       return Array.isArray(data) ? data.map(parseJob) : [];
     },
 
@@ -185,6 +206,17 @@ function parseJob(value: unknown): AutoHDRJob {
     state,
     providerUid: nullableText(row.provider_uid, 255),
     providerStatus: nullableProviderStatus(row.provider_status),
+    providerUidAssignedAt: nullableText(row.provider_uid_assigned_at, 64),
+    uploadStartedAt: nullableText(row.upload_started_at, 64),
+    finalizeStartedAt: nullableText(row.finalize_started_at, 64),
+    reconciliationRequiredAt: nullableText(row.reconciliation_required_at, 64),
+    reconciliationSourceState: nullableReconciliationState(row.reconciliation_source_state),
+    lastErrorCode: nullableText(row.last_error_code, 96),
+    lastErrorEvidence: nullableText(row.last_error_evidence, 500),
+    lastErrorAt: nullableText(row.last_error_at, 64),
+    abandonedAt: nullableText(row.abandoned_at, 64),
+    abandonedBy: row.abandoned_by == null ? null : uuid(row.abandoned_by),
+    abandonReason: nullableText(row.abandon_reason, 500),
     retrievalClaimToken: row.retrieval_claim_token == null ? null : uuid(row.retrieval_claim_token),
     ...(row.created_at ? { createdAt: safeText(row.created_at, 64) } : {}),
     ...(row.updated_at ? { updatedAt: safeText(row.updated_at, 64) } : {}),
@@ -296,6 +328,14 @@ function nullableProviderStatus(value: unknown): AutoHDRJob["providerStatus"] {
   const text = safeText(value, 16);
   if (!PROVIDER_STATUSES.has(text)) throw new Error("AutoHDR database returned an invalid provider status.");
   return text as NonNullable<AutoHDRJob["providerStatus"]>;
+}
+
+function nullableReconciliationState(value: unknown): AutoHDRJob["reconciliationSourceState"] {
+  if (value == null) return null;
+  if (value !== "preparing" && value !== "awaiting_upload" && value !== "finalizing") {
+    throw new Error("AutoHDR database returned an invalid reconciliation phase.");
+  }
+  return value;
 }
 
 function byteaHex(value: unknown): string {

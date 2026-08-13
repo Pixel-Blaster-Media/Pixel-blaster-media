@@ -30,6 +30,17 @@ export type AutoHDRJob = Readonly<{
   state: AutoHDRJobState;
   providerUid: string | null;
   providerStatus?: AutoHDRNormalizedStatus | null;
+  providerUidAssignedAt?: string | null;
+  uploadStartedAt?: string | null;
+  finalizeStartedAt?: string | null;
+  reconciliationRequiredAt?: string | null;
+  reconciliationSourceState?: "preparing" | "awaiting_upload" | "finalizing" | null;
+  lastErrorCode?: string | null;
+  lastErrorEvidence?: string | null;
+  lastErrorAt?: string | null;
+  abandonedAt?: string | null;
+  abandonedBy?: string | null;
+  abandonReason?: string | null;
   retrievalClaimToken?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -96,13 +107,30 @@ export type AutoHDRJobStore = {
     errorCode?: string;
     retrievalClaimToken?: string | null;
   }): Promise<AutoHDRJob>;
-  assignProviderUid(input: {
+  activateProviderJob(input: {
     organizationId: string;
     bookingId: string;
     propertyId: string;
     jobId: string;
     providerUid: string;
-    providerStatus: AutoHDRNormalizedStatus;
+  }): Promise<AutoHDRJob>;
+  reconcileProviderJob(input: {
+    organizationId: string;
+    bookingId: string;
+    propertyId: string;
+    jobId: string;
+    expectedState: "preparing" | "awaiting_upload" | "finalizing";
+    errorCode: string;
+    errorEvidence: string;
+    providerUid?: string | null;
+  }): Promise<AutoHDRJob>;
+  abandonProviderJob(input: {
+    organizationId: string;
+    bookingId: string;
+    propertyId: string;
+    jobId: string;
+    adminUserId: string;
+    reason: string;
   }): Promise<AutoHDRJob>;
   claimRetrieval(input: {
     organizationId: string;
@@ -169,9 +197,11 @@ export function createAutoHDRApplication(dependencies: {
         409,
       );
     }
-    await store.transition(identity(claimed.job, "claimed", "preparing"));
+    const preparing = await store.transition(identity(claimed.job, "claimed", "preparing"));
 
     let providerCreated = false;
+    let providerUid: string | null = null;
+    let reconciliationState: "preparing" | "awaiting_upload" = "preparing";
     try {
       const client = await dependencies.getClient(input.admin.organizationId);
       const callbacks = dependencies.getCallbackUrls(booking);
@@ -182,25 +212,28 @@ export function createAutoHDRApplication(dependencies: {
         ...callbacks,
       });
       providerCreated = true;
-      const uploads = pairAutoHDRUploadDestinations(
-        manifest.map((file) => file.filename),
-        created.uploadedFiles,
-      );
-      await store.assignProviderUid({
+      providerUid = created.uid;
+      const job = await store.activateProviderJob({
         organizationId: input.admin.organizationId,
         bookingId: booking.id,
         propertyId: booking.propertyId,
         jobId: claimed.job.id,
         providerUid: created.uid,
-        providerStatus: "created",
       });
-      const job = await store.transition({
-        ...identity(claimed.job, "preparing", "awaiting_upload"),
-        providerStatus: "uploading",
-      });
+      reconciliationState = "awaiting_upload";
+      const uploads = pairAutoHDRUploadDestinations(
+        manifest.map((file) => file.filename),
+        created.uploadedFiles,
+      );
       return { ok: true as const, job, uploads };
     } catch {
-      await reconcileQuietly(store, claimed.job, "preparing", "provider_outcome_ambiguous");
+      await reconcileOrThrow(store, preparing, reconciliationState, {
+        errorCode: "provider_outcome_ambiguous",
+        errorEvidence: providerCreated
+          ? "Provider creation returned, but local upload phase activation was not confirmed."
+          : "Provider creation outcome was not confirmed.",
+        providerUid,
+      });
       throw new AutoHDRWorkflowError(
         "provider_outcome_ambiguous",
         providerCreated
@@ -221,13 +254,20 @@ export function createAutoHDRApplication(dependencies: {
     if (!job.providerUid) throw new AutoHDRWorkflowError("job_invalid", "AutoHDR job is missing its provider identity.", 409);
     await dependencies.requireEnabled(input.admin.organizationId);
     const client = await dependencies.getClient(input.admin.organizationId);
-    await store.transition({ ...identity(job, "awaiting_upload", "finalizing"), providerStatus: "uploading" });
+    const finalizing = await store.transition({
+      ...identity(job, "awaiting_upload", "finalizing"), providerStatus: "uploading",
+    });
     try {
       await client.finalizePhotoshoot(job.providerUid);
-      const updated = await store.transition({ ...identity(job, "finalizing", "processing"), providerStatus: "processing" });
+      const updated = await store.transition({
+        ...identity(finalizing, "finalizing", "processing"), providerStatus: "processing",
+      });
       return { ok: true as const, job: updated };
     } catch {
-      await reconcileQuietly(store, job, "finalizing", "provider_outcome_ambiguous");
+      await reconcileOrThrow(store, finalizing, "finalizing", {
+        errorCode: "provider_outcome_ambiguous",
+        errorEvidence: "Provider finalize outcome or local processing confirmation was not authoritative.",
+      });
       throw new AutoHDRWorkflowError(
         "provider_outcome_ambiguous",
         "The AutoHDR finalize outcome is uncertain. Reconciliation is required and finalize will not be retried automatically.",
@@ -275,7 +315,48 @@ export function createAutoHDRApplication(dependencies: {
         }),
       };
     }
+    if (status.normalizedStatus === "created" || status.normalizedStatus === "uploading") {
+      return {
+        ok: true as const,
+        job: await store.transition({
+          ...identity(job, "processing", "reconciliation_required"),
+          providerStatus: status.normalizedStatus,
+          errorCode: "provider_phase_regression",
+        }),
+      };
+    }
     return { ok: true as const, job };
+  }
+
+  async function reconcile(input: { admin: AdminContext; bookingId: string; jobId: string }) {
+    const { job } = await requireBookingAndJob(store, input);
+    if (job.state !== "preparing" && job.state !== "awaiting_upload" && job.state !== "finalizing") {
+      throw new AutoHDRWorkflowError("invalid_job_state", "This AutoHDR job is not stranded in a reconcilable phase.", 409);
+    }
+    return { ok: true as const, job: await store.reconcileProviderJob({
+      organizationId: job.organizationId,
+      bookingId: job.bookingId,
+      propertyId: job.propertyId,
+      jobId: job.id,
+      expectedState: job.state,
+      errorCode: "operator_reconciliation_requested",
+      errorEvidence: "An operator requested reconciliation after browser capabilities were unavailable.",
+    }) };
+  }
+
+  async function abandon(input: {
+    admin: AdminContext; bookingId: string; jobId: string; reason: string;
+  }) {
+    const { job } = await requireBookingAndJob(store, input);
+    const reason = boundedOperatorReason(input.reason);
+    return { ok: true as const, job: await store.abandonProviderJob({
+      organizationId: job.organizationId,
+      bookingId: job.bookingId,
+      propertyId: job.propertyId,
+      jobId: job.id,
+      adminUserId: input.admin.userId,
+      reason,
+    }) };
   }
 
   async function retrieve(input: {
@@ -293,7 +374,7 @@ export function createAutoHDRApplication(dependencies: {
     };
   }
 
-  return Object.freeze({ prepare, finalize, refresh, retrieve });
+  return Object.freeze({ prepare, finalize, refresh, reconcile, abandon, retrieve });
 }
 
 async function requireBooking(
@@ -349,14 +430,33 @@ function identity(job: AutoHDRJob, from: AutoHDRJobState, to: AutoHDRJobState) {
   };
 }
 
-async function reconcileQuietly(
+async function reconcileOrThrow(
   store: AutoHDRJobStore,
   job: AutoHDRJob,
-  from: AutoHDRJobState,
-  errorCode: string,
+  from: "preparing" | "awaiting_upload" | "finalizing",
+  evidence: { errorCode: string; errorEvidence: string; providerUid?: string | null },
 ): Promise<void> {
-  await store.transition({
-    ...identity(job, from, "reconciliation_required"),
-    errorCode,
-  }).catch(() => undefined);
+  try {
+    await store.reconcileProviderJob({
+      organizationId: job.organizationId,
+      bookingId: job.bookingId,
+      propertyId: job.propertyId,
+      jobId: job.id,
+      expectedState: from,
+      ...evidence,
+    });
+  } catch {
+    throw new AutoHDRWorkflowError(
+      "reconciliation_persistence_failed",
+      "AutoHDR reconciliation could not be durably recorded. Stop and escalate this job before any retry.",
+      503,
+    );
+  }
+}
+
+function boundedOperatorReason(value: unknown): string {
+  if (typeof value !== "string" || value !== value.trim() || value.length < 1 || value.length > 500 || /[\u0000-\u001f\u007f]/.test(value)) {
+    throw new AutoHDRWorkflowError("invalid_request", "An operator reason between 1 and 500 characters is required.");
+  }
+  return value;
 }

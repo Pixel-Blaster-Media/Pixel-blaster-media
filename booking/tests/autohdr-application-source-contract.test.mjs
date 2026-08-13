@@ -12,6 +12,8 @@ test("AutoHDR routes authenticate before delegated tenant-qualified workflows an
     finalize: "finalizeBookingAutoHDR",
     refresh: "refreshBookingAutoHDR",
     retrieve: "retrieveBookingAutoHDR",
+    reconcile: "reconcileBookingAutoHDR",
+    abandon: "abandonBookingAutoHDR",
   };
   for (const name of Object.keys(delegates)) {
     assert.equal(existsSync(new URL(route(name), root)), true, `missing ${name} route`);
@@ -26,6 +28,8 @@ test("AutoHDR routes authenticate before delegated tenant-qualified workflows an
   assert.match(read(route("finalize")), /parseAutoHDRJobOnlyInput/);
   assert.match(read(route("refresh")), /parseAutoHDRJobOnlyInput/);
   assert.match(read(route("retrieve")), /parseAutoHDRJobOnlyInput/);
+  assert.match(read(route("reconcile")), /parseAutoHDRJobOnlyInput/);
+  assert.match(read(route("abandon")), /parseAutoHDRAbandonInput/);
 });
 
 test("canonical source routes authenticate before prepare or acceptance and keep signed URLs out of persistence", () => {
@@ -93,7 +97,9 @@ test("database boundary centralizes the separately-owned RPC names and never sto
     "accept_autohdr_source_version",
     "claim_autohdr_job",
     "transition_autohdr_job",
-    "assign_autohdr_provider_uid",
+    "activate_autohdr_provider_job",
+    "reconcile_autohdr_provider_job",
+    "abandon_autohdr_provider_job",
     "claim_autohdr_retrieval",
   ]) {
     assert.match(contract, new RegExp(rpc));
@@ -157,7 +163,7 @@ test("MediaWorkflow swaps gated prose for the compact runtime-gated AutoHDR UI",
   assert.match(mediaWorkflow, /Prerequisite/);
   assert.doesNotMatch(mediaWorkflow, /presigned-upload contract, zero-credit test mode/);
   assert.match(page, /getAutoHDRRuntimeReadiness/);
-  assert.match(page, /autoHDREnabled\s*\?\s*listBookingAutoHDRJobs/);
+  assert.match(page, /listBookingAutoHDRJobs\(\{ admin, bookingId: id \}\)/);
   assert.match(page, /mutationEnabled=\{autoHDRReadiness\.ready\}/);
   assert.match(readiness, /createProductionR2Storage/);
   assert.match(readiness, /MEDIA_R2_BROWSER_UPLOADS_ENABLED/);
@@ -178,6 +184,12 @@ test("MediaWorkflow swaps gated prose for the compact runtime-gated AutoHDR UI",
   assert.doesNotMatch(section, /ready for delivery/i);
   assert.doesNotMatch(section, /iGUIDE/i);
   assert.match(section, /accept=\{ACCEPTED_FILES\}/);
+  assert.match(section, /Resume remaining/);
+  assert.match(section, /Finalize uploaded job/);
+  assert.match(section, /Reconcile required after reload/);
+  assert.match(section, /jobs\.map\(/);
+  assert.match(section, /completedFilenames/);
+  assert.match(section, /readAutoHDRApiJson/);
   assert.doesNotMatch(section, /\.dng|\.raw|image\/\*/i);
 });
 

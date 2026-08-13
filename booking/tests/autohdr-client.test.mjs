@@ -106,3 +106,14 @@ test("AutoHDR client returns opaque bounded errors without provider response bod
       !error.message.includes("sensitive"),
   );
 });
+
+test("AutoHDR client requires a declared JSON response type on success", async () => {
+  const client = createAutoHDRClient({
+    apiKey: "secret-key",
+    fetchImpl: async () => new Response(new TextEncoder().encode('{"status":"completed"}'), { status: 200 }),
+  });
+  await assert.rejects(
+    client.getStatus("shoot_9"),
+    (error) => error?.message === "AutoHDR returned an unexpected response type.",
+  );
+});

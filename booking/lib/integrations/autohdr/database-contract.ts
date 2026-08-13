@@ -52,8 +52,11 @@ export const AUTOHDR_DATABASE_CONTRACT = Object.freeze({
     prepareSourceUpload: "prepare_autohdr_source_batch",
     acceptSourceUpload: "accept_autohdr_source_version",
     claim: "claim_autohdr_job",
+    list: "list_autohdr_jobs",
     transition: "transition_autohdr_job",
-    assignProviderUid: "assign_autohdr_provider_uid",
+    activateProviderJob: "activate_autohdr_provider_job",
+    reconcileProviderJob: "reconcile_autohdr_provider_job",
+    abandonProviderJob: "abandon_autohdr_provider_job",
     claimRetrieval: "claim_autohdr_retrieval",
   }),
   args: Object.freeze({
@@ -131,10 +134,9 @@ export const AUTOHDR_DATABASE_CONTRACT = Object.freeze({
         p_retrieval_claim_token: input.retrievalClaimToken ?? null,
       };
     },
-    assignProviderUid(input: Scope & {
+    activateProviderJob(input: Scope & {
       jobId: string;
       providerUid: string;
-      providerStatus: AutoHDRNormalizedStatus;
     }) {
       return {
         p_organization_id: input.organizationId,
@@ -142,7 +144,34 @@ export const AUTOHDR_DATABASE_CONTRACT = Object.freeze({
         p_property_id: input.propertyId,
         p_job_id: input.jobId,
         p_provider_uid: input.providerUid,
-        p_provider_status: input.providerStatus,
+      };
+    },
+    reconcileProviderJob(input: Scope & {
+      jobId: string;
+      expectedState: "preparing" | "awaiting_upload" | "finalizing";
+      errorCode: string;
+      errorEvidence: string;
+      providerUid?: string | null;
+    }) {
+      return {
+        p_organization_id: input.organizationId,
+        p_booking_id: input.bookingId,
+        p_property_id: input.propertyId,
+        p_job_id: input.jobId,
+        p_expected_state: input.expectedState,
+        p_error_code: input.errorCode,
+        p_error_evidence: input.errorEvidence,
+        p_provider_uid: input.providerUid ?? null,
+      };
+    },
+    abandonProviderJob(input: Scope & { jobId: string; adminUserId: string; reason: string }) {
+      return {
+        p_organization_id: input.organizationId,
+        p_booking_id: input.bookingId,
+        p_property_id: input.propertyId,
+        p_job_id: input.jobId,
+        p_admin_user_id: input.adminUserId,
+        p_reason: input.reason,
       };
     },
     claimRetrieval(input: Scope & { jobId: string }) {

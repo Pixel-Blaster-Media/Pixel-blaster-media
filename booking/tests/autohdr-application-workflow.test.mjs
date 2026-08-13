@@ -44,7 +44,11 @@ const signedUrl =
   });
 
 function fixture(overrides = {}) {
-  const { failProcessingTransition = false, ...dependencyOverrides } = overrides;
+  const {
+    failProcessingTransition = false,
+    failReconciliation = false,
+    ...dependencyOverrides
+  } = overrides;
   const calls = [];
   let job = {
     id: "55555555-5555-4555-8555-555555555555",
@@ -76,9 +80,20 @@ function fixture(overrides = {}) {
       job = { ...job, state: input.newState };
       return job;
     },
-    async assignProviderUid(input) {
-      calls.push("assign_provider_uid");
-      job = { ...job, providerUid: input.providerUid };
+    async activateProviderJob(input) {
+      calls.push("activate_provider_job");
+      job = { ...job, providerUid: input.providerUid, state: "awaiting_upload" };
+      return job;
+    },
+    async reconcileProviderJob(input) {
+      calls.push(`reconcile:${input.expectedState}`);
+      if (failReconciliation) throw new Error("database reconciliation write failed secret=internal");
+      job = { ...job, state: "reconciliation_required" };
+      return job;
+    },
+    async abandonProviderJob(input) {
+      calls.push(`abandon:${input.adminUserId}:${input.reason}`);
+      job = { ...job, state: "rejected" };
       return job;
     },
     async claimRetrieval() {
@@ -159,8 +174,7 @@ test("prepare validates accepted canonical sources, claims exact DB manifest, th
     "transition:claimed:preparing",
     "get_client",
     "provider_create",
-    "assign_provider_uid",
-    "transition:preparing:awaiting_upload",
+    "activate_provider_job",
   ]);
   assert.deepEqual(calls[3].claimInput.files, [{
     position: 0,
@@ -248,7 +262,23 @@ test("prepare marks an ambiguous provider creation failure for reconciliation an
     (error) => error?.code === "provider_outcome_ambiguous" && !error.message.includes("secret"),
   );
   assert.equal(attempts, 1);
-  assert.match(calls.join("\n"), /transition:preparing:reconciliation_required/);
+  assert.match(calls.join("\n"), /reconcile:preparing/);
+});
+
+test("prepare does not swallow a failure to persist authoritative reconciliation", async () => {
+  const { application } = fixture({
+    failReconciliation: true,
+    getClient: async () => ({
+      async createPhotoshoot() {
+        throw new TypeError("ambiguous provider response secret=provider");
+      },
+    }),
+  });
+  await assert.rejects(
+    application.prepare({ admin, bookingId: booking.id, manifest, style: {} }),
+    (error) => error?.code === "reconciliation_persistence_failed" &&
+      !error.message.includes("secret"),
+  );
 });
 
 test("finalize claims the state transition before calling the provider once", async () => {
@@ -294,7 +324,23 @@ test("finalize reconciles when the provider succeeds but local confirmation fail
       !error.message.includes("internal details"),
   );
   assert.equal(calls.filter((call) => call === "provider_finalize").length, 1);
-  assert.ok(calls.includes("transition:finalizing:reconciliation_required"));
+  assert.ok(calls.includes("reconcile:finalizing"));
+});
+
+test("finalize surfaces reconciliation persistence failure after an ambiguous provider outcome", async () => {
+  const { application, setJob } = fixture({ failProcessingTransition: true, failReconciliation: true });
+  setJob({
+    id: "55555555-5555-4555-8555-555555555555",
+    organizationId: admin.organizationId,
+    bookingId: booking.id,
+    state: "awaiting_upload",
+    providerUid: "shoot_7",
+  });
+  await assert.rejects(
+    application.finalize({ admin, bookingId: booking.id, jobId: "55555555-5555-4555-8555-555555555555" }),
+    (error) => error?.code === "reconciliation_persistence_failed" &&
+      !error.message.includes("internal"),
+  );
 });
 
 test("status maps an unknown provider state fail-closed and never retrieves photos", async () => {
@@ -329,6 +375,52 @@ test("status maps an unknown provider state fail-closed and never retrieves phot
   });
   assert.equal(result.job.state, "reconciliation_required");
   assert.equal(calls.includes("provider_processed_photos"), false);
+});
+
+test("refresh reconciles provider created/uploading because upload capabilities cannot survive reload", async () => {
+  for (const normalizedStatus of ["created", "uploading"]) {
+    const { application, calls, setJob } = fixture({
+      getClient: async () => ({
+        async getStatus() {
+          calls.push("provider_status");
+          return { normalizedStatus };
+        },
+      }),
+    });
+    setJob({
+      id: "55555555-5555-4555-8555-555555555555",
+      organizationId: admin.organizationId,
+      bookingId: booking.id,
+      state: "processing",
+      providerUid: "shoot_7",
+    });
+    const result = await application.refresh({
+      admin,
+      bookingId: booking.id,
+      jobId: "55555555-5555-4555-8555-555555555555",
+    });
+    assert.equal(result.job.state, "reconciliation_required");
+    assert.ok(calls.includes("transition:processing:reconciliation_required"));
+  }
+});
+
+test("operator abandonment passes the authenticated admin identity and bounded reason to the store", async () => {
+  const { application, calls, setJob } = fixture();
+  setJob({
+    id: "55555555-5555-4555-8555-555555555555",
+    organizationId: admin.organizationId,
+    bookingId: booking.id,
+    state: "reconciliation_required",
+    providerUid: "shoot_7",
+  });
+  const result = await application.abandon({
+    admin,
+    bookingId: booking.id,
+    jobId: "55555555-5555-4555-8555-555555555555",
+    reason: "Confirmed provider processing never began.",
+  });
+  assert.equal(result.job.state, "rejected");
+  assert.ok(calls.includes(`abandon:${admin.userId}:Confirmed provider processing never began.`));
 });
 
 test("retrieval is explicit but blocked before claim or processed URL access", async () => {

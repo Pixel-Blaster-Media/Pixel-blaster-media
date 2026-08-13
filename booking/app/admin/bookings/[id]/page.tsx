@@ -223,9 +223,7 @@ export default async function BookingDetailPage({
       autoenhanceEnabled
         ? listBookingAutoenhanceBatches({ admin, bookingId: id })
         : Promise.resolve([]),
-      autoHDREnabled
-        ? listBookingAutoHDRJobs({ admin, bookingId: id })
-        : Promise.resolve([]),
+      listBookingAutoHDRJobs({ admin, bookingId: id }),
       getActiveCatalog({ organizationId: admin.organizationId }),
     ]);
 
@@ -407,7 +405,6 @@ export default async function BookingDetailPage({
               body="Use the primary source, review the files, and prepare one complete delivery."
             />
             <MediaWorkflow
-              autoHDREnabled={autoHDREnabled}
               autoHDRReadiness={autoHDRReadiness}
               autoHDR={
                 <AutoHDRSection

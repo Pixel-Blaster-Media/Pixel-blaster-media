@@ -20,7 +20,7 @@ test("billing is consolidated into Details instead of owning a top-level tab", (
   assert.match(page, /raw === "billing"\) return "details"/);
 });
 
-test("Media presents one guided workflow and hides provider controls behind setup", () => {
+test("Media presents one guided workflow and keeps recovery history visible behind setup", () => {
   assert.match(workflow, /Upload[\s\S]*Review[\s\S]*Prepare[\s\S]*Ready/);
   assert.match(workflow, /Planned delivery flow/);
   assert.doesNotMatch(workflow, /index === 0/);
@@ -29,7 +29,8 @@ test("Media presents one guided workflow and hides provider controls behind setu
   assert.match(workflow, /Manual photo upload/);
   assert.match(workflow, /manual\/canonical JPG upload is not enabled in this preview/);
   assert.match(workflow, /autoenhanceEnabled \? " Autoenhance remains available under source connections\."/);
-  assert.match(workflow, /autoHDREnabled \? \(/);
+  assert.doesNotMatch(workflow, /autoHDREnabled \? \(/);
+  assert.match(workflow, /Existing job history remains visible/);
   assert.match(workflow, /autoenhanceEnabled \? \(/);
   assert.doesNotMatch(workflow, /type="file"/);
 });

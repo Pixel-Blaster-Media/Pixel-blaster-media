@@ -5,7 +5,6 @@ import type { AutoHDRRuntimeReadiness } from "@/lib/integrations/autohdr/readine
 const PLANNED_FLOW = ["Upload", "Review", "Prepare", "Ready"] as const;
 
 export default function MediaWorkflow({
-  autoHDREnabled,
   autoHDRReadiness,
   autoHDR,
   autoenhanceEnabled,
@@ -15,7 +14,6 @@ export default function MediaWorkflow({
   video,
   manualLinks,
 }: {
-  autoHDREnabled: boolean;
   autoHDRReadiness: AutoHDRRuntimeReadiness;
   autoHDR: ReactNode;
   autoenhanceEnabled: boolean;
@@ -85,7 +83,6 @@ export default function MediaWorkflow({
         ) : null}
       </section>
 
-      {autoHDREnabled ? (
       <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-realtor-primary">
           Primary photo editor
@@ -112,7 +109,6 @@ export default function MediaWorkflow({
           ) : null}
         </div>
       </section>
-      ) : null}
 
       <details className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4">
         <summary className="cursor-pointer text-sm font-semibold text-realtor-text">

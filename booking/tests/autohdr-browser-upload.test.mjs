@@ -82,3 +82,41 @@ test("browser refuses mismatched manifests and does not expose failed response b
   );
   assert.equal(bodyReads, 0);
 });
+
+test("same-session resume preserves completed filenames and never uploads them twice", async () => {
+  const files = ["Kitchen.jpg", "Dining.jpg", "Exterior.jpg"].map((name) => ({
+    name, size: 10, lastModified: 1,
+  }));
+  const uploads = files.map((file) => ({
+    filename: file.name,
+    url: `https://image-upload-autohdr-j.s3.amazonaws.com/${file.name}?opaque`,
+    method: "PUT",
+    headers: { "Content-Type": "application/octet-stream", "x-amz-acl": "private" },
+  }));
+  const completed = new Set();
+  const attempts = [];
+  await assert.rejects(
+    uploadAutoHDRFiles(files, uploads, {
+      concurrency: 1,
+      onFileUploaded: (filename) => completed.add(filename),
+      fetchImpl: async (url) => {
+        attempts.push(url);
+        return { ok: !url.includes("Dining"), status: url.includes("Dining") ? 503 : 200 };
+      },
+    }),
+    /Dining\.jpg/,
+  );
+  assert.deepEqual([...completed], ["Kitchen.jpg"]);
+
+  await uploadAutoHDRFiles(files, uploads, {
+    concurrency: 1,
+    completedFilenames: completed,
+    onFileUploaded: (filename) => completed.add(filename),
+    fetchImpl: async (url) => {
+      attempts.push(url);
+      return { ok: true, status: 200 };
+    },
+  });
+  assert.equal(attempts.filter((url) => url.includes("Kitchen")).length, 1);
+  assert.deepEqual([...completed].sort(), files.map((file) => file.name).sort());
+});

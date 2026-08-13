@@ -1161,7 +1161,12 @@ type AutoHDRJobsTable = CanonicalMediaTable<{
   idempotency_key: string; manifest_sha256: string; file_count: number;
   state: AutoHDRJobState; provider_uid: string | null;
   provider_status: AutoHDRProviderStatus | null;
-  provider_uid_assigned_at: string | null; retrieval_claimed_at: string | null;
+  provider_uid_assigned_at: string | null; upload_started_at: string | null;
+  finalize_started_at: string | null; reconciliation_required_at: string | null;
+  reconciliation_source_state: "preparing" | "awaiting_upload" | "finalizing" | null;
+  last_error_evidence: string | null; abandoned_at: string | null;
+  abandoned_by: string | null; abandon_reason: string | null;
+  retrieval_claimed_at: string | null;
   retrieval_claim_token: string | null; last_error_code: string | null;
   last_error_at: string | null; state_changed_at: string;
   created_at: string; updated_at: string;
@@ -1211,6 +1216,17 @@ type AutoHDRSafeJobRow = {
   state: AutoHDRJobState;
   provider_uid: string | null;
   provider_status: AutoHDRProviderStatus | null;
+  provider_uid_assigned_at: string | null;
+  upload_started_at: string | null;
+  finalize_started_at: string | null;
+  reconciliation_required_at: string | null;
+  reconciliation_source_state: "preparing" | "awaiting_upload" | "finalizing" | null;
+  last_error_code: string | null;
+  last_error_evidence: string | null;
+  last_error_at: string | null;
+  abandoned_at: string | null;
+  abandoned_by: string | null;
+  abandon_reason: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -1486,14 +1502,37 @@ export interface Database {
         };
         Returns: AutoHDRJobsTable["Row"][];
       };
-      assign_autohdr_provider_uid: {
+      activate_autohdr_provider_job: {
         Args: {
           p_organization_id: string;
           p_booking_id: string;
           p_property_id: string;
           p_job_id: string;
           p_provider_uid: string;
-          p_provider_status: AutoHDRProviderStatus;
+        };
+        Returns: AutoHDRJobsTable["Row"][];
+      };
+      reconcile_autohdr_provider_job: {
+        Args: {
+          p_organization_id: string;
+          p_booking_id: string;
+          p_property_id: string;
+          p_job_id: string;
+          p_expected_state: "preparing" | "awaiting_upload" | "finalizing";
+          p_error_code: string;
+          p_error_evidence: string;
+          p_provider_uid?: string | null;
+        };
+        Returns: AutoHDRJobsTable["Row"][];
+      };
+      abandon_autohdr_provider_job: {
+        Args: {
+          p_organization_id: string;
+          p_booking_id: string;
+          p_property_id: string;
+          p_job_id: string;
+          p_admin_user_id: string;
+          p_reason: string;
         };
         Returns: AutoHDRJobsTable["Row"][];
       };

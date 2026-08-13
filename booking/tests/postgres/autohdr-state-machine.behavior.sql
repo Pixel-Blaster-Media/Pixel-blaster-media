@@ -115,9 +115,9 @@ begin
   end;
 
   begin
-    perform public.assign_autohdr_provider_uid(
+    perform public.activate_autohdr_provider_job(
       v_job.organization_id, v_job.booking_id, v_job.property_id, v_job.id,
-      'provider-a', 'created'
+      'provider-a'
     );
     raise exception 'provider uid was assigned before preparation';
   exception when check_violation then null;
@@ -127,21 +127,28 @@ begin
     v_job.organization_id, v_job.booking_id, v_job.property_id, v_job.id,
     'claimed', 'preparing', null, null, null
   );
-  perform public.assign_autohdr_provider_uid(
+  select * into v_job
+    from public.activate_autohdr_provider_job(
+      v_job.organization_id, v_job.booking_id, v_job.property_id, v_job.id,
+      'provider-a'
+    );
+  if v_job.state <> 'awaiting_upload'
+     or v_job.provider_uid <> 'provider-a'
+     or v_job.provider_uid_assigned_at is null
+     or v_job.upload_started_at is null then
+    raise exception 'provider activation was not atomic or durable';
+  end if;
+  perform public.activate_autohdr_provider_job(
     v_job.organization_id, v_job.booking_id, v_job.property_id, v_job.id,
-    'provider-a', 'created'
-  );
-  perform public.assign_autohdr_provider_uid(
-    v_job.organization_id, v_job.booking_id, v_job.property_id, v_job.id,
-    'provider-a', 'created'
+    'provider-a'
   );
   begin
-    perform public.assign_autohdr_provider_uid(
+    perform public.activate_autohdr_provider_job(
       v_job.organization_id, v_job.booking_id, v_job.property_id, v_job.id,
-      'provider-conflict', 'created'
+      'provider-conflict'
     );
     raise exception 'conflicting provider uid assignment was accepted';
-  exception when unique_violation then null;
+  exception when check_violation then null;
   end;
 
   begin
@@ -156,13 +163,8 @@ begin
       v_conflicting_job.property_id, v_conflicting_job.id,
       'claimed', 'preparing', null, null, null
     );
-    perform public.assign_autohdr_provider_uid(
-      v_conflicting_job.organization_id, v_conflicting_job.booking_id,
-      v_conflicting_job.property_id, v_conflicting_job.id,
-      'provider-a', 'created'
-    );
-    raise exception 'provider uid was assigned to a second tenant job';
-  exception when unique_violation then null;
+    raise exception 'a second unresolved provider preparation was accepted';
+  exception when check_violation then null;
   end;
 
   begin
@@ -176,16 +178,12 @@ begin
   begin
     perform public.transition_autohdr_job(
       '22222222-2222-4222-8222-222222222222', v_job.booking_id,
-      v_job.property_id, v_job.id, 'preparing', 'awaiting_upload', null, null, null
+      v_job.property_id, v_job.id, 'awaiting_upload', 'finalizing', null, null, null
     );
     raise exception 'wrong-tenant transition found a job';
   exception when no_data_found then null;
   end;
 
-  perform public.transition_autohdr_job(
-    v_job.organization_id, v_job.booking_id, v_job.property_id, v_job.id,
-    'preparing', 'awaiting_upload', 'uploading', null, null
-  );
   perform public.transition_autohdr_job(
     v_job.organization_id, v_job.booking_id, v_job.property_id, v_job.id,
     'awaiting_upload', 'finalizing', 'uploading', null, null
@@ -273,7 +271,8 @@ begin
    where routine_schema = 'public'
      and routine_name in (
        'claim_autohdr_job', 'transition_autohdr_job',
-       'assign_autohdr_provider_uid', 'claim_autohdr_retrieval'
+       'activate_autohdr_provider_job', 'reconcile_autohdr_provider_job',
+       'abandon_autohdr_provider_job', 'claim_autohdr_retrieval'
      )
      and security_type <> 'DEFINER';
   if v_unsafe_functions is not null then
@@ -286,9 +285,15 @@ begin
      or has_function_privilege('anon', 'public.transition_autohdr_job(uuid,uuid,uuid,uuid,text,text,text,text,uuid)', 'EXECUTE')
      or has_function_privilege('authenticated', 'public.transition_autohdr_job(uuid,uuid,uuid,uuid,text,text,text,text,uuid)', 'EXECUTE')
      or not has_function_privilege('service_role', 'public.transition_autohdr_job(uuid,uuid,uuid,uuid,text,text,text,text,uuid)', 'EXECUTE')
-     or has_function_privilege('anon', 'public.assign_autohdr_provider_uid(uuid,uuid,uuid,uuid,text,text)', 'EXECUTE')
-     or has_function_privilege('authenticated', 'public.assign_autohdr_provider_uid(uuid,uuid,uuid,uuid,text,text)', 'EXECUTE')
-     or not has_function_privilege('service_role', 'public.assign_autohdr_provider_uid(uuid,uuid,uuid,uuid,text,text)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.activate_autohdr_provider_job(uuid,uuid,uuid,uuid,text)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.activate_autohdr_provider_job(uuid,uuid,uuid,uuid,text)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.activate_autohdr_provider_job(uuid,uuid,uuid,uuid,text)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.reconcile_autohdr_provider_job(uuid,uuid,uuid,uuid,text,text,text,text)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.reconcile_autohdr_provider_job(uuid,uuid,uuid,uuid,text,text,text,text)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.reconcile_autohdr_provider_job(uuid,uuid,uuid,uuid,text,text,text,text)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.abandon_autohdr_provider_job(uuid,uuid,uuid,uuid,uuid,text)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.abandon_autohdr_provider_job(uuid,uuid,uuid,uuid,uuid,text)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.abandon_autohdr_provider_job(uuid,uuid,uuid,uuid,uuid,text)', 'EXECUTE')
      or has_function_privilege('anon', 'public.claim_autohdr_retrieval(uuid,uuid,uuid,uuid)', 'EXECUTE')
      or has_function_privilege('authenticated', 'public.claim_autohdr_retrieval(uuid,uuid,uuid,uuid)', 'EXECUTE')
      or not has_function_privilege('service_role', 'public.claim_autohdr_retrieval(uuid,uuid,uuid,uuid)', 'EXECUTE') then

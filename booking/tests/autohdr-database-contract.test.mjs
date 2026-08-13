@@ -31,7 +31,7 @@ test("claim arguments exactly match final migration 20260813013349", () => {
   });
 });
 
-test("state, uid, and retrieval arguments exactly match final migration 20260813013349", () => {
+test("state, provider recovery, and retrieval arguments exactly match additive RPCs", () => {
   assert.deepEqual(AUTOHDR_DATABASE_CONTRACT.args.transition({
     ...scope,
     jobId,
@@ -49,18 +49,45 @@ test("state, uid, and retrieval arguments exactly match final migration 20260813
     p_error_code: null,
     p_retrieval_claim_token: null,
   });
-  assert.deepEqual(AUTOHDR_DATABASE_CONTRACT.args.assignProviderUid({
+  assert.deepEqual(AUTOHDR_DATABASE_CONTRACT.args.activateProviderJob({
     ...scope,
     jobId,
     providerUid: "shoot_7",
-    providerStatus: "created",
   }), {
     p_organization_id: scope.organizationId,
     p_booking_id: scope.bookingId,
     p_property_id: scope.propertyId,
     p_job_id: jobId,
     p_provider_uid: "shoot_7",
-    p_provider_status: "created",
+  });
+  assert.deepEqual(AUTOHDR_DATABASE_CONTRACT.args.reconcileProviderJob({
+    ...scope,
+    jobId,
+    expectedState: "awaiting_upload",
+    errorCode: "upload_capability_lost",
+    errorEvidence: "Browser upload capability expired.",
+  }), {
+    p_organization_id: scope.organizationId,
+    p_booking_id: scope.bookingId,
+    p_property_id: scope.propertyId,
+    p_job_id: jobId,
+    p_expected_state: "awaiting_upload",
+    p_error_code: "upload_capability_lost",
+    p_error_evidence: "Browser upload capability expired.",
+    p_provider_uid: null,
+  });
+  assert.deepEqual(AUTOHDR_DATABASE_CONTRACT.args.abandonProviderJob({
+    ...scope,
+    jobId,
+    adminUserId: "66666666-6666-4666-8666-666666666666",
+    reason: "Confirmed processing never began.",
+  }), {
+    p_organization_id: scope.organizationId,
+    p_booking_id: scope.bookingId,
+    p_property_id: scope.propertyId,
+    p_job_id: jobId,
+    p_admin_user_id: "66666666-6666-4666-8666-666666666666",
+    p_reason: "Confirmed processing never began.",
   });
   assert.deepEqual(AUTOHDR_DATABASE_CONTRACT.args.claimRetrieval({ ...scope, jobId }), {
     p_organization_id: scope.organizationId,

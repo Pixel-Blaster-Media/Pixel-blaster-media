@@ -33,11 +33,13 @@ const settings = readFileSync(
   "utf8",
 );
 
-test("photo provider toggles are tenant-scoped and hide disabled booking tools", () => {
+test("photo provider toggles are tenant-scoped while AutoHDR history remains read-only", () => {
   assert.match(bookingPage, /isPhotoEditingProviderEnabled\("autohdr", admin\.organizationId\)/);
   assert.match(bookingPage, /isPhotoEditingProviderEnabled\("autoenhance", admin\.organizationId\)/);
   assert.match(bookingPage, /autoenhanceEnabled\s*\?\s*listBookingAutoenhanceBatches/);
-  assert.match(mediaWorkflow, /autoHDREnabled \? \(/);
+  assert.doesNotMatch(mediaWorkflow, /autoHDREnabled \? \(/);
+  assert.match(mediaWorkflow, /Existing job history remains visible/);
+  assert.match(bookingPage, /listBookingAutoHDRJobs\(\{ admin, bookingId: id \}\)/);
   assert.match(mediaWorkflow, /autoenhanceEnabled \? \(/);
   assert.match(settings, /ProviderEnablementToggle/);
   assert.match(settings, /provider="autohdr"/);

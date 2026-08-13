@@ -274,6 +274,8 @@ export async function uploadAutoHDRFiles(
     concurrency?: number;
     fetchImpl?: UploadFetch;
     onProgress?: (completed: number, total: number) => void;
+    completedFilenames?: ReadonlySet<string>;
+    onFileUploaded?: (filename: string) => void;
   } = {},
 ): Promise<void> {
   if (files.length !== uploads.length || files.length < 1) {
@@ -295,14 +297,19 @@ export async function uploadAutoHDRFiles(
     }
   }
   const fetchImpl = options.fetchImpl ?? (fetch as unknown as UploadFetch);
+  const completedFilenames = new Set(options.completedFilenames ?? []);
+  if ([...completedFilenames].some((filename) => !uploads.some((upload) => upload.filename === filename))) {
+    throw new Error("AutoHDR completed upload identities did not match.");
+  }
   let next = 0;
-  let completed = 0;
+  let completed = completedFilenames.size;
   const worker = async () => {
     while (next < files.length) {
       const index = next;
       next += 1;
       const file = files[index];
       const upload = uploads[index];
+      if (completedFilenames.has(file.name)) continue;
       const response = await fetchImpl(upload.url, {
         method: "PUT",
         headers: {
@@ -316,10 +323,14 @@ export async function uploadAutoHDRFiles(
         throw new Error(`AutoHDR upload failed for ${file.name} (${response.status}).`);
       }
       completed += 1;
+      completedFilenames.add(file.name);
+      options.onFileUploaded?.(file.name);
       options.onProgress?.(completed, files.length);
     }
   };
-  await Promise.all(
+  const outcomes = await Promise.allSettled(
     Array.from({ length: Math.min(concurrency, files.length) }, () => worker()),
   );
+  const failed = outcomes.find((outcome): outcome is PromiseRejectedResult => outcome.status === "rejected");
+  if (failed) throw failed.reason;
 }
