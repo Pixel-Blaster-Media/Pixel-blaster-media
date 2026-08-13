@@ -1,3 +1,5 @@
+import { AUTOHDR_SOURCE_MAX_FILES } from "./source-limits.ts";
+
 export const AUTOHDR_MODELS = [
   "Classic",
   "The Lisa",
@@ -37,8 +39,8 @@ export function buildAutoHDRCreateRequest(input: {
   style?: AutoHDRStyleInput;
   mockCall?: boolean;
 }) {
-  if (!Array.isArray(input.files) || input.files.length < 1 || input.files.length > 160) {
-    throw new Error("AutoHDR files must contain between 1 and 160 filenames.");
+  if (!Array.isArray(input.files) || input.files.length < 1 || input.files.length > AUTOHDR_SOURCE_MAX_FILES) {
+    throw new Error("AutoHDR files must contain between 1 and 20 filenames.");
   }
   const files = input.files.map((filename) => ({ filename: safeFilename(filename) }));
   const uploadCallbackUrl = safeHttpsUrl(input.uploadCallbackUrl, "upload callback URL");
@@ -66,7 +68,7 @@ export function parseAutoHDRCreateResponse(value: unknown): {
   // AutoHDR's live schema calls these values `uploaded_files`, but it does
   // not define them as URLs or specify upload method/headers. Keep the values
   // opaque until the provider confirms the presigned-upload contract.
-  const uploaded = requiredArray(row.uploaded_files, "uploaded_files", 160).map((entry) =>
+  const uploaded = requiredArray(row.uploaded_files, "uploaded_files", AUTOHDR_SOURCE_MAX_FILES).map((entry) =>
     boundedString(entry, "uploaded_files entry", 4096),
   );
   return {

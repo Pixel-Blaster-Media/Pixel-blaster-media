@@ -4,6 +4,11 @@ import type {
   AutoHDRSourceManifestEntry,
 } from "./database-contract.ts";
 import type { CanonicalSourceContentType } from "./source-upload-core.ts";
+import {
+  AUTOHDR_SOURCE_MAX_FILE_BYTES,
+  AUTOHDR_SOURCE_MAX_FILES,
+  AUTOHDR_SOURCE_MAX_TOTAL_BYTES,
+} from "./source-limits.ts";
 
 type BrowserFile = Readonly<{
   name: string;
@@ -13,9 +18,6 @@ type BrowserFile = Readonly<{
   arrayBuffer?: () => Promise<ArrayBuffer>;
 }>;
 
-const MAX_FILES = 160;
-const MAX_FILE_BYTES = 100 * 1024 * 1024;
-const MAX_TOTAL_BYTES = 8 * 1024 * 1024 * 1024;
 const SAFE_FILENAME = /^[^\\/\u0000-\u001f\u007f]{1,255}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const SOURCE_FILE = /\.(jpe?g|png)$/i;
@@ -76,7 +78,7 @@ export async function hashAutoHDRSourceFiles(
 
 export function validateAutoHDRSourceFiles(files: BrowserFile[]): void {
   if (!Array.isArray(files) || files.length < 1) throw new Error("Pick at least one AutoHDR image.");
-  if (files.length > MAX_FILES) throw new Error("AutoHDR accepts at most 160 images per job.");
+  if (files.length > AUTOHDR_SOURCE_MAX_FILES) throw new Error("AutoHDR accepts at most 20 images per job.");
   let total = 0;
   const names = new Set<string>();
   for (const file of files) {
@@ -87,15 +89,15 @@ export function validateAutoHDRSourceFiles(files: BrowserFile[]): void {
     const folded = file.name.toLocaleLowerCase("en-US");
     if (names.has(folded)) throw new Error("AutoHDR job contains a duplicate filename.");
     names.add(folded);
-    if (!Number.isSafeInteger(file.size) || file.size < 1 || file.size > MAX_FILE_BYTES) {
-      throw new Error("Each AutoHDR image must be between 1 byte and 100 MiB.");
+    if (!Number.isSafeInteger(file.size) || file.size < 1 || file.size > AUTOHDR_SOURCE_MAX_FILE_BYTES) {
+      throw new Error("Each AutoHDR image must be between 1 byte and 25 MiB.");
     }
     if (!Number.isSafeInteger(file.lastModified) || file.lastModified < 0) {
       throw new Error("An AutoHDR image timestamp is invalid.");
     }
     if (typeof file.arrayBuffer !== "function") throw new Error("AutoHDR source file is not readable.");
     total += file.size;
-    if (total > MAX_TOTAL_BYTES) throw new Error("The AutoHDR job exceeds the 8 GiB total limit.");
+    if (total > AUTOHDR_SOURCE_MAX_TOTAL_BYTES) throw new Error("The AutoHDR job exceeds the 250 MiB total limit.");
   }
 }
 

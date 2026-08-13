@@ -5,6 +5,7 @@ import {
   assertAutoHDRTransition,
   buildAutoHDRIdempotencyKey,
   normalizeAutoHDRFileManifest,
+  normalizeAutoHDRSourceManifest,
 } from "../lib/integrations/autohdr/workflow-core.ts";
 
 test("builds a stable tenant and booking-bound idempotency key", () => {
@@ -41,12 +42,24 @@ test("rejects duplicate, unsafe, empty, and oversized file manifests", () => {
     /duplicate/i,
   );
   assert.throws(
-    () => normalizeAutoHDRFileManifest([{ name: "photo.jpg", size: 101 * 1024 * 1024, lastModified: 1 }]),
-    /100 MiB/i,
+    () => normalizeAutoHDRFileManifest([{ name: "photo.jpg", size: 26 * 1024 * 1024, lastModified: 1 }]),
+    /25 MiB/i,
   );
   assert.throws(
     () => normalizeAutoHDRFileManifest([{ name: "photo.jpg", size: "1024", lastModified: 1 }]),
-    /100 MiB/i,
+    /25 MiB/i,
+  );
+  assert.throws(
+    () => normalizeAutoHDRFileManifest(Array.from({ length: 21 }, (_, index) => ({
+      name: `${index}.jpg`, size: 1, lastModified: 1,
+    }))),
+    /20 images/i,
+  );
+  assert.throws(
+    () => normalizeAutoHDRFileManifest(Array.from({ length: 11 }, (_, index) => ({
+      name: `${index}.jpg`, size: 25 * 1024 * 1024, lastModified: 1,
+    }))),
+    /250 MiB/i,
   );
   assert.throws(
     () => normalizeAutoHDRFileManifest([{ name: "photo.jpg", size: 1024, lastModified: "1" }]),
@@ -59,6 +72,32 @@ test("preserves the browser filename exactly", () => {
     { name: " Kitchen Final.CR3 ", size: 1024, lastModified: 1 },
   ]);
   assert.equal(entry.name, " Kitchen Final.CR3 ");
+});
+
+test("canonical source manifests enforce the same first-release count, file, and total bounds", () => {
+  const source = (position, byteSize = 1) => ({
+    position,
+    filename: `${position}.jpg`,
+    byteSize,
+    lastModified: 1,
+    contentType: "image/jpeg",
+    sha256: position.toString(16).padStart(64, "0"),
+  });
+  assert.throws(
+    () => normalizeAutoHDRSourceManifest(Array.from({ length: 21 }, (_, index) => source(index))),
+    /20 images/i,
+  );
+  assert.throws(
+    () => normalizeAutoHDRSourceManifest([source(0, 25 * 1024 * 1024 + 1)]),
+    /byte size/i,
+  );
+  assert.throws(
+    () => normalizeAutoHDRSourceManifest(Array.from(
+      { length: 11 },
+      (_, index) => source(index, 25 * 1024 * 1024),
+    )),
+    /250 MiB/i,
+  );
 });
 
 test("allows only the fail-closed AutoHDR job transitions", () => {

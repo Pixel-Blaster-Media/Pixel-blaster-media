@@ -5,10 +5,12 @@ import type {
   AutoHDRCanonicalSource,
   AutoHDRSourceManifestEntry,
 } from "./database-contract.ts";
+import {
+  AUTOHDR_SOURCE_MAX_FILE_BYTES,
+  AUTOHDR_SOURCE_MAX_FILES,
+  AUTOHDR_SOURCE_MAX_TOTAL_BYTES,
+} from "./source-limits.ts";
 
-const MAX_FILES = 160;
-const MAX_FILE_BYTES = 100 * 1024 * 1024;
-const MAX_TOTAL_BYTES = 8 * 1024 * 1024 * 1024;
 const SAFE_FILENAME = /^[^\\/\u0000-\u001f\u007f]{1,255}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -61,7 +63,7 @@ export function normalizeAutoHDRFileManifest(
   if (!Array.isArray(input) || input.length < 1) {
     throw new Error("Pick at least one AutoHDR image.");
   }
-  if (input.length > MAX_FILES) throw new Error("AutoHDR accepts at most 160 images per job.");
+  if (input.length > AUTOHDR_SOURCE_MAX_FILES) throw new Error("AutoHDR accepts at most 20 images per job.");
   let total = 0;
   const names = new Set<string>();
   const output = input.map((entry) => {
@@ -73,11 +75,11 @@ export function normalizeAutoHDRFileManifest(
     if (names.has(folded)) throw new Error("AutoHDR job contains a duplicate filename.");
     names.add(folded);
     const size = entry.size;
-    if (typeof size !== "number" || !Number.isSafeInteger(size) || size < 1 || size > MAX_FILE_BYTES) {
-      throw new Error("Each AutoHDR image must be between 1 byte and 100 MiB.");
+    if (typeof size !== "number" || !Number.isSafeInteger(size) || size < 1 || size > AUTOHDR_SOURCE_MAX_FILE_BYTES) {
+      throw new Error("Each AutoHDR image must be between 1 byte and 25 MiB.");
     }
     total += size;
-    if (total > MAX_TOTAL_BYTES) throw new Error("The AutoHDR job exceeds the 8 GiB total limit.");
+    if (total > AUTOHDR_SOURCE_MAX_TOTAL_BYTES) throw new Error("The AutoHDR job exceeds the 250 MiB total limit.");
     const lastModified = entry.lastModified;
     if (
       typeof lastModified !== "number" ||
@@ -120,7 +122,7 @@ export function buildAutoHDRIdempotencyKey(input: {
 
 export function normalizeAutoHDRSourceManifest(input: unknown): AutoHDRSourceManifestEntry[] {
   if (!Array.isArray(input) || input.length < 1) throw new Error("Pick at least one AutoHDR image.");
-  if (input.length > MAX_FILES) throw new Error("AutoHDR accepts at most 160 images per job.");
+  if (input.length > AUTOHDR_SOURCE_MAX_FILES) throw new Error("AutoHDR accepts at most 20 images per job.");
   let total = 0;
   const names = new Set<string>();
   const checksums = new Set<string>();
@@ -131,9 +133,9 @@ export function normalizeAutoHDRSourceManifest(input: unknown): AutoHDRSourceMan
     if (names.has(folded)) throw new Error("AutoHDR job contains a duplicate filename.");
     names.add(folded);
     if (row.position !== position) throw new Error("AutoHDR source positions must be contiguous.");
-    const byteSize = positiveInteger(row.byteSize, MAX_FILE_BYTES, "AutoHDR source byte size");
+    const byteSize = positiveInteger(row.byteSize, AUTOHDR_SOURCE_MAX_FILE_BYTES, "AutoHDR source byte size");
     total += byteSize;
-    if (total > MAX_TOTAL_BYTES) throw new Error("The AutoHDR job exceeds the 8 GiB total limit.");
+    if (total > AUTOHDR_SOURCE_MAX_TOTAL_BYTES) throw new Error("The AutoHDR job exceeds the 250 MiB total limit.");
     const lastModified = nonnegativeInteger(row.lastModified, "AutoHDR source timestamp");
     const contentType = canonicalSourceContentType(filename, row.contentType);
     const sha256 = typeof row.sha256 === "string" && /^[0-9a-f]{64}$/.test(row.sha256)

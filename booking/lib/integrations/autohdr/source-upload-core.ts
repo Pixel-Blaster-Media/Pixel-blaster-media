@@ -1,5 +1,6 @@
 import { buildMasterKey } from "../../media/storage/keys.ts";
 import type { AutoHDRCanonicalSource } from "./database-contract.ts";
+import { AUTOHDR_SOURCE_MAX_FILE_BYTES } from "./source-limits.ts";
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const PRIVATE_BUCKET = "pixel-blaster-private-media";
@@ -41,7 +42,7 @@ export function buildCanonicalSourcePutInput(input: {
   if (input.objectKey !== expectedKey) {
     throw new Error("Canonical source key or extension does not match its exact identity and content type.");
   }
-  if (!Number.isSafeInteger(input.byteSize) || input.byteSize < 1 || input.byteSize > 100 * 1024 * 1024) {
+  if (!Number.isSafeInteger(input.byteSize) || input.byteSize < 1 || input.byteSize > AUTOHDR_SOURCE_MAX_FILE_BYTES) {
     throw new Error("Canonical source byte size is invalid.");
   }
   if (!SHA256.test(input.sha256)) throw new Error("Canonical source checksum is invalid.");

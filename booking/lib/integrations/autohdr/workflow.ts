@@ -15,6 +15,8 @@ import {
   normalizeAutoHDRSourceManifest,
 } from "./workflow-core";
 
+const SOURCE_FILE_TIMEOUT_MS = 30_000;
+
 function application() {
   return createAutoHDRApplication({
     store: createAutoHDRJobStore(),
@@ -76,28 +78,40 @@ export async function acceptBookingAutoHDRSourceUpload(input: {
   admin: AdminContext;
   bookingId: string;
   sources: unknown;
+  signal: AbortSignal;
 }) {
+  input.signal.throwIfAborted();
   const store = createAutoHDRJobStore();
   const booking = await requireScopedBooking(store, input.bookingId, input.admin.organizationId);
   const sources = normalizeAcceptedAutoHDRSources(input.sources);
   const storage = createProductionR2Storage(input.admin.organizationId);
-  const accepted = [];
+  const verified = [];
   for (const source of sources) {
+    const fileSignal = AbortSignal.any([
+      input.signal,
+      AbortSignal.timeout(SOURCE_FILE_TIMEOUT_MS),
+    ]);
     const objectKey = source.objectKey as Parameters<typeof storage.head>[0];
-    const head = await storage.head(objectKey);
+    const head = await storage.head(objectKey, fileSignal);
     validateCanonicalSourceUpload({ ...source, organizationId: input.admin.organizationId }, head);
-    const download = await storage.getVerified(objectKey);
+    const download = await storage.getVerified(objectKey, fileSignal);
     let dimensions: Awaited<ReturnType<typeof verifyCanonicalImageStream>>;
     try {
       validateCanonicalSourceUpload(
         { ...source, organizationId: input.admin.organizationId },
         { ...download, etag: null },
       );
-      dimensions = await verifyCanonicalImageStream(download.body, source.contentType);
+      dimensions = await verifyCanonicalImageStream(download.body, source.contentType, fileSignal);
     } catch (error) {
       download.body.destroy(error instanceof Error ? error : undefined);
       throw error;
     }
+    verified.push({ source, dimensions });
+  }
+  input.signal.throwIfAborted();
+  const accepted = [];
+  for (const { source, dimensions } of verified) {
+    input.signal.throwIfAborted();
     accepted.push(await store.acceptSourceUpload({
       organizationId: input.admin.organizationId,
       bookingId: booking.id,

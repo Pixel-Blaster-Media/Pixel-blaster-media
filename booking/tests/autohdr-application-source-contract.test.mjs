@@ -42,6 +42,16 @@ test("canonical source routes authenticate before prepare or acceptance and keep
     assert.doesNotMatch(source, /String\(err(or)?\)|err(or)?\.message/);
   }
   const workflow = read("lib/integrations/autohdr/workflow.ts");
+  const acceptRoute = read(route("source/accept"));
+  const packageJson = JSON.parse(read("package.json"));
+  assert.equal(packageJson.dependencies.sharp, "0.35.3");
+  assert.match(read("lib/integrations/autohdr/source-image-verification.ts"), /from\s+["']sharp["']/);
+  assert.match(acceptRoute, /export const maxDuration = 300/);
+  assert.match(acceptRoute, /request\.signal/);
+  assert.match(acceptRoute, /AbortSignal\.timeout/);
+  assert.match(workflow, /AbortSignal\.timeout/);
+  assert.match(workflow, /\.head\(objectKey, fileSignal\)/);
+  assert.match(workflow, /\.getVerified\(objectKey, fileSignal\)/);
   assert.match(workflow, /createProductionR2Storage/);
   assert.match(workflow, /\.head\(/);
   assert.match(workflow, /\.getVerified\(/);

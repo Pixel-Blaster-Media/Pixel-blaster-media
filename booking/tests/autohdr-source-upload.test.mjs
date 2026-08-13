@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import sharp from "sharp";
+
 import {
   hashAutoHDRSourceFiles,
   uploadCanonicalAutoHDRSources,
@@ -32,6 +34,59 @@ function browserFile(name, bytes, type = "image/jpeg", lastModified = 1234) {
   };
 }
 
+function streamBytes(bytes, chunkSize = bytes.length) {
+  return (async function* () {
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      yield bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length));
+    }
+  })();
+}
+
+function pngWithoutChunks(bytes, removedTypes) {
+  const chunks = [bytes.subarray(0, 8)];
+  let offset = 8;
+  while (offset < bytes.length) {
+    const length = bytes.readUInt32BE(offset);
+    const end = offset + 12 + length;
+    const type = bytes.toString("ascii", offset + 4, offset + 8);
+    if (!removedTypes.has(type)) chunks.push(bytes.subarray(offset, end));
+    offset = end;
+  }
+  return Buffer.concat(chunks);
+}
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngWithDimensions(bytes, width, height) {
+  const output = Buffer.from(bytes);
+  assert.equal(output.toString("ascii", 12, 16), "IHDR");
+  output.writeUInt32BE(width, 16);
+  output.writeUInt32BE(height, 20);
+  output.writeUInt32BE(crc32(output.subarray(12, 29)), 29);
+  return output;
+}
+
+function jpegWithMalformedEntropy(bytes) {
+  const startOfScan = bytes.indexOf(Buffer.from([0xff, 0xda]));
+  assert.ok(startOfScan >= 0);
+  const scanHeaderLength = bytes.readUInt16BE(startOfScan + 2);
+  const entropyStart = startOfScan + 2 + scanHeaderLength;
+  assert.ok(bytes.length - entropyStart > 8);
+  return Buffer.concat([
+    bytes.subarray(0, entropyStart + 2),
+    Buffer.from([0xff, 0xd9]),
+  ]);
+}
+
 test("browser hashes the bounded selected set and sends stable manifest metadata", async () => {
   const manifest = await hashAutoHDRSourceFiles([
     browserFile("Kitchen.jpg", [1, 2, 3]),
@@ -56,12 +111,19 @@ test("browser hashes the bounded selected set and sends stable manifest metadata
     },
   ]);
   await assert.rejects(
-    hashAutoHDRSourceFiles(Array.from({ length: 161 }, (_, index) => browserFile(`${index}.jpg`, [1]))),
-    /160/,
+    hashAutoHDRSourceFiles(Array.from({ length: 21 }, (_, index) => browserFile(`${index}.jpg`, [1]))),
+    /20/,
   );
   await assert.rejects(
-    hashAutoHDRSourceFiles([{ ...browserFile("huge.jpg", [1]), size: 100 * 1024 * 1024 + 1 }]),
-    /100 MiB/,
+    hashAutoHDRSourceFiles([{ ...browserFile("huge.jpg", [1]), size: 25 * 1024 * 1024 + 1 }]),
+    /25 MiB/,
+  );
+  await assert.rejects(
+    hashAutoHDRSourceFiles(Array.from({ length: 11 }, (_, index) => ({
+      ...browserFile(`${index}.jpg`, [1]),
+      size: 25 * 1024 * 1024,
+    }))),
+    /250 MiB/,
   );
 });
 
@@ -213,30 +275,24 @@ test("HEAD acceptance rejects any size, image MIME, checksum, extension, key, or
   );
 });
 
-test("verified JPEG/PNG dimensions come from bounded server bytes and the verifying stream is fully drained", async () => {
-  let jpegDrained = false;
-  async function* jpegBody() {
-    yield Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x02]);
-    yield Buffer.from([0xff, 0xc0, 0x00, 0x0b, 0x08, 0x04, 0x38, 0x07, 0x80, 0x03, 0x01, 0x11, 0x00]);
-    jpegDrained = true;
-    yield Buffer.from([0xff, 0xd9]);
+test("full decoder accepts generated baseline/progressive JPEG and PNG after draining verified bytes", async () => {
+  const raw = Buffer.alloc(17 * 11 * 3);
+  for (let index = 0; index < raw.length; index += 1) raw[index] = (index * 37) % 256;
+  const input = sharp(raw, { raw: { width: 17, height: 11, channels: 3 } });
+  const [baseline, progressive, png] = await Promise.all([
+    input.clone().jpeg({ progressive: false }).toBuffer(),
+    input.clone().jpeg({ progressive: true }).toBuffer(),
+    input.clone().png().toBuffer(),
+  ]);
+  for (const jpeg of [baseline, progressive]) {
+    assert.deepEqual(await verifyCanonicalImageStream(streamBytes(jpeg, 7), "image/jpeg"), {
+      widthPx: 17,
+      heightPx: 11,
+    });
   }
-  assert.deepEqual(await verifyCanonicalImageStream(jpegBody(), "image/jpeg"), {
-    widthPx: 1920,
-    heightPx: 1080,
-  });
-  assert.equal(jpegDrained, true);
-
-  async function* pngBody() {
-    yield Buffer.from([
-      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-      0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-      0x00, 0x00, 0x0b, 0xb8, 0x00, 0x00, 0x07, 0xd0,
-    ]);
-  }
-  assert.deepEqual(await verifyCanonicalImageStream(pngBody(), "image/png"), {
-    widthPx: 3000,
-    heightPx: 2000,
+  assert.deepEqual(await verifyCanonicalImageStream(streamBytes(png, 5), "image/png"), {
+    widthPx: 17,
+    heightPx: 11,
   });
   await assert.rejects(
     verifyCanonicalImageStream((async function* () {
@@ -247,22 +303,55 @@ test("verified JPEG/PNG dimensions come from bounded server bytes and the verify
   );
 });
 
-test("server image policy rejects malformed, oversized-dimension, and excessive-pixel sources", async () => {
-  const png = (width, height) => (async function* () {
-    const header = Buffer.alloc(24);
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(header);
-    header.writeUInt32BE(13, 8);
-    header.write("IHDR", 12, "ascii");
-    header.writeUInt32BE(width, 16);
-    header.writeUInt32BE(height, 20);
-    yield header;
-  })();
-  await assert.rejects(verifyCanonicalImageStream(png(0, 100), "image/png"), /dimensions/i);
-  await assert.rejects(verifyCanonicalImageStream(png(40_000, 2), "image/png"), /dimensions/i);
-  await assert.rejects(verifyCanonicalImageStream(png(20_000, 20_000), "image/png"), /pixels/i);
+test("full decoder rejects structurally incomplete, corrupt, mismatched, and oversized images", async () => {
+  const raw = Buffer.alloc(19 * 13 * 3);
+  for (let index = 0; index < raw.length; index += 1) raw[index] = (index * 53) % 256;
+  const [jpeg, png] = await Promise.all([
+    sharp(raw, { raw: { width: 19, height: 13, channels: 3 } }).jpeg({ quality: 90 }).toBuffer(),
+    sharp(raw, { raw: { width: 19, height: 13, channels: 3 } }).png().toBuffer(),
+  ]);
+  const ihdrOnly = png.subarray(0, 33);
+  const missingIdat = pngWithoutChunks(png, new Set(["IDAT"]));
+  const missingIend = pngWithoutChunks(png, new Set(["IEND"]));
+  const badCrc = Buffer.from(png);
+  badCrc[29] ^= 0xff;
+  const sofOnlyJpeg = Buffer.from([
+    0xff, 0xd8, 0xff, 0xe0, 0x00, 0x02,
+    0xff, 0xc0, 0x00, 0x0b, 0x08, 0x04, 0x38, 0x07, 0x80, 0x03, 0x01, 0x11, 0x00,
+    0xff, 0xd9,
+  ]);
+
+  for (const invalidPng of [ihdrOnly, missingIdat, missingIend, badCrc]) {
+    await assert.rejects(verifyCanonicalImageStream(streamBytes(invalidPng), "image/png"), /PNG|decode|valid/i);
+  }
+  for (const invalidJpeg of [sofOnlyJpeg, jpeg.subarray(0, -2), jpegWithMalformedEntropy(jpeg)]) {
+    await assert.rejects(verifyCanonicalImageStream(streamBytes(invalidJpeg), "image/jpeg"), /JPEG|decode|valid/i);
+  }
+  await assert.rejects(verifyCanonicalImageStream(streamBytes(png), "image/jpeg"), /JPEG|type|format/i);
+  await assert.rejects(verifyCanonicalImageStream(streamBytes(jpeg), "image/png"), /PNG|type|format/i);
   await assert.rejects(
-    verifyCanonicalImageStream((async function* () { yield Buffer.from("not a jpeg"); })(), "image/jpeg"),
-    /JPEG/i,
+    verifyCanonicalImageStream(streamBytes(pngWithDimensions(png, 40_000, 2)), "image/png"),
+    /dimensions/i,
+  );
+  await assert.rejects(
+    verifyCanonicalImageStream(streamBytes(pngWithDimensions(png, 20_000, 20_000)), "image/png"),
+    /pixels/i,
+  );
+});
+
+test("server verification rejects over-25-MiB streams and honors abort signals", async () => {
+  const oneMiB = Buffer.alloc(1024 * 1024);
+  await assert.rejects(
+    verifyCanonicalImageStream((async function* () {
+      for (let index = 0; index < 26; index += 1) yield oneMiB;
+    })(), "image/jpeg"),
+    /25 MiB/i,
+  );
+  const controller = new AbortController();
+  controller.abort(new Error("source request deadline exceeded"));
+  await assert.rejects(
+    verifyCanonicalImageStream(streamBytes(Buffer.from([0xff, 0xd8, 0xff, 0xd9])), "image/jpeg", controller.signal),
+    /deadline exceeded/i,
   );
 });
 

@@ -9,6 +9,7 @@ import {
   type AutoHDRSourceManifestEntry,
 } from "./database-contract";
 import { buildCanonicalSourcePutInput } from "./source-upload-core";
+import { AUTOHDR_SOURCE_MAX_FILES } from "./source-limits";
 import type { AutoHDRJobState } from "./workflow-core";
 
 type DatabaseError = { code?: string; message?: string } | null;
@@ -191,7 +192,12 @@ function parseCanonicalSources(
   organizationId: string,
   files: AutoHDRSourceManifestEntry[],
 ): { sources: AutoHDRCanonicalSource[]; newlyCreated: boolean } {
-  if (!Array.isArray(value) || value.length !== files.length || value.length < 1 || value.length > 160) {
+  if (
+    !Array.isArray(value) ||
+    value.length !== files.length ||
+    value.length < 1 ||
+    value.length > AUTOHDR_SOURCE_MAX_FILES
+  ) {
     throw new Error("AutoHDR source database contract returned an invalid manifest.");
   }
   let newlyCreated: boolean | null = null;

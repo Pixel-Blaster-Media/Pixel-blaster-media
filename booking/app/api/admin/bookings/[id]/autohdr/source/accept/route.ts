@@ -10,8 +10,12 @@ import { acceptBookingAutoHDRSourceUpload } from "@/lib/integrations/autohdr/wor
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const maxDuration = 300;
+
+const SOURCE_ACCEPT_TIMEOUT_MS = 285_000;
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const signal = AbortSignal.any([request.signal, AbortSignal.timeout(SOURCE_ACCEPT_TIMEOUT_MS)]);
   const admin = await requireAdmin();
   try {
     const [{ id }, raw] = await Promise.all([params, readBoundedAutoHDRJson(request)]);
@@ -19,6 +23,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       admin,
       bookingId: id,
       ...parseAutoHDRSourceAcceptInput(raw),
+      signal,
     });
     return NextResponse.json(result, {
       headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" },
