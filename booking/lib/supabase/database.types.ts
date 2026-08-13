@@ -1136,6 +1136,41 @@ type ListingGalleryItemsTable = CanonicalMediaTable<{
   created_at: string; removed_at: string | null;
 }, "organization_id" | "listing_website_id" | "property_id" | "batch_id" | "release_id" | "release_item_id" | "media_version_id" | "derivative_id" | "position">;
 
+type AutoHDRJobState =
+  | "claimed"
+  | "preparing"
+  | "awaiting_upload"
+  | "finalizing"
+  | "processing"
+  | "ready"
+  | "retrieving"
+  | "review_pending"
+  | "retryable"
+  | "reconciliation_required"
+  | "rejected";
+type AutoHDRProviderStatus =
+  | "created"
+  | "uploading"
+  | "processing"
+  | "ready"
+  | "failed"
+  | "unknown";
+type AutoHDRJobsTable = CanonicalMediaTable<{
+  id: string; organization_id: string; booking_id: string; property_id: string;
+  idempotency_key: string; manifest_sha256: string; file_count: number;
+  state: AutoHDRJobState; provider_uid: string | null;
+  provider_status: AutoHDRProviderStatus | null;
+  provider_uid_assigned_at: string | null; retrieval_claimed_at: string | null;
+  retrieval_claim_token: string | null; last_error_code: string | null;
+  last_error_at: string | null; state_changed_at: string;
+  created_at: string; updated_at: string;
+}, "organization_id" | "booking_id" | "property_id" | "idempotency_key" | "manifest_sha256" | "file_count">;
+type AutoHDRJobFilesTable = CanonicalMediaTable<{
+  id: string; organization_id: string; booking_id: string; property_id: string;
+  job_id: string; position: number; source_media_version_id: string;
+  source_batch_id: string; filename: string; input_sha256: string; created_at: string;
+}, "organization_id" | "booking_id" | "property_id" | "job_id" | "position" | "source_media_version_id" | "source_batch_id" | "filename" | "input_sha256">;
+
 export interface Database {
   public: {
     Tables: {
@@ -1174,6 +1209,8 @@ export interface Database {
       download_grants: DownloadGrantsTable;
       download_events: DownloadEventsTable;
       listing_gallery_items: ListingGalleryItemsTable;
+      autohdr_jobs: AutoHDRJobsTable;
+      autohdr_job_files: AutoHDRJobFilesTable;
       google_calendar_connection: GoogleCalendarConnectionTable;
       integration_credentials: IntegrationCredentialsTable;
       iguide_jobs: IGuideJobsTable;
@@ -1221,6 +1258,51 @@ export interface Database {
           p_fields: string[];
         };
         Returns: Json | null;
+      };
+      claim_autohdr_job: {
+        Args: {
+          p_organization_id: string;
+          p_booking_id: string;
+          p_property_id: string;
+          p_idempotency_key: string;
+          p_manifest_sha256: string;
+          p_files: Json;
+        };
+        Returns: AutoHDRJobsTable["Row"][];
+      };
+      transition_autohdr_job: {
+        Args: {
+          p_organization_id: string;
+          p_booking_id: string;
+          p_property_id: string;
+          p_job_id: string;
+          p_expected_state: AutoHDRJobState;
+          p_new_state: AutoHDRJobState;
+          p_provider_status: AutoHDRProviderStatus | null;
+          p_error_code: string | null;
+          p_retrieval_claim_token: string | null;
+        };
+        Returns: AutoHDRJobsTable["Row"][];
+      };
+      assign_autohdr_provider_uid: {
+        Args: {
+          p_organization_id: string;
+          p_booking_id: string;
+          p_property_id: string;
+          p_job_id: string;
+          p_provider_uid: string;
+          p_provider_status: AutoHDRProviderStatus;
+        };
+        Returns: AutoHDRJobsTable["Row"][];
+      };
+      claim_autohdr_retrieval: {
+        Args: {
+          p_organization_id: string;
+          p_booking_id: string;
+          p_property_id: string;
+          p_job_id: string;
+        };
+        Returns: AutoHDRJobsTable["Row"][];
       };
       find_company_invitation_auth_user: {
         Args: { p_invitation_id: string };
