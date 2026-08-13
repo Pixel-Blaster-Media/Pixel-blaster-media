@@ -5,6 +5,7 @@ import {
   BOOKING_STATUSES,
   deliverableTypeLabel,
 } from "@/lib/booking/booking-status";
+import { BUSINESS_TZ } from "@/lib/booking/availability";
 import {
   imageUrlOrNull,
   metadataImageUrls,
@@ -957,6 +958,7 @@ function pickLatest(
 
 function formatDateTime(iso: string): string {
   return new Intl.DateTimeFormat("en-US", {
+    timeZone: BUSINESS_TZ,
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(iso));
