@@ -78,6 +78,21 @@ test("canonical source routes authenticate before prepare or acceptance and keep
   assert.doesNotMatch(workflow, /if \(!prepared\.newlyCreated\)[\s\S]{0,300}source_request_conflict/);
 });
 
+test("every mutating source workflow rechecks the exact rollout kill switches", () => {
+  const workflow = read("lib/integrations/autohdr/workflow.ts");
+  const gate = read("lib/integrations/autohdr/source-mutation-gate.ts");
+  const prepareStart = workflow.indexOf("export async function prepareBookingAutoHDRSourceUpload");
+  const acceptStart = workflow.indexOf("export async function acceptBookingAutoHDRSourceUpload");
+  const finalizeStart = workflow.indexOf("export async function finalizeBookingAutoHDR", acceptStart);
+  assert.ok(prepareStart >= 0 && acceptStart > prepareStart && finalizeStart > acceptStart);
+  assert.match(workflow.slice(prepareStart, acceptStart), /requireAutoHDRSourceMutationEnabled\(\)/);
+  assert.match(workflow.slice(acceptStart, finalizeStart), /requireAutoHDRSourceMutationEnabled\(\)/);
+  assert.match(gate, /MEDIA_R2_BROWSER_UPLOADS_ENABLED/);
+  assert.match(gate, /AUTOHDR_QUARANTINE_WORKFLOW_ENABLED/);
+  assert.match(gate, /===\s*["']true["']/);
+  assert.match(gate, /AutoHDRWorkflowError/);
+});
+
 test("R2 presigning fixes browser-supplied headers and does not sign an empty SDK checksum", () => {
   const signer = read("lib/integrations/autohdr/source-upload.ts");
   const packageJson = JSON.parse(read("package.json"));

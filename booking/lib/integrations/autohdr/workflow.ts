@@ -10,6 +10,7 @@ import { createAutoHDRJobStore } from "./database-adapter";
 import { presignCanonicalAutoHDRSources } from "./source-upload";
 import { ingestAutoHDRSourceFiles } from "./source-ingestion-core";
 import { verifyCanonicalImageStream } from "./source-image-verification";
+import { requireAutoHDRSourceMutationEnabled } from "./source-mutation-gate";
 import { normalizeAutoHDRSourceManifest } from "./workflow-core";
 
 const SOURCE_FILE_TIMEOUT_MS = 30_000;
@@ -53,6 +54,7 @@ export async function prepareBookingAutoHDRSourceUpload(input: {
   manifest: unknown;
   requestId: string;
 }) {
+  requireAutoHDRSourceMutationEnabled();
   const store = createAutoHDRJobStore();
   const booking = await requireScopedBooking(store, input.bookingId, input.admin.organizationId);
   await requirePhotoEditingProviderEnabled("autohdr", input.admin.organizationId);
@@ -79,6 +81,7 @@ export async function acceptBookingAutoHDRSourceUpload(input: {
   signal: AbortSignal;
 }) {
   input.signal.throwIfAborted();
+  requireAutoHDRSourceMutationEnabled();
   const store = createAutoHDRJobStore();
   const booking = await requireScopedBooking(store, input.bookingId, input.admin.organizationId);
   // Browser-returned state and object identities are never authoritative.
