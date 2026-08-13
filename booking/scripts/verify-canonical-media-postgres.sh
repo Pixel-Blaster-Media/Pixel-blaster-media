@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export LC_ALL=C
+export LANG=C
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [[ -n "${POSTGRES_BIN:-}" ]]; then
@@ -22,21 +25,29 @@ if ! "$PG_BIN/postgres" --version | /usr/bin/grep -Eq 'PostgreSQL\) 17\.'; then
 fi
 
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pixel-booking-media-pg-test.XXXXXX")"
+SOCKET_DIR="/tmp/pbmedia-$$"
 PORT="$((56000 + ($$ % 1000)))"
 STARTED=0
 cleanup() {
   if [[ "$STARTED" == 1 ]]; then
     "$PG_BIN/pg_ctl" -D "$TMP_DIR/data" -m immediate -w stop >/dev/null 2>&1 || true
   fi
+  rm -rf "$SOCKET_DIR"
   rm -rf "$TMP_DIR"
 }
 trap cleanup EXIT
 
+mkdir -p "$SOCKET_DIR"
 "$PG_BIN/initdb" -D "$TMP_DIR/data" -A trust -U postgres --no-locale >/dev/null
-"$PG_BIN/pg_ctl" -D "$TMP_DIR/data" -o "-F -p $PORT -k $TMP_DIR" -w start >/dev/null
+if ! "$PG_BIN/pg_ctl" -D "$TMP_DIR/data" \
+  -l "$TMP_DIR/postgres.log" \
+  -o "-F -p $PORT -k $SOCKET_DIR -c listen_addresses=''" -w start >/dev/null; then
+  sed -n '1,240p' "$TMP_DIR/postgres.log" >&2
+  exit 1
+fi
 STARTED=1
 
-PSQL=("$PG_BIN/psql" -X -v ON_ERROR_STOP=1 -h "$TMP_DIR" -p "$PORT" -U postgres -d postgres)
+PSQL=("$PG_BIN/psql" -X -v ON_ERROR_STOP=1 -h "$SOCKET_DIR" -p "$PORT" -U postgres -d postgres)
 "${PSQL[@]}" -f "$ROOT/tests/postgres/canonical-media-bootstrap.sql" >/dev/null
 printf '\\set ON_ERROR_STOP on\nbegin;\n\\ir %s\nrollback;\n' \
   "$ROOT/supabase/migrations/20260811225000_canonical_media_releases.sql" \

@@ -150,6 +150,18 @@ test("browser uploads only exact canonical identities with signed fields and bou
   assert.equal(seen.length, 1);
   assert.deepEqual(seen[0].init.headers, source.upload.headers);
   assert.equal(seen[0].init.body, file);
+  await assert.doesNotReject(
+    uploadCanonicalAutoHDRSources([file], [source], {
+      fetchImpl: async () => ({ ok: false, status: 412 }),
+    }),
+    "create-only replay must continue to server-side identity and checksum verification",
+  );
+  await assert.rejects(
+    uploadCanonicalAutoHDRSources([file], [source], {
+      fetchImpl: async () => ({ ok: false, status: 409 }),
+    }),
+    /409/,
+  );
   await assert.rejects(
     uploadCanonicalAutoHDRSources([file], [{ ...source, sha256: "cd".repeat(32) }], {
       fetchImpl: async () => { throw new Error("must not upload"); },

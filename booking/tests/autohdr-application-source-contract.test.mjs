@@ -49,6 +49,12 @@ test("canonical source routes authenticate before prepare or acceptance and keep
   assert.ok(workflow.indexOf(".head(") < workflow.indexOf(".getVerified("));
   assert.ok(workflow.indexOf(".getVerified(") < workflow.indexOf("acceptSourceUpload("));
   assert.doesNotMatch(read("lib/integrations/autohdr/database-adapter.ts"), /uploadUrl|upload_url|presigned/i);
+  const requestCore = read("lib/integrations/autohdr/request-core.ts");
+  assert.match(requestCore, /requestId/);
+  assert.match(requestCore, /UUID\.test\(row\.requestId\)/);
+  assert.doesNotMatch(workflow, /randomUUID/);
+  assert.match(workflow, /requestId:\s*input\.requestId/);
+  assert.doesNotMatch(workflow, /if \(!prepared\.newlyCreated\)[\s\S]{0,300}source_request_conflict/);
 });
 
 test("R2 presigning fixes browser-supplied headers and does not sign an empty SDK checksum", () => {
@@ -80,7 +86,7 @@ test("database boundary centralizes the separately-owned RPC names and never sto
   assert.doesNotMatch(adapter, /newly_claimed/);
   assert.match(adapter, /newly_created/);
   assert.doesNotMatch(adapter, /claim_outcome/);
-  assert.match(read("lib/integrations/autohdr/workflow.ts"), /if \(!prepared\.newlyCreated\)/);
+  assert.match(read("lib/integrations/autohdr/workflow.ts"), /presignCanonicalAutoHDRSources/);
   for (const exactArgument of [
     "p_property_id",
     "p_manifest_sha256",
@@ -113,6 +119,17 @@ test("status never retrieves renders and blocked retrieval never calls the proce
   assert.match(workflow.slice(retrieveStart), /secure_ingestion_prerequisite/);
 });
 
+test("the mandatory provider upload callback is bounded, advisory, and cannot mutate state", () => {
+  const callbackPath = "app/api/integrations/autohdr/upload/route.ts";
+  assert.equal(existsSync(new URL(callbackPath, root)), true, "missing AutoHDR upload callback route");
+  const callback = read(callbackPath);
+  assert.match(callback, /MAX_CALLBACK_BYTES/);
+  assert.match(callback, /status:\s*204/);
+  assert.doesNotMatch(callback, /getServiceSupabase|createAutoHDRJobStore|\.rpc\(|\.from\(/);
+  assert.doesNotMatch(callback, /console\.|request\.json\(|String\(error\)|error\.message/);
+  assert.match(read("lib/integrations/autohdr/workflow.ts"), /api\/integrations\/autohdr\/upload/);
+});
+
 test("MediaWorkflow swaps gated prose for the compact runtime-gated AutoHDR UI", () => {
   const mediaWorkflow = read("app/admin/bookings/[id]/MediaWorkflow.tsx");
   const section = read("app/admin/bookings/[id]/AutoHDRSection.tsx");
@@ -127,6 +144,8 @@ test("MediaWorkflow swaps gated prose for the compact runtime-gated AutoHDR UI",
   assert.match(readiness, /===\s*"true"/);
   assert.match(section, /Review pending ingestion/);
   assert.match(section, /hashAutoHDRSourceFiles/);
+  assert.match(section, /crypto\.randomUUID\(\)/);
+  assert.match(section, /requestId/);
   assert.match(section, /uploadCanonicalAutoHDRSources/);
   assert.match(section, /source\/prepare/);
   assert.match(section, /source\/accept/);

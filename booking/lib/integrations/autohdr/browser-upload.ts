@@ -170,7 +170,11 @@ export async function uploadCanonicalAutoHDRSources(
         body: file,
         redirect: "error",
       });
-      if (!response.ok) throw new Error(`Pixel source upload failed for ${file.name} (${response.status}).`);
+      // An idempotent retry may find the exact checksum-addressed key present.
+      // Only server-side HEAD + verified GET may accept that existing object.
+      if (!response.ok && response.status !== 412) {
+        throw new Error(`Pixel source upload failed for ${file.name} (${response.status}).`);
+      }
       completed += 1;
       options.onProgress?.(completed, files.length);
     }

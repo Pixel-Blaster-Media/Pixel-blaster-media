@@ -42,6 +42,7 @@ export default function AutoHDRSection({
   const [perspectiveCorrection, setPerspectiveCorrection] = useState(true);
   const [retainOriginalSky, setRetainOriginalSky] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [sourceRequestId, setSourceRequestId] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ completed: number; total: number } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,11 +78,13 @@ export default function AutoHDRSection({
     setError(null);
     setMessage("Hashing source photos…");
     try {
+      const requestId = sourceRequestId ?? crypto.randomUUID();
+      if (!sourceRequestId) setSourceRequestId(requestId);
       const sourceManifest = await hashAutoHDRSourceFiles(files);
       setMessage("Preparing private Pixel source storage…");
       const sourcePrepared = await apiJson<SourcePrepareResponse>(
         `/api/admin/bookings/${bookingId}/autohdr/source/prepare`,
-        { manifest: sourceManifest },
+        { manifest: sourceManifest, requestId },
       );
       if (!sourcePrepared.ok) throw new Error(sourcePrepared.error);
       setMessage("Uploading originals to private Pixel storage…");
@@ -124,6 +127,7 @@ export default function AutoHDRSection({
       if (!finalized.ok) throw new Error(finalized.error);
       setJobs((current) => upsertJob(current, finalized.job));
       setFiles([]);
+      setSourceRequestId(null);
       setMessage("Processing at AutoHDR. This panel will refresh automatically.");
     } catch (cause) {
       setError(publicClientError(cause));
@@ -152,26 +156,6 @@ export default function AutoHDRSection({
     }
   }
 
-  async function requestRetrieval(jobId: string) {
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await apiJson<JobResponse>(
-        `/api/admin/bookings/${bookingId}/autohdr/retrieve`,
-        { jobId },
-      );
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setJobs((current) => upsertJob(current, result.job));
-    } catch (cause) {
-      setError(publicClientError(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <section className="space-y-4 rounded-2xl border border-realtor-primary/20 bg-white/80 p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -180,8 +164,8 @@ export default function AutoHDRSection({
             AutoHDR
           </h2>
           <p className="mt-1 max-w-2xl text-xs leading-relaxed text-realtor-muted">
-            Send a bounded photo set for editing. Finished provider work remains
-            review pending until an administrator explicitly retrieves it.
+            Send a bounded JPEG/PNG set for editing. Finished provider work is
+            held at the provider until secure private ingestion is enabled.
           </p>
         </div>
         <span className="rounded-full border border-realtor-primary/15 bg-realtor-surface px-3 py-1 text-xs font-semibold text-realtor-primary">
@@ -204,9 +188,11 @@ export default function AutoHDRSection({
               try {
                 validateAutoHDRSourceFiles(selected);
                 setFiles(selected);
+                setSourceRequestId(null);
                 setError(null);
               } catch (cause) {
                 setFiles([]);
+                setSourceRequestId(null);
                 setError(publicClientError(cause));
                 event.currentTarget.value = "";
               }
@@ -282,14 +268,9 @@ export default function AutoHDRSection({
           </button>
         ) : null}
         {activeJob?.state === "ready" ? (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void requestRetrieval(activeJob.id)}
-            className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-900 disabled:opacity-50"
-          >
-            Retrieve for review
-          </button>
+          <span className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-900">
+            Secure ingestion not enabled
+          </span>
         ) : null}
       </div>
     </section>

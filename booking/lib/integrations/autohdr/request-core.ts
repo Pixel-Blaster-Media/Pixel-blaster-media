@@ -53,12 +53,19 @@ export function parseAutoHDRPrepareInput(value: unknown): {
 
 export function parseAutoHDRSourcePrepareInput(value: unknown): {
   manifest: Array<Record<string, unknown>>;
+  requestId: string;
 } {
-  const row = exactObject(value, ["manifest"]);
+  const row = exactObject(value, ["manifest", "requestId"]);
   if (!Array.isArray(row.manifest)) {
     throw new AutoHDRWorkflowError("invalid_request", "AutoHDR source manifest must be an array.");
   }
-  return { manifest: row.manifest.map((entry) => sourceEntry(entry, false)) };
+  if (typeof row.requestId !== "string" || !UUID.test(row.requestId)) {
+    throw new AutoHDRWorkflowError("invalid_request", "AutoHDR source request ID is invalid.");
+  }
+  return {
+    manifest: row.manifest.map((entry) => sourceEntry(entry, false)),
+    requestId: row.requestId,
+  };
 }
 
 export function parseAutoHDRSourceAcceptInput(value: unknown): {

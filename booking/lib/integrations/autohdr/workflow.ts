@@ -1,7 +1,5 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
-
 import type { AdminContext } from "@/lib/auth/require-admin";
 import { requirePhotoEditingProviderEnabled } from "@/lib/integrations/provider-enablement";
 import { createProductionR2Storage } from "@/lib/media/storage/r2";
@@ -54,6 +52,7 @@ export async function prepareBookingAutoHDRSourceUpload(input: {
   admin: AdminContext;
   bookingId: string;
   manifest: unknown;
+  requestId: string;
 }) {
   const store = createAutoHDRJobStore();
   const booking = await requireScopedBooking(store, input.bookingId, input.admin.organizationId);
@@ -63,17 +62,10 @@ export async function prepareBookingAutoHDRSourceUpload(input: {
     organizationId: input.admin.organizationId,
     bookingId: booking.id,
     propertyId: booking.propertyId,
-    requestId: randomUUID(),
+    requestId: input.requestId,
     createdBy: input.admin.userId,
     files,
   });
-  if (!prepared.newlyCreated) {
-    throw new AutoHDRWorkflowError(
-      "source_request_conflict",
-      "This canonical source request already exists and will not be issued fresh upload capabilities.",
-      409,
-    );
-  }
   return {
     ok: true as const,
     sources: await presignCanonicalAutoHDRSources(input.admin.organizationId, prepared.sources),
