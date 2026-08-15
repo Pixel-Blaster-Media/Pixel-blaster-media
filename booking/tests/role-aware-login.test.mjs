@@ -483,8 +483,9 @@ test("callback and password reset failures route through visible authoritative a
   assert.equal(shouldHandoffAuthCode("/api/example", true), false);
   assert.match(authCallback, /url\.searchParams\.get\("error"\)/);
   assert.match(authCallback, /providerError \? "callback_failed" : "expired"/);
-  assert.match(resetConfirmAction, /redirect\("\/auth\/continue\?password_updated=1"\)/);
+  assert.match(resetConfirmAction, /redirect\("\/auth\/password-updated"\)/);
   assert.match(passwordUpdatedPage, /Your new password is ready/);
+  assert.match(passwordUpdatedPage, /href="\/auth\/continue"/);
   assert.match(passwordUpdatedPage, /Continue to workspace/);
 });
 

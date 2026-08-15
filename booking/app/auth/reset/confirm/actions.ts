@@ -100,5 +100,5 @@ export async function setNewPassword(
       needsFreshLink: true,
     };
   }
-  redirect("/auth/continue?password_updated=1");
+  redirect("/auth/password-updated");
 }
