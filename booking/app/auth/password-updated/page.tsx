@@ -1,20 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { safePostAuthPath } from "@/lib/auth/account-destination";
-
 export const metadata: Metadata = {
   title: "Password updated",
 };
 
-export default async function PasswordUpdatedPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ next?: string }>;
-}) {
-  const params = await searchParams;
-  const destination = safePostAuthPath(params.next ?? null);
-
+export default function PasswordUpdatedPage() {
   return (
     <div className="space-y-6">
       <header>
@@ -31,7 +22,7 @@ export default async function PasswordUpdatedPage({
       </header>
 
       <Link
-        href={destination}
+        href="/auth/continue"
         className="inline-flex min-h-11 items-center justify-center rounded-full bg-realtor-primary px-5 py-2 text-sm font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-realtor-primary"
       >
         Continue to workspace
