@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import type { CatalogItemDTO } from "@/lib/booking/catalog-dto";
+import { getActiveCatalogExamples } from "@/lib/booking/catalog-examples";
 import {
   getSelectedServiceCapabilities,
   isCatalogAddonEligible,
@@ -39,11 +40,20 @@ export default async function BookStep1Page({
   );
   if (!organization) notFound();
   const scopedState = { ...state, organizationSlug: organization.slug };
-  const catalog = await getActiveCatalog({ organizationId: organization.id });
+  const [catalog, examplesByItem] = await Promise.all([
+    getActiveCatalog({ organizationId: organization.id }),
+    getActiveCatalogExamples(organization.id),
+  ]);
 
-  const bundles = catalog.bundles.map(toDTO);
-  const aLaCarte = catalog.aLaCarte.map(toDTO);
-  const addons = catalog.addons.map(toDTO);
+  const bundles = catalog.bundles.map((row) =>
+    toDTO(row, examplesByItem.get(row.id) ?? []),
+  );
+  const aLaCarte = catalog.aLaCarte.map((row) =>
+    toDTO(row, examplesByItem.get(row.id) ?? []),
+  );
+  const addons = catalog.addons.map((row) =>
+    toDTO(row, examplesByItem.get(row.id) ?? []),
+  );
 
   // Only keep slugs that exist in the live catalog so a stale URL
   // doesn't show a phantom selection.
@@ -103,7 +113,10 @@ export default async function BookStep1Page({
   );
 }
 
-function toDTO(r: CatalogItemRow): CatalogItemDTO {
+function toDTO(
+  r: CatalogItemRow,
+  examples: CatalogItemDTO["examples"],
+): CatalogItemDTO {
   return {
     id: r.id,
     slug: r.slug,
@@ -127,5 +140,6 @@ function toDTO(r: CatalogItemRow): CatalogItemDTO {
     badge: r.badge,
     highlight: r.highlight,
     ideal_for: r.ideal_for,
+    examples,
   };
 }

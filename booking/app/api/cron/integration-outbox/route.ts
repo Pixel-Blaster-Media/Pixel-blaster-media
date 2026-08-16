@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { runCatalogStreamCleanup } from "@/lib/booking/catalog-stream-cleanup";
 import { runScheduledIntegrationOutbox } from "@/lib/integrations/scheduler";
 import {
   integrationOutboxDispatchEnabled,
@@ -26,7 +27,15 @@ export async function GET(request: Request) {
   if (!integrationOutboxDispatchEnabled(
     process.env.INTEGRATION_OUTBOX_DISPATCH_ENABLED,
   )) {
-    return NextResponse.json({ ok: true, enabled: false });
+    try {
+      const streamCleanup = await runCatalogStreamCleanup();
+      return NextResponse.json({ ok: streamCleanup.ok, enabled: false, streamCleanup });
+    } catch {
+      return NextResponse.json(
+        { ok: false, enabled: false, error: "Scheduled Stream cleanup failed." },
+        { status: 500 },
+      );
+    }
   }
 
   let dispatchNotBefore: string;
@@ -41,8 +50,18 @@ export async function GET(request: Request) {
     );
   }
   try {
-    const result = await runScheduledIntegrationOutbox({ dispatchNotBefore });
-    return NextResponse.json({ ...result, enabled: true });
+    const [result, streamCleanup] = await Promise.all([
+      runScheduledIntegrationOutbox({ dispatchNotBefore }),
+      runCatalogStreamCleanup().catch(() => ({
+        ok: false,
+        reconciled: 0,
+        attempted: 0,
+        cleaned: 0,
+        retryable: 0,
+        providerUnknown: 0,
+      })),
+    ]);
+    return NextResponse.json({ ...result, enabled: true, streamCleanup });
   } catch {
     console.error("[integration-outbox-cron] scheduler failed", {
       kind: "scheduler_failure",

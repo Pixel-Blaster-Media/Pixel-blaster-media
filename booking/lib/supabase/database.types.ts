@@ -677,6 +677,66 @@ interface CatalogItemsTable {
   Relationships: [];
 }
 
+interface CatalogItemExamplesTable {
+  Row: {
+    id: string;
+    organization_id: string;
+    catalog_item_id: string;
+    title: string;
+    description: string | null;
+    kind: "video" | "interactive" | "link";
+    source_type: "external_url" | "cloudflare_stream";
+    external_url: string | null;
+    stream_uid: string | null;
+    status: "uploading" | "ready" | "failed" | "deleting";
+    active: boolean;
+    display_order: number;
+    created_at: string;
+    updated_at: string;
+  };
+  Insert: {
+    id?: string;
+    organization_id: string;
+    catalog_item_id: string;
+    title: string;
+    description?: string | null;
+    kind: "video" | "interactive" | "link";
+    source_type: "external_url" | "cloudflare_stream";
+    external_url?: string | null;
+    stream_uid?: string | null;
+    status?: "uploading" | "ready" | "failed" | "deleting";
+    active?: boolean;
+    display_order?: number;
+  };
+  Update: Partial<CatalogItemExamplesTable["Insert"]>;
+  Relationships: [];
+}
+
+interface CatalogStreamUploadClaimsTable {
+  Row: {
+    id: string;
+    organization_id: string;
+    catalog_item_id: string | null;
+    example_id: string | null;
+    stream_uid: string | null;
+    state: "claimed" | "provider_unknown" | "provisioned" | "attached" | "completed" | "cleanup_required" | "cleaned";
+    created_at: string;
+    updated_at: string;
+  };
+  Insert: {
+    id: string;
+    organization_id: string;
+    catalog_item_id?: string | null;
+    example_id?: string | null;
+    stream_uid?: string | null;
+    state?: "claimed" | "provider_unknown" | "provisioned" | "attached" | "completed" | "cleanup_required" | "cleaned";
+    created_at?: string;
+    updated_at?: string;
+  };
+  Update: Partial<CatalogStreamUploadClaimsTable["Insert"]>;
+  Relationships: [];
+}
+
 interface BookingLineItemsTable {
   Row: {
     id: string;
@@ -1152,6 +1212,8 @@ export interface Database {
       quickbooks_connection: QuickBooksConnectionTable;
       service_prices: ServicePricesTable;
       catalog_items: CatalogItemsTable;
+      catalog_item_examples: CatalogItemExamplesTable;
+      catalog_stream_upload_claims: CatalogStreamUploadClaimsTable;
       booking_line_items: BookingLineItemsTable;
       integration_jobs: IntegrationJobsTable;
       booking_notifications: BookingNotificationsTable;
@@ -1193,6 +1255,41 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      begin_catalog_stream_example_deletion: {
+        Args: {
+          p_example_id: string;
+          p_organization_id: string;
+        };
+        Returns: string | null;
+      };
+      finalize_catalog_stream_upload: {
+        Args: {
+          p_example_id: string;
+          p_organization_id: string;
+          p_stream_uid: string;
+          p_outcome: string;
+        };
+        Returns: boolean;
+      };
+      attach_catalog_stream_upload: {
+        Args: {
+          p_claim_id: string;
+          p_organization_id: string;
+          p_catalog_item_id: string;
+          p_stream_uid: string;
+          p_title: string;
+          p_description?: string | null;
+        };
+        Returns: string | null;
+      };
+      claim_catalog_stream_upload: {
+        Args: {
+          p_claim_id: string;
+          p_organization_id: string;
+          p_catalog_item_id: string;
+        };
+        Returns: string;
+      };
       is_admin: {
         Args: Record<string, never>;
         Returns: boolean;
