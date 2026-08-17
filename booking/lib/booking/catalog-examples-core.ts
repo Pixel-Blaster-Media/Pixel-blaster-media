@@ -300,11 +300,17 @@ export async function createStreamDirectUpload(input: {
   return result;
 }
 
-export async function getStreamVideoState(
+export interface StreamVideoDetails {
+  state: "ready" | "processing" | "failed";
+  width: number | null;
+  height: number | null;
+}
+
+export async function getStreamVideoDetails(
   uid: string,
   env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
   fetchImpl: typeof fetch = fetch,
-): Promise<"ready" | "processing" | "failed"> {
+): Promise<StreamVideoDetails> {
   if (!STREAM_UID.test(uid)) throw new Error("Invalid Cloudflare Stream video ID.");
   const config = loadStreamConfig(env);
   const response = await fetchImpl(
@@ -321,10 +327,36 @@ export async function getStreamVideoState(
   }
   const result = (raw as { result?: unknown }).result;
   if (!result || typeof result !== "object") throw new Error("Cloudflare Stream returned an invalid video status.");
-  const video = result as { readyToStream?: unknown; status?: { state?: unknown } };
-  if (video.readyToStream === true || video.status?.state === "ready") return "ready";
-  if (video.status?.state === "error") return "failed";
-  return "processing";
+  const video = result as {
+    readyToStream?: unknown;
+    status?: { state?: unknown };
+    input?: { width?: unknown; height?: unknown };
+  };
+  const state = video.readyToStream === true || video.status?.state === "ready"
+    ? "ready"
+    : video.status?.state === "error" ? "failed" : "processing";
+  if (state !== "ready") return { state, width: null, height: null };
+  const width = video.input?.width;
+  const height = video.input?.height;
+  if (
+    !Number.isInteger(width)
+    || !Number.isInteger(height)
+    || (width as number) < 1
+    || (height as number) < 1
+    || (width as number) > 32768
+    || (height as number) > 32768
+  ) {
+    throw new Error("Cloudflare Stream returned invalid video dimensions.");
+  }
+  return { state, width: width as number, height: height as number };
+}
+
+export async function getStreamVideoState(
+  uid: string,
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+  fetchImpl: typeof fetch = fetch,
+): Promise<"ready" | "processing" | "failed"> {
+  return (await getStreamVideoDetails(uid, env, fetchImpl)).state;
 }
 
 async function readBoundedProviderJson(response: Response): Promise<unknown> {

@@ -12,6 +12,8 @@ const SOURCE = {
   source_type: "cloudflare_stream",
   external_url: null,
   stream_uid: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  video_width: 1080,
+  video_height: 1920,
   status: "ready",
   active: true,
   display_order: 0,
@@ -48,6 +50,23 @@ test("one managed video projects into distinct public catalog placements", async
   assert.equal(shared?.title, PLACEMENT.title);
   assert.equal(shared?.description, PLACEMENT.description);
   assert.equal(shared?.embed_url, original?.embed_url);
+  assert.equal(original?.orientation, "portrait");
+  assert.equal(shared?.orientation, "portrait");
+
+  const landscape = projectActiveCatalogExamples(
+    [{ ...SOURCE, video_width: 1920, video_height: 1080 }],
+    [],
+    { CLOUDFLARE_STREAM_CUSTOMER_CODE: "testcode" },
+  ).get(SOURCE.catalog_item_id)?.[0];
+  assert.equal(landscape?.orientation, "landscape");
+
+  const missingDimensions = projectActiveCatalogExamples(
+    [{ ...SOURCE, video_width: null, video_height: null }],
+    [PLACEMENT],
+    { CLOUDFLARE_STREAM_CUSTOMER_CODE: "testcode" },
+  );
+  assert.equal(missingDimensions.has(SOURCE.catalog_item_id), false);
+  assert.equal(missingDimensions.has(PLACEMENT.catalog_item_id), false);
 });
 
 async function optional(path) {

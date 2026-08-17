@@ -84,4 +84,15 @@ printf '\\set ON_ERROR_STOP on\nbegin;\n\\ir %s\ncommit;\n' "$SHARED_MIGRATION" 
 "${PSQL[@]}" -f "$TMP_DIR/shared-apply.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/tests/postgres/shared-catalog-videos.behavior.sql" >/dev/null
 
-echo "Catalog item examples and shared video placements PostgreSQL 17 suites passed."
+DIMENSIONS_MIGRATION="$ROOT/supabase/migrations/20260817173000_catalog_video_dimensions.sql"
+printf '\\set ON_ERROR_STOP on\nbegin;\n\\ir %s\nrollback;\n' "$DIMENSIONS_MIGRATION" > "$TMP_DIR/dimensions-rollback-proof.sql"
+"${PSQL[@]}" -f "$TMP_DIR/dimensions-rollback-proof.sql" >/dev/null
+if [[ "$("${PSQL[@]}" -Atc "select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'catalog_item_examples' and column_name in ('video_width', 'video_height')")" != "0" ]]; then
+  echo "Rollback proof left catalog video dimension schema residue." >&2
+  exit 1
+fi
+printf '\\set ON_ERROR_STOP on\nbegin;\n\\ir %s\ncommit;\n' "$DIMENSIONS_MIGRATION" > "$TMP_DIR/dimensions-apply.sql"
+"${PSQL[@]}" -f "$TMP_DIR/dimensions-apply.sql" >/dev/null
+"${PSQL[@]}" -f "$ROOT/tests/postgres/catalog-video-dimensions.behavior.sql" >/dev/null
+
+echo "Catalog item examples, shared placements, and video dimensions PostgreSQL 17 suites passed."

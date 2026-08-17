@@ -215,14 +215,19 @@ export default function CatalogExamplesEditor({
                 </p>
               </div>
               <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
-                {!example.is_shared && example.source_type === "cloudflare_stream" && example.status === "uploading" ? (
+                {!example.is_shared
+                  && example.source_type === "cloudflare_stream"
+                  && (
+                    example.status === "uploading"
+                    || (example.status === "ready" && (example.video_width === null || example.video_height === null))
+                  ) ? (
                   <button
                     type="button"
                     disabled={Boolean(progress)}
                     onClick={() => void checkProcessing(example.id)}
                     className="tap-target text-xs font-semibold text-realtor-primary disabled:opacity-50"
                   >
-                    Check processing
+                    {example.status === "ready" ? "Recover video details" : "Check processing"}
                   </button>
                 ) : null}
                 <button

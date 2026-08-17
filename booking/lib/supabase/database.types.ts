@@ -690,6 +690,8 @@ interface CatalogItemExamplesTable {
     source_type: "external_url" | "cloudflare_stream";
     external_url: string | null;
     stream_uid: string | null;
+    video_width: number | null;
+    video_height: number | null;
     status: "uploading" | "ready" | "failed" | "deleting";
     active: boolean;
     display_order: number;
@@ -706,6 +708,8 @@ interface CatalogItemExamplesTable {
     source_type: "external_url" | "cloudflare_stream";
     external_url?: string | null;
     stream_uid?: string | null;
+    video_width?: number | null;
+    video_height?: number | null;
     status?: "uploading" | "ready" | "failed" | "deleting";
     active?: boolean;
     display_order?: number;
@@ -1335,6 +1339,26 @@ export interface Database {
           p_organization_id: string;
           p_stream_uid: string;
           p_outcome: string;
+        };
+        Returns: boolean;
+      };
+      record_catalog_stream_example_dimensions: {
+        Args: {
+          p_example_id: string;
+          p_organization_id: string;
+          p_stream_uid: string;
+          p_video_width: number;
+          p_video_height: number;
+        };
+        Returns: boolean;
+      };
+      finalize_catalog_stream_upload_with_dimensions: {
+        Args: {
+          p_example_id: string;
+          p_organization_id: string;
+          p_stream_uid: string;
+          p_video_width: number;
+          p_video_height: number;
         };
         Returns: boolean;
       };

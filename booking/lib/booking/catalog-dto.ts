@@ -6,6 +6,7 @@ export interface CatalogItemExampleDTO {
   kind: "video" | "interactive" | "link";
   embed_url: string | null;
   external_url: string | null;
+  orientation: "portrait" | "landscape";
 }
 
 export interface CatalogItemDTO {
