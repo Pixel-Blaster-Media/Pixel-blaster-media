@@ -24,7 +24,7 @@ export async function POST(
       .eq("source_type", "cloudflare_stream")
       .maybeSingle();
     if (error || !example?.stream_uid) return jsonError("Video example not found.", 404);
-    if (example.status === "ready") return NextResponse.json({ status: "ready" }, { headers: noStoreHeaders() });
+    if (example.status === "ready") return NextResponse.json({ ok: true, status: "ready" }, { headers: noStoreHeaders() });
     if (example.status === "failed") return jsonError("Cloudflare could not process that video.", 422);
     if (example.status !== "uploading") return jsonError("Video example is no longer processing.", 409);
 
@@ -49,7 +49,7 @@ export async function POST(
     revalidatePath("/admin/settings/pricing");
     revalidatePath("/book");
     if (state === "failed") return jsonError("Cloudflare could not process that video.", 422);
-    return NextResponse.json({ status: "ready" }, { headers: noStoreHeaders() });
+    return NextResponse.json({ ok: true, status: "ready" }, { headers: noStoreHeaders() });
   } catch {
     return jsonError("Could not check the video yet.", 503);
   }
