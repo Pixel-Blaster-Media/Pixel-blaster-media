@@ -15,6 +15,8 @@ export interface PublicCatalogExampleSource {
   source_type: "external_url" | "cloudflare_stream";
   external_url: string | null;
   stream_uid: string | null;
+  video_width: number | null;
+  video_height: number | null;
   status: "uploading" | "ready" | "failed" | "deleting";
   active: boolean;
   display_order: number;
@@ -36,7 +38,14 @@ export function projectActiveCatalogExamples(
   placements: PublicCatalogExamplePlacement[],
   env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
 ): Map<string, CatalogItemExampleDTO[]> {
-  const readySources = examples.filter((row) => row.active && row.status === "ready");
+  const readySources = examples.filter((row) => (
+    row.active
+    && row.status === "ready"
+    && (
+      row.source_type !== "cloudflare_stream"
+      || (row.video_width !== null && row.video_height !== null)
+    )
+  ));
   const sources = new Map(readySources.map((row) => [row.id, row]));
   const grouped = new Map<string, Array<{ order: number; dto: CatalogItemExampleDTO }>>();
 
@@ -102,5 +111,11 @@ function toPublicDTO(
     kind: row.kind,
     embed_url: embedUrl,
     external_url: externalUrl,
+    orientation: (
+      row.source_type === "cloudflare_stream"
+      && row.video_width !== null
+      && row.video_height !== null
+      && row.video_height > row.video_width
+    ) ? "portrait" : "landscape",
   };
 }

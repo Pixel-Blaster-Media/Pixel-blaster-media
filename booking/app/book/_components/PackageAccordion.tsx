@@ -644,7 +644,12 @@ function ExampleFrame({
           role="tabpanel"
           aria-labelledby={hasTabs ? `catalog-example-tab-${example.id}` : undefined}
           aria-label={hasTabs ? undefined : example.title}
-          className="relative aspect-video overflow-hidden rounded-2xl bg-black shadow-inner"
+          className={
+            "relative overflow-hidden rounded-2xl bg-black shadow-inner "
+            + (example.orientation === "portrait"
+              ? "mx-auto aspect-[9/16] w-full max-w-sm"
+              : "aspect-video w-full")
+          }
         >
           <iframe
             key={example.id}

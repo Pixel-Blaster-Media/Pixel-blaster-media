@@ -209,10 +209,47 @@ test("Cloudflare Stream direct upload fails closed and returns only a bounded up
   );
 });
 
+test("Cloudflare Stream details preserve validated native video dimensions", async () => {
+  const details = await core.getStreamVideoDetails(
+    "1234567890abcdef1234567890abcdef",
+    {
+      CLOUDFLARE_STREAM_ACCOUNT_ID: "0123456789abcdef0123456789abcdef",
+      CLOUDFLARE_STREAM_API_TOKEN: "secret-token",
+      NEXT_PUBLIC_APP_URL: "https://pixelblastermedia.com",
+    },
+    async () => new Response(JSON.stringify({
+      success: true,
+      result: {
+        readyToStream: true,
+        status: { state: "ready" },
+        input: { width: 1080, height: 1920 },
+      },
+    }), { status: 200 }),
+  );
+  assert.deepEqual(details, { state: "ready", width: 1080, height: 1920 });
+
+  await assert.rejects(
+    core.getStreamVideoDetails(
+      "1234567890abcdef1234567890abcdef",
+      {
+        CLOUDFLARE_STREAM_ACCOUNT_ID: "0123456789abcdef0123456789abcdef",
+        CLOUDFLARE_STREAM_API_TOKEN: "secret-token",
+        NEXT_PUBLIC_APP_URL: "https://pixelblastermedia.com",
+      },
+      async () => new Response(JSON.stringify({
+        success: true,
+        result: { readyToStream: true, input: { width: 0, height: 1920 } },
+      }), { status: 200 }),
+    ),
+    /dimensions/i,
+  );
+});
+
 test("catalog examples cross schema, admin, public booking, and SaaS cloning boundaries", async () => {
-  const [migration, dto, page, picker, editor, actions, uploadRoute, completeRoute, cleanupRoute, cleanupWorker, sharedCron, companySetup, types] =
+  const [migration, portraitMigration, dto, page, picker, editor, actions, uploadRoute, completeRoute, cleanupRoute, cleanupWorker, sharedCron, companySetup, types] =
     await Promise.all([
       readFile(new URL("../supabase/migrations/20260816120000_catalog_item_examples.sql", import.meta.url), "utf8"),
+      readFile(new URL("../supabase/migrations/20260817173000_catalog_video_dimensions.sql", import.meta.url), "utf8"),
       readFile(new URL("../lib/booking/catalog-dto.ts", import.meta.url), "utf8"),
       readFile(new URL("../app/book/page.tsx", import.meta.url), "utf8"),
       readFile(new URL("../app/book/_components/PackageAccordion.tsx", import.meta.url), "utf8"),
@@ -241,6 +278,12 @@ test("catalog examples cross schema, admin, public booking, and SaaS cloning bou
   assert.match(migration, /claim_catalog_stream_upload/i);
   assert.match(migration, /attach_catalog_stream_upload/i);
   assert.match(types, /catalog_item_examples: CatalogItemExamplesTable/);
+  assert.match(portraitMigration, /video_width integer/);
+  assert.match(portraitMigration, /video_height integer/);
+  assert.match(portraitMigration, /record_catalog_stream_example_dimensions/);
+  assert.match(portraitMigration, /finalize_catalog_stream_upload_with_dimensions/);
+  assert.match(portraitMigration, /video_width is not null[\s\S]*video_height is not null/i);
+  assert.match(dto, /orientation: "portrait" \| "landscape"/);
   assert.match(dto, /examples: CatalogItemExampleDTO\[\]/);
   assert.match(page, /getActiveCatalogExamples/);
   assert.match(picker, /ViewExampleButton/);
@@ -248,12 +291,16 @@ test("catalog examples cross schema, admin, public booking, and SaaS cloning bou
   assert.match(picker, /className="fixed inset-0 !m-0 h-dvh max-h-none[^\"]*items-center[^\"]*p-4/);
   assert.doesNotMatch(picker, /className="fixed inset-0 !m-0 h-dvh max-h-none[^\"]*items-end/);
   assert.match(picker, /max-h-\[92dvh\] w-full max-w-3xl[^\"]*overscroll-contain[^\"]*rounded-\[1\.75rem\]/);
+  assert.match(picker, /example\.orientation === "portrait"/);
+  assert.match(picker, /aspect-\[9\/16\]/);
   assert.match(picker, /event\.stopPropagation\(\)/);
   assert.match(picker, /previousFocusRef/);
   assert.match(picker, /event\.key === "Tab"/);
   assert.match(picker, /dialogRef\.current\?\.focus/);
   assert.match(picker, /trustedExampleEmbed/);
   assert.match(editor, /Upload video/);
+  assert.match(editor, /Use existing video/);
+  assert.match(editor, /Recover video details/);
   assert.match(editor, /Attach URL/);
   assert.match(editor, /YouTube, Vimeo, and iGUIDE open in the player/i);
   assert.match(editor, /Check processing/);
@@ -265,6 +312,11 @@ test("catalog examples cross schema, admin, public booking, and SaaS cloning bou
   assert.match(uploadRoute, /attach_catalog_stream_upload/);
   assert.match(uploadRoute, /if \(attachError \|\| !exampleId[\s\S]*setClaimCleanup[\s\S]*Could not attach the prepared upload safely/);
   assert.match(completeRoute, /finalize_catalog_stream_upload/);
+  assert.match(completeRoute, /getStreamVideoDetails/);
+  assert.match(completeRoute, /record_catalog_stream_example_dimensions/);
+  assert.match(completeRoute, /finalize_catalog_stream_upload_with_dimensions/);
+  assert.match(types, /video_width: number \| null/);
+  assert.match(types, /video_height: number \| null/);
   assert.match(actions, /begin_catalog_stream_example_deletion/);
   assert.match(uploadRoute, /requireAdmin/);
   assert.match(cleanupRoute, /runCatalogStreamCleanup/);
