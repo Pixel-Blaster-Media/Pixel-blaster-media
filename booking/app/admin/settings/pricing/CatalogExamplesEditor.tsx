@@ -3,10 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 
-import type { CatalogItemExampleRow } from "@/lib/booking/catalog-examples";
+import type {
+  CatalogItemExampleAdminRow,
+  ReusableCatalogVideo,
+} from "@/lib/booking/catalog-examples";
 import {
   attachCatalogExample,
+  attachSharedCatalogVideo,
   deleteCatalogExample,
+  removeSharedCatalogVideoPlacement,
 } from "./example-actions";
 
 const MAX_BASIC_VIDEO_BYTES = 200 * 1024 * 1024;
@@ -14,15 +19,18 @@ const MAX_BASIC_VIDEO_BYTES = 200 * 1024 * 1024;
 export default function CatalogExamplesEditor({
   catalogItemId,
   examples,
+  reusableVideos,
   streamConfigured,
 }: {
   catalogItemId: string;
-  examples: CatalogItemExampleRow[];
+  examples: CatalogItemExampleAdminRow[];
+  reusableVideos: ReusableCatalogVideo[];
   streamConfigured: boolean;
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [mode, setMode] = useState<"closed" | "url" | "upload">("closed");
+  const [mode, setMode] = useState<"closed" | "url" | "upload" | "reuse">("closed");
+  const [sourceExampleId, setSourceExampleId] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState<"video" | "interactive" | "link">("interactive");
@@ -30,9 +38,14 @@ export default function CatalogExamplesEditor({
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const attachedSources = new Set(examples.map((example) => example.source_example_id));
+  const availableReusableVideos = reusableVideos.filter(
+    (video) => video.catalog_item_id !== catalogItemId && !attachedSources.has(video.id),
+  );
 
   const reset = () => {
     setMode("closed");
+    setSourceExampleId("");
     setTitle("");
     setDescription("");
     setUrl("");
@@ -50,6 +63,22 @@ export default function CatalogExamplesEditor({
     startTransition(async () => {
       const result = await attachCatalogExample(formData);
       if (!result.ok) return setError(result.error ?? "Could not attach example.");
+      reset();
+      router.refresh();
+    });
+  };
+
+  const attachReusable = () => {
+    if (!sourceExampleId) return setError("Choose a reusable video.");
+    const formData = new FormData();
+    formData.set("catalog_item_id", catalogItemId);
+    formData.set("source_example_id", sourceExampleId);
+    formData.set("title", title);
+    formData.set("description", description);
+    setError(null);
+    startTransition(async () => {
+      const result = await attachSharedCatalogVideo(formData);
+      if (!result.ok) return setError(result.error ?? "Could not reuse video.");
       reset();
       router.refresh();
     });
@@ -141,6 +170,15 @@ export default function CatalogExamplesEditor({
           </button>
           <button
             type="button"
+            disabled={availableReusableVideos.length === 0 || Boolean(progress)}
+            onClick={() => setMode(mode === "reuse" ? "closed" : "reuse")}
+            title={availableReusableVideos.length > 0 ? undefined : "No other uploaded videos are available"}
+            className="tap-target rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-text hover:border-realtor-primary/40 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            Use existing video
+          </button>
+          <button
+            type="button"
             disabled={!streamConfigured || Boolean(progress)}
             aria-describedby={!streamConfigured ? `stream-disabled-${catalogItemId}` : undefined}
             onClick={() => setMode(mode === "upload" ? "closed" : "upload")}
@@ -169,13 +207,15 @@ export default function CatalogExamplesEditor({
               <div className="min-w-0">
                 <p className="truncate font-semibold text-realtor-text">{example.title}</p>
                 <p className="text-[10px] uppercase tracking-wider text-realtor-muted">
-                  {example.source_type === "cloudflare_stream" ? "Uploaded video" : example.kind}
+                  {example.is_shared
+                    ? "Shared placement · Uploaded video"
+                    : example.source_type === "cloudflare_stream" ? "Uploaded video" : example.kind}
                   {example.status !== "ready" ? ` · ${example.status}` : ""}
                   {!example.active ? " · hidden" : ""}
                 </p>
               </div>
               <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
-                {example.source_type === "cloudflare_stream" && example.status === "uploading" ? (
+                {!example.is_shared && example.source_type === "cloudflare_stream" && example.status === "uploading" ? (
                   <button
                     type="button"
                     disabled={Boolean(progress)}
@@ -189,10 +229,15 @@ export default function CatalogExamplesEditor({
                   type="button"
                   disabled={pending}
                   onClick={() => {
-                    if (!confirm(`Remove “${example.title}”?`)) return;
+                    const prompt = example.is_shared
+                      ? `Unlink “${example.title}” from this service? The uploaded video will remain available elsewhere.`
+                      : `Remove “${example.title}”? Uploaded videos are deleted everywhere only when they have no shared placements.`;
+                    if (!confirm(prompt)) return;
                     setError(null);
                     startTransition(async () => {
-                      const result = await deleteCatalogExample(example.id);
+                      const result = example.is_shared
+                        ? await removeSharedCatalogVideoPlacement(example.placement_id ?? "")
+                        : await deleteCatalogExample(example.id);
                       if (!result.ok) setError(result.error ?? "Could not remove example.");
                       router.refresh();
                     });
@@ -212,10 +257,32 @@ export default function CatalogExamplesEditor({
           onSubmit={(event) => {
             event.preventDefault();
             if (mode === "url") attachUrl();
+            else if (mode === "reuse") attachReusable();
             else void uploadVideo();
           }}
           className="mt-3 grid min-w-0 gap-3 border-t border-realtor-primary/10 pt-3"
         >
+          {mode === "reuse" ? (
+            <Field label="Reusable video">
+              <select
+                value={sourceExampleId}
+                onChange={(event) => {
+                  const selectedId = event.target.value;
+                  const selected = availableReusableVideos.find((video) => video.id === selectedId);
+                  setSourceExampleId(selectedId);
+                  setTitle(selected?.title ?? "");
+                  setDescription(selected?.description ?? "");
+                }}
+                required
+                className="w-full min-w-0 rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
+              >
+                <option value="">Choose an uploaded video…</option>
+                {availableReusableVideos.map((video) => (
+                  <option key={video.id} value={video.id}>{video.title}</option>
+                ))}
+              </select>
+            </Field>
+          ) : null}
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Example title">
               <input
@@ -270,6 +337,19 @@ export default function CatalogExamplesEditor({
                 className="tap-target justify-self-start rounded-full bg-realtor-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
               >
                 {pending ? "Attaching…" : "Attach example"}
+              </button>
+            </>
+          ) : mode === "reuse" ? (
+            <>
+              <p className="text-[11px] text-realtor-muted">
+                This creates a shared placement. The same Cloudflare video is not uploaded or stored again.
+              </p>
+              <button
+                type="submit"
+                disabled={pending || !sourceExampleId}
+                className="tap-target justify-self-start rounded-full bg-realtor-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+              >
+                {pending ? "Adding…" : "Use video here"}
               </button>
             </>
           ) : (

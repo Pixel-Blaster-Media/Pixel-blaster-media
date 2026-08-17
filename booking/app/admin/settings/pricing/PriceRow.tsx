@@ -3,7 +3,10 @@
 import { useState, useTransition, type ReactNode } from "react";
 
 import type { CatalogItemRow } from "@/lib/booking/catalog";
-import type { CatalogItemExampleRow } from "@/lib/booking/catalog-examples";
+import type {
+  CatalogItemExampleAdminRow,
+  ReusableCatalogVideo,
+} from "@/lib/booking/catalog-examples";
 
 import { deleteCatalogItem, updateCatalogItem } from "./actions";
 import CatalogExamplesEditor from "./CatalogExamplesEditor";
@@ -11,10 +14,12 @@ import CatalogExamplesEditor from "./CatalogExamplesEditor";
 export default function CatalogItemEditor({
   item,
   examples,
+  reusableVideos,
   streamConfigured,
 }: {
   item: CatalogItemRow;
-  examples: CatalogItemExampleRow[];
+  examples: CatalogItemExampleAdminRow[];
+  reusableVideos: ReusableCatalogVideo[];
   streamConfigured: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -418,6 +423,7 @@ export default function CatalogItemEditor({
         <CatalogExamplesEditor
           catalogItemId={item.id}
           examples={examples}
+          reusableVideos={reusableVideos}
           streamConfigured={streamConfigured}
         />
         </>

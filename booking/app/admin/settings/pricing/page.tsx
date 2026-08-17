@@ -5,7 +5,9 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { getFullCatalog, type CatalogItemRow } from "@/lib/booking/catalog";
 import {
   getFullCatalogExamples,
-  type CatalogItemExampleRow,
+  getReusableCatalogVideos,
+  type CatalogItemExampleAdminRow,
+  type ReusableCatalogVideo,
 } from "@/lib/booking/catalog-examples";
 import { isStreamConfigured } from "@/lib/booking/catalog-examples-core";
 import type { CatalogItemKind } from "@/lib/supabase/database.types";
@@ -18,9 +20,10 @@ export const dynamic = "force-dynamic";
 
 export default async function PricingPage() {
   const admin = await requireAdmin();
-  const [{ bundles, aLaCarte, addons }, examplesByItem] = await Promise.all([
+  const [{ bundles, aLaCarte, addons }, examplesByItem, reusableVideos] = await Promise.all([
     getFullCatalog({ organizationId: admin.organizationId }),
     getFullCatalogExamples(admin.organizationId),
+    getReusableCatalogVideos(admin.organizationId),
   ]);
   const streamConfigured = isStreamConfigured();
 
@@ -48,6 +51,7 @@ export default async function PricingPage() {
         blurb="Realtors pick one bundle. Duration + price are fixed."
         items={bundles}
         examplesByItem={examplesByItem}
+        reusableVideos={reusableVideos}
         streamConfigured={streamConfigured}
       />
       <Section
@@ -56,6 +60,7 @@ export default async function PricingPage() {
         blurb="Realtors can combine multiple with quantities. Durations stack into a single booking slot."
         items={aLaCarte}
         examplesByItem={examplesByItem}
+        reusableVideos={reusableVideos}
         streamConfigured={streamConfigured}
       />
       <Section
@@ -64,6 +69,7 @@ export default async function PricingPage() {
         blurb='Toggled per booking. Mark "Only when cart has video" for add-ons like "put me on camera" so they hide unless the selection includes video.'
         items={addons}
         examplesByItem={examplesByItem}
+        reusableVideos={reusableVideos}
         streamConfigured={streamConfigured}
       />
     </div>
@@ -76,13 +82,15 @@ function Section({
   blurb,
   items,
   examplesByItem,
+  reusableVideos,
   streamConfigured,
 }: {
   kind: CatalogItemKind;
   title: string;
   blurb: string;
   items: CatalogItemRow[];
-  examplesByItem: Map<string, CatalogItemExampleRow[]>;
+  examplesByItem: Map<string, CatalogItemExampleAdminRow[]>;
+  reusableVideos: ReusableCatalogVideo[];
   streamConfigured: boolean;
 }) {
   return (
@@ -102,6 +110,7 @@ function Section({
             <CatalogItemEditor
               item={it}
               examples={examplesByItem.get(it.id) ?? []}
+              reusableVideos={reusableVideos}
               streamConfigured={streamConfigured}
             />
           </li>

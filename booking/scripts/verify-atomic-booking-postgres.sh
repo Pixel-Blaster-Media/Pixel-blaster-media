@@ -43,10 +43,13 @@ PSQL=("$PG_BIN/psql" -X -v ON_ERROR_STOP=1 -h "$TMP_DIR" -p "$PORT" -U postgres 
 "${PSQL[@]}" -f "$ROOT/supabase/migrations/20260719124500_integration_outbox_recovery_reconciliation.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/supabase/migrations/20260720120000_beta_company_invitations.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/supabase/migrations/20260810173824_aerial_addon_catalog_rules.sql" >/dev/null
+"${PSQL[@]}" -f "$ROOT/supabase/migrations/20260816120000_catalog_item_examples.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/supabase/migrations/20260817130000_site_plan_addon.sql" >/dev/null
+"${PSQL[@]}" -f "$ROOT/supabase/migrations/20260817143000_shared_catalog_video_placements.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/tests/postgres/atomic-booking-outbox.behavior.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/tests/postgres/beta-company-invitations.behavior.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/tests/postgres/aerial-addon-catalog.behavior.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/tests/postgres/site-plan-addon.behavior.sql" >/dev/null
+"${PSQL[@]}" -f "$ROOT/tests/postgres/shared-catalog-videos.behavior.sql" >/dev/null
 
 echo "Atomic booking PostgreSQL behavior suite passed."

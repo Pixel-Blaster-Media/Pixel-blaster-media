@@ -714,6 +714,35 @@ interface CatalogItemExamplesTable {
   Relationships: [];
 }
 
+interface CatalogItemExamplePlacementsTable {
+  Row: {
+    id: string;
+    organization_id: string;
+    catalog_item_id: string;
+    source_example_id: string;
+    title: string;
+    description: string | null;
+    display_order: number;
+    active: boolean;
+    created_at: string;
+    updated_at: string;
+  };
+  Insert: {
+    id?: string;
+    organization_id: string;
+    catalog_item_id: string;
+    source_example_id: string;
+    title: string;
+    description?: string | null;
+    display_order: number;
+    active?: boolean;
+    created_at?: string;
+    updated_at?: string;
+  };
+  Update: Partial<CatalogItemExamplePlacementsTable["Insert"]>;
+  Relationships: [];
+}
+
 interface CatalogStreamUploadClaimsTable {
   Row: {
     id: string;
@@ -1215,6 +1244,7 @@ export interface Database {
       service_prices: ServicePricesTable;
       catalog_items: CatalogItemsTable;
       catalog_item_examples: CatalogItemExamplesTable;
+      catalog_item_example_placements: CatalogItemExamplePlacementsTable;
       catalog_stream_upload_claims: CatalogStreamUploadClaimsTable;
       booking_line_items: BookingLineItemsTable;
       integration_jobs: IntegrationJobsTable;
@@ -1257,6 +1287,41 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      attach_external_catalog_example: {
+        Args: {
+          p_organization_id: string;
+          p_catalog_item_id: string;
+          p_title: string;
+          p_description: string | null;
+          p_kind: string;
+          p_external_url: string;
+        };
+        Returns: string | null;
+      };
+      attach_shared_catalog_stream_example: {
+        Args: {
+          p_organization_id: string;
+          p_catalog_item_id: string;
+          p_source_example_id: string;
+          p_title: string;
+          p_description: string | null;
+        };
+        Returns: string | null;
+      };
+      remove_shared_catalog_stream_placement: {
+        Args: {
+          p_organization_id: string;
+          p_placement_id: string;
+        };
+        Returns: boolean;
+      };
+      next_catalog_example_display_order: {
+        Args: {
+          p_organization_id: string;
+          p_catalog_item_id: string;
+        };
+        Returns: number | null;
+      };
       begin_catalog_stream_example_deletion: {
         Args: {
           p_example_id: string;
