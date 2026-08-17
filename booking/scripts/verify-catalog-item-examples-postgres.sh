@@ -95,4 +95,15 @@ printf '\\set ON_ERROR_STOP on\nbegin;\n\\ir %s\ncommit;\n' "$DIMENSIONS_MIGRATI
 "${PSQL[@]}" -f "$TMP_DIR/dimensions-apply.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/tests/postgres/catalog-video-dimensions.behavior.sql" >/dev/null
 
-echo "Catalog item examples, shared placements, and video dimensions PostgreSQL 17 suites passed."
+GROUPS_MIGRATION="$ROOT/supabase/migrations/20260817190000_grouped_catalog_sample_pills.sql"
+printf '\\set ON_ERROR_STOP on\nbegin;\n\\ir %s\nrollback;\n' "$GROUPS_MIGRATION" > "$TMP_DIR/groups-rollback-proof.sql"
+"${PSQL[@]}" -f "$TMP_DIR/groups-rollback-proof.sql" >/dev/null
+if [[ "$("${PSQL[@]}" -Atc "select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'catalog_item_examples' and column_name in ('sample_group_key', 'sample_group_label')")" != "0" ]]; then
+  echo "Rollback proof left grouped catalog sample schema residue." >&2
+  exit 1
+fi
+printf '\\set ON_ERROR_STOP on\nbegin;\n\\ir %s\ncommit;\n' "$GROUPS_MIGRATION" > "$TMP_DIR/groups-apply.sql"
+"${PSQL[@]}" -f "$TMP_DIR/groups-apply.sql" >/dev/null
+"${PSQL[@]}" -f "$ROOT/tests/postgres/grouped-catalog-sample-pills.behavior.sql" >/dev/null
+
+echo "Catalog item examples, shared placements, video dimensions, and grouped sample pills PostgreSQL 17 suites passed."

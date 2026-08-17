@@ -4,6 +4,8 @@ export interface CatalogItemExampleDTO {
   title: string;
   description: string | null;
   kind: "video" | "interactive" | "link";
+  sample_group_key: string | null;
+  sample_group_label: string | null;
   embed_url: string | null;
   external_url: string | null;
   orientation: "portrait" | "landscape";

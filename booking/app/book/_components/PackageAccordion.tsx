@@ -7,6 +7,10 @@ import type {
   CatalogItemDTO,
   CatalogItemExampleDTO,
 } from "@/lib/booking/catalog-dto";
+import {
+  getCatalogSampleGroups,
+  type CatalogSampleGroup,
+} from "@/lib/booking/catalog-sample-groups";
 import { isAddonEligible } from "@/lib/booking/catalog-rules";
 import BookingTotalBar from "./BookingTotalBar";
 import {
@@ -57,7 +61,10 @@ export default function PackageAccordion({
     [selectedSlugs, aLaCarte],
   );
   const [aLaCarteOpen, setALaCarteOpen] = useState(hasALaCarte);
-  const [exampleItem, setExampleItem] = useState<CatalogItemDTO | null>(null);
+  const [exampleViewer, setExampleViewer] = useState<{
+    item: CatalogItemDTO;
+    group: CatalogSampleGroup;
+  } | null>(null);
 
   const bySlug = useMemo(() => {
     const m = new Map<string, CatalogItemDTO>();
@@ -246,10 +253,9 @@ export default function PackageAccordion({
                   </div>
 
                   <div className="mt-5 flex flex-wrap items-center gap-2">
-                    <MediaBadges item={b} />
-                    <ViewExampleButton
+                    <MediaBadges
                       item={b}
-                      onOpen={() => setExampleItem(b)}
+                      onOpen={(group) => setExampleViewer({ item: b, group })}
                     />
                     {sqftRuleText(b) ? (
                       <span className="rounded-full border border-realtor-primary/20 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
@@ -324,10 +330,9 @@ export default function PackageAccordion({
                       <p className="font-semibold leading-5 text-realtor-text">
                         {a.name}
                       </p>
-                      <MediaBadges item={a} />
-                      <ViewExampleButton
+                      <MediaBadges
                         item={a}
-                        onOpen={() => setExampleItem(a)}
+                        onOpen={(group) => setExampleViewer({ item: a, group })}
                       />
                       {selected ? (
                         <span className="rounded-full bg-realtor-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
@@ -409,12 +414,12 @@ export default function PackageAccordion({
                           {a.description}
                         </p>
                       ) : null}
-                      {a.examples.length > 0 ? <div className="mt-2">
-                        <ViewExampleButton
+                      <div className="mt-2">
+                        <MediaBadges
                           item={a}
-                          onOpen={() => setExampleItem(a)}
+                          onOpen={(group) => setExampleViewer({ item: a, group })}
                         />
-                      </div> : null}
+                      </div>
                     </div>
                   </article>
                 </li>
@@ -424,11 +429,12 @@ export default function PackageAccordion({
         </section>
       ) : null}
 
-      {exampleItem ? (
+      {exampleViewer ? (
         <ExampleViewer
-          key={exampleItem.id}
-          item={exampleItem}
-          onClose={() => setExampleItem(null)}
+          key={`${exampleViewer.item.id}:${exampleViewer.group.key}`}
+          item={exampleViewer.item}
+          group={exampleViewer.group}
+          onClose={() => setExampleViewer(null)}
         />
       ) : null}
 
@@ -449,45 +455,23 @@ export default function PackageAccordion({
   );
 }
 
-function ViewExampleButton({
-  item,
-  onOpen,
-}: {
-  item: CatalogItemDTO;
-  onOpen: () => void;
-}) {
-  if (item.examples.length === 0) return null;
-  return (
-    <button
-      type="button"
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onOpen();
-      }}
-      onKeyDown={(event) => event.stopPropagation()}
-      className="tap-target inline-flex items-center gap-1 rounded-full border border-realtor-primary/25 bg-white px-2.5 py-1 text-[11px] font-semibold text-realtor-primary transition hover:border-realtor-primary/50 hover:bg-realtor-primary/5"
-    >
-      <span aria-hidden="true">▶</span>
-      {item.examples.length === 1 ? "View example" : "View examples"}
-    </button>
-  );
-}
-
 function ExampleViewer({
   item,
+  group,
   onClose,
 }: {
   item: CatalogItemDTO;
+  group: CatalogSampleGroup;
   onClose: () => void;
 }) {
+  const examples = group.examples;
   const modalRef = useRef<HTMLDialogElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
-  const [selectedId, setSelectedId] = useState(item.examples[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState(examples[0]?.id ?? "");
   const selected =
-    item.examples.find((example) => example.id === selectedId) ?? item.examples[0];
+    examples.find((example) => example.id === selectedId) ?? examples[0];
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -580,9 +564,9 @@ function ExampleViewer({
           </button>
         </div>
 
-        {item.examples.length > 1 ? (
+        {examples.length > 1 ? (
           <div className="mt-4 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Available examples">
-            {item.examples.map((example) => (
+            {examples.map((example) => (
               <button
                 key={example.id}
                 id={`catalog-example-tab-${example.id}`}
@@ -593,15 +577,15 @@ function ExampleViewer({
                 tabIndex={example.id === selected.id ? 0 : -1}
                 onClick={() => setSelectedId(example.id)}
                 onKeyDown={(event) => {
-                  const current = item.examples.findIndex((candidate) => candidate.id === example.id);
+                  const current = examples.findIndex((candidate) => candidate.id === example.id);
                   let next = current;
-                  if (event.key === "ArrowRight") next = (current + 1) % item.examples.length;
-                  else if (event.key === "ArrowLeft") next = (current - 1 + item.examples.length) % item.examples.length;
+                  if (event.key === "ArrowRight") next = (current + 1) % examples.length;
+                  else if (event.key === "ArrowLeft") next = (current - 1 + examples.length) % examples.length;
                   else if (event.key === "Home") next = 0;
-                  else if (event.key === "End") next = item.examples.length - 1;
+                  else if (event.key === "End") next = examples.length - 1;
                   else return;
                   event.preventDefault();
-                  const nextExample = item.examples[next];
+                  const nextExample = examples[next];
                   if (!nextExample) return;
                   setSelectedId(nextExample.id);
                   requestAnimationFrame(() => {
@@ -621,7 +605,7 @@ function ExampleViewer({
           </div>
         ) : null}
 
-        <ExampleFrame example={selected} hasTabs={item.examples.length > 1} />
+        <ExampleFrame example={selected} hasTabs={examples.length > 1} />
       </section>
     </dialog>
   );
@@ -709,33 +693,42 @@ function trustedExampleEmbed(raw: string): boolean {
 
 function MediaBadges({
   item,
-  inverted = false,
+  onOpen,
 }: {
   item: CatalogItemDTO;
-  inverted?: boolean;
+  onOpen: (group: CatalogSampleGroup) => void;
 }) {
-  const badges = [
-    item.is_photo ? "Photos" : null,
-    item.is_video ? "Video" : null,
-  ].filter((badge): badge is string => Boolean(badge));
-  if (badges.length === 0) return null;
+  const groups = getCatalogSampleGroups(item);
+  if (groups.length === 0) return null;
 
   return (
-    <span className="flex flex-wrap gap-1.5">
-      {badges.map((badge) => (
-        <span
-          key={badge}
-          className={
-            "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider " +
-            (inverted
-              ? "border-white/25 bg-white/10 text-white/82"
-              : "border-realtor-primary/25 bg-white text-realtor-primary")
-          }
+    <div className="flex flex-wrap gap-1.5">
+      {groups.map((group) => group.examples.length > 0 ? (
+        <button
+          key={group.key}
+          type="button"
+          aria-label={`View ${group.examples.length} ${group.label} ${group.examples.length === 1 ? "sample" : "samples"} for ${item.name}`}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onOpen(group);
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+          className="tap-target inline-flex items-center gap-1 rounded-full border border-realtor-primary/35 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary transition hover:border-realtor-primary/60 hover:bg-realtor-primary/5 focus:outline-none focus:ring-2 focus:ring-realtor-primary/35"
         >
-          {badge}
+          <span aria-hidden="true">▶</span>
+          <span>{group.label}</span>
+          {group.examples.length > 1 ? <span aria-hidden="true">· {group.examples.length}</span> : null}
+        </button>
+      ) : (
+        <span
+          key={group.key}
+          className="rounded-full border border-realtor-primary/25 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary"
+        >
+          {group.label}
         </span>
       ))}
-    </span>
+    </div>
   );
 }
 

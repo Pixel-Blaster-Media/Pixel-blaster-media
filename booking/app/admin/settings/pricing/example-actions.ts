@@ -6,6 +6,7 @@ import {
   deleteStreamVideo,
   parseExampleUrl,
 } from "@/lib/booking/catalog-examples-core";
+import { normalizeCatalogSampleGroupInput } from "@/lib/booking/catalog-sample-groups";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
@@ -22,12 +23,17 @@ export async function attachCatalogExample(formData: FormData): Promise<ExampleA
   const title = text(formData, "title");
   const description = text(formData, "description");
   const kind = text(formData, "kind");
+  const sampleGroup = normalizeCatalogSampleGroupInput(
+    text(formData, "sample_group"),
+    text(formData, "custom_sample_group_label"),
+  );
   const externalUrl = parseExampleUrl(text(formData, "external_url"));
 
   if (!catalogItemId) return { ok: false, error: "Choose a service." };
   if (!title || title.length > 120) return { ok: false, error: "Example title must be 1–120 characters." };
   if (description.length > 500) return { ok: false, error: "Description must be 500 characters or fewer." };
   if (!KINDS.has(kind)) return { ok: false, error: "Choose a valid example type." };
+  if (!sampleGroup) return { ok: false, error: "Choose where this sample should appear." };
   if (!externalUrl) return { ok: false, error: "Enter a valid HTTPS example URL." };
 
   const supabase = getServiceSupabase();
@@ -40,6 +46,8 @@ export async function attachCatalogExample(formData: FormData): Promise<ExampleA
       p_description: description || null,
       p_kind: kind,
       p_external_url: externalUrl,
+      p_sample_group_key: sampleGroup.key,
+      p_sample_group_label: sampleGroup.label,
     },
   );
   if (error || !attachedId) {
