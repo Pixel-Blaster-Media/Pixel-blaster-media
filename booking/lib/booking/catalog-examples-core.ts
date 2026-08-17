@@ -166,33 +166,45 @@ export async function findStreamVideosByClaimIds(
       range?: unknown;
       total?: unknown;
     };
+    const legacyVideos = Array.isArray(envelope.result) ? envelope.result : null;
+    const currentResult = (
+      envelope.result &&
+      typeof envelope.result === "object" &&
+      !Array.isArray(envelope.result)
+    )
+      ? envelope.result as { videos?: unknown; range?: unknown; total?: unknown }
+      : null;
+    const currentVideos = Array.isArray(currentResult?.videos) ? currentResult.videos : null;
+    const videos = legacyVideos ?? currentVideos;
     const info = envelope.result_info;
     const hasLegacyCounts = Boolean(
       info &&
+      legacyVideos &&
       info.page === 1 &&
       info.per_page === 2 &&
-      info.count === (Array.isArray(envelope.result) ? envelope.result.length : -1) &&
-      info.total_count === (Array.isArray(envelope.result) ? envelope.result.length : -1) &&
+      info.count === legacyVideos.length &&
+      info.total_count === legacyVideos.length &&
       (info.total_pages === 0 || info.total_pages === 1),
     );
     const hasCurrentCounts = Boolean(
-      Array.isArray(envelope.result) &&
-      envelope.range === envelope.result.length &&
-      envelope.total === envelope.result.length,
+      currentResult &&
+      currentVideos &&
+      currentResult.range === currentVideos.length &&
+      currentResult.total === currentVideos.length,
     );
     if (
       envelope.success !== true ||
-      !Array.isArray(envelope.result) ||
-      envelope.result.length > 1 ||
+      !videos ||
+      videos.length > 1 ||
       (!hasLegacyCounts && !hasCurrentCounts)
     ) {
       throw new Error("Cloudflare Stream inventory was invalid.");
     }
-    if (envelope.result.length === 0) {
+    if (videos.length === 0) {
       absent.add(claimId);
       continue;
     }
-    const entry = envelope.result[0];
+    const entry = videos[0];
     if (!entry || typeof entry !== "object") throw new Error("Cloudflare Stream inventory was invalid.");
     const video = entry as { uid?: unknown; creator?: unknown; meta?: { catalogUploadClaimId?: unknown } };
     if (

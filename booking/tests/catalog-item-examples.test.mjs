@@ -134,9 +134,29 @@ test("Cloudflare Stream direct upload fails closed and returns only a bounded up
       CLOUDFLARE_STREAM_ACCOUNT_ID: "0123456789abcdef0123456789abcdef",
       CLOUDFLARE_STREAM_API_TOKEN: "secret-token",
     },
-    async () => new Response(JSON.stringify({ success: true, result: [], range: 0, total: 0 }), { status: 200 }),
+    async () => new Response(JSON.stringify({
+      success: true,
+      result: { videos: [], range: 0, total: 0 },
+      errors: [],
+      messages: [],
+    }), { status: 200 }),
   );
   assert.equal(currentInventory.absent.has("ffffffff-ffff-4fff-8fff-ffffffffffff"), true);
+  await assert.rejects(
+    core.findStreamVideosByClaimIds(
+      ["abababab-abab-4bab-8bab-abababababab"],
+      {
+        CLOUDFLARE_STREAM_ACCOUNT_ID: "0123456789abcdef0123456789abcdef",
+        CLOUDFLARE_STREAM_API_TOKEN: "secret-token",
+      },
+      async () => new Response(JSON.stringify({
+        success: true,
+        result: { videos: [] },
+        result_info: { count: 0, page: 1, per_page: 2, total_count: 0, total_pages: 0 },
+      }), { status: 200 }),
+    ),
+    /inventory was invalid/i,
+  );
   await assert.rejects(
     core.createStreamDirectUpload({
       env: {
