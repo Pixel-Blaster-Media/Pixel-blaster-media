@@ -548,7 +548,7 @@ function ExampleViewer({
         event.preventDefault();
         onClose();
       }}
-      className="fixed inset-0 m-0 h-full max-h-none w-full max-w-none items-end justify-center bg-transparent p-0 open:flex backdrop:bg-realtor-text/55 backdrop:backdrop-blur-sm sm:items-center sm:p-5"
+      className="fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none items-end justify-center bg-transparent p-0 open:flex backdrop:bg-realtor-text/55 backdrop:backdrop-blur-sm sm:items-center sm:p-5"
       onMouseDown={(event) => {
         if (event.currentTarget === event.target) onClose();
       }}
@@ -556,7 +556,7 @@ function ExampleViewer({
       <section
         ref={dialogRef}
         tabIndex={-1}
-        className="max-h-[92dvh] w-full overflow-y-auto rounded-t-[1.75rem] bg-realtor-surface p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl sm:max-w-3xl sm:rounded-[1.75rem] sm:p-5"
+        className="max-h-[92dvh] w-full overscroll-contain overflow-y-auto rounded-t-[1.75rem] bg-realtor-surface p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl sm:max-w-3xl sm:rounded-[1.75rem] sm:p-5"
       >
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
