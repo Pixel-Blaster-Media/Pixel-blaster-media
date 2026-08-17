@@ -4,14 +4,28 @@ Vercel deployments are billable for this project. Minimize them without weakenin
 
 ## Booking app (`pixel-blaster-media`)
 
-- Vercel root directory: `booking/`
-- Automatic Git deployments: production branch `main` only
-- Feature-branch preview deployments: disabled by default
-- Affected-project filtering: enabled in Vercel project settings
-- Expected deployment count for normal backend/config work: **one production deployment after merge**
-- Create a preview manually only when browser QA of unreleased UI is materially useful
+- **Canonical Realtor-facing Vercel project:** `pixel-blaster-media` (`prj_QmEJtyuVnVhXILDCJiTPbZr2EdT5`).
+- Vercel root directory: `booking/`.
+- `pixelblastermedia.com` and `www.pixelblastermedia.com` proxy `/book`, `/portal`, `/auth`, `/admin`, and `/api` to this project through the static website's `vercel.json`.
+- The newer Vercel project named `booking` is noncanonical and must never be used for production releases or environment configuration.
+- Automatic Git deployments: production branch `main` only.
+- Feature-branch preview deployments: disabled by default.
+- Affected-project filtering: enabled in Vercel project settings.
+- Expected deployment count for normal backend/config work: **one production deployment after merge**.
+- Create a preview manually only when browser QA of unreleased UI is materially useful.
 
 Run local tests, TypeScript, lint, and a production build before merging. Batch related changes into one reviewed PR.
+
+For a manual production deployment, link the **repository root** to the canonical project and use the fail-closed release command:
+
+```bash
+cd /path/to/pixel-booking-canonical
+vercel link --yes --project pixel-blaster-media
+booking/scripts/deploy-production.sh --check-only
+booking/scripts/deploy-production.sh
+```
+
+The script refuses to deploy unless the root link has the canonical project ID, Vercel reports Root Directory `booking`, the tree is clean, and `HEAD` exactly matches `origin/main`. Do not run `vercel --prod` directly from `booking/`.
 
 ## Static website (`pixel-blaster-media-website`)
 
