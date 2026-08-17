@@ -221,6 +221,15 @@ export default function CatalogItemEditor({
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
+                  name="require_has_iguide"
+                  defaultChecked={item.require_has_iguide}
+                  className="h-4 w-4 accent-realtor-primary"
+                />
+                <span>Only show when iGUIDE is selected</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
                   name="exclude_has_aerial"
                   defaultChecked={item.exclude_has_aerial}
                   className="h-4 w-4 accent-realtor-primary"

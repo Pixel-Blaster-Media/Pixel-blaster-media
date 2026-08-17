@@ -113,6 +113,7 @@ interface CatalogItemOption {
   isAerial: boolean;
   requireHasVideo: boolean;
   requireHasMedia: boolean;
+  requireHasIGuide: boolean;
   excludeHasAerial: boolean;
   sqftPricingEnabled: boolean;
   includedSqft: number | null;
@@ -2861,6 +2862,7 @@ function CalendarQuickCatalogPicker({
                         {catalogItem.requireHasMedia
                           ? " · needs photos, iGUIDE, or video"
                           : ""}
+                        {catalogItem.requireHasIGuide ? " · needs iGUIDE" : ""}
                         {catalogItem.excludeHasAerial
                           ? " · only when aerial is not included"
                           : ""}
@@ -2916,6 +2918,7 @@ function catalogOptionRuleItem(item: CatalogItemOption): CatalogRuleItem {
     is_aerial: item.isAerial,
     require_has_video: item.requireHasVideo,
     require_has_media: item.requireHasMedia,
+    require_has_iguide: item.requireHasIGuide,
     exclude_has_aerial: item.excludeHasAerial,
   };
 }

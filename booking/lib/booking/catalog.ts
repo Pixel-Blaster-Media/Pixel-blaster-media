@@ -3,7 +3,7 @@ import "server-only";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
-import { addonEligibilityError } from "@/lib/booking/catalog-rules";
+import { catalogAddonEligibilityMessage } from "@/lib/booking/catalog-rules";
 
 export type CatalogItemRow =
   Database["public"]["Tables"]["catalog_items"]["Row"];
@@ -173,19 +173,11 @@ export function validateCart(
 
   for (const { row } of items) {
     if (row.kind !== "addon") continue;
-    const eligibilityError = addonEligibilityError(
+    const message = catalogAddonEligibilityMessage(
       row,
       nonAddon.map((item) => item.row),
     );
-    if (eligibilityError === "requires_video") {
-      return `"${row.name}" requires a video package or à la carte item.`;
-    }
-    if (eligibilityError === "requires_media") {
-      return `"${row.name}" requires photos, iGUIDE, or video.`;
-    }
-    if (eligibilityError === "already_has_aerial") {
-      return `"${row.name}" cannot be added because aerial coverage is already included.`;
-    }
+    if (message) return message;
   }
 
   return null;

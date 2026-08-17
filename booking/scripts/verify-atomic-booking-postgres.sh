@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export LC_ALL=C
 
 if [[ -n "${POSTGRES_BIN:-}" ]]; then
   PG_BIN="$POSTGRES_BIN"
@@ -21,8 +22,8 @@ if ! "$PG_BIN/postgres" --version | /usr/bin/grep -Eq 'PostgreSQL\) 17\.'; then
   exit 1
 fi
 
-TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pixel-booking-pg-test.XXXXXX")"
-PORT="$((55000 + ($$ % 1000)))"
+TMP_DIR="$(mktemp -d "/tmp/pixel-booking-pg-test.XXXXXX")"
+PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
 STARTED=0
 cleanup() {
   if [[ "$STARTED" == 1 ]]; then
@@ -42,8 +43,10 @@ PSQL=("$PG_BIN/psql" -X -v ON_ERROR_STOP=1 -h "$TMP_DIR" -p "$PORT" -U postgres 
 "${PSQL[@]}" -f "$ROOT/supabase/migrations/20260719124500_integration_outbox_recovery_reconciliation.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/supabase/migrations/20260720120000_beta_company_invitations.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/supabase/migrations/20260810173824_aerial_addon_catalog_rules.sql" >/dev/null
+"${PSQL[@]}" -f "$ROOT/supabase/migrations/20260817130000_site_plan_addon.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/tests/postgres/atomic-booking-outbox.behavior.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/tests/postgres/beta-company-invitations.behavior.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/tests/postgres/aerial-addon-catalog.behavior.sql" >/dev/null
+"${PSQL[@]}" -f "$ROOT/tests/postgres/site-plan-addon.behavior.sql" >/dev/null
 
 echo "Atomic booking PostgreSQL behavior suite passed."

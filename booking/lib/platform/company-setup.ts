@@ -570,6 +570,7 @@ async function copyStarterCatalog(
       is_aerial: item.is_aerial,
       require_has_video: item.require_has_video,
       require_has_media: item.require_has_media,
+      require_has_iguide: item.require_has_iguide,
       exclude_has_aerial: item.exclude_has_aerial,
       badge: item.badge,
       highlight: item.highlight,

@@ -285,6 +285,7 @@ export default async function BookStep4Page({
             is_aerial: item.is_aerial,
             require_has_video: item.require_has_video,
             require_has_media: item.require_has_media,
+            require_has_iguide: item.require_has_iguide,
             exclude_has_aerial: item.exclude_has_aerial,
           }),
         )}

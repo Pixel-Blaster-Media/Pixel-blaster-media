@@ -639,6 +639,7 @@ interface CatalogItemsTable {
     is_aerial: boolean;
     require_has_video: boolean;
     require_has_media: boolean;
+    require_has_iguide: boolean;
     exclude_has_aerial: boolean;
     badge: string | null;
     highlight: boolean;
@@ -668,6 +669,7 @@ interface CatalogItemsTable {
     is_aerial?: boolean;
     require_has_video?: boolean;
     require_has_media?: boolean;
+    require_has_iguide?: boolean;
     exclude_has_aerial?: boolean;
     badge?: string | null;
     highlight?: boolean;

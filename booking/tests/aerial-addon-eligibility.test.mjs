@@ -14,6 +14,7 @@ const capability = (overrides = {}) => ({
   is_aerial: false,
   require_has_video: false,
   require_has_media: false,
+  require_has_iguide: false,
   exclude_has_aerial: false,
   ...overrides,
 });
@@ -73,6 +74,29 @@ test("video-only add-ons continue to use the same fail-closed helper", () => {
   );
 });
 
+test("iGUIDE-only add-ons require a selected iGUIDE service", () => {
+  const sitePlan = capability({ require_has_iguide: true });
+
+  for (const service of [
+    capability({ is_photo: true }),
+    capability({ is_video: true }),
+    capability({ is_aerial: true }),
+  ]) {
+    assert.equal(
+      isCatalogAddonEligible(sitePlan, getSelectedServiceCapabilities([service])),
+      false,
+    );
+  }
+
+  assert.equal(
+    isCatalogAddonEligible(
+      sitePlan,
+      getSelectedServiceCapabilities([capability({ is_iguide: true })]),
+    ),
+    true,
+  );
+});
+
 test("catalog capability fields cross every booking and company-cloning boundary", async () => {
   const [
     dto,
@@ -126,6 +150,7 @@ test("catalog capability fields cross every booking and company-cloning boundary
     "is_iguide",
     "is_aerial",
     "require_has_media",
+    "require_has_iguide",
     "exclude_has_aerial",
   ]) {
     for (const [boundary, source] of Object.entries({
@@ -161,9 +186,12 @@ test("catalog capability fields cross every booking and company-cloning boundary
   assert.match(companySetup, /is_iguide:\s*item\.is_iguide/);
   assert.match(companySetup, /is_aerial:\s*item\.is_aerial/);
   assert.match(companySetup, /require_has_media:\s*item\.require_has_media/);
+  assert.match(companySetup, /require_has_iguide:\s*item\.require_has_iguide/);
   assert.match(companySetup, /exclude_has_aerial:\s*item\.exclude_has_aerial/);
   assert.match(postgresRunner, /20260810173824_aerial_addon_catalog_rules\.sql/);
+  assert.match(postgresRunner, /20260817130000_site_plan_addon\.sql/);
   assert.match(postgresRunner, /aerial-addon-catalog\.behavior\.sql/);
+  assert.match(postgresRunner, /site-plan-addon\.behavior\.sql/);
   assert.match(postgresBehavior, /sqlstate 'PB002'/i);
   assert.match(postgresBehavior, /committed request did not replay/i);
   assert.match(postgresBehavior, /has_function_privilege/i);
