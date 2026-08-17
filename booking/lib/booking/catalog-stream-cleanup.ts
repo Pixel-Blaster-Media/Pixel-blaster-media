@@ -91,6 +91,16 @@ export async function runCatalogStreamCleanup(): Promise<CatalogStreamCleanupRes
 
   const outcomes = await Promise.all((claims ?? []).map(async (claim) => {
     if (claim.example_id) {
+      const { count: sharedUsageCount, error: sharedUsageError } = await supabase
+        .from("catalog_item_example_placements")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", claim.organization_id)
+        .eq("source_example_id", claim.example_id);
+      if (sharedUsageError || (sharedUsageCount ?? 0) > 0) {
+        await deferCleanup(claim.id, claim.organization_id);
+        return false;
+      }
+
       const { data: hidden, error: hideError } = await supabase
         .from("catalog_item_examples")
         .update({ active: false, status: "deleting" })

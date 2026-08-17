@@ -39,12 +39,25 @@ create role authenticated nologin;
 create role service_role nologin bypassrls;
 create table public.organizations (
   id uuid primary key,
-  name text not null
+  name text not null,
+  slug text unique
 );
 create table public.catalog_items (
   id uuid primary key,
   organization_id uuid not null references public.organizations(id) on delete cascade,
-  name text not null
+  slug text,
+  name text not null,
+  description text not null default '',
+  kind text not null default 'bundle',
+  active boolean not null default true,
+  taxable boolean not null default true,
+  display_order integer not null default 0,
+  is_photo boolean not null default false,
+  is_video boolean not null default false,
+  require_has_video boolean not null default false,
+  duration_minutes integer not null default 0,
+  price_cents integer not null default 0,
+  unique (organization_id, slug)
 );
 grant select on table public.organizations, public.catalog_items to service_role;
 SQL
@@ -60,4 +73,15 @@ printf '\\set ON_ERROR_STOP on\nbegin;\n\\ir %s\ncommit;\n' "$MIGRATION" > "$TMP
 "${PSQL[@]}" -f "$TMP_DIR/apply.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/tests/postgres/catalog-item-examples.behavior.sql" >/dev/null
 
-echo "Catalog item examples PostgreSQL 17 schema, tenant boundary, privilege, constraint, rollback, and restricted-deletion suite passed."
+SHARED_MIGRATION="$ROOT/supabase/migrations/20260817143000_shared_catalog_video_placements.sql"
+printf '\\set ON_ERROR_STOP on\nbegin;\n\\ir %s\nrollback;\n' "$SHARED_MIGRATION" > "$TMP_DIR/shared-rollback-proof.sql"
+"${PSQL[@]}" -f "$TMP_DIR/shared-rollback-proof.sql" >/dev/null
+if [[ "$("${PSQL[@]}" -Atc "select to_regclass('public.catalog_item_example_placements') is null")" != "t" ]]; then
+  echo "Rollback proof left shared catalog video schema residue." >&2
+  exit 1
+fi
+printf '\\set ON_ERROR_STOP on\nbegin;\n\\ir %s\ncommit;\n' "$SHARED_MIGRATION" > "$TMP_DIR/shared-apply.sql"
+"${PSQL[@]}" -f "$TMP_DIR/shared-apply.sql" >/dev/null
+"${PSQL[@]}" -f "$ROOT/tests/postgres/shared-catalog-videos.behavior.sql" >/dev/null
+
+echo "Catalog item examples and shared video placements PostgreSQL 17 suites passed."

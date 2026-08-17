@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 
 import {
   deleteStreamVideo,
-  nextExampleDisplayOrder,
   parseExampleUrl,
 } from "@/lib/booking/catalog-examples-core";
 import { requireAdmin } from "@/lib/auth/require-admin";
@@ -32,36 +31,93 @@ export async function attachCatalogExample(formData: FormData): Promise<ExampleA
   if (!externalUrl) return { ok: false, error: "Enter a valid HTTPS example URL." };
 
   const supabase = getServiceSupabase();
-  const { data: item, error: itemError } = await supabase
-    .from("catalog_items")
+  const { data: attachedId, error } = await supabase.rpc(
+    "attach_external_catalog_example",
+    {
+      p_organization_id: admin.organizationId,
+      p_catalog_item_id: catalogItemId,
+      p_title: title,
+      p_description: description || null,
+      p_kind: kind,
+      p_external_url: externalUrl,
+    },
+  );
+  if (error || !attachedId) {
+    return { ok: false, error: "Could not attach the example. The service may already have eight examples." };
+  }
+
+  revalidatePath("/admin/settings/pricing");
+  revalidatePath("/book");
+  return { ok: true };
+}
+
+export async function attachSharedCatalogVideo(formData: FormData): Promise<ExampleActionResult> {
+  const admin = await requireAdmin();
+  const catalogItemId = text(formData, "catalog_item_id");
+  const sourceExampleId = text(formData, "source_example_id");
+  const title = text(formData, "title");
+  const description = text(formData, "description");
+  if (!catalogItemId || !sourceExampleId) return { ok: false, error: "Choose a reusable video." };
+  if (!title || title.length > 120) return { ok: false, error: "Example title must be 1–120 characters." };
+  if (description.length > 500) return { ok: false, error: "Description must be 500 characters or fewer." };
+
+  const supabase = getServiceSupabase();
+  const [{ data: source, error: sourceError }, { data: target, error: targetError }] = await Promise.all([
+    supabase
+      .from("catalog_item_examples")
+      .select("id, catalog_item_id")
+      .eq("organization_id", admin.organizationId)
+      .eq("id", sourceExampleId)
+      .eq("source_type", "cloudflare_stream")
+      .eq("status", "ready")
+      .eq("active", true)
+      .maybeSingle(),
+    supabase
+      .from("catalog_items")
+      .select("id")
+      .eq("organization_id", admin.organizationId)
+      .eq("id", catalogItemId)
+      .maybeSingle(),
+  ]);
+  if (sourceError || targetError || !source || !target || source.catalog_item_id === catalogItemId) {
+    return { ok: false, error: "That reusable video is unavailable for this service." };
+  }
+
+  const { data: placementId, error } = await supabase.rpc(
+    "attach_shared_catalog_stream_example",
+    {
+      p_organization_id: admin.organizationId,
+      p_catalog_item_id: catalogItemId,
+      p_source_example_id: sourceExampleId,
+      p_title: title,
+      p_description: description || null,
+    },
+  );
+  if (error || !placementId) {
+    return { ok: false, error: "Could not reuse the video. It may already be attached or the service may have eight examples." };
+  }
+  revalidatePath("/admin/settings/pricing");
+  revalidatePath("/book");
+  return { ok: true };
+}
+
+export async function removeSharedCatalogVideoPlacement(id: string): Promise<ExampleActionResult> {
+  const admin = await requireAdmin();
+  if (!id) return { ok: false, error: "Missing shared placement." };
+  const supabase = getServiceSupabase();
+  const { data: placement, error: readError } = await supabase
+    .from("catalog_item_example_placements")
     .select("id")
     .eq("organization_id", admin.organizationId)
-    .eq("id", catalogItemId)
+    .eq("id", id)
     .maybeSingle();
-  if (itemError || !item) return { ok: false, error: "That service is unavailable." };
+  if (readError || !placement) return { ok: false, error: "Shared placement not found." };
 
-  const { data: existing, error: existingError } = await supabase
-    .from("catalog_item_examples")
-    .select("display_order")
-    .eq("organization_id", admin.organizationId)
-    .eq("catalog_item_id", catalogItemId);
-  if (existingError) return { ok: false, error: "Could not inspect existing examples." };
-  const displayOrder = nextExampleDisplayOrder(existing ?? []);
-  if (displayOrder === null) return { ok: false, error: "A service can have up to eight examples." };
-
-  const { error } = await supabase.from("catalog_item_examples").insert({
-    organization_id: admin.organizationId,
-    catalog_item_id: catalogItemId,
-    title,
-    description: description || null,
-    kind: kind as "video" | "interactive" | "link",
-    source_type: "external_url",
-    external_url: externalUrl,
-    status: "ready",
-    display_order: displayOrder,
-  });
-  if (error) return { ok: false, error: "Could not attach the example." };
-
+  const { data: removed, error } = await supabase.rpc(
+    "remove_shared_catalog_stream_placement",
+    { p_organization_id: admin.organizationId, p_placement_id: id },
+  );
+  if (error || removed !== true) return { ok: false, error: "Could not unlink the shared video." };
   revalidatePath("/admin/settings/pricing");
   revalidatePath("/book");
   return { ok: true };
@@ -81,6 +137,19 @@ export async function deleteCatalogExample(id: string): Promise<ExampleActionRes
   if (readError || !example) return { ok: false, error: "Example not found." };
 
   if (example.source_type === "cloudflare_stream" && example.stream_uid) {
+    const { count: sharedUsageCount, error: usageError } = await supabase
+      .from("catalog_item_example_placements")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", admin.organizationId)
+      .eq("source_example_id", id);
+    if (usageError) return { ok: false, error: "Could not inspect where this video is used." };
+    if ((sharedUsageCount ?? 0) > 0) {
+      return {
+        ok: false,
+        error: `This video is used in ${sharedUsageCount} other ${sharedUsageCount === 1 ? "service" : "services"}. Unlink those shared placements before deleting it everywhere.`,
+      };
+    }
+
     const { data: deletionUid, error: transitionError } = await supabase.rpc(
       "begin_catalog_stream_example_deletion",
       {
