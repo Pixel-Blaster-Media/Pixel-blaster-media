@@ -135,6 +135,7 @@ function toDTO(
     is_aerial: r.is_aerial,
     require_has_video: r.require_has_video,
     require_has_media: r.require_has_media,
+    require_has_iguide: r.require_has_iguide,
     exclude_has_aerial: r.exclude_has_aerial,
     display_order: r.display_order,
     badge: r.badge,

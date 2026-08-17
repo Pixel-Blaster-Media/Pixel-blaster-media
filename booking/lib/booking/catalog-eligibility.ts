@@ -5,12 +5,14 @@ export interface CatalogCapabilityFlags {
   is_aerial: boolean;
   require_has_video: boolean;
   require_has_media: boolean;
+  require_has_iguide: boolean;
   exclude_has_aerial: boolean;
 }
 
 export interface SelectedServiceCapabilities {
   hasVideo: boolean;
   hasMedia: boolean;
+  hasIGuide: boolean;
   hasAerial: boolean;
 }
 
@@ -23,6 +25,7 @@ export function getSelectedServiceCapabilities(
     hasMedia: services.some(
       (item) => item.is_photo || item.is_video || item.is_iguide,
     ),
+    hasIGuide: services.some((item) => item.is_iguide),
     hasAerial: services.some((item) => item.is_aerial),
   };
 }
@@ -34,6 +37,7 @@ export function isCatalogAddonEligible(
 ): boolean {
   if (addon.require_has_video && !selected.hasVideo) return false;
   if (addon.require_has_media && !selected.hasMedia) return false;
+  if (addon.require_has_iguide && !selected.hasIGuide) return false;
   if (addon.exclude_has_aerial && selected.hasAerial) return false;
   return true;
 }

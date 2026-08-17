@@ -26,6 +26,7 @@ export interface CatalogItemDTO {
   is_aerial: boolean;
   require_has_video: boolean;
   require_has_media: boolean;
+  require_has_iguide: boolean;
   exclude_has_aerial: boolean;
   display_order: number;
   badge: string | null;

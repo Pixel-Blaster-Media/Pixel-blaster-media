@@ -10,7 +10,11 @@ const rulesModule = await tsImport(
   "../lib/booking/catalog-rules.ts",
   import.meta.url,
 );
-const { addonEligibilityError, isAddonEligible } = rulesModule.default;
+const {
+  addonEligibilityError,
+  catalogAddonEligibilityMessage,
+  isAddonEligible,
+} = rulesModule.default;
 
 function item(overrides = {}) {
   return {
@@ -21,6 +25,7 @@ function item(overrides = {}) {
     is_aerial: false,
     require_has_video: false,
     require_has_media: false,
+    require_has_iguide: false,
     exclude_has_aerial: false,
     ...overrides,
   };
@@ -50,6 +55,29 @@ test("aerial add-on is hidden without media or when aerial is included", () => {
       item({ is_photo: true, is_aerial: true }),
     ]),
     "already_has_aerial",
+  );
+});
+
+test("site plan is eligible only when iGUIDE is selected", () => {
+  const sitePlan = item({ kind: "addon", require_has_iguide: true });
+
+  assert.equal(addonEligibilityError(sitePlan, [item({ is_photo: true })]), "requires_iguide");
+  assert.equal(addonEligibilityError(sitePlan, [item({ is_video: true })]), "requires_iguide");
+  assert.equal(addonEligibilityError(sitePlan, [item({ is_iguide: true })]), null);
+  assert.equal(isAddonEligible(sitePlan, [item({ is_iguide: true })]), true);
+});
+
+test("cart validation explains that Site Plan requires iGUIDE", () => {
+  const photos = item({ is_photo: true });
+  const sitePlan = {
+    name: "Site Plan",
+    ...item({ kind: "addon", require_has_iguide: true }),
+  };
+
+  assert.equal(typeof catalogAddonEligibilityMessage, "function");
+  assert.equal(
+    catalogAddonEligibilityMessage(sitePlan, [photos]),
+    '"Site Plan" requires an iGUIDE package or à la carte item.',
   );
 });
 

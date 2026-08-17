@@ -43,6 +43,7 @@ type BookingCatalogItem = Pick<
   | "is_aerial"
   | "require_has_video"
   | "require_has_media"
+  | "require_has_iguide"
   | "exclude_has_aerial"
 >;
 
@@ -246,6 +247,7 @@ export async function createPublicBooking(
         is_aerial: false,
         require_has_video: false,
         require_has_media: false,
+        require_has_iguide: false,
         exclude_has_aerial: false,
       };
     };

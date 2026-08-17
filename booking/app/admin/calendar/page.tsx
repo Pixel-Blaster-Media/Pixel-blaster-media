@@ -134,6 +134,7 @@ interface CatalogItemOption {
   isAerial: boolean;
   requireHasVideo: boolean;
   requireHasMedia: boolean;
+  requireHasIGuide: boolean;
   excludeHasAerial: boolean;
   sqftPricingEnabled: boolean;
   includedSqft: number | null;
@@ -725,6 +726,7 @@ function catalogToOptions(
       isAerial: item.is_aerial,
       requireHasVideo: item.require_has_video,
       requireHasMedia: item.require_has_media,
+      requireHasIGuide: item.require_has_iguide,
       excludeHasAerial: item.exclude_has_aerial,
       sqftPricingEnabled: item.sqft_pricing_enabled,
       includedSqft: item.included_sqft,

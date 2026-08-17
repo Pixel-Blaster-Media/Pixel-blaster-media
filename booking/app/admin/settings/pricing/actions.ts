@@ -113,6 +113,8 @@ export async function createCatalogItem(
       kind === "addon" && formData.get("require_has_video") === "on",
     require_has_media:
       kind === "addon" && formData.get("require_has_media") === "on",
+    require_has_iguide:
+      kind === "addon" && formData.get("require_has_iguide") === "on",
     exclude_has_aerial:
       kind === "addon" && formData.get("exclude_has_aerial") === "on",
   };
@@ -183,6 +185,8 @@ export async function updateCatalogItem(
       kind === "addon" && formData.get("require_has_video") === "on",
     require_has_media:
       kind === "addon" && formData.get("require_has_media") === "on",
+    require_has_iguide:
+      kind === "addon" && formData.get("require_has_iguide") === "on",
     exclude_has_aerial:
       kind === "addon" && formData.get("exclude_has_aerial") === "on",
   };

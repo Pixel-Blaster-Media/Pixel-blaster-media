@@ -232,6 +232,14 @@ export default function NewItemForm({ kind }: { kind: CatalogItemKind }) {
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
+                name="require_has_iguide"
+                className="h-4 w-4 accent-realtor-primary"
+              />
+              <span>Only when iGUIDE is selected</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
                 name="exclude_has_aerial"
                 className="h-4 w-4 accent-realtor-primary"
               />
