@@ -245,8 +245,8 @@ test("catalog examples cross schema, admin, public booking, and SaaS cloning bou
   assert.match(page, /getActiveCatalogExamples/);
   assert.match(picker, /ViewExampleButton/);
   assert.match(picker, /role="dialog"/);
-  assert.match(picker, /className="fixed inset-0 m-0 h-dvh max-h-none/);
-  assert.doesNotMatch(picker, /className="fixed inset-0 m-0 h-full max-h-none/);
+  assert.match(picker, /className="fixed inset-0 !m-0 h-dvh max-h-none/);
+  assert.doesNotMatch(picker, /className="fixed inset-0 m-0 h-dvh max-h-none/);
   assert.match(picker, /max-h-\[92dvh\][^"]*overscroll-contain/);
   assert.match(picker, /event\.stopPropagation\(\)/);
   assert.match(picker, /previousFocusRef/);

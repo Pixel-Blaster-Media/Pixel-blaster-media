@@ -548,7 +548,7 @@ function ExampleViewer({
         event.preventDefault();
         onClose();
       }}
-      className="fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none items-end justify-center bg-transparent p-0 open:flex backdrop:bg-realtor-text/55 backdrop:backdrop-blur-sm sm:items-center sm:p-5"
+      className="fixed inset-0 !m-0 h-dvh max-h-none w-full max-w-none items-end justify-center bg-transparent p-0 open:flex backdrop:bg-realtor-text/55 backdrop:backdrop-blur-sm sm:items-center sm:p-5"
       onMouseDown={(event) => {
         if (event.currentTarget === event.target) onClose();
       }}
