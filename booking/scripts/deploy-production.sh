@@ -29,7 +29,7 @@ actual_project_name="$(node -e 'const fs=require("node:fs"); const p=JSON.parse(
 
 project_details="$(vercel project inspect "$EXPECTED_PROJECT_NAME" 2>&1)"
 printf '%s\n' "$project_details" | grep -Fq "$EXPECTED_PROJECT_ID" || fail "Vercel returned a different project ID."
-printf '%s\n' "$project_details" | grep -Eq "Root Directory[[:space:]]+$EXPECTED_ROOT_DIRECTORY" || fail "canonical project root directory is not booking."
+printf '%s\n' "$project_details" | grep -Eq "^[[:space:]]*Root Directory[[:space:]]+$EXPECTED_ROOT_DIRECTORY[[:space:]]*$" || fail "canonical project root directory is not booking."
 
 if [[ "${1:-}" == "--check-only" ]]; then
   printf 'Canonical Vercel deployment target verified: %s (%s), root directory %s.\n' \
