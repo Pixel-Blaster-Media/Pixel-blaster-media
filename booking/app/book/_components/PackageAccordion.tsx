@@ -258,13 +258,8 @@ export default function PackageAccordion({
                       onOpen={(group) => setExampleViewer({ item: b, group })}
                     />
                     {sqftRuleText(b) ? (
-                      <span className="rounded-full border border-realtor-primary/20 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
+                      <span className={`${capabilityPillClass} border-realtor-primary/20 text-realtor-muted`}>
                         Sqft pricing
-                      </span>
-                    ) : null}
-                    {selected ? (
-                      <span className="rounded-full bg-realtor-primary px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm shadow-realtor-primary/20">
-                        Selected
                       </span>
                     ) : null}
                   </div>
@@ -691,6 +686,9 @@ function trustedExampleEmbed(raw: string): boolean {
   }
 }
 
+const capabilityPillClass =
+  "inline-flex h-7 shrink-0 items-center rounded-full border bg-white px-2.5 text-[10px] font-semibold uppercase leading-none tracking-wider";
+
 function MediaBadges({
   item,
   onOpen,
@@ -702,7 +700,7 @@ function MediaBadges({
   if (groups.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
       {groups.map((group) => group.examples.length > 0 ? (
         <button
           key={group.key}
@@ -714,16 +712,18 @@ function MediaBadges({
             onOpen(group);
           }}
           onKeyDown={(event) => event.stopPropagation()}
-          className="tap-target inline-flex items-center gap-1 rounded-full border border-realtor-primary/35 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary transition hover:border-realtor-primary/60 hover:bg-realtor-primary/5 focus:outline-none focus:ring-2 focus:ring-realtor-primary/35"
+          className="tap-target group inline-flex items-center rounded-full focus:outline-none"
         >
-          <span aria-hidden="true">▶</span>
-          <span>{group.label}</span>
-          {group.examples.length > 1 ? <span aria-hidden="true">· {group.examples.length}</span> : null}
+          <span className={`${capabilityPillClass} gap-1 border-realtor-primary/40 text-realtor-primary transition group-hover:border-realtor-primary/65 group-hover:bg-realtor-primary/5 group-focus-visible:ring-2 group-focus-visible:ring-realtor-primary/35`}>
+            <span aria-hidden="true" className="text-[9px]">▶</span>
+            <span>{group.label}</span>
+            {group.examples.length > 1 ? <span aria-hidden="true">· {group.examples.length}</span> : null}
+          </span>
         </button>
       ) : (
         <span
           key={group.key}
-          className="rounded-full border border-realtor-primary/25 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary"
+          className={`${capabilityPillClass} border-realtor-primary/25 text-realtor-primary`}
         >
           {group.label}
         </span>

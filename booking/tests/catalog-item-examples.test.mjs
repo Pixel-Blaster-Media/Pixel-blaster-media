@@ -408,3 +408,36 @@ test("Pixel catalog copy offers both Reel styles at the same product level", asy
   assert.match(migration, /slug = 'social_media_reel'/);
   assert.match(migration, /slug = 'social_media_special'/);
 });
+
+test("capability pills share one compact visual box while playable pills retain a coarse-pointer target", async () => {
+  const picker = await readFile(
+    new URL("../app/book/_components/PackageAccordion.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    picker,
+    /const capabilityPillClass\s*=\s*[\s\S]*?h-7[\s\S]*?leading-none/,
+    "all visible capability pills should use one fixed-height visual class",
+  );
+  assert.match(
+    picker,
+    /className="tap-target group inline-flex items-center/,
+    "the playable wrapper should retain the coarse-pointer hit target",
+  );
+  assert.match(
+    picker,
+    /className="flex flex-wrap items-center gap-x-1\.5 gap-y-1"/,
+    "wrapped pill lines should center visual pills instead of stretching them",
+  );
+  assert.match(
+    picker,
+    /className=\{`\$\{capabilityPillClass\}[\s\S]*group-focus-visible:ring-2/,
+    "hover and focus treatment should live on the same visual shell",
+  );
+  assert.doesNotMatch(
+    picker,
+    />\s*Selected\s*</,
+    "the redundant Selected text pill should not crowd the capability row",
+  );
+});
