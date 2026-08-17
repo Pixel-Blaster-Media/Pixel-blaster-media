@@ -1,4 +1,13 @@
 /** Client-safe catalog shape used by the public booking experience. */
+export interface CatalogItemExampleDTO {
+  id: string;
+  title: string;
+  description: string | null;
+  kind: "video" | "interactive" | "link";
+  embed_url: string | null;
+  external_url: string | null;
+}
+
 export interface CatalogItemDTO {
   id: string;
   slug: string;
@@ -22,4 +31,5 @@ export interface CatalogItemDTO {
   badge: string | null;
   highlight: boolean;
   ideal_for: string | null;
+  examples: CatalogItemExampleDTO[];
 }

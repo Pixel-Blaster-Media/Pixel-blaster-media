@@ -1,9 +1,12 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { CatalogItemDTO } from "@/lib/booking/catalog-dto";
+import type {
+  CatalogItemDTO,
+  CatalogItemExampleDTO,
+} from "@/lib/booking/catalog-dto";
 import { isAddonEligible } from "@/lib/booking/catalog-rules";
 import BookingTotalBar from "./BookingTotalBar";
 import {
@@ -54,6 +57,7 @@ export default function PackageAccordion({
     [selectedSlugs, aLaCarte],
   );
   const [aLaCarteOpen, setALaCarteOpen] = useState(hasALaCarte);
+  const [exampleItem, setExampleItem] = useState<CatalogItemDTO | null>(null);
 
   const bySlug = useMemo(() => {
     const m = new Map<string, CatalogItemDTO>();
@@ -177,18 +181,9 @@ export default function PackageAccordion({
             return (
               <li key={b.id}>
                 <article
-                  role="button"
-                  tabIndex={0}
-                  aria-pressed={selected}
                   onClick={() => selectBundle(b.slug)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      selectBundle(b.slug);
-                    }
-                  }}
                   className={
-                    "realtor-package-card booking-package-card flex h-full min-w-0 cursor-pointer flex-col rounded-[1.65rem] border p-4 transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 md:p-5 " +
+                    "realtor-package-card booking-package-card flex h-full min-w-0 cursor-pointer flex-col rounded-[1.65rem] border p-4 transition md:p-5 " +
                     (selected
                       ? "realtor-package-card-selected"
                       : b.highlight
@@ -230,22 +225,32 @@ export default function PackageAccordion({
                             : formatMinutes(b.duration_minutes)}
                         </p>
                       </div>
-                      <span
-                        aria-hidden="true"
+                      <button
+                        type="button"
+                        aria-pressed={selected}
+                        aria-label={`${selected ? "Selected" : "Select"} ${b.name}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          selectBundle(b.slug);
+                        }}
                         className={
-                          "mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition " +
+                          "mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
                           (selected
                             ? "border-realtor-primary bg-realtor-primary text-white shadow-sm"
                             : "border-realtor-primary/35 bg-white text-transparent")
                         }
                       >
                         ✓
-                      </span>
+                      </button>
                     </div>
                   </div>
 
                   <div className="mt-5 flex flex-wrap items-center gap-2">
                     <MediaBadges item={b} />
+                    <ViewExampleButton
+                      item={b}
+                      onOpen={() => setExampleItem(b)}
+                    />
                     {sqftRuleText(b) ? (
                       <span className="rounded-full border border-realtor-primary/20 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
                         Sqft pricing
@@ -291,38 +296,39 @@ export default function PackageAccordion({
             return (
               <li key={a.id}>
                 <article
-                  role="button"
-                  tabIndex={0}
-                  aria-pressed={selected}
                   onClick={() => toggleALaCarte(a.slug)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      toggleALaCarte(a.slug);
-                    }
-                  }}
                   className={
-                    "realtor-service-tile flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
+                    "realtor-service-tile flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition " +
                     (selected ? "realtor-service-tile-selected" : "")
                   }
                 >
-                  <span
-                    aria-hidden="true"
+                  <button
+                    type="button"
+                    aria-pressed={selected}
+                    aria-label={`${selected ? "Remove" : "Add"} ${a.name}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggleALaCarte(a.slug);
+                    }}
                     className={
-                      "mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition " +
+                      "mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
                       (selected
                         ? "border-realtor-primary bg-realtor-primary text-white shadow-sm"
                         : "border-realtor-primary/35 bg-white text-transparent")
                     }
                   >
                     ✓
-                  </span>
+                  </button>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2 pr-2">
                       <p className="font-semibold leading-5 text-realtor-text">
                         {a.name}
                       </p>
                       <MediaBadges item={a} />
+                      <ViewExampleButton
+                        item={a}
+                        onOpen={() => setExampleItem(a)}
+                      />
                       {selected ? (
                         <span className="rounded-full bg-realtor-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
                           Added
@@ -362,7 +368,8 @@ export default function PackageAccordion({
               const selected = selectedAddOnSlugs.includes(a.slug);
               return (
                 <li key={a.id}>
-                  <label
+                  <article
+                    onClick={() => toggleAddon(a.slug)}
                     className={
                       "flex h-full cursor-pointer items-start gap-3 rounded-2xl p-3 transition " +
                       (selected
@@ -370,23 +377,24 @@ export default function PackageAccordion({
                         : "realtor-choice hover:border-realtor-primary/50")
                     }
                   >
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      onChange={() => toggleAddon(a.slug)}
-                      className="sr-only"
-                    />
-                    <span
-                      aria-hidden="true"
+
+                    <button
+                      type="button"
+                      aria-pressed={selected}
+                      aria-label={`${selected ? "Remove" : "Add"} ${a.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleAddon(a.slug);
+                      }}
                       className={
-                        "mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold transition " +
+                        "mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
                         (selected
                           ? "border-realtor-primary bg-realtor-primary text-white"
                           : "border-realtor-primary/35 bg-white text-transparent")
                       }
                     >
                       ✓
-                    </span>
+                    </button>
                     <div className="min-w-0 flex-1 text-sm">
                       <div className="flex items-baseline justify-between gap-3">
                         <span className="font-semibold text-realtor-text">
@@ -401,13 +409,27 @@ export default function PackageAccordion({
                           {a.description}
                         </p>
                       ) : null}
+                      {a.examples.length > 0 ? <div className="mt-2">
+                        <ViewExampleButton
+                          item={a}
+                          onOpen={() => setExampleItem(a)}
+                        />
+                      </div> : null}
                     </div>
-                  </label>
+                  </article>
                 </li>
               );
             })}
           </ul>
         </section>
+      ) : null}
+
+      {exampleItem ? (
+        <ExampleViewer
+          key={exampleItem.id}
+          item={exampleItem}
+          onClose={() => setExampleItem(null)}
+        />
       ) : null}
 
       <BookingTotalBar
@@ -425,6 +447,259 @@ export default function PackageAccordion({
       />
     </div>
   );
+}
+
+function ViewExampleButton({
+  item,
+  onOpen,
+}: {
+  item: CatalogItemDTO;
+  onOpen: () => void;
+}) {
+  if (item.examples.length === 0) return null;
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onOpen();
+      }}
+      onKeyDown={(event) => event.stopPropagation()}
+      className="tap-target inline-flex items-center gap-1 rounded-full border border-realtor-primary/25 bg-white px-2.5 py-1 text-[11px] font-semibold text-realtor-primary transition hover:border-realtor-primary/50 hover:bg-realtor-primary/5"
+    >
+      <span aria-hidden="true">▶</span>
+      {item.examples.length === 1 ? "View example" : "View examples"}
+    </button>
+  );
+}
+
+function ExampleViewer({
+  item,
+  onClose,
+}: {
+  item: CatalogItemDTO;
+  onClose: () => void;
+}) {
+  const modalRef = useRef<HTMLDialogElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  const [selectedId, setSelectedId] = useState(item.examples[0]?.id ?? "");
+  const selected =
+    item.examples.find((example) => example.id === selectedId) ?? item.examples[0];
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const handleKeyboard = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key === "Tab") {
+        const focusable = Array.from(
+          dialogRef.current?.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), a[href], iframe, [tabindex]:not([tabindex="-1"])',
+          ) ?? [],
+        );
+        if (focusable.length === 0) {
+          event.preventDefault();
+          dialogRef.current?.focus();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKeyboard);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    if (!modalRef.current?.open) modalRef.current?.showModal();
+    requestAnimationFrame(() => dialogRef.current?.focus());
+    return () => {
+      document.removeEventListener("keydown", handleKeyboard);
+      document.body.style.overflow = previousOverflow;
+      previousFocusRef.current?.focus();
+    };
+  }, []);
+
+  if (!selected) return null;
+  return (
+    <dialog
+      ref={modalRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="catalog-example-title"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      className="fixed inset-0 m-0 h-full max-h-none w-full max-w-none items-end justify-center bg-transparent p-0 open:flex backdrop:bg-realtor-text/55 backdrop:backdrop-blur-sm sm:items-center sm:p-5"
+      onMouseDown={(event) => {
+        if (event.currentTarget === event.target) onClose();
+      }}
+    >
+      <section
+        ref={dialogRef}
+        tabIndex={-1}
+        className="max-h-[92dvh] w-full overflow-y-auto rounded-t-[1.75rem] bg-realtor-surface p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl sm:max-w-3xl sm:rounded-[1.75rem] sm:p-5"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">
+              {item.name}
+            </p>
+            <h2 id="catalog-example-title" className="mt-1 text-xl font-semibold text-realtor-text">
+              {selected.title}
+            </h2>
+            {selected.description ? (
+              <p className="mt-1 text-sm text-realtor-muted">{selected.description}</p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close example"
+            className="tap-target flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-realtor-primary/20 bg-white text-xl text-realtor-text"
+          >
+            ×
+          </button>
+        </div>
+
+        {item.examples.length > 1 ? (
+          <div className="mt-4 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Available examples">
+            {item.examples.map((example) => (
+              <button
+                key={example.id}
+                id={`catalog-example-tab-${example.id}`}
+                type="button"
+                role="tab"
+                aria-selected={example.id === selected.id}
+                aria-controls={`catalog-example-panel-${example.id}`}
+                tabIndex={example.id === selected.id ? 0 : -1}
+                onClick={() => setSelectedId(example.id)}
+                onKeyDown={(event) => {
+                  const current = item.examples.findIndex((candidate) => candidate.id === example.id);
+                  let next = current;
+                  if (event.key === "ArrowRight") next = (current + 1) % item.examples.length;
+                  else if (event.key === "ArrowLeft") next = (current - 1 + item.examples.length) % item.examples.length;
+                  else if (event.key === "Home") next = 0;
+                  else if (event.key === "End") next = item.examples.length - 1;
+                  else return;
+                  event.preventDefault();
+                  const nextExample = item.examples[next];
+                  if (!nextExample) return;
+                  setSelectedId(nextExample.id);
+                  requestAnimationFrame(() => {
+                    document.getElementById(`catalog-example-tab-${nextExample.id}`)?.focus();
+                  });
+                }}
+                className={
+                  "tap-target shrink-0 rounded-full border px-3 py-2 text-xs font-semibold transition " +
+                  (example.id === selected.id
+                    ? "border-realtor-primary bg-realtor-primary text-white"
+                    : "border-realtor-primary/20 bg-white text-realtor-text")
+                }
+              >
+                {example.title}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <ExampleFrame example={selected} hasTabs={item.examples.length > 1} />
+      </section>
+    </dialog>
+  );
+}
+
+function ExampleFrame({
+  example,
+  hasTabs,
+}: {
+  example: CatalogItemExampleDTO;
+  hasTabs: boolean;
+}) {
+  const embedUrl = example.embed_url;
+  const trustedEmbed = embedUrl ? trustedExampleEmbed(embedUrl) : false;
+  return (
+    <div className="mt-4">
+      {embedUrl ? (
+        <div
+          id={`catalog-example-panel-${example.id}`}
+          role="tabpanel"
+          aria-labelledby={hasTabs ? `catalog-example-tab-${example.id}` : undefined}
+          aria-label={hasTabs ? undefined : example.title}
+          className="relative aspect-video overflow-hidden rounded-2xl bg-black shadow-inner"
+        >
+          <iframe
+            key={example.id}
+            src={embedUrl}
+            title={example.title}
+            className="absolute inset-0 h-full w-full border-0"
+            loading="lazy"
+            allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+            sandbox={
+              trustedEmbed
+                ? "allow-forms allow-popups allow-presentation allow-same-origin allow-scripts"
+                : "allow-presentation allow-scripts"
+            }
+          />
+        </div>
+      ) : (
+        <div
+          id={`catalog-example-panel-${example.id}`}
+          role="tabpanel"
+          aria-labelledby={hasTabs ? `catalog-example-tab-${example.id}` : undefined}
+          aria-label={hasTabs ? undefined : example.title}
+          className="rounded-2xl border border-realtor-primary/15 bg-white p-5 text-sm text-realtor-muted"
+        >
+          This example opens on the provider’s website. Your booking selections will remain here.
+        </div>
+      )}
+      {example.external_url ? (
+        <a
+          href={example.external_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex min-h-11 items-center text-xs font-semibold text-realtor-primary hover:text-realtor-text"
+        >
+          Open full example in a new tab ↗
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
+function trustedExampleEmbed(raw: string): boolean {
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    return (
+      host === "www.youtube-nocookie.com" ||
+      host === "player.vimeo.com" ||
+      host === "youriguide.com" ||
+      host.endsWith(".youriguide.com") ||
+      host.endsWith(".cloudflarestream.com")
+    );
+  } catch {
+    return false;
+  }
 }
 
 function MediaBadges({

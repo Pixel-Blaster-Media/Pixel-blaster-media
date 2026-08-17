@@ -10,6 +10,8 @@ import type { CatalogItemKind, Database } from "@/lib/supabase/database.types";
 
 type CatalogItemRow = Database["public"]["Tables"]["catalog_items"]["Row"];
 type CatalogItemInsert = Database["public"]["Tables"]["catalog_items"]["Insert"];
+type CatalogExampleRow = Database["public"]["Tables"]["catalog_item_examples"]["Row"];
+type CatalogExampleInsert = Database["public"]["Tables"]["catalog_item_examples"]["Insert"];
 
 export interface CompanySetupInput {
   companyName: string;
@@ -584,6 +586,55 @@ async function copyStarterCatalog(
   if (insertError) {
     throw new Error(`Could not copy starter catalog: ${insertError.message}`);
   }
+
+  const [{ data: sourceExamples, error: exampleReadError }, { data: targetItems, error: targetReadError }] =
+    await Promise.all([
+      service
+        .from("catalog_item_examples")
+        .select("*")
+        .eq("organization_id", fromOrganizationId)
+        .eq("active", true)
+        .eq("status", "ready")
+        .eq("source_type", "external_url")
+        .returns<CatalogExampleRow[]>(),
+      service
+        .from("catalog_items")
+        .select("id, slug")
+        .eq("organization_id", toOrganizationId)
+        .returns<Array<{ id: string; slug: string }>>(),
+    ]);
+  if (exampleReadError) throw new Error(`Could not read starter examples: ${exampleReadError.message}`);
+  if (targetReadError) throw new Error(`Could not map starter examples: ${targetReadError.message}`);
+  if (!sourceExamples?.length) return;
+
+  const sourceSlugById = new Map(data.map((item) => [item.id, item.slug]));
+  const targetIdBySlug = new Map((targetItems ?? []).map((item) => [item.slug, item.id]));
+  const exampleInserts = sourceExamples.flatMap((example): CatalogExampleInsert[] => {
+    const slug = sourceSlugById.get(example.catalog_item_id);
+    const targetCatalogItemId = slug ? targetIdBySlug.get(slug) : undefined;
+    if (!targetCatalogItemId) return [];
+    return [{
+      id: deterministicUuid("catalog-example", `${toOrganizationId}:${example.id}`),
+      organization_id: toOrganizationId,
+      catalog_item_id: targetCatalogItemId,
+      title: example.title,
+      description: example.description,
+      kind: example.kind,
+      source_type: example.source_type,
+      external_url: example.external_url,
+      stream_uid: example.stream_uid,
+      status: "ready",
+      active: true,
+      display_order: example.display_order,
+    }];
+  });
+  if (!exampleInserts.length) return;
+  const { error: exampleInsertError } = await service
+    .from("catalog_item_examples")
+    .upsert(exampleInserts, { onConflict: "id", ignoreDuplicates: true });
+  if (exampleInsertError) {
+    throw new Error(`Could not copy starter examples: ${exampleInsertError.message}`);
+  }
 }
 
 function compactCatalogInsert(row: CatalogItemInsert): CatalogItemInsert {
@@ -697,6 +748,12 @@ async function cleanupFailedCompany(
           .eq("id", createdUserId),
       );
     }
+    await runStep("remove copied catalog examples", () =>
+      service
+        .from("catalog_item_examples")
+        .delete()
+        .eq("organization_id", organizationId),
+    );
     await runStep("remove copied catalog", () =>
       service
         .from("catalog_items")

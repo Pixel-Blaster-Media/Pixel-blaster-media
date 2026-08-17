@@ -3,10 +3,20 @@
 import { useState, useTransition, type ReactNode } from "react";
 
 import type { CatalogItemRow } from "@/lib/booking/catalog";
+import type { CatalogItemExampleRow } from "@/lib/booking/catalog-examples";
 
 import { deleteCatalogItem, updateCatalogItem } from "./actions";
+import CatalogExamplesEditor from "./CatalogExamplesEditor";
 
-export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
+export default function CatalogItemEditor({
+  item,
+  examples,
+  streamConfigured,
+}: {
+  item: CatalogItemRow;
+  examples: CatalogItemExampleRow[];
+  streamConfigured: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [pending, startPending] = useTransition();
   const [deleting, startDeleting] = useTransition();
@@ -56,6 +66,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
       </div>
 
       {open ? (
+        <>
         <form
           action={(fd) => {
             setError(null);
@@ -167,6 +178,7 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
           />
         </label>
       </div>
+
 
       <div className="rounded-2xl border border-realtor-primary/15 bg-white/65 p-3">
         <p className="text-[10px] uppercase tracking-wider text-realtor-muted">
@@ -394,6 +406,12 @@ export default function CatalogItemEditor({ item }: { item: CatalogItemRow }) {
         ) : null}
       </div>
         </form>
+        <CatalogExamplesEditor
+          catalogItemId={item.id}
+          examples={examples}
+          streamConfigured={streamConfigured}
+        />
+        </>
       ) : null}
     </div>
   );
