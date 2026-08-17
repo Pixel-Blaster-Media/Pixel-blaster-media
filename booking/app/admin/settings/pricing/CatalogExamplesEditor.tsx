@@ -8,6 +8,10 @@ import type {
   ReusableCatalogVideo,
 } from "@/lib/booking/catalog-examples";
 import {
+  CATALOG_SAMPLE_GROUP_OPTIONS,
+  resolveCatalogSampleGroup,
+} from "@/lib/booking/catalog-sample-groups";
+import {
   attachCatalogExample,
   attachSharedCatalogVideo,
   deleteCatalogExample,
@@ -34,6 +38,8 @@ export default function CatalogExamplesEditor({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState<"video" | "interactive" | "link">("interactive");
+  const [sampleGroup, setSampleGroup] = useState("iguide");
+  const [customSampleGroupLabel, setCustomSampleGroupLabel] = useState("");
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
@@ -49,6 +55,8 @@ export default function CatalogExamplesEditor({
     setTitle("");
     setDescription("");
     setUrl("");
+    setSampleGroup("iguide");
+    setCustomSampleGroupLabel("");
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -58,6 +66,8 @@ export default function CatalogExamplesEditor({
     formData.set("title", title);
     formData.set("description", description);
     formData.set("kind", kind);
+    formData.set("sample_group", sampleGroup);
+    formData.set("custom_sample_group_label", customSampleGroupLabel);
     formData.set("external_url", url);
     setError(null);
     startTransition(async () => {
@@ -212,6 +222,7 @@ export default function CatalogExamplesEditor({
                     : example.source_type === "cloudflare_stream" ? "Uploaded video" : example.kind}
                   {example.status !== "ready" ? ` · ${example.status}` : ""}
                   {!example.active ? " · hidden" : ""}
+                  {` · ${resolveCatalogSampleGroup(example).label} pill`}
                 </p>
               </div>
               <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
@@ -302,7 +313,11 @@ export default function CatalogExamplesEditor({
               <Field label="Example type">
                 <select
                   value={kind}
-                  onChange={(event) => setKind(event.target.value as typeof kind)}
+                  onChange={(event) => {
+                    const nextKind = event.target.value as typeof kind;
+                    setKind(nextKind);
+                    setSampleGroup(nextKind === "video" ? "video" : nextKind === "interactive" ? "iguide" : "custom");
+                  }}
                   className="w-full min-w-0 rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
                 >
                   <option value="interactive">Interactive example</option>
@@ -312,6 +327,34 @@ export default function CatalogExamplesEditor({
               </Field>
             ) : null}
           </div>
+          {mode === "url" ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label="Show sample under">
+                <select
+                  value={sampleGroup}
+                  onChange={(event) => setSampleGroup(event.target.value)}
+                  className="w-full min-w-0 rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
+                >
+                  {CATALOG_SAMPLE_GROUP_OPTIONS.map((option) => (
+                    <option key={option.key} value={option.key}>{option.label} pill</option>
+                  ))}
+                  <option value="custom">Custom pill</option>
+                </select>
+              </Field>
+              {sampleGroup === "custom" ? (
+                <Field label="Custom pill label">
+                  <input
+                    value={customSampleGroupLabel}
+                    onChange={(event) => setCustomSampleGroupLabel(event.target.value)}
+                    maxLength={24}
+                    required
+                    placeholder="Site Plan"
+                    className="w-full min-w-0 rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
+                  />
+                </Field>
+              ) : null}
+            </div>
+          ) : null}
           <Field label="Short explanation (optional)">
             <input
               value={description}

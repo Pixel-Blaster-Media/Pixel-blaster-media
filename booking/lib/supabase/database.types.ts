@@ -692,6 +692,8 @@ interface CatalogItemExamplesTable {
     stream_uid: string | null;
     video_width: number | null;
     video_height: number | null;
+    sample_group_key: string | null;
+    sample_group_label: string | null;
     status: "uploading" | "ready" | "failed" | "deleting";
     active: boolean;
     display_order: number;
@@ -710,6 +712,8 @@ interface CatalogItemExamplesTable {
     stream_uid?: string | null;
     video_width?: number | null;
     video_height?: number | null;
+    sample_group_key?: string | null;
+    sample_group_label?: string | null;
     status?: "uploading" | "ready" | "failed" | "deleting";
     active?: boolean;
     display_order?: number;
@@ -1299,6 +1303,8 @@ export interface Database {
           p_description: string | null;
           p_kind: string;
           p_external_url: string;
+          p_sample_group_key?: string;
+          p_sample_group_label?: string;
         };
         Returns: string | null;
       };

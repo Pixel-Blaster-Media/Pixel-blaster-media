@@ -17,6 +17,8 @@ export interface PublicCatalogExampleSource {
   stream_uid: string | null;
   video_width: number | null;
   video_height: number | null;
+  sample_group_key: string | null;
+  sample_group_label: string | null;
   status: "uploading" | "ready" | "failed" | "deleting";
   active: boolean;
   display_order: number;
@@ -109,6 +111,8 @@ function toPublicDTO(
     title: row.title,
     description: row.description,
     kind: row.kind,
+    sample_group_key: row.sample_group_key,
+    sample_group_label: row.sample_group_label,
     embed_url: embedUrl,
     external_url: externalUrl,
     orientation: (

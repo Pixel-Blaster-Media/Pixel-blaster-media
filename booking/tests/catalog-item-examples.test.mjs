@@ -286,7 +286,7 @@ test("catalog examples cross schema, admin, public booking, and SaaS cloning bou
   assert.match(dto, /orientation: "portrait" \| "landscape"/);
   assert.match(dto, /examples: CatalogItemExampleDTO\[\]/);
   assert.match(page, /getActiveCatalogExamples/);
-  assert.match(picker, /ViewExampleButton/);
+  assert.match(picker, /MediaBadges/);
   assert.match(picker, /role="dialog"/);
   assert.match(picker, /className="fixed inset-0 !m-0 h-dvh max-h-none[^\"]*items-center[^\"]*p-4/);
   assert.doesNotMatch(picker, /className="fixed inset-0 !m-0 h-dvh max-h-none[^\"]*items-end/);
@@ -350,4 +350,61 @@ test("catalog video processing checks use an HTTP method implemented by the comp
     /NextResponse\.json\(\{\s*ok:\s*true,\s*status:\s*"ready"\s*\}/,
     "the completion route must return the success flag required by the editor",
   );
+});
+
+test("catalog samples live in grouped capability pills instead of a duplicate example action", async () => {
+  const [picker, sampleGroups, dto, databaseTypes, editor, actions, migration, companySetup, dedicatedRunner, fullRunner, behavior] = await Promise.all([
+    readFile(new URL("../app/book/_components/PackageAccordion.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/booking/catalog-sample-groups.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/booking/catalog-dto.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/supabase/database.types.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/settings/pricing/CatalogExamplesEditor.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/settings/pricing/example-actions.ts", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/20260817190000_grouped_catalog_sample_pills.sql", import.meta.url), "utf8"),
+    readFile(new URL("../lib/platform/company-setup.ts", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/verify-catalog-item-examples-postgres.sh", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/verify-atomic-booking-postgres.sh", import.meta.url), "utf8"),
+    readFile(new URL("./postgres/grouped-catalog-sample-pills.behavior.sql", import.meta.url), "utf8"),
+  ]);
+
+  assert.doesNotMatch(picker, /function ViewExampleButton/);
+  assert.doesNotMatch(picker, />View examples?</);
+  assert.match(picker, /getCatalogSampleGroups/);
+  assert.match(picker, /View \$\{group\.examples\.length\} \$\{group\.label\}/);
+  assert.match(sampleGroups, /item\.is_photo/);
+  assert.match(sampleGroups, /item\.is_video/);
+  assert.match(sampleGroups, /item\.is_iguide/);
+  assert.match(sampleGroups, /item\.is_aerial/);
+  assert.match(dto, /sample_group_key: string \| null/);
+  assert.match(dto, /sample_group_label: string \| null/);
+  assert.match(databaseTypes, /p_sample_group_key\?: string/);
+  assert.match(databaseTypes, /p_sample_group_label\?: string/);
+  assert.match(editor, /Show sample under/);
+  assert.match(editor, /Custom pill/);
+  assert.match(actions, /normalizeCatalogSampleGroupInput/);
+  assert.match(actions, /p_sample_group_key/);
+  assert.match(actions, /p_sample_group_label/);
+  assert.match(migration, /add column sample_group_key text/);
+  assert.match(migration, /add column sample_group_label text/);
+  assert.match(migration, /catalog_item_examples_sample_group_pair/);
+  assert.match(migration, /attach_external_catalog_example[\s\S]*p_sample_group_key text[\s\S]*p_sample_group_label text/i);
+  assert.match(companySetup, /sample_group_key: example\.sample_group_key/);
+  assert.match(companySetup, /sample_group_label: example\.sample_group_label/);
+  assert.match(dedicatedRunner, /20260817190000_grouped_catalog_sample_pills\.sql/);
+  assert.match(fullRunner, /20260817190000_grouped_catalog_sample_pills\.sql/);
+  assert.match(behavior, /partial-null/i);
+  assert.match(behavior, /custom_site_plan/);
+  assert.match(behavior, /authenticated role can attach grouped examples/i);
+});
+
+test("Pixel catalog copy offers both Reel styles at the same product level", async () => {
+  const migration = await readFile(
+    new URL("../supabase/migrations/20260817190000_grouped_catalog_sample_pills.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(migration, /Choose a smooth One-Take walkthrough or an Edited Reel made from short clips cut to music/);
+  assert.match(migration, /Your choice of a One-Take Reel or Edited Reel, complemented by drone footage/);
+  assert.match(migration, /organization_id = '00000000-0000-0000-0000-000000000001'/);
+  assert.match(migration, /slug = 'social_media_reel'/);
+  assert.match(migration, /slug = 'social_media_special'/);
 });

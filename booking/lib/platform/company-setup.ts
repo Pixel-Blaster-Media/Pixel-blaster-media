@@ -624,6 +624,8 @@ async function copyStarterCatalog(
       source_type: example.source_type,
       external_url: example.external_url,
       stream_uid: example.stream_uid,
+      sample_group_key: example.sample_group_key,
+      sample_group_label: example.sample_group_label,
       status: "ready",
       active: true,
       display_order: example.display_order,
