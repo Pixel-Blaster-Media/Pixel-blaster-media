@@ -274,3 +274,25 @@ test("catalog examples cross schema, admin, public booking, and SaaS cloning bou
   assert.match(sharedCron, /runCatalogStreamCleanup/);
   assert.match(companySetup, /catalog_item_examples/);
 });
+
+test("catalog video processing checks use an HTTP method implemented by the completion route", async () => {
+  const [editor, completeRoute] = await Promise.all([
+    readFile(new URL("../app/admin/settings/pricing/CatalogExamplesEditor.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/admin/catalog-examples/[id]/complete/route.ts", import.meta.url), "utf8"),
+  ]);
+  const completionFetch = editor.match(
+    /fetch\(`\/api\/admin\/catalog-examples\/\$\{encodeURIComponent\(exampleId\)\}\/complete`,\s*\{[\s\S]*?method:\s*"([A-Z]+)"/,
+  );
+  assert.ok(completionFetch, "the editor must declare the completion request method");
+  const implementedMethods = [...completeRoute.matchAll(/export async function (GET|POST|PUT|PATCH|DELETE)\b/g)]
+    .map((match) => match[1]);
+  assert.ok(
+    implementedMethods.includes(completionFetch[1]),
+    `editor uses ${completionFetch[1]} but route implements ${implementedMethods.join(", ")}`,
+  );
+  assert.match(
+    completeRoute,
+    /NextResponse\.json\(\{\s*ok:\s*true,\s*status:\s*"ready"\s*\}/,
+    "the completion route must return the success flag required by the editor",
+  );
+});

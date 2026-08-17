@@ -312,7 +312,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 async function waitUntilReady(exampleId: string): Promise<void> {
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const response = await fetch(`/api/admin/catalog-examples/${encodeURIComponent(exampleId)}/complete`, {
-      method: "PATCH",
+      method: "POST",
     });
     const body = await safeJson(response);
     if (response.ok && body.ok === true) return;
