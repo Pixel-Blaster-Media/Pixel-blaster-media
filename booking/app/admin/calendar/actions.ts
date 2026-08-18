@@ -15,9 +15,15 @@ import {
   validateCart,
   type CatalogItemRow,
 } from "@/lib/booking/catalog";
+import { createManageToken } from "@/lib/booking/manage-token";
 import { ccRecipientsFor } from "@/lib/email/recipients";
 import { sendEmail } from "@/lib/email/resend";
 import { getOrganizationEmailSettings } from "@/lib/email/settings";
+import {
+  bookingGoogleCalendarLink,
+  bookingIcsCalendarLink,
+  shootConfirmedEmail,
+} from "@/lib/email/templates";
 import {
   getGoogleCalendarClient,
   GoogleCalendarError,
@@ -30,6 +36,8 @@ interface ActionResult {
   error?: string;
   warning?: string;
   bookingId?: string;
+  previousScheduledAt?: string;
+  scheduledAt?: string;
 }
 
 interface RealtorSearchResult {
@@ -338,6 +346,7 @@ export async function createAdminShoot(
 
   if (!suppressRealtorNotifications) {
     await sendConfirmationBestEffort({
+      bookingId: booking.id,
       email: contactEmail,
       ccEmails: ccRecipientsFor(
         contactEmail,
@@ -348,8 +357,18 @@ export async function createAdminShoot(
       streetAddress: unitNumber
         ? `${streetAddress}, Unit ${unitNumber}`
         : streetAddress,
+      city,
+      postalCode,
       scheduledAt,
-      services: selectedItems.map((item) => item.name).join(", "),
+      scheduledEndsAt: new Date(scheduledEndsAt),
+      services: selectedItems
+        .filter((item) => item.kind !== "addon")
+        .map((item) => item.name),
+      addOns: selectedItems
+        .filter((item) => item.kind === "addon")
+        .map((item) => item.name),
+      notes,
+      totalPriceCents: totals.totalPriceCents,
     });
   }
 
@@ -610,7 +629,13 @@ export async function rescheduleCalendarShoot(
   revalidatePath("/admin/calendar");
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${booking.id}`);
-  return { ok: true, warning, bookingId: booking.id };
+  return {
+    ok: true,
+    warning,
+    bookingId: booking.id,
+    previousScheduledAt: booking.scheduled_at,
+    scheduledAt: scheduledAt.toISOString(),
+  };
 }
 
 /**
@@ -937,45 +962,89 @@ function calendarShootTitle(args: {
 }
 
 async function sendConfirmationBestEffort(args: {
+  bookingId: string;
   email: string;
   ccEmails: string[];
   organizationId: string;
   name: string;
   streetAddress: string;
+  city: string;
+  postalCode: string;
   scheduledAt: Date;
-  services: string;
+  scheduledEndsAt: Date;
+  services: string[];
+  addOns: string[];
+  notes: string;
+  totalPriceCents: number;
 }) {
   try {
-    const whenLabel = new Intl.DateTimeFormat("en-US", {
-      timeZone: BUSINESS_TZ,
-      dateStyle: "full",
-      timeStyle: "short",
-    }).format(args.scheduledAt);
     const emailSettings = await getOrganizationEmailSettings(args.organizationId);
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+    const appUrl = safeHttpUrl(process.env.NEXT_PUBLIC_APP_URL);
+    const fullAddress = [args.streetAddress, args.city, args.postalCode]
+      .filter(Boolean)
+      .join(", ");
+    const details =
+      `Services: ${args.services.join(", ")}${args.addOns.length ? `\nAdd-ons: ${args.addOns.join(", ")}` : ""}` +
+      (args.notes ? `\nNotes: ${args.notes}` : "");
+    const mail = shootConfirmedEmail({
+      contactName: args.name,
+      streetAddress: args.streetAddress,
+      city: args.city,
+      scheduledAt: args.scheduledAt.toISOString(),
+      scheduledEndsAt: args.scheduledEndsAt.toISOString(),
+      services: args.services,
+      addOns: args.addOns,
+      portalLink: appUrl ? new URL("/portal", appUrl).toString() : "",
+      manageLink: appUrl
+        ? new URL(
+            `/book/manage/${createManageToken(args.bookingId)}`,
+            appUrl,
+          ).toString()
+        : null,
+      googleCalendarLink: bookingGoogleCalendarLink({
+        title: `${emailSettings.organizationName} — media shoot`,
+        start: args.scheduledAt,
+        end: args.scheduledEndsAt,
+        location: fullAddress,
+        details,
+      }),
+      calendarDownloadLink: appUrl
+        ? bookingIcsCalendarLink(appUrl, {
+            start: args.scheduledAt,
+            end: args.scheduledEndsAt,
+            address: fullAddress,
+            services: [...args.services, ...args.addOns].join(", "),
+            organizationName: emailSettings.organizationName,
+            notes: args.notes,
+            uid: args.bookingId,
+          })
+        : null,
+      notes: args.notes,
+      totalPriceCents: args.totalPriceCents,
+      companyName: emailSettings.organizationName,
+    });
     await sendEmail({
       to: args.email,
       ...(args.ccEmails.length > 0 ? { cc: args.ccEmails } : {}),
-      subject: `Booking confirmed - ${args.streetAddress}`,
+      subject: mail.subject,
       organizationId: args.organizationId,
-      html: `
-        <p>Hi ${escapeHtml(args.name)},</p>
-        <p>Your shoot is booked and on our calendar.</p>
-        <p>
-          <strong>Address:</strong> ${escapeHtml(args.streetAddress)}<br>
-          <strong>When:</strong> ${escapeHtml(whenLabel)}<br>
-          <strong>Services:</strong> ${escapeHtml(args.services)}
-        </p>
-        ${
-          appUrl
-            ? `<p>You can view this booking in your portal: <a href="${appUrl}/portal">${appUrl}/portal</a></p>`
-            : ""
-        }
-        <p>— ${escapeHtml(emailSettings.organizationName)}</p>
-      `,
+      html: mail.html,
+      replyTo: emailSettings.replyToEmail ?? undefined,
     });
   } catch (err) {
     console.warn("[admin-calendar] confirmation email failed", err);
+  }
+}
+
+function safeHttpUrl(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:"
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
   }
 }
 

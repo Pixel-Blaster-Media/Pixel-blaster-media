@@ -207,7 +207,7 @@ test("mobile admin navigation stays visible without covering calendar bottom she
 
 test("rescheduling surfaces Google Calendar sync warnings and rejected actions", () => {
   assert.match(calendarActionsSource, /warning\?: string/);
-  assert.match(calendarActionsSource, /return \{ ok: true, warning/);
+  assert.match(calendarActionsSource, /return\s*\{\s*ok: true,\s*warning/);
   assert.match(
     calendarActionsSource,
     /if \(!gcal && booking\.google_calendar_event_id\)/,

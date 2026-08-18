@@ -273,6 +273,8 @@ export async function acceptRequest(
     streetAddress: req.street_address,
     scheduledAt,
     services: req.services,
+    addOns: req.add_ons,
+    notes: req.notes,
   });
 
   revalidatePath("/admin/inbox");
@@ -309,6 +311,8 @@ async function sendShootConfirmedEmail(args: {
   streetAddress: string;
   scheduledAt: string | null;
   services: string[];
+  addOns: string[];
+  notes: string | null;
 }): Promise<void> {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (!appUrl) {
@@ -372,6 +376,8 @@ async function sendShootConfirmedEmail(args: {
     streetAddress: args.streetAddress,
     scheduledAt: args.scheduledAt,
     services: args.services,
+    addOns: args.addOns,
+    notes: args.notes,
     portalLink,
     companyName: emailSettings.organizationName,
   });
@@ -390,6 +396,8 @@ async function sendShootConfirmedEmail(args: {
           streetAddress: args.streetAddress,
           scheduledAt: args.scheduledAt,
           services: args.services,
+          addOns: args.addOns,
+          notes: args.notes,
           portalLink: `${appUrl}/portal`,
           companyName: emailSettings.organizationName,
         })

@@ -367,7 +367,11 @@ async function dispatchCustomerEmail(
     start: startAt,
     end: endAt,
     location: fullAddress,
-    details: `Services: ${services.join(", ")}${addons.length ? `\nAdd-ons: ${addons.join(", ")}` : ""}`,
+    details:
+      `Services: ${services.join(", ")}${addons.length ? `\nAdd-ons: ${addons.join(", ")}` : ""}` +
+      (payload.booking.client_notes
+        ? `\nNotes: ${payload.booking.client_notes}`
+        : ""),
   });
   const calendarDownloadLink = appUrl
     ? bookingIcsCalendarLink(appUrl, {
@@ -376,6 +380,8 @@ async function dispatchCustomerEmail(
         address: fullAddress,
         services: [...services, ...addons].join(", "),
         organizationName: payload.organization.name,
+        notes: payload.booking.client_notes,
+        uid: payload.booking_id,
       })
     : null;
   const email = shootConfirmedEmail({
@@ -391,6 +397,8 @@ async function dispatchCustomerEmail(
     googleCalendarLink: calendarLink,
     calendarDownloadLink,
     invoiceLink: invoiceUrl,
+    notes: payload.booking.client_notes,
+    totalPriceCents: bookingTotalPriceCents(payload),
     companyName: payload.organization.name,
   });
   const cc = ccRecipientsFor(payload.realtor.email, payload.realtor.delivery_cc_emails);
@@ -443,6 +451,30 @@ async function dispatchAdminEmail(
   const fullAddress = [street, payload.property.city, payload.property.postal_code]
     .filter(Boolean)
     .join(", ");
+  const services = itemNames(payload, false);
+  const addons = itemNames(payload, true);
+  const googleCalendarLink = bookingGoogleCalendarLink({
+    title: `${payload.organization.name} — media shoot`,
+    start: new Date(payload.booking.scheduled_at),
+    end: new Date(payload.booking.scheduled_ends_at),
+    location: fullAddress,
+    details:
+      `Services: ${services.join(", ")}${addons.length ? `\nAdd-ons: ${addons.join(", ")}` : ""}` +
+      (payload.booking.client_notes
+        ? `\nNotes: ${payload.booking.client_notes}`
+        : ""),
+  });
+  const calendarDownloadLink = appUrl
+    ? bookingIcsCalendarLink(appUrl, {
+        start: new Date(payload.booking.scheduled_at),
+        end: new Date(payload.booking.scheduled_ends_at),
+        address: fullAddress,
+        services: [...services, ...addons].join(", "),
+        organizationName: payload.organization.name,
+        notes: payload.booking.client_notes,
+        uid: payload.booking_id,
+      })
+    : null;
   const email = newBookingStaffEmail({
     realtorName: payload.realtor.full_name,
     realtorEmail: payload.realtor.email,
@@ -451,8 +483,8 @@ async function dispatchAdminEmail(
     streetAddress: street,
     city: payload.property.city,
     scheduledAt: payload.booking.scheduled_at,
-    services: itemNames(payload, false),
-    addOns: itemNames(payload, true),
+    services,
+    addOns: addons,
     notes: payload.booking.client_notes,
     squareFootage: payload.booking.square_footage,
     occupancy: payload.booking.is_vacant,
@@ -461,7 +493,10 @@ async function dispatchAdminEmail(
       ? new URL(`/admin/bookings/${payload.booking_id}`, appUrl).toString()
       : null,
     calendarLink: appUrl ? new URL("/admin/calendar", appUrl).toString() : null,
+    googleCalendarLink,
+    calendarDownloadLink,
     directionsLink: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`,
+    totalPriceCents: bookingTotalPriceCents(payload),
     companyName: payload.organization.name,
   });
   const mutation: Promise<SendEmailResult> = recipient
@@ -633,6 +668,15 @@ function itemNames(
   return payload.line_items
     .filter((item) => addons ? item.kind === "addon" : item.kind !== "addon")
     .map((item) => item.name);
+}
+
+function bookingTotalPriceCents(
+  payload: ClaimedIntegrationJob["payload"],
+): number {
+  return payload.line_items.reduce(
+    (total, item) => total + item.unit_price_cents * Math.max(1, item.quantity),
+    0,
+  );
 }
 
 function propertyStreet(payload: ClaimedIntegrationJob["payload"]): string {

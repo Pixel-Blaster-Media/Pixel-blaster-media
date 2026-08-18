@@ -250,14 +250,15 @@ export default function EditBookingForm({
         <input
           name="send_confirmation"
           type="checkbox"
+          defaultChecked
           className="mt-1"
         />
         <span>
           <span className="block font-semibold">
-            Send booking confirmation email again
+            Email the booking update to the realtor
           </span>
           <span className="block text-xs text-realtor-muted">
-            Leave this off for quiet admin fixes like address/name cleanup.
+            Turn this off only for a quiet internal correction.
           </span>
         </span>
       </label>

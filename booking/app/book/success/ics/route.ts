@@ -17,20 +17,32 @@ export function GET(request: NextRequest) {
 
   const address = clean(params.get("address"), 200);
   const services = clean(params.get("services"), 300);
+  const notes = clean(params.get("notes"), 1_000);
   const org = clean(params.get("org"), 100) || "Pixel Blaster Media";
+  const requestedUid = clean(params.get("uid"), 120).replace(
+    /[^A-Za-z0-9._-]/g,
+    "",
+  );
+  const uid = requestedUid || `${start.getTime()}-${end.getTime()}`;
+  const description = [
+    services ? `Services: ${services}` : null,
+    notes ? `Notes: ${notes}` : null,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join("\n");
 
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//Pixel Blaster Media//Booking//EN",
     "BEGIN:VEVENT",
-    `UID:${start.getTime()}-${end.getTime()}@pixelblastermedia.com`,
+    `UID:${uid}@pixelblastermedia.com`,
     `DTSTAMP:${icsDate(new Date())}`,
     `DTSTART:${icsDate(start)}`,
     `DTEND:${icsDate(end)}`,
     `SUMMARY:${icsText(`${org} — media shoot`)}`,
     address ? `LOCATION:${icsText(address)}` : null,
-    services ? `DESCRIPTION:${icsText(`Services: ${services}`)}` : null,
+    description ? `DESCRIPTION:${icsText(description)}` : null,
     "END:VEVENT",
     "END:VCALENDAR",
   ].filter((line): line is string => line !== null);
@@ -63,6 +75,7 @@ function clean(value: string | null, maxLength: number): string {
 function icsText(value: string): string {
   return value
     .replace(/\\/g, "\\\\")
+    .replace(/\r?\n/g, "\\n")
     .replace(/;/g, "\\;")
     .replace(/,/g, "\\,");
 }
