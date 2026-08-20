@@ -404,8 +404,8 @@ export default async function IntegrationsPage({
             </>
           ) : (
             <>
-              Google Calendar connection failed ({googleFlashError}). Double-check
-              that your OAuth app&apos;s authorized redirect URI matches{" "}
+              Google Calendar connection failed. Nothing was connected or
+              replaced. Double-check that your OAuth app&apos;s authorized redirect URI matches{" "}
               <code className="break-all">{resolvedGoogleRedirectUri}</code>
               .
             </>

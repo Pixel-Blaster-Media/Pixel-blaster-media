@@ -2,12 +2,13 @@ import "server-only";
 
 import { BUSINESS_TZ } from "@/lib/booking/availability";
 import { isCancellable } from "@/lib/booking/booking-status";
+import { syncStoredBookingGoogleCalendarEvent } from "@/lib/booking/calendar-event-service";
 import { sendEmail } from "@/lib/email/resend";
 import {
   getAdminNotificationEmail,
   getOrganizationEmailSettings,
 } from "@/lib/email/settings";
-import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
+
 import { sendPushBestEffort } from "@/lib/notifications/push";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { BookingStatus } from "@/lib/supabase/database.types";
@@ -15,6 +16,7 @@ import type { BookingStatus } from "@/lib/supabase/database.types";
 export interface CancelResult {
   ok: boolean;
   error?: string;
+  warning?: string;
   /** The booking row after the status flip, for callers that want to render a flash. */
   addressLine?: string;
   whenLabel?: string;
@@ -50,7 +52,7 @@ interface BookingRow {
  *
  *   - Re-checks the booking exists + is in a cancellable state
  *   - Flips `status` → `cancelled`
- *   - Deletes the Google Calendar event if we have its id (best-effort)
+ *   - Strictly deletes the Google Calendar event before clearing its linkage
  *   - Sends a cancellation email to whichever side DIDN'T press the button
  *
  * The `initiator` arg decides the notification direction:
@@ -91,38 +93,37 @@ export async function cancelBooking(
     };
   }
 
-  // 1) Flip the status.
-  let updateQuery = supabase
+  // 1) Flip the status but retain Calendar linkage until strict cleanup proves
+  // the remote event is deleted or already gone.
+  const { data: cancelled, error: updateErr } = await supabase
     .from("bookings")
-    .update({
-      status: "cancelled",
-      google_calendar_event_id: null,
-      google_calendar_event_url: null,
-    })
-    .eq("id", bookingId);
+    .update({ status: "cancelled" })
+    .eq("id", bookingId)
+    .eq("organization_id", scope.organizationId)
+    .eq("status", booking.status)
+    .select("id")
+    .maybeSingle<{ id: string }>();
 
-  updateQuery = updateQuery.eq("organization_id", scope.organizationId);
-
-  const { error: updateErr } = await updateQuery;
-
-  if (updateErr) {
-    return { ok: false, error: updateErr.message };
+  if (updateErr || !cancelled) {
+    return {
+      ok: false,
+      error: updateErr
+        ? "Could not cancel booking."
+        : "Booking changed before it could be cancelled.",
+    };
   }
 
-  // 2) Delete the Google Calendar event (best-effort).
-  if (booking.google_calendar_event_id) {
-    try {
-      const client = await getGoogleCalendarClient({
-        organizationId: booking.organization_id,
-      });
-      if (client) {
-        await client.deleteEvent(booking.google_calendar_event_id);
-      }
-    } catch (err) {
-      // Not fatal — the booking is already marked cancelled in our DB.
-      // Admin can delete the stray event by hand if needed.
-      console.warn("[cancel] google event delete failed", err);
-    }
+  // 2) Strictly delete and then clear linkage through the canonical service.
+  let calendarSynced = true;
+  try {
+    const result = await syncStoredBookingGoogleCalendarEvent({
+      organizationId: booking.organization_id,
+      bookingId: booking.id,
+    });
+    calendarSynced = result.ok;
+  } catch {
+    calendarSynced = false;
+    console.warn("[cancel] google calendar cleanup failed");
   }
 
   // 3) Notify.
@@ -155,6 +156,7 @@ export async function cancelBooking(
     whenLabel,
     organizationId: booking.organization_id,
     suppressRealtorNotifications: booking.suppress_realtor_notifications,
+    calendarWarning: !calendarSynced,
   });
   await sendPushBestEffort(booking.organization_id, {
     title:
@@ -170,6 +172,9 @@ export async function cancelBooking(
     ok: true,
     addressLine,
     whenLabel,
+    warning: calendarSynced
+      ? undefined
+      : "Booking cancelled, but Google Calendar cleanup did not finish. Check the linked event before the cancelled time.",
   };
 }
 
@@ -182,6 +187,7 @@ async function sendCancellationEmail(args: {
   whenLabel: string;
   organizationId: string;
   suppressRealtorNotifications: boolean;
+  calendarWarning: boolean;
 }): Promise<void> {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   const emailSettings = await getOrganizationEmailSettings(args.organizationId);
@@ -235,6 +241,11 @@ async function sendCancellationEmail(args: {
         <strong>Address:</strong> ${escapeHtml(args.addressLine)}<br>
         <strong>When:</strong> ${escapeHtml(args.whenLabel)}
       </p>
+      ${
+        args.calendarWarning
+          ? "<p><strong>Calendar cleanup needs attention:</strong> the booking is cancelled, but the linked Google Calendar event could not be confirmed deleted automatically.</p>"
+          : ""
+      }
       <p>Open in admin: ${appUrl}/admin/bookings/${args.bookingId}</p>
     `,
     replyTo: args.realtorEmail ?? undefined,

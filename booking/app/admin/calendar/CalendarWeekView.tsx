@@ -101,6 +101,7 @@ interface DayColumn {
 interface CatalogItemOption {
   id: string;
   slug: string;
+  active: boolean;
   kind: "bundle" | "a_la_carte" | "addon";
   name: string;
   description: string;
@@ -607,8 +608,8 @@ export default function CalendarWeekView({
           setMoveError(result.warning);
         }
         router.refresh();
-      } catch (error) {
-        console.error("[admin-calendar] calendar move request failed", error);
+      } catch {
+        console.error("[admin-calendar] calendar move request failed");
         setMoveError("Could not move that calendar item. Please try again.");
       }
     });
@@ -1603,7 +1604,14 @@ export default function CalendarWeekView({
                     setError(result.error ?? "Could not add shoot.");
                     return;
                   }
-                  router.push(`/admin/bookings/${result.bookingId}`);
+                  const warningCode =
+                    result.warningCode ??
+                    (result.warning ? "follow_up_failed" : null);
+                  router.push(
+                    warningCode
+                      ? `/admin/bookings/${result.bookingId}?follow_up=${warningCode}`
+                      : `/admin/bookings/${result.bookingId}`,
+                  );
                 });
               }}
             >
@@ -1618,7 +1626,7 @@ export default function CalendarWeekView({
                 title="Package"
                 detail="Pick what they booked first. Add-ons can stay empty."
               >
-                <CatalogPicker items={catalogItems} />
+                <CatalogPicker items={catalogItems.filter((item) => item.active)} />
               </FormSection>
 
               <FormSection
@@ -2235,8 +2243,8 @@ function CalendarQuickView({
           return;
         }
         onChanged(result.warning);
-      } catch (error) {
-        console.error("[admin-calendar] reschedule request failed", error);
+      } catch {
+        console.error("[admin-calendar] reschedule request failed");
         setRescheduleError("Could not reschedule this booking. Please try again.");
       }
     });
@@ -2245,8 +2253,11 @@ function CalendarQuickView({
   const toggleCatalogItem = (catalogItem: CatalogItemOption) => {
     setServicesError(null);
     setSelectedCatalogItemIds((current) => {
+      const alreadySelected = current.includes(catalogItem.id);
+      if (!catalogItem.active && !alreadySelected) return current;
+
       let next: string[];
-      if (current.includes(catalogItem.id)) {
+      if (alreadySelected) {
         next = current.filter((id) => id !== catalogItem.id);
       } else if (catalogItem.kind === "bundle") {
         const bundleIds = new Set(
@@ -2268,6 +2279,7 @@ function CalendarQuickView({
       );
       return next.filter((id) => {
         const itemOption = catalogItems.find((candidate) => candidate.id === id);
+        if (itemOption && !itemOption.active && current.includes(id)) return true;
         return (
           itemOption &&
           (itemOption.kind !== "addon" ||
@@ -2298,8 +2310,8 @@ function CalendarQuickView({
           return;
         }
         onChanged(result.warning);
-      } catch (error) {
-        console.error("[admin-calendar] package update failed", error);
+      } catch {
+        console.error("[admin-calendar] package update failed");
         setServicesError("Could not update this package. Please try again.");
       }
     });
@@ -2827,8 +2839,10 @@ function CalendarQuickCatalogPicker({
               {groupItems.map((catalogItem) => {
                 const selected = selectedIds.includes(catalogItem.id);
                 const disabled =
-                  catalogItem.kind === "addon" &&
-                  !calendarAddonEligible(catalogItem, selectedServices);
+                  (!catalogItem.active && !selected) ||
+                  (catalogItem.kind === "addon" &&
+                    !calendarAddonEligible(catalogItem, selectedServices) &&
+                    !(selected && !catalogItem.active));
                 return (
                   <label
                     key={catalogItem.id}
@@ -2848,6 +2862,7 @@ function CalendarQuickCatalogPicker({
                     <span className="min-w-0 flex-1">
                       <span className="block font-semibold text-realtor-text">
                         {catalogItem.name}
+                        {!catalogItem.active ? " (inactive — retained from booking)" : ""}
                       </span>
                       <span className="mt-0.5 block text-realtor-muted">
                         {formatPrice(

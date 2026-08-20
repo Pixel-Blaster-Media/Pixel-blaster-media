@@ -8,6 +8,16 @@ import {
   refreshAccessToken,
   type TokenResponse,
 } from "./oauth";
+import {
+  deleteGoogleCalendarEventStrict,
+  insertGoogleCalendarEvent,
+  updateGoogleCalendarEvent,
+  GoogleCalendarError,
+  type GoogleCalendarCreatedEvent,
+  type GoogleCalendarMutationInput,
+} from "./event-mutation-core";
+
+export { GoogleCalendarError } from "./event-mutation-core";
 
 type ConnectionRow =
   Database["public"]["Tables"]["google_calendar_connection"]["Row"];
@@ -16,17 +26,6 @@ type ConnectionRow =
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 /** Bound every Google freeBusy caller, including customer availability. */
 const FREE_BUSY_REQUEST_TIMEOUT_MS = 20_000;
-
-export class GoogleCalendarError extends Error {
-  constructor(
-    message: string,
-    public status?: number,
-    public reason?: string,
-  ) {
-    super(message);
-    this.name = "GoogleCalendarError";
-  }
-}
 
 function googleCalendarErrorReason(body: string): string | undefined {
   try {
@@ -56,36 +55,22 @@ export interface GoogleCalendarClient {
   /** Calendar events in [from, to], used by the admin calendar display. */
   getEvents(from: Date, to: Date): Promise<GoogleCalendarEvent[]>;
   /** Create an event, returning Google's event id + html link for storage on the booking. */
-  createEvent(input: CreateEventInput): Promise<CreatedEvent>;
+  createEvent(input: CreateEventInput, eventId?: string): Promise<CreatedEvent>;
   /** Update an existing event's booking details in place. */
   updateEvent(eventId: string, input: CreateEventInput): Promise<CreatedEvent>;
-  /** Move an existing event without replacing its title, notes, or guests. */
-  updateEventTime(
+  /** Delete only an owned event; markerless legacy adoption must be explicit. */
+  deleteEvent(
     eventId: string,
-    startISO: string,
-    endISO: string,
-  ): Promise<CreatedEvent>;
-  /** Delete an event — best-effort, safe to call if the event was already deleted. */
-  deleteEvent(eventId: string): Promise<void>;
+    ownership: {
+      bookingId: string;
+      organizationId: string;
+      allowMarkerlessLegacy?: boolean;
+    },
+  ): Promise<void>;
 }
 
-interface CreateEventInput {
-  summary: string;
-  description?: string;
-  location?: string;
-  /** ISO UTC. */
-  startISO: string;
-  /** ISO UTC. */
-  endISO: string;
-  /** If provided, attaches the realtor as a guest (they'll see it on their calendar too). */
-  attendeeEmail?: string;
-  attendeeName?: string;
-}
-
-interface CreatedEvent {
-  id: string;
-  htmlLink: string;
-}
+type CreateEventInput = GoogleCalendarMutationInput;
+type CreatedEvent = GoogleCalendarCreatedEvent;
 
 export interface GoogleCalendarEvent {
   id: string;
@@ -135,9 +120,7 @@ export async function getGoogleCalendarConnection(
     .maybeSingle<ConnectionRow>();
 
   if (scoped.error) {
-    throw new Error(
-      `Load google calendar connection failed: ${scoped.error.message}`,
-    );
+    throw new Error("Load Google Calendar connection failed");
   }
   return scoped.data ?? null;
 }
@@ -166,9 +149,7 @@ async function getGoogleCalendarConnections(
 
   const result = await query.returns<ConnectionRow[]>();
   if (result.error) {
-    throw new Error(
-      `Load google calendar connections failed: ${result.error.message}`,
-    );
+    throw new Error("Load Google Calendar connections failed");
   }
   return result.data ?? [];
 }
@@ -253,28 +234,33 @@ async function clientFromConnection(
     async getEvents(from, to) {
       return listEvents(accessToken, calendarId, from, to);
     },
-    async createEvent(input) {
-      return insertEvent(accessToken, calendarId, input);
+    async createEvent(input, eventId) {
+      return insertGoogleCalendarEvent({
+        fetchImpl: fetch,
+        accessToken,
+        calendarId,
+        input,
+        eventId,
+      });
     },
     async updateEvent(eventId, input) {
-      return patchEvent(
+      return updateGoogleCalendarEvent({
+        fetchImpl: fetch,
         accessToken,
         calendarId,
         eventId,
-        calendarEventBody(input),
-      );
+        input,
+      });
     },
-    async updateEventTime(eventId, startISO, endISO) {
-      return patchEventTime(
+
+    async deleteEvent(eventId, ownership) {
+      await deleteGoogleCalendarEventStrict({
+        fetchImpl: fetch,
         accessToken,
         calendarId,
         eventId,
-        startISO,
-        endISO,
-      );
-    },
-    async deleteEvent(eventId) {
-      await deleteEventBestEffort(accessToken, calendarId, eventId);
+        ...ownership,
+      });
     },
   };
 }
@@ -374,7 +360,7 @@ async function queryFreeBusy(
   if (!res.ok) {
     const body = await res.text();
     throw new GoogleCalendarError(
-      `freeBusy query failed: ${body.slice(0, 500)}`,
+      `Google Calendar freeBusy query failed (${res.status})`,
       res.status,
       googleCalendarErrorReason(body),
     );
@@ -410,9 +396,8 @@ async function listEvents(
   });
 
   if (!res.ok) {
-    const body = await res.text();
     throw new GoogleCalendarError(
-      `events.list failed: ${body.slice(0, 500)}`,
+      `Google Calendar events.list failed (${res.status})`,
       res.status,
     );
   }
@@ -468,133 +453,6 @@ function dateOnlyToUtc(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
 }
 
-async function insertEvent(
-  accessToken: string,
-  calendarId: string,
-  input: CreateEventInput,
-): Promise<CreatedEvent> {
-  const body = calendarEventBody(input);
-
-  const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=all`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    },
-  );
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new GoogleCalendarError(
-      `events.insert failed: ${errText.slice(0, 500)}`,
-      res.status,
-    );
-  }
-
-  const json = (await res.json()) as { id?: string; htmlLink?: string };
-  if (!json.id) {
-    throw new GoogleCalendarError(
-      "events.insert returned no id",
-      res.status,
-    );
-  }
-  return {
-    id: json.id,
-    htmlLink: json.htmlLink ?? "",
-  };
-}
-
-async function patchEventTime(
-  accessToken: string,
-  calendarId: string,
-  eventId: string,
-  startISO: string,
-  endISO: string,
-): Promise<CreatedEvent> {
-  return patchEvent(accessToken, calendarId, eventId, {
-    start: { dateTime: startISO },
-    end: { dateTime: endISO },
-  });
-}
-
-function calendarEventBody(input: CreateEventInput): Record<string, unknown> {
-  const body: Record<string, unknown> = {
-    summary: input.summary,
-    description: input.description,
-    location: input.location,
-    start: { dateTime: input.startISO },
-    end: { dateTime: input.endISO },
-  };
-  if (input.attendeeEmail) {
-    body.attendees = [
-      {
-        email: input.attendeeEmail,
-        displayName: input.attendeeName,
-      },
-    ];
-  }
-  return body;
-}
-
-async function patchEvent(
-  accessToken: string,
-  calendarId: string,
-  eventId: string,
-  body: Record<string, unknown>,
-): Promise<CreatedEvent> {
-  const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
-    {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    },
-  );
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new GoogleCalendarError(
-      `events.patch failed: ${errText.slice(0, 500)}`,
-      res.status,
-    );
-  }
-
-  const json = (await res.json()) as { id?: string; htmlLink?: string };
-  if (!json.id) {
-    throw new GoogleCalendarError("events.patch returned no id", res.status);
-  }
-  return { id: json.id, htmlLink: json.htmlLink ?? "" };
-}
-
-async function deleteEventBestEffort(
-  accessToken: string,
-  calendarId: string,
-  eventId: string,
-): Promise<void> {
-  try {
-    await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
-      {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${accessToken}` },
-      },
-    );
-    // 2xx or 410 (already gone) both mean "the event isn't there anymore"
-    // — either is fine for our purposes. We swallow everything because the
-    // caller is handling a booking cancellation; the DB update shouldn't
-    // hinge on Google responding.
-  } catch {
-    // Best-effort. Log + move on.
-  }
-}
-
 export async function persistTokens(args: {
   organizationId?: string;
   googleAccountEmail: string;
@@ -637,9 +495,7 @@ export async function persistTokens(args: {
       .eq("organization_id", organizationId(args))
       .eq("id", existing.id);
     if (updated.error) {
-      throw new Error(
-        `Save google connection failed: ${updated.error.message}`,
-      );
+      throw new Error("Save Google Calendar connection failed");
     }
     return;
   }
@@ -648,7 +504,7 @@ export async function persistTokens(args: {
     .from("google_calendar_connection")
     .insert(sourcePayload);
   if (inserted.error) {
-    throw new Error(`Save google connection failed: ${inserted.error.message}`);
+    throw new Error("Save Google Calendar connection failed");
   }
 }
 
@@ -663,9 +519,7 @@ export async function deleteGoogleCalendarConnection(
     .delete()
     .eq("organization_id", orgId);
   if (deleted.error) {
-    throw new Error(
-      `Delete google calendar connections failed: ${deleted.error.message}`,
-    );
+    throw new Error("Delete Google Calendar connections failed");
   }
   return conn;
 }

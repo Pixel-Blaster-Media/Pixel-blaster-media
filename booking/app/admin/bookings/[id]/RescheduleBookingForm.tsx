@@ -16,10 +16,12 @@ export default function RescheduleBookingForm({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
 
   function onSubmit(formData: FormData) {
     setError(null);
     setSavedMessage(null);
+    setWarning(null);
     startTransition(async () => {
       const result = await rescheduleBookingFromDetails(bookingId, formData);
       if (!result.ok) {
@@ -31,6 +33,7 @@ export default function RescheduleBookingForm({
           ? "Booking rescheduled and confirmation email sent."
           : "Booking rescheduled.",
       );
+      setWarning(result.warning ?? null);
       router.refresh();
     });
   }
@@ -84,6 +87,11 @@ export default function RescheduleBookingForm({
       {savedMessage ? (
         <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           {savedMessage}
+        </p>
+      ) : null}
+      {warning ? (
+        <p className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {warning}
         </p>
       ) : null}
     </form>

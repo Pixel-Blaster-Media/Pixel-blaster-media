@@ -19,12 +19,27 @@ const bookingActionsPath = new URL(
   "../app/admin/bookings/[id]/actions.ts",
   import.meta.url,
 );
+const calendarSyncPath = new URL(
+  "../lib/booking/calendar-event-sync.ts",
+  import.meta.url,
+);
+const calendarServicePath = new URL(
+  "../lib/booking/calendar-event-service.ts",
+  import.meta.url,
+);
+const calendarServiceCorePath = new URL(
+  "../lib/booking/calendar-event-service-core.ts",
+  import.meta.url,
+);
 
 const calendarSource = await readFile(calendarPath, "utf8");
 const calendarActionsSource = await readFile(calendarActionsPath, "utf8");
 const calendarPageSource = await readFile(calendarPagePath, "utf8");
 const bottomNavSource = await readFile(bottomNavPath, "utf8");
 const bookingActionsSource = await readFile(bookingActionsPath, "utf8");
+const calendarSyncSource = await readFile(calendarSyncPath, "utf8");
+const calendarServiceSource = await readFile(calendarServicePath, "utf8");
+const calendarServiceCoreSource = await readFile(calendarServiceCorePath, "utf8");
 const quickViewSource = calendarSource.slice(
   calendarSource.indexOf("function CalendarQuickView"),
   calendarSource.indexOf("function QuickViewSection"),
@@ -208,12 +223,19 @@ test("mobile admin navigation stays visible without covering calendar bottom she
 test("rescheduling surfaces Google Calendar sync warnings and rejected actions", () => {
   assert.match(calendarActionsSource, /warning\?: string/);
   assert.match(calendarActionsSource, /return \{ ok: true, warning/);
+  assert.match(calendarActionsSource, /syncStoredBookingGoogleCalendarEvent/);
+  assert.match(calendarServiceSource, /persistCreatedEvent:\s*\(\{ projection, event \}\)/);
+  assert.match(calendarServiceSource, /if \(!error && data\) return "linked"/);
+  assert.match(calendarServiceCoreSource, /status:\s*"stale_projection"/);
+  assert.match(calendarSyncSource, /if \(persistence === "ambiguous"\)/);
   assert.match(
-    calendarActionsSource,
-    /if \(!gcal && booking\.google_calendar_event_id\)/,
+    calendarSyncSource,
+    /await client\.deleteEvent\(event\.id,[\s\S]*bookingId:\s*eventInput\.bookingId[\s\S]*organizationId:\s*eventInput\.organizationId/,
   );
-  assert.match(calendarActionsSource, /error: calendarLinkError/);
-  assert.match(calendarActionsSource, /if \(calendarLinkError\)/);
   assert.match(quickViewSource, /result\.warning/);
-  assert.match(quickViewSource, /catch \(error\)/);
+  assert.match(quickViewSource, /catch \{/);
+  assert.doesNotMatch(
+    quickViewSource,
+    /console\.error\([^\n]*,\s*error\)/,
+  );
 });

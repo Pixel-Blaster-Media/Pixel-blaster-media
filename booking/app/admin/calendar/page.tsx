@@ -8,7 +8,7 @@ import {
   BUSINESS_TZ,
   businessDateTimeLocalToUtc,
 } from "@/lib/booking/availability";
-import { getActiveCatalog } from "@/lib/booking/catalog";
+import { getFullCatalog } from "@/lib/booking/catalog";
 import {
   labelForAddOn,
   labelForService,
@@ -122,6 +122,7 @@ type DisplayGoogleEvent = GoogleCalendarEvent & {
 interface CatalogItemOption {
   id: string;
   slug: string;
+  active: boolean;
   kind: "bundle" | "a_la_carte" | "addon";
   name: string;
   description: string;
@@ -187,17 +188,13 @@ export default async function AdminCalendarPage({
       .select("day_of_week, start_time, end_time, enabled")
       .eq("organization_id", admin.organizationId)
       .returns<BusinessHoursRow[]>(),
-    getActiveCatalog({ organizationId: admin.organizationId }),
+    getFullCatalog({ organizationId: admin.organizationId }),
   ]);
   const databaseLoadFailed = Boolean(
     bookingsRes.error || blocksRes.error || hoursRes.error,
   );
   if (databaseLoadFailed) {
-    console.error("[admin-calendar] database load failed", {
-      bookings: bookingsRes.error?.message,
-      blocks: blocksRes.error?.message,
-      hours: hoursRes.error?.message,
-    });
+    console.error("[admin-calendar] database load failed");
   }
   const calendarSources = await getGoogleCalendarSources({
     organizationId: admin.organizationId,
@@ -708,12 +705,13 @@ function CalendarSourceSummary({
 }
 
 function catalogToOptions(
-  catalog: Awaited<ReturnType<typeof getActiveCatalog>>,
+  catalog: Awaited<ReturnType<typeof getFullCatalog>>,
 ): CatalogItemOption[] {
   return [...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(
     (item) => ({
       id: item.id,
       slug: item.slug,
+      active: item.active,
       kind: item.kind,
       name: item.name,
       description: item.description,
@@ -864,15 +862,12 @@ async function fetchGoogleEventsBestEffort({
         events.push(...group.value);
       } else {
         hadError = true;
-        console.warn(
-          "[admin-calendar] google calendar source failed",
-          group.reason,
-        );
+        console.warn("[admin-calendar] google calendar source failed");
       }
     }
     return { events, hadError };
-  } catch (err) {
-    console.warn("[admin-calendar] google events fetch failed", err);
+  } catch {
+    console.warn("[admin-calendar] google events fetch failed");
     return { events: [], hadError: true };
   }
 }

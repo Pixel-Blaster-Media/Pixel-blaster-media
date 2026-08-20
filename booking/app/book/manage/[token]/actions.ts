@@ -4,18 +4,15 @@ import { revalidatePath } from "next/cache";
 
 import { BUSINESS_TZ, isSlotAvailable } from "@/lib/booking/availability";
 import { isCancellable } from "@/lib/booking/booking-status";
+import { syncStoredBookingGoogleCalendarEvent } from "@/lib/booking/calendar-event-service";
 import { cancelBooking } from "@/lib/booking/cancel";
 import { verifyManageToken } from "@/lib/booking/manage-token";
-import { labelForService } from "@/lib/booking/services";
 import { sendEmail } from "@/lib/email/resend";
 import {
   getAdminNotificationEmail,
   getOrganizationEmailSettings,
 } from "@/lib/email/settings";
-import {
-  getGoogleCalendarClient,
-  GoogleCalendarError,
-} from "@/lib/integrations/google-calendar/client";
+
 import { sendPushBestEffort } from "@/lib/notifications/push";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { BookingStatus } from "@/lib/supabase/database.types";
@@ -31,6 +28,7 @@ import type { BookingStatus } from "@/lib/supabase/database.types";
 export interface ManageActionResult {
   ok: boolean;
   error?: string;
+  warning?: string;
   /** New time label (BUSINESS_TZ) after a successful reschedule. */
   whenLabel?: string;
   /** Whether this action attempted a realtor-facing confirmation email. */
@@ -44,6 +42,7 @@ interface ManagedBookingRow {
   scheduled_at: string | null;
   scheduled_ends_at: string | null;
   services: string[];
+  add_ons: string[];
   client_notes: string | null;
   google_calendar_event_id: string | null;
   suppress_realtor_notifications: boolean;
@@ -72,7 +71,7 @@ async function loadManagedBooking(
   const { data: booking, error } = await service
     .from("bookings")
     .select(
-      "id, organization_id, status, scheduled_at, scheduled_ends_at, services, client_notes, google_calendar_event_id, suppress_realtor_notifications, unit_number, properties(street_address, city, postal_code), profiles(email, full_name, phone)",
+      "id, organization_id, status, scheduled_at, scheduled_ends_at, services, add_ons, client_notes, google_calendar_event_id, suppress_realtor_notifications, unit_number, properties(street_address, city, postal_code), profiles(email, full_name, phone)",
     )
     .eq("id", bookingId)
     .maybeSingle<ManagedBookingRow>();
@@ -185,14 +184,10 @@ export async function rescheduleManagedBooking(
         error: "That time was just taken. Please pick another slot.",
       };
     }
-    return { ok: false, error: updateError.message };
+    return { ok: false, error: "Could not reschedule booking." };
   }
 
-  const calendarSynced = await syncManagedBookingGoogleEvent(
-    booking,
-    newStart,
-    newEnd,
-  );
+  const calendarSynced = await syncManagedBookingGoogleEvent(booking);
 
   const oldWhenLabel = formatWhen(currentStart);
   const newWhenLabel = formatWhen(newStart);
@@ -269,6 +264,9 @@ export async function rescheduleManagedBooking(
   return {
     ok: true,
     whenLabel: newWhenLabel,
+    warning: calendarSynced
+      ? undefined
+      : "Your booking moved, but Google Calendar did not sync. Please contact the studio if you need confirmation before the appointment.",
     realtorNotified: Boolean(
       realtorEmailResult?.ok && !realtorEmailResult.skipped,
     ),
@@ -277,71 +275,15 @@ export async function rescheduleManagedBooking(
 
 async function syncManagedBookingGoogleEvent(
   booking: ManagedBookingRow,
-  newStart: Date,
-  newEnd: Date,
 ): Promise<boolean> {
   try {
-    const gcal = await getGoogleCalendarClient({
+    const result = await syncStoredBookingGoogleCalendarEvent({
       organizationId: booking.organization_id,
+      bookingId: booking.id,
     });
-    if (!gcal) return true;
-
-    if (booking.google_calendar_event_id) {
-      try {
-        await gcal.updateEventTime(
-          booking.google_calendar_event_id,
-          newStart.toISOString(),
-          newEnd.toISOString(),
-        );
-        return true;
-      } catch (error) {
-        const missingEvent =
-          error instanceof GoogleCalendarError &&
-          (error.status === 404 || error.status === 410);
-        if (!missingEvent) throw error;
-      }
-    }
-
-    const address = bookingAddressLine(booking);
-    const realtorName =
-      booking.profiles?.full_name ?? booking.profiles?.email ?? "Realtor";
-    const services = booking.services.map(labelForService).join(", ");
-    const event = await gcal.createEvent({
-      summary: [realtorName, services, booking.properties?.street_address]
-        .filter(Boolean)
-        .join(" - "),
-      location: address,
-      description:
-        `Realtor: ${realtorName}\n` +
-        (booking.profiles?.email
-          ? `Email: ${booking.profiles.email}\n`
-          : "") +
-        (booking.profiles?.phone
-          ? `Phone: ${booking.profiles.phone}\n`
-          : "") +
-        (services ? `Services: ${services}\n` : "") +
-        (booking.client_notes ? `\nNotes:\n${booking.client_notes}\n` : ""),
-      startISO: newStart.toISOString(),
-      endISO: newEnd.toISOString(),
-      ...(booking.suppress_realtor_notifications
-        ? {}
-        : {
-            attendeeEmail: booking.profiles?.email,
-            attendeeName: booking.profiles?.full_name ?? undefined,
-          }),
-    });
-
-    const { error } = await getServiceSupabase()
-      .from("bookings")
-      .update({
-        google_calendar_event_id: event.id,
-        google_calendar_event_url: event.htmlLink,
-      })
-      .eq("id", booking.id)
-      .eq("organization_id", booking.organization_id);
-    return !error;
-  } catch (error) {
-    console.warn("[manage-booking] google calendar reschedule failed", error);
+    return result.ok;
+  } catch {
+    console.warn("[manage-booking] google calendar reschedule failed");
     return false;
   }
 }
@@ -402,6 +344,9 @@ export async function cancelManagedBooking(
   revalidatePath(`/admin/bookings/${booking.id}`);
   return {
     ok: true,
+    warning: result.warning
+      ? "Your booking was cancelled, but Google Calendar cleanup needs attention. Please contact the studio if you need confirmation."
+      : undefined,
     realtorNotified,
   };
 }

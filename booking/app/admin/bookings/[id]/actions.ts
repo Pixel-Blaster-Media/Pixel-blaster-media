@@ -10,6 +10,7 @@ import {
   businessDateTimeLocalToUtc,
 } from "@/lib/booking/availability";
 import { rescheduleCalendarShoot } from "@/app/admin/calendar/actions";
+import { syncStoredBookingGoogleCalendarEvent } from "@/lib/booking/calendar-event-service";
 import { nextBookingStatuses } from "@/lib/booking/booking-status";
 import { validateManualDeliveryKind } from "@/lib/booking/manual-delivery-kind";
 import { cancelBooking } from "@/lib/booking/cancel";
@@ -17,6 +18,7 @@ import { totalDurationMinutes } from "@/lib/booking/services";
 import {
   computeCartTotals,
   getActiveCatalog,
+  getFullCatalog,
   getCatalogItemPrice,
   validateCart,
   type Catalog,
@@ -24,6 +26,7 @@ import {
 } from "@/lib/booking/catalog";
 import { buildDeliveryLinks } from "@/lib/booking/delivery-links";
 import { createManageToken } from "@/lib/booking/manage-token";
+import { syncRealtorCalendarEventsBestEffort } from "@/lib/booking/realtor-calendar-fanout";
 import { sendEmail } from "@/lib/email/resend";
 import { getOrganizationEmailSettings } from "@/lib/email/settings";
 import {
@@ -48,10 +51,7 @@ import {
   isIGuidePhotoZipUrl,
   type IGuidePhotoZipKind,
 } from "@/lib/integrations/iguide/photo-downloads";
-import {
-  getGoogleCalendarClient,
-  GoogleCalendarError,
-} from "@/lib/integrations/google-calendar/client";
+
 import {
   createIGuide as createIGuideInPortal,
   listIGuides,
@@ -205,6 +205,8 @@ interface BookingForManualEditRow {
   profiles: {
     email: string;
     full_name: string | null;
+    phone: string | null;
+    brokerage: string | null;
     delivery_cc_emails: string[] | null;
   } | null;
 }
@@ -222,6 +224,13 @@ export interface ActionResult {
   error?: string;
   confirmationSent?: boolean;
   warning?: string;
+}
+
+function combineActionWarnings(
+  ...warnings: Array<string | null | undefined>
+): string | undefined {
+  const combined = warnings.filter((warning): warning is string => Boolean(warning)).join(" ");
+  return combined || undefined;
 }
 
 const LISTING_WEBSITE_TEMPLATES: ListingWebsiteTemplate[] = [
@@ -266,6 +275,9 @@ export async function updateBookingStatus(
   bookingId: string,
   next: BookingStatus,
 ): Promise<ActionResult> {
+  if (next === "cancelled") {
+    return cancelBookingAsAdmin(bookingId);
+  }
   const admin = await requireAdminForBooking(bookingId);
   if (!admin) return { ok: false, error: "Booking not found." };
   const service = getServiceSupabase();
@@ -293,7 +305,7 @@ export async function updateBookingStatus(
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId);
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: "Could not update booking status." };
 
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${bookingId}`);
@@ -317,7 +329,7 @@ export async function cancelBookingAsAdmin(
   if (!result.ok) return { ok: false, error: result.error };
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${bookingId}`);
-  return { ok: true };
+  return { ok: true, warning: result.warning };
 }
 
 /**
@@ -366,7 +378,7 @@ export async function updateBookingDetails(
   const { data: booking, error: bookingError } = await service
     .from("bookings")
     .select(
-      "id, organization_id, property_id, owner_id, scheduled_at, scheduled_ends_at, services, add_ons, google_calendar_event_id, suppress_realtor_notifications, properties(street_address, city, province, postal_code), profiles(email, full_name, delivery_cc_emails)",
+      "id, organization_id, property_id, owner_id, scheduled_at, scheduled_ends_at, services, add_ons, google_calendar_event_id, suppress_realtor_notifications, properties(street_address, city, province, postal_code), profiles(email, full_name, phone, brokerage, delivery_cc_emails)",
     )
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
@@ -376,7 +388,7 @@ export async function updateBookingDetails(
     return { ok: false, error: "Booking not found." };
   }
 
-  const catalog = await getActiveCatalog({ organizationId: admin.organizationId });
+  const catalog = await getFullCatalog({ organizationId: admin.organizationId });
   const catalogItems = catalogRows(catalog);
   const byId = new Map(catalogItems.map((item) => [item.id, item]));
   const shouldReplaceCatalogItems = selectedCatalogIds.length > 0;
@@ -394,6 +406,16 @@ export async function updateBookingDetails(
     : catalogItems.filter((item) =>
         [...booking.services, ...booking.add_ons].includes(item.slug),
       );
+  const currentSlugs = new Set([...booking.services, ...booking.add_ons]);
+  if (
+    shouldReplaceCatalogItems &&
+    selectedItems.some((item) => !item.active && !currentSlugs.has(item.slug))
+  ) {
+    return {
+      ok: false,
+      error: "Inactive packages can be retained but cannot be newly added.",
+    };
+  }
   const totals = shouldReplaceCatalogItems
     ? computeCartTotals(cart, catalog, squareFootage)
     : null;
@@ -441,17 +463,6 @@ export async function updateBookingDetails(
         .map((item) => item.slug)
     : booking.add_ons;
 
-  const { error: profileError } = await service
-    .from("profiles")
-    .update({
-      full_name: contactName,
-      phone: contactPhone,
-      brokerage,
-    })
-    .eq("id", booking.owner_id)
-    .eq("organization_id", admin.organizationId);
-  if (profileError) return { ok: false, error: profileError.message };
-
   // Guard: an empty time field means "leave the schedule alone", not
   // "clear it" — otherwise a form variant that omits the field would
   // silently wipe the booking's time.
@@ -488,40 +499,64 @@ export async function updateBookingDetails(
           "The database still has the no-overlap guard. Apply migration 0037_allow_admin_overlap.sql to enable admin double-booking.",
       };
     }
-    return { ok: false, error: updateError.message };
+    return { ok: false, error: "Could not save booking." };
   }
 
+  let lineItemWarning: string | undefined;
   if (shouldReplaceCatalogItems) {
     const lineItemError = await replaceBookingLineItems({
       bookingId: booking.id,
       selectedItems,
       squareFootage,
     });
-    if (lineItemError) return { ok: false, error: lineItemError };
+    if (lineItemError) {
+      lineItemWarning =
+        "Booking saved, but its item snapshots did not update. Review the package before invoicing.";
+    }
   }
 
-  await syncGoogleCalendarEventBestEffort({
+  const profileChanged =
+    booking.profiles?.full_name !== contactName ||
+    booking.profiles?.phone !== contactPhone ||
+    booking.profiles?.brokerage !== brokerage;
+  let profileUpdated = !profileChanged;
+  let profileWarning: string | undefined;
+  if (profileChanged) {
+    const { data: updatedProfile, error: profileError } = await service
+      .from("profiles")
+      .update({
+        full_name: contactName,
+        phone: contactPhone,
+        brokerage,
+      })
+      .eq("id", booking.owner_id)
+      .eq("organization_id", admin.organizationId)
+      .select("id")
+      .maybeSingle<{ id: string }>();
+    profileUpdated = Boolean(updatedProfile) && !profileError;
+    if (!profileUpdated) {
+      profileWarning =
+        "Booking saved, but the shared realtor details did not update.";
+    }
+  }
+
+  const calendarSynced = await syncGoogleCalendarEventBestEffort({
     organizationId: admin.organizationId,
     bookingId: booking.id,
-    previousEventId: booking.google_calendar_event_id,
-    contactEmail: booking.profiles?.email ?? "",
-    contactName,
-    contactPhone: contactPhone ?? "",
-    brokerage: brokerage ?? "",
-    streetAddress,
-    unitNumber: unitNumber ?? "",
-    city: city ?? "",
-    postalCode: postalCode ?? "",
-    notes: clientNotes ?? "",
-    selectedItems,
-    scheduledAt,
-    scheduledEndsAt,
-    notifyRealtor: !booking.suppress_realtor_notifications,
   });
+  const linkedRealtorEventsSynced =
+    profileChanged && profileUpdated
+      ? await syncRealtorCalendarEventsBestEffort({
+          organizationId: admin.organizationId,
+          ownerId: booking.owner_id,
+          excludeBookingId: booking.id,
+        })
+      : true;
 
   let confirmationSent = false;
   const shouldAttemptConfirmation = Boolean(
     shouldSendConfirmation &&
+      !lineItemWarning &&
       !booking.suppress_realtor_notifications &&
       booking.profiles?.email,
   );
@@ -531,7 +566,9 @@ export async function updateBookingDetails(
       organizationId: admin.organizationId,
       email: booking.profiles.email,
       ccEmails: booking.profiles.delivery_cc_emails ?? [],
-      contactName,
+      contactName: profileUpdated
+        ? contactName
+        : (booking.profiles.full_name ?? booking.profiles.email),
     });
   }
 
@@ -563,7 +600,23 @@ export async function updateBookingDetails(
   revalidatePath("/admin/bookings");
   revalidatePath("/admin/calendar");
   revalidatePath(`/admin/bookings/${bookingId}`);
-  return { ok: true, confirmationSent };
+  return {
+    ok: true,
+    confirmationSent,
+    warning: combineActionWarnings(
+      lineItemWarning,
+      profileWarning,
+      calendarSynced
+        ? undefined
+        : "Booking saved, but Google Calendar did not sync. Check the event before the shoot.",
+      linkedRealtorEventsSynced
+        ? undefined
+        : "Realtor details saved, but one or more of their other linked Google Calendar events did not sync.",
+      shouldSendConfirmation && !confirmationSent
+        ? "The confirmation email was not sent."
+        : undefined,
+    ),
+  };
 }
 
 /**
@@ -630,9 +683,10 @@ export async function updateBookingServicesFromCalendar(
     return { ok: false, error: "This booking has no property address." };
   }
 
-  const catalog = await getActiveCatalog({ organizationId: admin.organizationId });
+  const catalog = await getFullCatalog({ organizationId: admin.organizationId });
   const catalogItems = catalogRows(catalog);
   const byId = new Map(catalogItems.map((item) => [item.id, item]));
+  const currentSlugs = new Set([...booking.services, ...booking.add_ons]);
   const cart = selectedCatalogIds.map((catalogItemId) => ({
     catalogItemId,
     quantity: 1,
@@ -640,15 +694,25 @@ export async function updateBookingServicesFromCalendar(
   if (cart.some((line) => !byId.has(line.catalogItemId))) {
     return {
       ok: false,
-      error: "One of those services is no longer active. Refresh and try again.",
+      error: "One of those services no longer exists. Refresh and try again.",
+    };
+  }
+  const selectedItems = cart
+    .map((line) => byId.get(line.catalogItemId))
+    .filter((item): item is CatalogItemRow => Boolean(item));
+  if (
+    selectedItems.some(
+      (item) => !item.active && !currentSlugs.has(item.slug),
+    )
+  ) {
+    return {
+      ok: false,
+      error: "An inactive service cannot be newly added to this booking.",
     };
   }
   const cartError = validateCart(cart, catalog);
   if (cartError) return { ok: false, error: cartError };
 
-  const selectedItems = cart
-    .map((line) => byId.get(line.catalogItemId))
-    .filter((item): item is CatalogItemRow => Boolean(item));
   const totals = computeCartTotals(cart, catalog, booking.square_footage);
   const durationMinutes = Math.max(totals.totalDurationMinutes, 60);
   const scheduledAt = booking.scheduled_at
@@ -678,37 +742,27 @@ export async function updateBookingServicesFromCalendar(
     })
     .eq("id", booking.id)
     .eq("organization_id", admin.organizationId);
-  if (updateError) return { ok: false, error: updateError.message };
+  if (updateError) {
+    return { ok: false, error: "Could not update booking services." };
+  }
 
   const lineItemError = await replaceBookingLineItems({
     bookingId: booking.id,
     selectedItems,
     squareFootage: booking.square_footage,
   });
-  if (lineItemError) return { ok: false, error: lineItemError };
+  const lineItemWarning = lineItemError
+    ? "Package selection was saved, but item snapshots could not be refreshed."
+    : undefined;
 
-  await syncGoogleCalendarEventBestEffort({
+  const calendarSynced = await syncGoogleCalendarEventBestEffort({
     organizationId: admin.organizationId,
     bookingId: booking.id,
-    previousEventId: booking.google_calendar_event_id,
-    contactEmail: booking.profiles?.email ?? "",
-    contactName:
-      booking.profiles?.full_name ?? booking.profiles?.email ?? "Realtor",
-    contactPhone: booking.profiles?.phone ?? "",
-    brokerage: booking.profiles?.brokerage ?? "",
-    streetAddress: booking.properties.street_address,
-    unitNumber: booking.unit_number ?? "",
-    city: booking.properties.city ?? "",
-    postalCode: booking.properties.postal_code ?? "",
-    notes: booking.client_notes ?? "",
-    selectedItems,
-    scheduledAt,
-    scheduledEndsAt,
-    notifyRealtor: !booking.suppress_realtor_notifications,
   });
 
   let confirmationSent = false;
   if (
+    !lineItemWarning &&
     shouldSendConfirmation &&
     !booking.suppress_realtor_notifications &&
     booking.profiles?.email
@@ -740,19 +794,27 @@ export async function updateBookingServicesFromCalendar(
       total_price_cents: totals.totalPriceCents,
       duration_minutes: durationMinutes,
     },
-    result_status: "success",
-    result_message: "Booking package updated from the calendar quick view.",
+    result_status: lineItemWarning ? "failed" : "success",
+    result_message:
+      lineItemWarning ?? "Booking package updated from the calendar quick view.",
   });
 
   revalidatePath("/admin/calendar");
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${booking.id}`);
 
-  const warning = booking.quickbooks_invoice_id
-    ? "Package updated. This booking already has an invoice; review it before sending."
-    : shouldSendConfirmation && !confirmationSent
-      ? "Package updated, but the confirmation email was not sent."
-      : undefined;
+  const warning = combineActionWarnings(
+    lineItemWarning,
+    !calendarSynced
+      ? "Package updated, but Google Calendar did not sync. Check the event before the shoot."
+      : undefined,
+    booking.quickbooks_invoice_id
+      ? "This booking already has an invoice; review it before sending."
+      : undefined,
+    shouldSendConfirmation && !confirmationSent
+      ? "The confirmation email was not sent."
+      : undefined,
+  );
   return { ok: true, confirmationSent, warning };
 }
 
@@ -797,7 +859,16 @@ export async function rescheduleBookingFromDetails(
     ? await sendConfirmationForExistingBookingBestEffort(bookingId)
     : false;
 
-  return { ok: true, confirmationSent };
+  return {
+    ok: true,
+    confirmationSent,
+    warning: combineActionWarnings(
+      result.warning,
+      shouldSendConfirmation && !confirmationSent
+        ? "Booking rescheduled, but the confirmation email was not sent."
+        : undefined,
+    ),
+  };
 }
 
 /**
@@ -868,7 +939,7 @@ export async function addManualDeliverable(
     ready_at: new Date().toISOString(),
   });
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: "Could not complete this action." };
 
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true };
@@ -887,7 +958,7 @@ export async function deleteDeliverable(
     .eq("id", deliverableId)
     .eq("booking_id", bookingId);
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: "Could not complete this action." };
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true };
 }
@@ -963,7 +1034,7 @@ export async function saveListingWebsite(
     .select("property_id")
     .eq("slug", slug)
     .maybeSingle<{ property_id: string }>();
-  if (slugError) return { ok: false, error: slugError.message };
+  if (slugError) return { ok: false, error: "Could not validate the listing URL." };
   if (slugOwner && slugOwner.property_id !== booking.property_id) {
     return { ok: false, error: "That public URL is already in use. Try a slightly different slug." };
   }
@@ -993,7 +1064,7 @@ export async function saveListingWebsite(
     { onConflict: "property_id" },
   );
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: "Could not complete this action." };
 
   revalidatePath(`/admin/bookings/${bookingId}`);
   revalidatePath(`/listings/${slug}`);
@@ -1088,13 +1159,10 @@ export async function sendDeliveryReadyEmail(
         if (invoiceResult.ok) {
           invoiceUrl = invoiceResult.invoiceUrl ?? null;
         } else {
-          console.warn(
-            "[delivery] invoice auto-create skipped:",
-            invoiceResult.error,
-          );
+          console.warn("[delivery] invoice auto-create skipped");
         }
-      } catch (err) {
-        console.warn("[delivery] invoice auto-create failed", err);
+      } catch {
+        console.warn("[delivery] invoice auto-create failed");
       }
     }
   }
@@ -1118,7 +1186,7 @@ export async function sendDeliveryReadyEmail(
     html: email.html,
     organizationId: admin.organizationId,
   });
-  if (!sent.ok) return { ok: false, error: sent.error ?? "Email failed." };
+  if (!sent.ok) return { ok: false, error: "Delivery email could not be sent." };
 
   const sentAt = new Date().toISOString();
   const notificationRows = [primaryRecipient, ...ccRecipients].map(
@@ -1135,7 +1203,10 @@ export async function sendDeliveryReadyEmail(
       onConflict: "booking_id,kind,recipient_email",
     });
   if (notificationError && notificationError.code !== "23505") {
-    return { ok: false, error: notificationError.message };
+    return {
+      ok: false,
+      error: "The delivery email was sent, but its notification record could not be saved.",
+    };
   }
 
   await sendPushBestEffort(admin.organizationId, {
@@ -1267,7 +1338,7 @@ export async function saveIGuideId(
       .update({ iguide_id: null, iguide_portal_id: null })
       .eq("id", bookingId)
       .eq("organization_id", admin.organizationId);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: "Could not complete this action." };
     revalidatePath(`/admin/bookings/${bookingId}`);
     return { ok: true, iguideId: null, portalId: null };
   }
@@ -1296,7 +1367,9 @@ export async function saveIGuideId(
       .neq("id", bookingId)
       .maybeSingle<ExistingIGuideBookingRow>();
 
-    if (existingError) return { ok: false, error: existingError.message };
+    if (existingError) {
+      return { ok: false, error: "Could not validate the iGUIDE link." };
+    }
     if (existing) {
       const address = [
         existing.properties?.street_address,
@@ -1323,7 +1396,7 @@ export async function saveIGuideId(
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId);
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: "Could not complete this action." };
 
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true, iguideId: alias, portalId };
@@ -1353,7 +1426,7 @@ export async function listExistingIGuides(
       error:
         result.status === 401 || result.status === 403
           ? "Your iGUIDE token needs the iguide.list permission before tours can be selected here."
-          : result.error ?? "Could not load iGUIDEs from the portal.",
+          : "Could not load iGUIDEs from the portal.",
     };
   }
 
@@ -1411,7 +1484,7 @@ export async function syncIGuide(
   const result = await syncIGuideForBooking(booking, {
     organizationId: admin.organizationId,
   });
-  if (!result.ok) return { ok: false, error: result.error };
+  if (!result.ok) return { ok: false, error: "Could not synchronize this iGUIDE." };
 
   revalidatePath(`/admin/bookings/${bookingId}`);
   return {
@@ -1463,7 +1536,7 @@ export async function saveIGuidePhotoDownloads(
       .delete()
       .eq("source", "iguide")
       .eq("external_id", externalId);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: "Could not complete this action." };
     revalidatePath(`/admin/bookings/${bookingId}`);
     return { ok: true };
   }
@@ -1491,7 +1564,7 @@ export async function saveIGuidePhotoDownloads(
     { onConflict: "organization_id,source,external_id" },
   );
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: "Could not complete this action." };
 
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true };
@@ -1584,7 +1657,7 @@ export async function createIGuideForBooking(
   if (!result.ok || !result.data) {
     return {
       ok: false,
-      error: result.error ?? "iGuide did not create the tour.",
+      error: "iGUIDE did not create the tour.",
     };
   }
   if (!result.data.id) {
@@ -1600,7 +1673,7 @@ export async function createIGuideForBooking(
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId);
 
-  if (updateErr) return { ok: false, error: updateErr.message };
+  if (updateErr) return { ok: false, error: "Could not save the provider link." };
 
   const recorded = await recordIGuideCreateJob({
     organizationId: admin.organizationId,
@@ -1612,7 +1685,12 @@ export async function createIGuideForBooking(
     defaultViewId: result.data.defaultViewId ?? null,
     rawCreateResponse: result.data,
   });
-  if (!recorded.ok) return { ok: false, error: recorded.error };
+  if (!recorded.ok) {
+    return {
+      ok: false,
+      error: "The iGUIDE was created, but its local job could not be saved.",
+    };
+  }
 
   revalidatePath(`/admin/bookings/${bookingId}`);
   return {
@@ -1735,9 +1813,7 @@ async function hasUnresolvedAmbiguousQuickBooksJob(
     .limit(1)
     .maybeSingle<{ id: string }>();
   if (error) {
-    console.warn("[qbo.invoice] ambiguous outbox guard failed closed", {
-      code: error.code,
-    });
+    console.warn("[qbo.invoice] ambiguous outbox guard failed closed");
     return true;
   }
   return Boolean(data);
@@ -1795,7 +1871,7 @@ async function createInvoiceForBookingId(
     property: booking.properties,
   });
 
-  if (!result.ok) return { ok: false, error: result.error };
+  if (!result.ok) return { ok: false, error: "Could not create the invoice." };
   return {
     ok: true,
     invoiceUrl: result.invoiceUrl,
@@ -1810,7 +1886,7 @@ export async function refreshInvoice(
   const admin = await requireAdminForBooking(bookingId);
   if (!admin) return { ok: false, error: "Booking not found." };
   const result = await refreshInvoiceInQBO(bookingId);
-  if (!result.ok) return { ok: false, error: result.error };
+  if (!result.ok) return { ok: false, error: "Could not refresh the invoice." };
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true, status: result.status };
 }
@@ -1838,7 +1914,7 @@ export async function saveFotelloListingId(
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId);
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: "Could not complete this action." };
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true, listingId };
 }
@@ -1921,13 +1997,17 @@ export async function saveFotelloDeliveryLinks(
     .eq("booking_id", booking.id)
     .eq("source", "fotello")
     .in("external_id", externalIds);
-  if (deleteError) return { ok: false, error: deleteError.message };
+  if (deleteError) {
+    return { ok: false, error: "Could not replace provider delivery links." };
+  }
 
   if (rows.length > 0) {
     const { error: insertError } = await service
       .from("deliverables")
       .insert(rows);
-    if (insertError) return { ok: false, error: insertError.message };
+    if (insertError) {
+      return { ok: false, error: "Could not save provider delivery links." };
+    }
   }
 
   revalidatePath(`/admin/bookings/${bookingId}`);
@@ -2004,7 +2084,7 @@ export async function prepareFotelloUpload(
         .update({ fotello_listing_id: listingId })
         .eq("id", booking.id)
         .eq("organization_id", admin.organizationId);
-      if (updateError) return { ok: false, error: updateError.message };
+      if (updateError) return { ok: false, error: "Could not save the provider link." };
     }
 
     const uploads = await Promise.all(
@@ -2022,13 +2102,10 @@ export async function prepareFotelloUpload(
         expires: upload.expires,
       })),
     };
-  } catch (err) {
+  } catch {
     return {
       ok: false,
-      error:
-        err instanceof Error
-          ? err.message
-          : "Fotello could not prepare uploads.",
+      error: "Fotello could not prepare uploads.",
     };
   }
 }
@@ -2069,7 +2146,7 @@ export async function startFotelloEnhance(
       .update({ fotello_listing_id: cleanListingId })
       .eq("id", booking.id)
       .eq("organization_id", admin.organizationId);
-    if (updateError) return { ok: false, error: updateError.message };
+    if (updateError) return { ok: false, error: "Could not save the provider link." };
   }
 
   try {
@@ -2091,13 +2168,14 @@ export async function startFotelloEnhance(
     });
 
     revalidatePath(`/admin/bookings/${bookingId}`);
-    if (!result.ok) return { ok: false, error: result.error };
+    if (!result.ok) {
+      return { ok: false, error: "Fotello could not synchronize this enhance." };
+    }
     return { ok: true, enhanceId: enhance.id, status: result.status };
-  } catch (err) {
+  } catch {
     return {
       ok: false,
-      error:
-        err instanceof Error ? err.message : "Fotello could not start enhance.",
+      error: "Fotello could not start enhance.",
     };
   }
 }
@@ -2141,7 +2219,9 @@ export async function trackFotelloEnhance(
   });
 
   revalidatePath(`/admin/bookings/${bookingId}`);
-  if (!result.ok) return { ok: false, error: result.error };
+  if (!result.ok) {
+    return { ok: false, error: "Fotello could not synchronize this enhance." };
+  }
   return { ok: true, status: result.status };
 }
 
@@ -2169,7 +2249,7 @@ export async function untrackFotelloEnhance(
     .eq("id", deliverableId)
     .eq("booking_id", bookingId)
     .eq("source", "fotello");
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: "Could not complete this action." };
   revalidatePath(`/admin/bookings/${bookingId}`);
   return { ok: true };
 }
@@ -2203,7 +2283,7 @@ async function replaceBookingLineItems({
     .select("id")
     .eq("booking_id", bookingId)
     .returns<Array<{ id: string }>>();
-  if (oldLineItemsError) return oldLineItemsError.message;
+  if (oldLineItemsError) return "Could not update booking line items.";
 
   const lineItems = selectedItems.map((item) => ({
     booking_id: bookingId,
@@ -2218,7 +2298,7 @@ async function replaceBookingLineItems({
   const { error: lineItemError } = await service
     .from("booking_line_items")
     .insert(lineItems);
-  if (lineItemError) return lineItemError.message;
+  if (lineItemError) return "Could not update booking line items.";
 
   const oldLineItemIds = (oldLineItems ?? []).map((item) => item.id);
   if (oldLineItemIds.length === 0) return null;
@@ -2226,7 +2306,7 @@ async function replaceBookingLineItems({
     .from("booking_line_items")
     .delete()
     .in("id", oldLineItemIds);
-  return deleteLineItemsError?.message ?? null;
+  return deleteLineItemsError ? "Could not update booking line items." : null;
 }
 
 async function sendConfirmationForExistingBookingBestEffort(
@@ -2273,8 +2353,8 @@ async function sendConfirmationForExistingBookingBestEffort(
       ccEmails: booking.profiles.delivery_cc_emails ?? [],
       contactName: booking.profiles.full_name ?? booking.profiles.email,
     });
-  } catch (err) {
-    console.warn("[booking-edit] confirmation resend failed", err);
+  } catch {
+    console.warn("[booking-edit] confirmation resend failed");
     return false;
   }
 }
@@ -2348,8 +2428,8 @@ async function sendBookingConfirmationEmailBestEffort(args: {
         `/book/manage/${createManageToken(args.bookingId)}`,
         appUrl,
       ).toString();
-    } catch (err) {
-      console.warn("[booking-edit] confirmation manage link failed", err);
+    } catch {
+      console.warn("[booking-edit] confirmation manage link failed");
     }
   }
   let usedFallbackLink = false;
@@ -2372,8 +2452,8 @@ async function sendBookingConfirmationEmailBestEffort(args: {
       } else {
         portalLink = data.properties.action_link;
       }
-    } catch (err) {
-      console.warn("[booking-edit] confirmation magic link failed", err);
+    } catch {
+      console.warn("[booking-edit] confirmation magic link failed");
       const fallback = new URL("/auth/sign-in", appUrl);
       fallback.searchParams.set("audience", "realtor");
       fallback.searchParams.set("next", "/portal");
@@ -2455,7 +2535,7 @@ async function sendBookingConfirmationEmailBestEffort(args: {
       recipient_email: recipientEmail,
       status,
       provider_message_id: result.id ?? null,
-      error: result.ok ? null : (result.error ?? "Email failed."),
+      error: result.ok ? null : "Email delivery failed.",
       metadata: {
         resentFromAdminEdit: true,
         usedFallbackLink,
@@ -2471,10 +2551,10 @@ async function sendBookingConfirmationEmailBestEffort(args: {
       onConflict: "booking_id,kind,recipient_email",
     });
   if (error && error.code !== "23505") {
-    console.warn("[booking-edit] confirmation notification log failed", error);
+    console.warn("[booking-edit] confirmation notification log failed");
   }
   if (!result.ok) {
-    console.warn("[booking-edit] confirmation send failed", result.error);
+    console.warn("[booking-edit] confirmation send failed");
   }
   return result.ok && !result.skipped;
 }
@@ -2488,28 +2568,34 @@ async function findOrCreatePropertyForBooking(args: {
   postalCode: string | null;
 }): Promise<string | null> {
   const service = getServiceSupabase();
-  const { data: existing, error: existingError } = await service
+  const { data: existingRows, error: existingError } = await service
     .from("properties")
-    .select("id")
+    .select("id, city, province, postal_code")
     .eq("organization_id", args.organizationId)
     .eq("owner_id", args.ownerId)
-    .ilike("street_address", args.streetAddress)
-    .maybeSingle<{ id: string }>();
+    .eq("street_address", args.streetAddress)
+    .limit(20)
+    .returns<
+      Array<{
+        id: string;
+        city: string | null;
+        province: string | null;
+        postal_code: string | null;
+      }>
+    >();
 
   if (existingError) return null;
-  if (existing?.id) {
-    await service
-      .from("properties")
-      .update({
-        city: args.city,
-        province: args.province,
-        postal_code: args.postalCode,
-      })
-      .eq("id", existing.id)
-      .eq("organization_id", args.organizationId);
-    return existing.id;
-  }
+  const normalize = (value: string | null) => value?.trim().toLowerCase() ?? "";
+  const exactMatch = (existingRows ?? []).find(
+    (row) =>
+      normalize(row.city) === normalize(args.city) &&
+      normalize(row.province) === normalize(args.province) &&
+      normalize(row.postal_code) === normalize(args.postalCode),
+  );
+  if (exactMatch) return exactMatch.id;
 
+  // A property row can be shared by historical bookings. Never mutate it from
+  // a single-booking edit; create a corrected row and repoint only this booking.
   const { data, error } = await service
     .from("properties")
     .insert({
@@ -2527,110 +2613,21 @@ async function findOrCreatePropertyForBooking(args: {
   return data.id;
 }
 
+
 async function syncGoogleCalendarEventBestEffort(args: {
   organizationId: string;
   bookingId: string;
-  previousEventId: string | null;
-  contactEmail: string;
-  contactName: string;
-  contactPhone: string;
-  brokerage: string;
-  streetAddress: string;
-  unitNumber: string;
-  city: string;
-  postalCode: string;
-  notes: string;
-  selectedItems: CatalogItemRow[];
-  scheduledAt: Date | null;
-  scheduledEndsAt: Date | null;
-  notifyRealtor: boolean;
-}) {
+}): Promise<boolean> {
   try {
-    const gcal = await getGoogleCalendarClient({
+    const result = await syncStoredBookingGoogleCalendarEvent({
       organizationId: args.organizationId,
+      bookingId: args.bookingId,
     });
-    if (!gcal) return;
-
-    const service = getServiceSupabase();
-    if (!args.scheduledAt || !args.scheduledEndsAt) {
-      if (args.previousEventId) {
-        await gcal.deleteEvent(args.previousEventId);
-      }
-      await service
-        .from("bookings")
-        .update({
-          google_calendar_event_id: null,
-          google_calendar_event_url: null,
-        })
-        .eq("organization_id", args.organizationId)
-        .eq("id", args.bookingId);
-      return;
-    }
-
-    const streetLine = args.unitNumber
-      ? `${args.streetAddress}, Unit ${args.unitNumber}`
-      : args.streetAddress;
-    const addressLine = [streetLine, args.city, args.postalCode]
-      .filter(Boolean)
-      .join(", ");
-    const serviceLabels = args.selectedItems.map((item) => item.name).join(", ");
-    const eventInput = {
-      summary: calendarShootTitle({
-        realtor: args.contactName,
-        services: serviceLabels,
-        address: streetLine,
-      }),
-      location: addressLine,
-      description:
-        `Realtor: ${args.contactName}\nEmail: ${args.contactEmail}\n` +
-        (args.contactPhone ? `Phone: ${args.contactPhone}\n` : "") +
-        (args.brokerage ? `Brokerage: ${args.brokerage}\n` : "") +
-        `Services: ${serviceLabels}\n` +
-        (args.notes ? `\nNotes:\n${args.notes}\n` : ""),
-      startISO: args.scheduledAt.toISOString(),
-      endISO: args.scheduledEndsAt.toISOString(),
-      ...(args.notifyRealtor
-        ? {
-            attendeeEmail: args.contactEmail || undefined,
-            attendeeName: args.contactName,
-          }
-        : {}),
-    };
-    let event: { id: string; htmlLink: string } | null = null;
-    if (args.previousEventId) {
-      try {
-        event = await gcal.updateEvent(args.previousEventId, eventInput);
-      } catch (error) {
-        const missingEvent =
-          error instanceof GoogleCalendarError &&
-          (error.status === 404 || error.status === 410);
-        if (!missingEvent) throw error;
-      }
-    }
-    event ??= await gcal.createEvent(eventInput);
-
-    await service
-      .from("bookings")
-      .update({
-        google_calendar_event_id: event.id,
-        google_calendar_event_url: event.htmlLink,
-      })
-      .eq("organization_id", args.organizationId)
-      .eq("id", args.bookingId);
-  } catch (err) {
-    console.warn("[booking-edit] google calendar sync failed", err);
+    return result.ok;
+  } catch {
+    console.warn("[booking-edit] google calendar sync failed");
+    return false;
   }
-}
-
-function calendarShootTitle(args: {
-  realtor: string;
-  services: string;
-  address: string;
-}): string {
-  return [args.realtor, args.services, args.address]
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .join(" - ");
 }
 
 function safeEmailAppUrl(value: string | undefined): string | null {

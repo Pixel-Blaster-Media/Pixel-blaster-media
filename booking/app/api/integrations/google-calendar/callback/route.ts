@@ -69,8 +69,8 @@ export async function GET(request: NextRequest) {
       appUrl,
       process.env.GOOGLE_CALENDAR_REDIRECT_URI,
     );
-  } catch (err) {
-    console.error("Invalid Google Calendar redirect configuration", err);
+  } catch {
+    console.error("Invalid Google Calendar redirect configuration");
     return NextResponse.json(
       { error: "Google Calendar OAuth redirect is misconfigured." },
       { status: 500 },
@@ -158,7 +158,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (errorParam) {
-    settingsUrl.searchParams.set("google_error", errorParam.slice(0, 80));
+    settingsUrl.searchParams.set("google_error", "google_oauth_error");
     return NextResponse.redirect(settingsUrl);
   }
 
@@ -238,12 +238,8 @@ export async function GET(request: NextRequest) {
 
     settingsUrl.searchParams.set("google_connected", "1");
     return NextResponse.redirect(settingsUrl);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "unknown";
-    settingsUrl.searchParams.set(
-      "google_error",
-      msg.slice(0, 200),
-    );
+  } catch {
+    settingsUrl.searchParams.set("google_error", "connection_failed");
     return NextResponse.redirect(settingsUrl);
   }
 }

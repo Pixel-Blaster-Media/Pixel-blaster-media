@@ -86,11 +86,11 @@ export default function AdminAssistant() {
     startTransition(async () => {
       try {
         setResult(await askAdminAssistant(value));
-      } catch (err) {
+      } catch {
         setResult({
           ok: false,
           kind: "unsupported",
-          message: err instanceof Error ? err.message : "Assistant failed.",
+          message: "Assistant failed. Try again.",
           actions: [],
         });
       }
@@ -116,11 +116,11 @@ export default function AdminAssistant() {
             ].slice(0, 4),
           );
         }
-      } catch (err) {
+      } catch {
         setResult({
           ok: false,
           kind: "unsupported",
-          message: err instanceof Error ? err.message : "Action failed.",
+          message: "Action failed. Try again.",
           actions: [],
         });
       } finally {
@@ -136,11 +136,11 @@ export default function AdminAssistant() {
         const nextResult = await undoAssistantActionLog(logId);
         setResult(nextResult);
         setLogs(await getAssistantActionLogs());
-      } catch (err) {
+      } catch {
         setResult({
           ok: false,
           kind: "unsupported",
-          message: err instanceof Error ? err.message : "Undo failed.",
+          message: "Undo failed. Try again.",
           actions: [],
         });
       } finally {

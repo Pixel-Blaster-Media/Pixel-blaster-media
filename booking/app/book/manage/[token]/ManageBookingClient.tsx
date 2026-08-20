@@ -22,7 +22,7 @@ interface Props {
 }
 
 interface Flash {
-  kind: "ok" | "error";
+  kind: "ok" | "warning" | "error";
   text: string;
 }
 
@@ -52,8 +52,8 @@ export default function ManageBookingClient({
       if (result.ok) {
         setDone(true);
         setFlash({
-          kind: "ok",
-          text: `You're rescheduled${result.whenLabel ? ` for ${result.whenLabel}` : ""}.${result.realtorNotified ? " A confirmation email is on the way." : ""}`,
+          kind: result.warning ? "warning" : "ok",
+          text: `You're rescheduled${result.whenLabel ? ` for ${result.whenLabel}` : ""}.${result.realtorNotified ? " A confirmation email is on the way." : ""}${result.warning ? ` ${result.warning}` : ""}`,
         });
         router.refresh();
       } else {
@@ -74,10 +74,10 @@ export default function ManageBookingClient({
       if (result.ok) {
         setDone(true);
         setFlash({
-          kind: "ok",
-          text: `Your booking has been cancelled.${result.realtorNotified ? " A confirmation email is on the way." : ""}`,
+          kind: result.warning ? "warning" : "ok",
+          text: `Your booking has been cancelled.${result.realtorNotified ? " A confirmation email is on the way." : ""}${result.warning ? ` ${result.warning}` : ""}`,
         });
-        router.refresh();
+        if (!result.warning) router.refresh();
       } else {
         setFlash({
           kind: "error",
@@ -98,7 +98,9 @@ export default function ManageBookingClient({
             "rounded-2xl border p-4 text-sm font-medium " +
             (flash.kind === "ok"
               ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700"
-              : "border-red-500/30 bg-red-500/10 text-red-700")
+              : flash.kind === "warning"
+                ? "border-amber-500/40 bg-amber-500/10 text-amber-800"
+                : "border-red-500/30 bg-red-500/10 text-red-700")
           }
         >
           {flash.text}
@@ -194,8 +196,8 @@ export default function ManageBookingClient({
               Cancel this booking
             </h2>
             <p className="mt-1 max-w-2xl text-sm text-realtor-muted">
-              This frees up the slot at {addressLine} and notifies the
-              photographer. You can always book a new shoot later.
+              This cancels your booking at {addressLine}. You can always book a
+              new shoot later.
             </p>
             {confirmCancel ? (
               <div className="mt-4 flex flex-wrap items-center gap-3">

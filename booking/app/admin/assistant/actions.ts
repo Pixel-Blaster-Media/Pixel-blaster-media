@@ -356,7 +356,7 @@ export async function getAssistantActionLogs(): Promise<AdminAssistantLog[]> {
       }>
     >();
   if (error) {
-    console.warn("[admin-assistant] could not load audit log", error.message);
+    console.warn("[admin-assistant] could not load audit log");
     return [];
   }
   return (data ?? []).map((row) => ({
@@ -440,7 +440,9 @@ async function executeConfirmedAssistantAction(
     return {
       ok: true,
       kind: "answer",
-      message: `Done. I moved the booking to ${action.nextStatus}.`,
+      message: result.warning
+        ? `I moved the booking to ${action.nextStatus}, but follow-up needs attention: ${result.warning}`
+        : `Done. I moved the booking to ${action.nextStatus}.`,
       actions: [
         {
           type: "open_booking",
@@ -731,8 +733,9 @@ async function executeConfirmedAssistantAction(
   return {
     ok: true,
     kind: "answer",
-    message:
-      "Done. I cancelled the booking, emailed the realtor, removed the Google Calendar event if one existed, and freed the slot.",
+    message: result.warning
+      ? `The booking is cancelled, but Calendar cleanup needs attention: ${result.warning}`
+      : "Done. I cancelled the booking. Configured notifications were attempted and Google Calendar cleanup completed.",
     actions: [
       {
         type: "open_booking",
@@ -769,7 +772,7 @@ async function applyAssistantUndo(
     return {
       ok: false,
       kind: "needs_clarification",
-      message: error.message,
+      message: "The assistant could not load that action for undo.",
       actions: [],
     };
   }
@@ -863,7 +866,7 @@ async function recordAssistantAction(
     });
 
   if (error) {
-    console.warn("[admin-assistant] audit log failed", error.message);
+    console.warn("[admin-assistant] audit log failed");
   }
 }
 
@@ -910,10 +913,10 @@ async function loadAssistantContext(organizationId: string): Promise<{
   ]);
 
   if (bookingRes.error) {
-    throw new Error(`Could not load bookings for assistant: ${bookingRes.error.message}`);
+    throw new Error("Could not load bookings for assistant");
   }
   if (realtorRes.error) {
-    throw new Error(`Could not load realtors for assistant: ${realtorRes.error.message}`);
+    throw new Error("Could not load realtors for assistant");
   }
 
   const bookingRows = bookingRes.data ?? [];
@@ -926,9 +929,7 @@ async function loadAssistantContext(organizationId: string): Promise<{
       .in("booking_id", bookingIds)
       .returns<BookingLineContextRow[]>();
     if (lineItemError) {
-      throw new Error(
-        `Could not load booking line items for assistant: ${lineItemError.message}`,
-      );
+      throw new Error("Could not load booking line items for assistant");
     }
     for (const line of lineItems ?? []) {
       const list = lineItemIdsByBookingId.get(line.booking_id) ?? [];
@@ -945,9 +946,7 @@ async function loadAssistantContext(organizationId: string): Promise<{
       .in("booking_id", bookingIds)
       .returns<DeliverableContextRow[]>();
     if (deliverableError) {
-      throw new Error(
-        `Could not load deliverables for assistant: ${deliverableError.message}`,
-      );
+      throw new Error("Could not load deliverables for assistant");
     }
     for (const deliverable of deliverables ?? []) {
       deliverablesByBookingId.set(deliverable.booking_id, [
@@ -1189,8 +1188,7 @@ async function planWithOpenAI(
 
   const json = (await res.json()) as unknown;
   if (!res.ok) {
-    const message = openAiErrorMessage(json);
-    throw new Error(message || `OpenAI request failed (${res.status}).`);
+    throw new Error("Assistant planning request failed");
   }
 
   const text = extractOutputText(json);
@@ -1811,7 +1809,7 @@ async function applyBulkPriceChange(
       .eq("id", update.id)
       .eq("price_cents", update.oldPriceCents);
     if (error) {
-      return { ok: false, error: error.message };
+      return { ok: false, error: "Assistant action could not be completed." };
     }
   }
 
@@ -1850,7 +1848,7 @@ async function applyCalendarBlock(
     })
     .select("id")
     .single<{ id: string }>();
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: "Assistant action could not be completed." };
   return {
     ok: true,
     undoPayload: {
@@ -1891,7 +1889,9 @@ async function applyBusinessHourUpdate(
       end_time: string;
       enabled: boolean;
     }>();
-  if (readError) return { ok: false, error: readError.message };
+  if (readError) {
+    return { ok: false, error: "Assistant action could not be completed." };
+  }
 
   const { error } = await supabase
     .from("business_hours")
@@ -1905,7 +1905,7 @@ async function applyBusinessHourUpdate(
       },
       { onConflict: "organization_id,day_of_week" },
     );
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: "Assistant action could not be completed." };
   return {
     ok: true,
     undoPayload: {
@@ -1933,7 +1933,9 @@ async function applyRealtorMemoryUpdate(
     .is("archived_at", null)
     .eq("id", realtorId)
     .maybeSingle<{ id: string; internal_notes: string | null }>();
-  if (readError) return { ok: false, error: readError.message };
+  if (readError) {
+    return { ok: false, error: "Assistant action could not be completed." };
+  }
   if (!realtor) return { ok: false, error: "Realtor profile was not found." };
 
   const nextNotes =
@@ -1950,7 +1952,7 @@ async function applyRealtorMemoryUpdate(
     .eq("role", "realtor")
     .is("archived_at", null)
     .eq("id", realtorId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: "Assistant action could not be completed." };
   return {
     ok: true,
     undoPayload: {
@@ -1986,7 +1988,9 @@ async function applyDeliveryCcUpdate(
     .is("archived_at", null)
     .eq("id", realtorId)
     .maybeSingle<{ id: string; delivery_cc_emails: string[] | null }>();
-  if (readError) return { ok: false, error: readError.message };
+  if (readError) {
+    return { ok: false, error: "Assistant action could not be completed." };
+  }
   if (!realtor) return { ok: false, error: "Realtor profile was not found." };
 
   const current = new Set((realtor.delivery_cc_emails ?? []).map(normalizeEmail));
@@ -2008,7 +2012,7 @@ async function applyDeliveryCcUpdate(
     .eq("role", "realtor")
     .is("archived_at", null)
     .eq("id", realtorId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: "Assistant action could not be completed." };
   return {
     ok: true,
     count: emails.length,
@@ -2036,7 +2040,9 @@ async function applyBookingNoteUpdate(
     .eq("organization_id", organizationId)
     .eq("id", bookingId)
     .maybeSingle<{ id: string; internal_notes: string | null }>();
-  if (readError) return { ok: false, error: readError.message };
+  if (readError) {
+    return { ok: false, error: "Assistant action could not be completed." };
+  }
   if (!booking) return { ok: false, error: "Booking was not found." };
 
   const nextNotes =
@@ -2051,7 +2057,7 @@ async function applyBookingNoteUpdate(
     .update({ internal_notes: nextNotes })
     .eq("organization_id", organizationId)
     .eq("id", bookingId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: "Assistant action could not be completed." };
   return {
     ok: true,
     undoPayload: {
@@ -2087,7 +2093,7 @@ async function applyUndoPayload(
         .update({ price_cents: priceCents })
         .eq("organization_id", organizationId)
         .eq("id", id);
-      if (error) return { ok: false, error: error.message };
+      if (error) return { ok: false, error: "Assistant action could not be completed." };
       restored += 1;
     }
     return {
@@ -2104,7 +2110,7 @@ async function applyUndoPayload(
       .delete()
       .eq("organization_id", organizationId)
       .eq("id", id);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: "Assistant action could not be completed." };
     return { ok: true, message: "Undone. I removed that blocked time." };
   }
 
@@ -2120,7 +2126,7 @@ async function applyUndoPayload(
         .delete()
         .eq("organization_id", organizationId)
         .eq("day_of_week", dayOfWeek);
-      if (error) return { ok: false, error: error.message };
+      if (error) return { ok: false, error: "Assistant action could not be completed." };
       return { ok: true, message: "Undone. I removed that working-hours row." };
     }
     if (typeof previous !== "object" || Array.isArray(previous)) {
@@ -2143,7 +2149,7 @@ async function applyUndoPayload(
       },
       { onConflict: "organization_id,day_of_week" },
     );
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: "Assistant action could not be completed." };
     return { ok: true, message: "Undone. I restored those working hours." };
   }
 
@@ -2159,7 +2165,7 @@ async function applyUndoPayload(
       .eq("role", "realtor")
       .is("archived_at", null)
       .eq("id", realtorId);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: "Assistant action could not be completed." };
     return { ok: true, message: "Undone. I restored the realtor memory note." };
   }
 
@@ -2176,7 +2182,7 @@ async function applyUndoPayload(
       .eq("role", "realtor")
       .is("archived_at", null)
       .eq("id", realtorId);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: "Assistant action could not be completed." };
     return { ok: true, message: "Undone. I restored the delivery CC list." };
   }
 
@@ -2190,7 +2196,7 @@ async function applyUndoPayload(
       .update({ internal_notes: notes })
       .eq("organization_id", organizationId)
       .eq("id", bookingId);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: "Assistant action could not be completed." };
     return { ok: true, message: "Undone. I restored the booking note." };
   }
 
@@ -2211,7 +2217,7 @@ async function markAssistantUndo(
     })
     .eq("id", logId);
   if (error) {
-    console.warn("[admin-assistant] undo log update failed", error.message);
+    console.warn("[admin-assistant] undo log update failed");
   }
 }
 
@@ -2340,8 +2346,9 @@ async function createBookingFromAssistant(
   return {
     ok: true,
     kind: "answer",
-    message:
-      "Done. I created the booking, checked the slot, added it to Google Calendar if connected, and sent the confirmation email.",
+    message: result.warning
+      ? `I created the booking, but follow-up needs attention: ${result.warning}`
+      : "Done. I created the booking.",
     actions: [
       {
         type: "open_booking",
@@ -2559,14 +2566,6 @@ function extractOutputText(json: unknown): string | null {
     }
   }
   return null;
-}
-
-function openAiErrorMessage(json: unknown): string | null {
-  if (!json || typeof json !== "object") return null;
-  const error = (json as { error?: unknown }).error;
-  if (!error || typeof error !== "object") return null;
-  const message = (error as { message?: unknown }).message;
-  return typeof message === "string" ? message : null;
 }
 
 function bookingLabel(booking: BookingContextRow): string {

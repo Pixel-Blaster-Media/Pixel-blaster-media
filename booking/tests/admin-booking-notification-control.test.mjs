@@ -35,6 +35,18 @@ test("provider dispatch accepts only an explicit boolean notification policy", (
   }
 });
 
+test("an admin content edit with no schedule field preserves the stored schedule", () => {
+  const editActions = read("app/admin/bookings/[id]/actions.ts");
+  assert.match(
+    editActions,
+    /const scheduleUpdate\s*=\s*scheduledAt[\s\S]*scheduled_at:\s*scheduledAt\.toISOString\(\)[\s\S]*:\s*\{\};/,
+  );
+  assert.match(
+    editActions,
+    /\.update\(\{[\s\S]*\.\.\.scheduleUpdate[\s\S]*}\)[\s\S]*syncGoogleCalendarEventBestEffort/,
+  );
+});
+
 test("admin booking persists quiet mode and every automatic path honors it", () => {
   const actions = read("app/admin/calendar/actions.ts");
   const editActions = read("app/admin/bookings/[id]/actions.ts");
@@ -42,6 +54,10 @@ test("admin booking persists quiet mode and every automatic path honors it", () 
   const manageClient = read("app/book/manage/[token]/ManageBookingClient.tsx");
   const cancelBooking = read("lib/booking/cancel.ts");
   const dispatcher = read("lib/integrations/dispatcher.ts");
+  const projection = read("lib/booking/calendar-event-projection-core.ts");
+  const mutationCore = read(
+    "lib/integrations/google-calendar/event-mutation-core.ts",
+  );
   const reminders = read("app/api/cron/reminders/route.ts");
   const migration = read(
     "supabase/migrations/20260720173000_persist_quiet_admin_bookings.sql",
@@ -52,19 +68,21 @@ test("admin booking persists quiet mode and every automatic path honors it", () 
     /const suppressRealtorNotifications\s*=\s*formData\.get\("suppress_realtor_notifications"\)\s*===\s*"on"/,
   );
   assert.match(actions, /suppress_realtor_notifications:\s*suppressRealtorNotifications/);
-  assert.match(actions, /notifyRealtor:\s*!suppressRealtorNotifications/);
-  assert.match(actions, /if\s*\(!suppressRealtorNotifications\)\s*{[\s\S]*sendConfirmationBestEffort/);
   assert.match(
     actions,
-    /\.\.\.\(args\.notifyRealtor\s*\?\s*{[\s\S]*attendeeEmail:[\s\S]*attendeeName:[\s\S]*}\s*:\s*{}\)/,
+    /if\s*\(!suppressRealtorNotifications\s*&&\s*profileUpdated\)\s*{[\s\S]*sendConfirmationBestEffort/,
   );
   assert.match(
-    actions,
-    /booking\.suppress_realtor_notifications[\s\S]*attendeeEmail/,
+    projection,
+    /attendee:\s*booking\.suppress_realtor_notifications\s*\?\s*null[\s\S]*email:\s*booking\.profiles\?\.email/,
   );
   assert.match(
-    editActions,
-    /notifyRealtor:\s*!booking\.suppress_realtor_notifications/,
+    mutationCore,
+    /else if \(input\.clearAttendees\)\s*{[\s\S]*body\.attendees\s*=\s*\[\]/,
+  );
+  assert.match(
+    mutationCore,
+    /return input\.clearAttendees \? "none" : "all"/,
   );
   assert.match(
     editActions,
@@ -78,10 +96,9 @@ test("admin booking persists quiet mode and every automatic path honors it", () 
     manageActions,
     /!booking\.suppress_realtor_notifications\s*&&\s*booking\.profiles\?\.email/,
   );
-  assert.match(
-    manageActions,
-    /booking\.suppress_realtor_notifications[\s\S]*attendeeEmail/,
-  );
+  assert.match(manageActions, /syncStoredBookingGoogleCalendarEvent/);
+  assert.match(editActions, /syncStoredBookingGoogleCalendarEvent/);
+  assert.match(actions, /syncStoredBookingGoogleCalendarEvent/);
   assert.match(
     cancelBooking,
     /suppressRealtorNotifications:\s*booking\.suppress_realtor_notifications/,
@@ -111,17 +128,14 @@ test("admin booking persists quiet mode and every automatic path honors it", () 
     dispatcher,
     /realtorNotificationsSuppressed[\s\S]*realtor_notifications_suppressed/,
   );
-  assert.match(
-    dispatcher,
-    /realtorNotificationsSuppressed[\s\S]*attendeeEmail/,
-  );
+  assert.match(dispatcher, /syncStoredBookingGoogleCalendarEvent/);
   assert.doesNotMatch(
     dispatcher,
     /notification_policy_lookup_failed[\s\S]*status:\s*"retryable"/,
   );
   assert.match(
     editActions,
-    /return\s*{\s*ok:\s*true,\s*confirmationSent\s*}/,
+    /confirmationSent,[\s\S]*warning:\s*combineActionWarnings/,
   );
   assert.match(
     editActions,
