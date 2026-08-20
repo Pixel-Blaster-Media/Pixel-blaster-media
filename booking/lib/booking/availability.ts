@@ -259,8 +259,8 @@ async function fetchGoogleBusy(
       }),
     );
     return windows.flat();
-  } catch (err) {
-    console.warn("[availability] google freeBusy failed", err);
+  } catch {
+    console.warn("[availability] google freeBusy failed");
     return [];
   }
 }

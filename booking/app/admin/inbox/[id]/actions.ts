@@ -7,12 +7,13 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { provisionRealtorAuthUser } from "@/lib/auth/provision-realtor";
 import { rollbackProvisionedRealtor } from "@/lib/auth/rollback-provisioned-realtor";
+import { syncStoredBookingGoogleCalendarEvent } from "@/lib/booking/calendar-event-service";
 import { totalDurationMinutes } from "@/lib/booking/services";
 import { ccRecipientsFor } from "@/lib/email/recipients";
 import { sendEmail } from "@/lib/email/resend";
 import { getOrganizationEmailSettings } from "@/lib/email/settings";
 import { shootConfirmedEmail } from "@/lib/email/templates";
-import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
+
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -38,7 +39,7 @@ export async function markReviewing(requestId: string): Promise<ActionResult> {
     .eq("organization_id", admin.organizationId)
     .in("status", ["new"]);
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: "Could not update this request." };
   revalidatePath("/admin/inbox");
   revalidatePath(`/admin/inbox/${requestId}`);
   return { ok: true };
@@ -57,7 +58,7 @@ export async function declineRequest(requestId: string): Promise<ActionResult> {
     .eq("id", requestId)
     .eq("organization_id", admin.organizationId);
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: "Could not update this request." };
   revalidatePath("/admin/inbox");
   revalidatePath(`/admin/inbox/${requestId}`);
   return { ok: true };
@@ -114,7 +115,7 @@ export async function acceptRequest(
         archived_at: string | null;
       }>();
     if (profileLookupError) {
-      console.error("[accept] existing profile lookup failed", profileLookupError.code);
+      console.error("[accept] existing profile lookup failed");
       return { ok: false, error: "Could not verify the realtor account." };
     }
     if (existingProfile) {
@@ -148,8 +149,8 @@ export async function acceptRequest(
       provisioningId = provisioned.provisioningId;
       createdUserInRequest = true;
     }
-  } catch (err) {
-    console.error("[accept] auth lookup threw", err);
+  } catch {
+    console.error("[accept] auth lookup failed");
     return { ok: false, error: "Auth admin call failed." };
   }
 
@@ -173,7 +174,7 @@ export async function acceptRequest(
   );
 
   if (acceptErr || !bookingId) {
-    console.error("[accept] transactional accept failed", acceptErr);
+    console.error("[accept] transactional accept failed");
     if (createdUserInRequest && userId && provisioningId) {
       const rollback = await rollbackProvisionedRealtor({
         userId,
@@ -205,90 +206,64 @@ export async function acceptRequest(
     .eq("organization_id", admin.organizationId)
     .maybeSingle<{ delivery_cc_emails: string[] | null }>();
 
-  // 3b. Push to Google Calendar (best-effort). Skipped if no calendar is
+  // 3b. Push the canonical stored booking to Google Calendar. Skipped if no calendar is
   // connected. If the scheduledAt is null (accepted without a date), we
   // skip here too — the admin will set the time later and we'll need a
   // reschedule affordance to push the event at that point.
+  let calendarSynced = true;
   if (scheduledAt) {
     try {
-      const gcal = await getGoogleCalendarClient({
+      const syncResult = await syncStoredBookingGoogleCalendarEvent({
         organizationId: admin.organizationId,
+        bookingId,
       });
-      if (gcal) {
-        const startDate = new Date(scheduledAt);
-        const duration = Math.max(
-          totalDurationMinutes(req.services, req.add_ons),
-          60,
-        );
-        const endDate = new Date(startDate.getTime() + duration * 60_000);
-        const addressLine = [req.street_address, req.city, req.postal_code]
-          .filter(Boolean)
-          .join(", ");
-        const servicesLabel = req.services.join(", ");
-        const event = await gcal.createEvent({
-          summary: calendarShootTitle({
-            realtor: req.contact_name,
-            services: servicesLabel,
-            address: req.street_address,
-          }),
-          location: addressLine,
-          description:
-            `Realtor: ${req.contact_name}\nEmail: ${req.contact_email}\n` +
-            (req.contact_phone ? `Phone: ${req.contact_phone}\n` : "") +
-            (req.brokerage ? `Brokerage: ${req.brokerage}\n` : "") +
-            `Services: ${servicesLabel}\n` +
-            (req.add_ons.length ? `Add-ons: ${req.add_ons.join(", ")}\n` : "") +
-            (req.notes ? `\nNotes:\n${req.notes}\n` : ""),
-          startISO: startDate.toISOString(),
-          endISO: endDate.toISOString(),
-          attendeeEmail: req.contact_email,
-          attendeeName: req.contact_name,
-        });
-        await supabase
-          .from("bookings")
-          .update({
-            google_calendar_event_id: event.id,
-            google_calendar_event_url: event.htmlLink,
-          })
-          .eq("id", bookingId)
-          .eq("organization_id", admin.organizationId);
+      if (!syncResult.ok) {
+        calendarSynced = false;
+        console.warn("[accept] google calendar sync needs reconciliation");
       }
-    } catch (err) {
-      console.warn("[accept] google calendar event create failed", err);
+    } catch {
+      calendarSynced = false;
+      console.warn("[accept] google calendar event create failed");
     }
   }
 
   // 6. Send the realtor a welcome + one-click sign-in link to the portal.
   //    Fire-and-forget in the sense that any failure here is logged but
   //    doesn't fail the accept — the core records already exist.
-  await sendShootConfirmedEmail({
-    bookingId,
-    email: req.contact_email,
-    ccEmails: ccRecipientsFor(
-      req.contact_email,
-      notificationProfile?.delivery_cc_emails,
-    ),
-    organizationId: admin.organizationId,
-    contactName: req.contact_name,
-    streetAddress: req.street_address,
-    scheduledAt,
-    services: req.services,
-  });
+  let confirmationSent = false;
+  try {
+    confirmationSent = await sendShootConfirmedEmail({
+      bookingId,
+      email: req.contact_email,
+      ccEmails: ccRecipientsFor(
+        req.contact_email,
+        notificationProfile?.delivery_cc_emails,
+      ),
+      organizationId: admin.organizationId,
+      contactName: req.contact_name,
+      streetAddress: req.street_address,
+      scheduledAt,
+      services: req.services,
+    });
+  } catch {
+    console.warn("[accept.email] confirmation workflow failed");
+  }
 
   revalidatePath("/admin/inbox");
   revalidatePath("/admin/bookings");
-  redirect(`/admin/bookings/${bookingId}`);
-}
-
-function calendarShootTitle(args: {
-  realtor: string;
-  services: string;
-  address: string;
-}): string {
-  return [args.realtor, args.services, args.address]
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .join(" - ");
+  const followUp =
+    !calendarSynced && !confirmationSent
+      ? "calendar_and_email_failed"
+      : !calendarSynced
+        ? "calendar_sync_failed"
+        : !confirmationSent
+          ? "confirmation_email_failed"
+          : null;
+  redirect(
+    followUp
+      ? `/admin/bookings/${bookingId}?follow_up=${followUp}`
+      : `/admin/bookings/${bookingId}`,
+  );
 }
 
 /**
@@ -309,7 +284,7 @@ async function sendShootConfirmedEmail(args: {
   streetAddress: string;
   scheduledAt: string | null;
   services: string[];
-}): Promise<void> {
+}): Promise<boolean> {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (!appUrl) {
     console.warn(
@@ -329,7 +304,7 @@ async function sendShootConfirmedEmail(args: {
       status: "skipped",
       error: "NEXT_PUBLIC_APP_URL not set",
     });
-    return;
+    return false;
   }
 
   const redirectTo = new URL("/auth/callback", appUrl);
@@ -345,10 +320,7 @@ async function sendShootConfirmedEmail(args: {
       options: { redirectTo: redirectTo.toString() },
     });
     if (error || !data?.properties?.action_link) {
-      console.warn(
-        "[accept.email] generateLink failed — falling back to sign-in page.",
-        error?.message,
-      );
+      console.warn("[accept.email] generateLink failed — using fallback");
       const fallback = new URL("/auth/sign-in", appUrl);
       fallback.searchParams.set("audience", "realtor");
       fallback.searchParams.set("next", "/portal");
@@ -357,8 +329,8 @@ async function sendShootConfirmedEmail(args: {
     } else {
       portalLink = data.properties.action_link;
     }
-  } catch (err) {
-    console.warn("[accept.email] generateLink threw — using fallback.", err);
+  } catch {
+    console.warn("[accept.email] generateLink failed — using fallback");
     const fallback = new URL("/auth/sign-in", appUrl);
     fallback.searchParams.set("audience", "realtor");
     fallback.searchParams.set("next", "/portal");
@@ -410,7 +382,7 @@ async function sendShootConfirmedEmail(args: {
     recipientEmail: args.email,
     status: result.ok ? (result.skipped ? "skipped" : "sent") : "failed",
     providerMessageId: result.id,
-    error: result.ok ? undefined : result.error,
+    error: result.ok ? undefined : "Email delivery failed.",
     metadata: {
       usedFallbackLink,
       emailSkipped: Boolean(result.skipped),
@@ -423,7 +395,7 @@ async function sendShootConfirmedEmail(args: {
       recipientEmails: args.ccEmails,
       status: ccResult.ok ? (ccResult.skipped ? "skipped" : "sent") : "failed",
       providerMessageId: ccResult.id,
-      error: ccResult.ok ? undefined : ccResult.error,
+      error: ccResult.ok ? undefined : "Email delivery failed.",
       metadata: {
         sentWithoutMagicLink: true,
         emailSkipped: Boolean(ccResult.skipped),
@@ -432,11 +404,16 @@ async function sendShootConfirmedEmail(args: {
   }
 
   if (!result.ok) {
-    console.warn("[accept.email] send failed", result.error);
+    console.warn("[accept.email] send failed");
   }
   if (ccResult && !ccResult.ok) {
-    console.warn("[accept.email] cc send failed", ccResult.error);
+    console.warn("[accept.email] cc send failed");
   }
+  return (
+    result.ok &&
+    !result.skipped &&
+    (!ccResult || (ccResult.ok && !ccResult.skipped))
+  );
 }
 
 async function logManyBookingNotifications(args: {
@@ -488,6 +465,6 @@ async function logBookingNotification(args: {
   );
 
   if (error) {
-    console.warn("[accept.email] notification log failed", error);
+    console.warn("[accept.email] notification log failed");
   }
 }

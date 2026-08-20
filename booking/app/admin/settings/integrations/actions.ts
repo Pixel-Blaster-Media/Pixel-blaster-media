@@ -600,10 +600,10 @@ export async function testGoogleCalendarConnection(): Promise<{
       calendarId: client.calendarId,
       config,
     };
-  } catch (err) {
+  } catch {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : String(err),
+      error: "Google Calendar connection test failed.",
       config,
     };
   }

@@ -9,6 +9,8 @@ import {
   BUSINESS_TZ,
   businessDateTimeLocalToUtc,
 } from "@/lib/booking/availability";
+import { syncStoredBookingGoogleCalendarEvent } from "@/lib/booking/calendar-event-service";
+import { syncRealtorCalendarEventsBestEffort } from "@/lib/booking/realtor-calendar-fanout";
 import {
   computeCartTotals,
   getActiveCatalog,
@@ -18,10 +20,7 @@ import {
 import { ccRecipientsFor } from "@/lib/email/recipients";
 import { sendEmail } from "@/lib/email/resend";
 import { getOrganizationEmailSettings } from "@/lib/email/settings";
-import {
-  getGoogleCalendarClient,
-  GoogleCalendarError,
-} from "@/lib/integrations/google-calendar/client";
+
 import { sendPushBestEffort } from "@/lib/notifications/push";
 import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
 
@@ -29,6 +28,10 @@ interface ActionResult {
   ok: boolean;
   error?: string;
   warning?: string;
+  warningCode?:
+    | "calendar_sync_failed"
+    | "confirmation_email_failed"
+    | "calendar_and_email_failed";
   bookingId?: string;
 }
 
@@ -117,7 +120,7 @@ export async function searchRealtors(
 
   const firstError = nameRes.error ?? emailRes.error;
   if (firstError) {
-    console.warn("[admin-calendar] realtor search failed", firstError.message);
+    console.warn("[admin-calendar] realtor search failed");
     return {
       ok: false,
       error: "Could not search realtors. Enter details manually.",
@@ -217,21 +220,34 @@ export async function createAdminShoot(
   if ("error" in realtor) return { ok: false, error: realtor.error };
   const userId = realtor.userId;
 
-  await supabase
+  const { data: currentProfile, error: currentProfileError } = await supabase
     .from("profiles")
-    .update({
-      full_name: contactName,
-      phone: contactPhone || null,
-      brokerage: brokerage || null,
-    })
-    .eq("organization_id", admin.organizationId)
-    .eq("id", userId);
-  const { data: notificationProfile } = await supabase
-    .from("profiles")
-    .select("delivery_cc_emails")
+    .select("full_name, phone, brokerage, delivery_cc_emails")
     .eq("organization_id", admin.organizationId)
     .eq("id", userId)
-    .maybeSingle<{ delivery_cc_emails: string[] | null }>();
+    .maybeSingle<{
+      full_name: string | null;
+      phone: string | null;
+      brokerage: string | null;
+      delivery_cc_emails: string[] | null;
+    }>();
+  if (currentProfileError || !currentProfile) {
+    if (realtor.newlyCreated) {
+      const rollback = await rollbackProvisionedRealtor({
+        userId,
+        provisioningId: realtor.provisioningId!,
+        context: "calendar-profile-read",
+      });
+      if (rollback.status !== "deleted") {
+        return { ok: false, error: cleanupReference(rollback.reference) };
+      }
+    }
+    return { ok: false, error: "Could not load the realtor profile." };
+  }
+  const profileChanged =
+    (currentProfile.full_name ?? "") !== contactName ||
+    (currentProfile.phone ?? "") !== contactPhone ||
+    (currentProfile.brokerage ?? "") !== brokerage;
 
   const propertyId = await findOrCreateProperty({
     organizationId: admin.organizationId,
@@ -279,7 +295,7 @@ export async function createAdminShoot(
     .single<InsertedRow>();
 
   if (bookingError || !booking) {
-    console.error("[admin-calendar] booking insert failed", bookingError);
+    console.error("[admin-calendar] booking insert failed");
     if (realtor.newlyCreated) {
       const rollback = await rollbackProvisionedRealtor({
         userId,
@@ -314,34 +330,59 @@ export async function createAdminShoot(
   const { error: lineItemError } = await supabase
     .from("booking_line_items")
     .insert(lineItems);
+  const lineItemWarning = lineItemError
+    ? "Booking saved, but item snapshots could not be recorded."
+    : undefined;
   if (lineItemError) {
-    console.warn("[admin-calendar] line item insert failed", lineItemError);
+    console.warn("[admin-calendar] line item insert failed");
   }
 
-  await createGoogleEventBestEffort({
+  let profileUpdated = true;
+  if (profileChanged) {
+    const { data: updatedProfile, error: profileUpdateError } = await supabase
+      .from("profiles")
+      .update({
+        full_name: contactName,
+        phone: contactPhone || null,
+        brokerage: brokerage || null,
+      })
+      .eq("organization_id", admin.organizationId)
+      .eq("id", userId)
+      .select("id")
+      .maybeSingle<{ id: string }>();
+    profileUpdated = !profileUpdateError && Boolean(updatedProfile);
+  }
+  const profileWarning =
+    profileChanged && !profileUpdated
+      ? "Booking saved, but the shared realtor profile could not be updated."
+      : undefined;
+  const siblingEventsSynced =
+    !realtor.newlyCreated && profileChanged && profileUpdated
+      ? await syncRealtorCalendarEventsBestEffort({
+          organizationId: admin.organizationId,
+          ownerId: userId,
+          excludeBookingId: booking.id,
+        })
+      : true;
+  const siblingCalendarWarning = !siblingEventsSynced
+    ? "Booking saved, but one or more other shoots for this realtor did not sync to Google Calendar."
+    : undefined;
+
+  const calendarSynced = await createGoogleEventBestEffort({
     organizationId: admin.organizationId,
     bookingId: booking.id,
-    contactEmail,
-    contactName,
-    contactPhone,
-    brokerage,
-    streetAddress,
-    unitNumber,
-    city,
-    postalCode,
-    notes,
-    selectedItems,
-    scheduledAt,
-    scheduledEndsAt,
-    notifyRealtor: !suppressRealtorNotifications,
   });
 
-  if (!suppressRealtorNotifications) {
-    await sendConfirmationBestEffort({
+  let confirmationWarning: string | undefined =
+    !suppressRealtorNotifications && !profileUpdated
+      ? "Booking saved, but the confirmation email was not sent because the realtor profile update failed."
+      : undefined;
+  if (!suppressRealtorNotifications && profileUpdated) {
+    const confirmationSent = await sendConfirmationBestEffort({
       email: contactEmail,
       ccEmails: ccRecipientsFor(
         contactEmail,
-        notificationProfile?.delivery_cc_emails,
+        currentProfile.delivery_cc_emails,
       ),
       organizationId: admin.organizationId,
       name: contactName,
@@ -351,17 +392,42 @@ export async function createAdminShoot(
       scheduledAt,
       services: selectedItems.map((item) => item.name).join(", "),
     });
+    if (!confirmationSent) {
+      confirmationWarning =
+        "Booking saved, but the confirmation email was not sent.";
+    }
   }
 
   revalidatePath("/admin/calendar");
   revalidatePath("/admin/bookings");
-  return { ok: true, bookingId: booking.id };
+  return {
+    ok: true,
+    bookingId: booking.id,
+    warning: combineWarnings(
+      lineItemWarning,
+      profileWarning,
+      siblingCalendarWarning,
+      calendarSynced
+        ? undefined
+        : "Booking saved, but Google Calendar did not sync. Check the event before the shoot.",
+      confirmationWarning,
+    ),
+    warningCode:
+      !calendarSynced && confirmationWarning
+        ? "calendar_and_email_failed"
+        : !calendarSynced
+          ? "calendar_sync_failed"
+          : confirmationWarning
+            ? "confirmation_email_failed"
+            : undefined,
+  };
 }
 
 interface BookingForRescheduleRow {
   id: string;
   status: string;
   services: string[] | null;
+  add_ons: string[] | null;
   scheduled_at: string | null;
   scheduled_ends_at: string | null;
   owner_id: string;
@@ -423,7 +489,7 @@ export async function rescheduleCalendarShoot(
   const { data: booking, error: bookingError } = await supabase
     .from("bookings")
     .select(
-      "id, status, services, scheduled_at, scheduled_ends_at, owner_id, unit_number, client_notes, google_calendar_event_id, suppress_realtor_notifications, properties(street_address, city, postal_code), profiles(email, full_name, phone, brokerage)",
+      "id, status, services, add_ons, scheduled_at, scheduled_ends_at, owner_id, unit_number, client_notes, google_calendar_event_id, suppress_realtor_notifications, properties(street_address, city, postal_code), profiles(email, full_name, phone, brokerage)",
     )
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
@@ -474,101 +540,24 @@ export async function rescheduleCalendarShoot(
           "The database still has the no-overlap guard. Apply migration 0037_allow_admin_overlap.sql to enable double-booking.",
       };
     }
-    return { ok: false, error: updateError.message };
+    return { ok: false, error: "Could not reschedule booking." };
   }
 
-  // Move the existing Google event in place so guests do not receive a
-  // cancellation followed by a brand-new invitation. If the event was deleted
-  // in Google, recreate it and repair the stored event id.
+  // Re-project the complete stored booking so the reschedule also repairs old
+  // titles/descriptions without dropping creation-only metadata.
   let warning: string | undefined;
   try {
-    const gcal = await getGoogleCalendarClient({
+    const syncResult = await syncStoredBookingGoogleCalendarEvent({
       organizationId: admin.organizationId,
+      bookingId: booking.id,
     });
-    if (!gcal && booking.google_calendar_event_id) {
-      throw new Error(
-        "Google Calendar connection is unavailable for an existing booking event.",
-      );
+    if (!syncResult.ok) {
+      throw new Error(`Google Calendar sync failed: ${syncResult.status}`);
     }
-    if (gcal) {
-      let event: { id: string; htmlLink: string } | null = null;
-      let createdEventId: string | null = null;
-      if (booking.google_calendar_event_id) {
-        try {
-          event = await gcal.updateEventTime(
-            booking.google_calendar_event_id,
-            scheduledAt.toISOString(),
-            scheduledEndsAt.toISOString(),
-          );
-        } catch (error) {
-          const missingEvent =
-            error instanceof GoogleCalendarError &&
-            (error.status === 404 || error.status === 410);
-          if (!missingEvent) throw error;
-        }
-      }
-
-      if (!event) {
-        const streetLine = booking.unit_number
-          ? `${booking.properties?.street_address ?? ""}, Unit ${booking.unit_number}`
-          : (booking.properties?.street_address ?? "");
-        event = await gcal.createEvent({
-          summary: calendarShootTitle({
-            realtor: booking.profiles?.full_name ?? booking.profiles?.email ?? "",
-            services: await serviceNamesForSlugs(
-              booking.services ?? [],
-              admin.organizationId,
-            ),
-            address: streetLine,
-          }),
-          location: [
-            streetLine,
-            booking.properties?.city,
-            booking.properties?.postal_code,
-          ]
-            .filter(Boolean)
-            .join(", "),
-          description:
-            `Realtor: ${booking.profiles?.full_name ?? ""}\n` +
-            `Email: ${booking.profiles?.email ?? ""}\n` +
-            (booking.profiles?.phone
-              ? `Phone: ${booking.profiles.phone}\n`
-              : "") +
-            (booking.client_notes
-              ? `\nNotes:\n${booking.client_notes}\n`
-              : ""),
-          startISO: scheduledAt.toISOString(),
-          endISO: scheduledEndsAt.toISOString(),
-          ...(booking.suppress_realtor_notifications
-            ? {}
-            : {
-                attendeeEmail: booking.profiles?.email ?? undefined,
-                attendeeName: booking.profiles?.full_name ?? undefined,
-              }),
-        });
-        createdEventId = event.id;
-      }
-      const { error: calendarLinkError } = await supabase
-        .from("bookings")
-        .update({
-          google_calendar_event_id: event.id,
-          google_calendar_event_url: event.htmlLink,
-        })
-        .eq("id", booking.id)
-        .eq("organization_id", admin.organizationId);
-      if (calendarLinkError) {
-        if (createdEventId) {
-          await gcal.deleteEvent(createdEventId);
-        }
-        throw new Error(
-          `Could not persist Google Calendar event link: ${calendarLinkError.message}`,
-        );
-      }
-    }
-  } catch (err) {
+  } catch {
     warning =
       "The booking moved, but Google Calendar sync did not finish. Check the event in Google Calendar before trying again.";
-    console.warn("[admin-calendar] google calendar reschedule failed", err);
+    console.warn("[admin-calendar] google calendar reschedule failed");
   }
 
   await supabase.from("assistant_action_logs").insert({
@@ -669,7 +658,7 @@ export async function moveCalendarBlock(
     .eq("id", block.id)
     .eq("organization_id", admin.organizationId);
 
-  if (updateError) return { ok: false, error: updateError.message };
+  if (updateError) return { ok: false, error: "Could not move blocked time." };
 
   await supabase.from("assistant_action_logs").insert({
     organization_id: admin.organizationId,
@@ -730,7 +719,7 @@ async function findOrCreateRealtor(args: {
       archived_at: string | null;
     }>();
   if (profileError) {
-    console.error("[admin-calendar] existing profile lookup failed", profileError.code);
+    console.error("[admin-calendar] existing profile lookup failed");
     return null;
   }
   if (profile?.id) {
@@ -767,20 +756,14 @@ async function findOrCreateRealtor(args: {
       .select("id")
       .maybeSingle<{ id: string }>();
     if (provisionError || !provisionedProfile) {
-      console.error(
-        "[admin-calendar] trusted realtor profile verification failed",
-        provisionError?.code ?? "missing_profile",
-      );
+      console.error("[admin-calendar] trusted realtor profile verification failed");
       const rollback = await rollbackProvisionedRealtor({
         userId: provisioned.userId,
         provisioningId,
         context: "calendar-profile-verification",
       });
       if (rollback.status !== "deleted") {
-        console.error(
-          "[admin-calendar] profile verification cleanup",
-          rollback.reference,
-        );
+        console.error("[admin-calendar] profile verification cleanup failed");
         return { error: cleanupReference(rollback.reference) };
       }
       return null;
@@ -829,7 +812,7 @@ async function findOrCreateProperty(args: {
     .single<InsertedRow>();
 
   if (error || !created) {
-    console.error("[admin-calendar] property insert failed", error);
+    console.error("[admin-calendar] property insert failed");
     return null;
   }
   return created.id;
@@ -838,102 +821,17 @@ async function findOrCreateProperty(args: {
 async function createGoogleEventBestEffort(args: {
   organizationId: string;
   bookingId: string;
-  contactEmail: string;
-  contactName: string;
-  contactPhone: string;
-  brokerage: string;
-  streetAddress: string;
-  unitNumber: string;
-  city: string;
-  postalCode: string;
-  notes: string;
-  selectedItems: CatalogItemRow[];
-  scheduledAt: Date;
-  scheduledEndsAt: string;
-  notifyRealtor: boolean;
-}) {
+}): Promise<boolean> {
   try {
-    const gcal = await getGoogleCalendarClient({
+    const result = await syncStoredBookingGoogleCalendarEvent({
       organizationId: args.organizationId,
+      bookingId: args.bookingId,
     });
-    if (!gcal) return;
-
-    const supabase = getServiceSupabase();
-    const streetLine = args.unitNumber
-      ? `${args.streetAddress}, Unit ${args.unitNumber}`
-      : args.streetAddress;
-    const addressLine = [streetLine, args.city, args.postalCode]
-      .filter(Boolean)
-      .join(", ");
-    const serviceLabels = args.selectedItems.map((item) => item.name).join(", ");
-    const event = await gcal.createEvent({
-      summary: calendarShootTitle({
-        realtor: args.contactName,
-        services: serviceLabels,
-        address: streetLine,
-      }),
-      location: addressLine,
-      description:
-        `Realtor: ${args.contactName}\nEmail: ${args.contactEmail}\n` +
-        (args.contactPhone ? `Phone: ${args.contactPhone}\n` : "") +
-        (args.brokerage ? `Brokerage: ${args.brokerage}\n` : "") +
-        `Services: ${serviceLabels}\n` +
-        (args.notes ? `\nNotes:\n${args.notes}\n` : ""),
-      startISO: args.scheduledAt.toISOString(),
-      endISO: args.scheduledEndsAt,
-      ...(args.notifyRealtor
-        ? {
-            attendeeEmail: args.contactEmail,
-            attendeeName: args.contactName,
-          }
-        : {}),
-    });
-    await supabase
-      .from("bookings")
-      .update({
-        google_calendar_event_id: event.id,
-        google_calendar_event_url: event.htmlLink,
-      })
-      .eq("organization_id", args.organizationId)
-      .eq("id", args.bookingId);
-  } catch (err) {
-    console.warn("[admin-calendar] google calendar event create failed", err);
-  }
-}
-
-/**
- * Map legacy service slugs to their display names so a re-created
- * Google Calendar event keeps the same title as the original.
- * Falls back to prettified slugs if a catalog item was removed.
- */
-async function serviceNamesForSlugs(
-  slugs: string[],
-  organizationId: string,
-): Promise<string> {
-  if (slugs.length === 0) return "";
-  try {
-    const catalog = await getActiveCatalog({ organizationId });
-    const bySlug = new Map<string, string>();
-    for (const item of [...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons]) {
-      bySlug.set(item.slug, item.name);
-    }
-    return slugs
-      .map((slug) => bySlug.get(slug) ?? slug.replace(/-/g, " "))
-      .join(", ");
+    return result.ok;
   } catch {
-    return slugs.map((slug) => slug.replace(/-/g, " ")).join(", ");
+    console.warn("[admin-calendar] google calendar event create failed");
+    return false;
   }
-}
-
-function calendarShootTitle(args: {
-  realtor: string;
-  services: string;
-  address: string;
-}): string {
-  return [args.realtor, args.services, args.address]
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .join(" - ");
 }
 
 async function sendConfirmationBestEffort(args: {
@@ -944,7 +842,7 @@ async function sendConfirmationBestEffort(args: {
   streetAddress: string;
   scheduledAt: Date;
   services: string;
-}) {
+}): Promise<boolean> {
   try {
     const whenLabel = new Intl.DateTimeFormat("en-US", {
       timeZone: BUSINESS_TZ,
@@ -953,7 +851,7 @@ async function sendConfirmationBestEffort(args: {
     }).format(args.scheduledAt);
     const emailSettings = await getOrganizationEmailSettings(args.organizationId);
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-    await sendEmail({
+    const result = await sendEmail({
       to: args.email,
       ...(args.ccEmails.length > 0 ? { cc: args.ccEmails } : {}),
       subject: `Booking confirmed - ${args.streetAddress}`,
@@ -974,9 +872,18 @@ async function sendConfirmationBestEffort(args: {
         <p>— ${escapeHtml(emailSettings.organizationName)}</p>
       `,
     });
-  } catch (err) {
-    console.warn("[admin-calendar] confirmation email failed", err);
+    return result.ok && !result.skipped;
+  } catch {
+    console.warn("[admin-calendar] confirmation email failed");
+    return false;
   }
+}
+
+function combineWarnings(
+  ...warnings: Array<string | null | undefined | false>
+): string | undefined {
+  const unique = [...new Set(warnings.filter((warning): warning is string => Boolean(warning)))];
+  return unique.length > 0 ? unique.join(" ") : undefined;
 }
 
 function str(formData: FormData, key: string): string {

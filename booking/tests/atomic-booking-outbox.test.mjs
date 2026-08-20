@@ -199,7 +199,7 @@ test("inline and scheduled integration attempts share the durable dispatcher", (
   assert.match(dispatcherSource, /lineItems:\s*payload\.line_items/);
   assert.match(
     dispatcherSource,
-    /getGoogleCalendarClient\([\s\S]{0,120}payload\.organization_id/,
+    /syncStoredBookingGoogleCalendarEvent\([\s\S]{0,180}organizationId:\s*payload\.organization_id[\s\S]{0,100}bookingId:\s*payload\.booking_id/,
   );
   assert.match(dispatcherSource, /payload\.organization\.admin_notification_email/);
   assert.match(dispatcherSource, /sendPushBestEffort\(payload\.organization_id/);

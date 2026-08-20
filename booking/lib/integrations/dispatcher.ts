@@ -1,6 +1,7 @@
 import "server-only";
 
 import { BUSINESS_TZ } from "@/lib/booking/availability";
+import { syncStoredBookingGoogleCalendarEvent } from "@/lib/booking/calendar-event-service";
 import { createManageToken } from "@/lib/booking/manage-token";
 import { ccRecipientsFor } from "@/lib/email/recipients";
 import { sendEmail, type SendEmailResult } from "@/lib/email/resend";
@@ -10,7 +11,7 @@ import {
   newBookingStaffEmail,
   shootConfirmedEmail,
 } from "@/lib/email/templates";
-import { getGoogleCalendarClient } from "@/lib/integrations/google-calendar/client";
+
 import {
   parseRealtorNotificationPolicy,
   type RealtorNotificationPolicy,
@@ -130,7 +131,6 @@ async function dispatchClaimedJob({
         jobType,
         claim,
         providerMutationTimeoutMs,
-        realtorNotificationsSuppressed === true,
       );
     case "email.booking.confirmation":
       return dispatchCustomerEmail(
@@ -223,85 +223,47 @@ async function dispatchCalendarEvent(
   jobType: IntegrationJobType,
   claim: ClaimedIntegrationJob,
   timeoutMs: number,
-  realtorNotificationsSuppressed: boolean,
 ): Promise<IntegrationJobDispatchResult> {
   const payload = claim.payload;
   try {
-    const startAt = new Date(payload.booking.scheduled_at);
-    const endAt = new Date(payload.booking.scheduled_ends_at);
-    const services = labels(payload, false);
-    const addons = labels(payload, true);
-    const street = propertyStreet(payload);
-    const address = [street, payload.property.city, payload.property.postal_code].filter(Boolean).join(", ");
-    const occupancy = payload.booking.is_vacant === "vacant"
-      ? "Vacant"
-      : payload.booking.is_vacant === "partial"
-        ? "Partially occupied"
-        : payload.booking.is_vacant === "occupied"
-          ? "Occupied"
-          : null;
     const operation = await withProviderMutationTimeout(
-      (async () => {
-        const calendar = await getGoogleCalendarClient({
-          organizationId: payload.organization_id,
-        });
-        if (!calendar) return { skipped: true as const };
-        const event = await calendar.createEvent({
-          summary: [payload.realtor.full_name, services, street].map((part) => part.trim()).filter(Boolean).join(" - "),
-          location: address,
-          description:
-            `Realtor: ${payload.realtor.full_name}\nEmail: ${payload.realtor.email}\n` +
-            (payload.realtor.phone ? `Phone: ${payload.realtor.phone}\n` : "") +
-            `Services: ${services}\n` +
-            (addons ? `Add-ons: ${addons}\n` : "") +
-            (payload.booking.square_footage ? `Size: ~${payload.booking.square_footage} sqft\n` : "") +
-            (occupancy ? `Occupancy: ${occupancy}\n` : "") +
-            (payload.booking.include_basement != null
-              ? `Basement: ${payload.booking.include_basement ? "include" : "skip"}\n`
-              : "") +
-            (payload.booking.client_notes ? `\nNotes:\n${payload.booking.client_notes}\n` : ""),
-          startISO: startAt.toISOString(),
-          endISO: endAt.toISOString(),
-          ...(realtorNotificationsSuppressed
-            ? {}
-            : {
-                attendeeEmail: payload.realtor.email,
-                attendeeName: payload.realtor.full_name,
-              }),
-        });
-        const { error } = await getServiceSupabase()
-          .from("bookings")
-          .update({ google_calendar_event_id: event.id, google_calendar_event_url: event.htmlLink })
-          .eq("id", payload.booking_id)
-          .eq("organization_id", payload.organization_id);
-        return { skipped: false as const, event, error };
-      })(),
+      syncStoredBookingGoogleCalendarEvent({
+        organizationId: payload.organization_id,
+        bookingId: payload.booking_id,
+      }),
       timeoutMs,
       jobType,
     );
-    if (operation.skipped) {
+    if (
+      operation.ok &&
+      (operation.status === "not_configured" || operation.status === "not_scheduled")
+    ) {
       return settle({
         organizationId,
         jobType,
         claim,
         status: "skipped",
-        providerResult: { reason: "not_configured" },
+        providerResult: { reason: operation.status },
       });
     }
-    const { event, error } = operation;
+    if (!operation.ok) {
+      return settle({
+        organizationId,
+        jobType,
+        claim,
+        status: "dead_letter",
+        providerExternalId: operation.eventId,
+        errorCode: operation.status,
+        errorMessage: "Calendar synchronization requires operator reconciliation",
+      });
+    }
     return settle({
       organizationId,
       jobType,
       claim,
-      status: error ? "dead_letter" : "completed",
-      providerExternalId: event.id,
-      providerResult: { event_url: event.htmlLink ?? null },
-      ...(error
-        ? {
-            errorCode: "local_persistence_failed",
-            errorMessage: "Calendar event exists but its local reference needs reconciliation",
-          }
-        : {}),
+      status: "completed",
+      providerExternalId: operation.eventId,
+      providerResult: { calendar_status: operation.status },
     });
   } catch (error) {
     if (error instanceof ProviderMutationTimeoutError) {
@@ -620,10 +582,6 @@ async function settle({
   } catch {
     return { jobType, outcome: "settlement_failed" };
   }
-}
-
-function labels(payload: ClaimedIntegrationJob["payload"], addons: boolean): string {
-  return itemNames(payload, addons).join(", ");
 }
 
 function itemNames(

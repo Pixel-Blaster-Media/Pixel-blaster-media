@@ -62,6 +62,21 @@ const canonicalCallback =
 const authorizedCallback =
   "https://pixel-blaster-media.vercel.app/api/integrations/google-calendar/callback";
 
+test("Google token failures never expose raw provider response bodies", () => {
+  assert.doesNotMatch(oauthSource, /body\.slice|await res\.text\(\)/);
+  assert.match(oauthSource, /Google token exchange failed \(\$\{res\.status}\)/);
+  assert.match(oauthSource, /Google token refresh failed \(\$\{res\.status}\)/);
+  assert.doesNotMatch(calendarClientSource, /body\.slice/);
+  assert.doesNotMatch(calendarClientSource, /error\.message/);
+});
+
+test("OAuth callback and settings expose only fixed connection error categories", () => {
+  assert.doesNotMatch(googleCallbackSource, /errorParam\.slice|err\.message/);
+  assert.match(googleCallbackSource, /"google_oauth_error"/);
+  assert.match(googleCallbackSource, /"connection_failed"/);
+  assert.doesNotMatch(integrationsPageSource, /\{googleFlashError\}/);
+});
+
 test("Google OAuth state is bound to the initiating admin and organization", () => {
   const state = buildGoogleCalendarOAuthState("user-a", "organization-a");
   assert.match(state, /^[a-f0-9]{48}\.[a-f0-9]{32}$/);

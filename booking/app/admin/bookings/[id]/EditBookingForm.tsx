@@ -13,6 +13,7 @@ export interface EditCatalogItem {
   kind: "bundle" | "a_la_carte" | "addon";
   name: string;
   slug: string;
+  active: boolean;
   durationMinutes: number;
   priceCents: number;
 }
@@ -47,6 +48,7 @@ export default function EditBookingForm({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [property, setProperty] = useState({
     street_address: initial.streetAddress,
     unit_number: initial.unitNumber,
@@ -68,6 +70,7 @@ export default function EditBookingForm({
   function onSubmit(formData: FormData) {
     setError(null);
     setSavedMessage(null);
+    setWarning(null);
     startTransition(async () => {
       const result = await updateBookingDetails(bookingId, formData);
       if (!result.ok) {
@@ -79,6 +82,7 @@ export default function EditBookingForm({
           ? "Booking saved and confirmation email sent."
           : "Booking saved.",
       );
+      setWarning(result.warning ?? null);
       router.refresh();
     });
   }
@@ -272,6 +276,11 @@ export default function EditBookingForm({
           {savedMessage}
         </p>
       ) : null}
+      {warning ? (
+        <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {warning}
+        </p>
+      ) : null}
 
       <div className="flex justify-end">
         <button
@@ -314,7 +323,10 @@ function CatalogGroup({
               className="mt-1"
             />
             <span className="min-w-0">
-              <span className="block font-semibold">{item.name}</span>
+              <span className="block font-semibold">
+                {item.name}
+                {!item.active ? " (inactive — retained from booking)" : ""}
+              </span>
               <span className="block text-xs text-realtor-muted">
                 {formatDuration(item.durationMinutes)} · {formatPrice(item.priceCents)}
               </span>

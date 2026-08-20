@@ -109,10 +109,7 @@ export async function exchangeCodeForTokens({
   });
 
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(
-      `Google token exchange failed (${res.status}): ${body.slice(0, 500)}`,
-    );
+    throw new Error(`Google token exchange failed (${res.status})`);
   }
 
   return (await res.json()) as TokenResponse;
@@ -142,10 +139,7 @@ export async function refreshAccessToken({
   });
 
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(
-      `Google token refresh failed (${res.status}): ${body.slice(0, 500)}`,
-    );
+    throw new Error(`Google token refresh failed (${res.status})`);
   }
 
   return (await res.json()) as TokenResponse;

@@ -23,7 +23,7 @@ import {
   parseRealtorAIMemory,
   summarizeRealtorAIMemory,
 } from "@/lib/realtors/memory";
-import { getActiveCatalog, type Catalog } from "@/lib/booking/catalog";
+import { getFullCatalog, type Catalog } from "@/lib/booking/catalog";
 import { labelForAddOn, labelForService } from "@/lib/booking/services";
 import {
   isIGuidePhotoZipUrl,
@@ -148,8 +148,21 @@ interface ListingWebsiteRow {
   cta_url: string | null;
 }
 
-interface BookingLineItemSelectionRow {
-  catalog_item_id: string;
+
+function followUpWarningMessage(value: string | undefined): string | null {
+  if (value === "calendar_sync_failed") {
+    return "The booking was saved, but Google Calendar did not sync. Check the Calendar event before the shoot.";
+  }
+  if (value === "confirmation_email_failed") {
+    return "The booking was saved, but the confirmation email was not sent.";
+  }
+  if (value === "calendar_and_email_failed") {
+    return "The booking was saved, but Google Calendar did not sync and the confirmation email was not sent. Check both before the shoot.";
+  }
+  if (value === "follow_up_failed") {
+    return "The booking was saved, but follow-up work needs attention. Review the booking before the shoot.";
+  }
+  return null;
 }
 
 export default async function BookingDetailPage({
@@ -157,11 +170,16 @@ export default async function BookingDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    calendar_sync?: string;
+    follow_up?: string;
+  }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
   const activeTabId = parseWorkspaceTab(query.tab);
+  const followUpWarning = followUpWarningMessage(query.follow_up);
   const admin = await requireAdmin();
   const supabase = await getServerSupabase();
   const [autoHDREnabled, autoenhanceEnabled] = await Promise.all([
@@ -174,7 +192,6 @@ export default async function BookingDetailPage({
     { data: deliverables },
     { data: iguideJob },
     { data: listingWebsite },
-    { data: bookingLineItems },
     autoenhanceBatches,
     catalog,
   ] =
@@ -208,15 +225,10 @@ export default async function BookingDetailPage({
         )
         .eq("booking_id", id)
         .maybeSingle<ListingWebsiteRow>(),
-      supabase
-        .from("booking_line_items")
-        .select("catalog_item_id")
-        .eq("booking_id", id)
-        .returns<BookingLineItemSelectionRow[]>(),
       autoenhanceEnabled
         ? listBookingAutoenhanceBatches({ admin, bookingId: id })
         : Promise.resolve([]),
-      getActiveCatalog({ organizationId: admin.organizationId }),
+      getFullCatalog({ organizationId: admin.organizationId }),
     ]);
 
   if (bookErr || !booking) notFound();
@@ -233,11 +245,13 @@ export default async function BookingDetailPage({
 
   const property = booking.properties;
   const profile = booking.profiles;
-  const catalogItems = toEditCatalogItems(catalog);
   const selectedCatalogItemIds = selectedCatalogIdsForBooking(
     booking,
-    bookingLineItems ?? [],
     catalog,
+  );
+  const selectedCatalogItemIdSet = new Set(selectedCatalogItemIds);
+  const catalogItems = toEditCatalogItems(catalog).filter(
+    (item) => item.active || selectedCatalogItemIdSet.has(item.id),
   );
   const profileMemorySummary = summarizeRealtorAIMemory(
     parseRealtorAIMemory(profile?.ai_memory),
@@ -293,6 +307,16 @@ export default async function BookingDetailPage({
 
   return (
     <div className="space-y-6">
+      {followUpWarning ? (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {followUpWarning}
+        </div>
+      ) : query.calendar_sync === "failed" ? (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          The booking was saved, but Google Calendar did not sync. Check the
+          Calendar event before the shoot.
+        </div>
+      ) : null}
       <div className="flex items-center justify-between">
         <Link
           href="/admin/bookings"
@@ -995,6 +1019,7 @@ function toEditCatalogItems(catalog: Catalog): EditCatalogItem[] {
       kind: item.kind,
       name: item.name,
       slug: item.slug,
+      active: item.active,
       durationMinutes: item.duration_minutes,
       priceCents: item.price_cents,
     }),
@@ -1003,12 +1028,8 @@ function toEditCatalogItems(catalog: Catalog): EditCatalogItem[] {
 
 function selectedCatalogIdsForBooking(
   booking: BookingDetail,
-  lineItems: BookingLineItemSelectionRow[],
   catalog: Catalog,
 ): string[] {
-  if (lineItems.length > 0) {
-    return lineItems.map((line) => line.catalog_item_id);
-  }
   const bySlug = new Map(
     [...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map((item) => [
       item.slug,
