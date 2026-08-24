@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  marketing-proxy:
+    name: Marketing proxy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Test signed proxy middleware
+        run: npm test
+
+  application:
+    name: Application
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_ENV: production
+      NEXT_PUBLIC_APP_URL: https://ci.example.invalid
+      NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: ci-service-role-key
+      CRON_SECRET: ci-cron-secret
+      AUTH_RECOVERY_SECRET: ci-recovery-secret
+      BOOKING_MANAGE_SECRET: ci-booking-manage-secret
+      BOOKING_PROXY_SHARED_SECRET: ci-only-proxy-attestation-secret-0123456789abcdef
+    defaults:
+      run:
+        working-directory: booking
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: booking/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: Build production-shaped artifact with placeholders
+        run: npm run build
+      - name: Probe built security boundaries
+        run: npm run test:http-security
+
+  postgresql:
+    name: PostgreSQL integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: booking
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: booking/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Install PostgreSQL 17 tools
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error \
+            --output /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+      - name: Run disposable PostgreSQL behavior suites
+        run: |
+          bash scripts/verify-atomic-booking-postgres.sh
+          bash scripts/verify-integration-credentials-postgres.sh
+          bash scripts/verify-catalog-item-examples-postgres.sh
+          LC_ALL=C TMPDIR=/tmp bash scripts/verify-canonical-media-postgres.sh

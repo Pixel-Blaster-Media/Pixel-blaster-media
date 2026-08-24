@@ -22,8 +22,8 @@ export const metadata: Metadata = {
   description:
     "Real estate media booking, delivery, listing websites, and client portals for photography companies and realtors.",
   robots: {
-    // Keep the standalone booking app out of search while it lives on a
-    // temporary Vercel URL. Flip this on once the public domain is ready.
+    // Keep the standalone booking app out of search until its public indexing
+    // policy is reviewed independently from deployment-host configuration.
     index: false,
     follow: false,
   },

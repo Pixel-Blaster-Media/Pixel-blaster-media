@@ -29,14 +29,61 @@
       "source": "/auth/",
       "destination": "/auth",
       "permanent": false
-    },
-    {
-      "source": "/_next/:path*",
-      "destination": "https://pixel-blaster-media.vercel.app/_next/:path*",
-      "permanent": false
     }
   ],
   "rewrites": [
+    {
+      "source": "/_next/:path*",
+      "destination": "https://pixel-blaster-media.vercel.app/_next/:path*"
+    },
+    {
+      "source": "/listings",
+      "destination": "https://pixel-blaster-media.vercel.app/listings"
+    },
+    {
+      "source": "/listings/:path*",
+      "destination": "https://pixel-blaster-media.vercel.app/listings/:path*"
+    },
+    {
+      "source": "/beta",
+      "destination": "https://pixel-blaster-media.vercel.app/beta"
+    },
+    {
+      "source": "/beta/:path*",
+      "destination": "https://pixel-blaster-media.vercel.app/beta/:path*"
+    },
+    {
+      "source": "/start",
+      "destination": "https://pixel-blaster-media.vercel.app/start"
+    },
+    {
+      "source": "/start/:path*",
+      "destination": "https://pixel-blaster-media.vercel.app/start/:path*"
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "destination": "https://pixel-blaster-media.vercel.app/manifest.webmanifest"
+    },
+    {
+      "source": "/sw.js",
+      "destination": "https://pixel-blaster-media.vercel.app/sw.js"
+    },
+    {
+      "source": "/offline.html",
+      "destination": "https://pixel-blaster-media.vercel.app/offline.html"
+    },
+    {
+      "source": "/icons/:path*",
+      "destination": "https://pixel-blaster-media.vercel.app/icons/:path*"
+    },
+    {
+      "source": "/icon.png",
+      "destination": "https://pixel-blaster-media.vercel.app/icon.png"
+    },
+    {
+      "source": "/apple-icon.png",
+      "destination": "https://pixel-blaster-media.vercel.app/apple-icon.png"
+    },
     {
       "source": "/book",
       "destination": "https://pixel-blaster-media.vercel.app/book"

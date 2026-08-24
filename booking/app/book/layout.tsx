@@ -6,13 +6,12 @@ export const metadata: Metadata = {
   title: "Book Real Estate Media",
   description:
     "Book real estate photography, video, iGuide virtual tours, and floor plans online with Pixel Blaster Media — serving Hamilton and the Greater Toronto Area.",
-  // The booking flow is public and proxied under the production domain
-  // (www.pixelblastermedia.com/book via vercel.json rewrites), so allow
-  // indexing here. The canonical keeps Google pointed at the main domain
-  // instead of the *.vercel.app origin. Admin/portal/auth remain noindex
-  // via the root layout.
+  // The booking flow is public and reaches this app through the marketing
+  // project's Vercel rewrites. Keep search engines and user-facing links on
+  // the configured apex application origin instead of an internal Vercel host.
+  // Admin/portal/auth remain noindex via the root layout.
   robots: { index: true, follow: true },
-  alternates: { canonical: "https://www.pixelblastermedia.com/book" },
+  alternates: { canonical: "https://pixelblastermedia.com/book" },
 };
 
 export const viewport: Viewport = {

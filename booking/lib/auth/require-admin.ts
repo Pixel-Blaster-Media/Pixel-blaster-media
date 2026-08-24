@@ -28,47 +28,27 @@ interface AdminMembershipRow {
 }
 
 /**
- * Server-component / server-action helper that:
- *   1. Resolves the caller's user id from the session cookie. We read
- *      the stored access_token and decode the JWT payload ourselves
- *      rather than calling supabase.auth.getUser(), because
- *      getUser() makes an outbound fetch that can fail intermittently
- *      from Vercel serverless ("fetch failed") — a network blip there
- *      must not bounce a legitimately signed-in admin to /auth/sign-in.
- *   2. Loads the corresponding profile row via the Postgres REST
- *      endpoint (separate from the auth endpoint — those have
- *      different availability characteristics).
- *   3. Bounces non-admin users back to /portal so realtors who somehow
- *      land on /admin don't get a confusing access-denied page.
- *
- * Throws (via redirect) on auth failure; on success returns a small
- * context object so admin pages can render the user's name.
+ * Verifies the Supabase Auth user before resolving tenant membership.
+ * Auth verification failure is fail-closed; authorization never relies on
+ * locally decoded cookie claims.
  */
 export async function requireAdmin(): Promise<AdminContext> {
   const supabase = await getServerSupabase();
   const signInPath = await adminSignInPath();
 
-  // getSession() reads the stored cookie locally. It still *may* call
-  // the network if the token is about to expire (auto-refresh) — but
-  // for a fresh session the call returns immediately.
   const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
 
-  if (sessionError && !isMissingSessionError(sessionError)) {
-    console.error("[auth] admin session refresh failed", sessionError.name);
+  if (userError) {
+    if (isMissingSessionError(userError)) redirect(signInPath);
+    console.error("[auth] admin verification failed", userError.name);
     redirect("/auth/access-unavailable");
   }
+  if (!user) redirect(signInPath);
 
-  if (!session?.access_token) {
-    redirect(signInPath);
-  }
-
-  const userId = decodeUserIdFromJwt(session.access_token);
-  if (!userId) {
-    redirect(signInPath);
-  }
+  const userId = user.id;
 
   const { data: profile, error } = await supabase
     .from("profiles")
@@ -124,20 +104,4 @@ function safeNextPath(next: string): string {
     return "/admin";
   }
   return next;
-}
-
-/** Extract the `sub` (user id) claim from a Supabase access token JWT. */
-function decodeUserIdFromJwt(token: string): string | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length < 2) return null;
-    const payload = JSON.parse(
-      Buffer.from(parts[1], "base64url").toString("utf8"),
-    ) as { sub?: string; exp?: number };
-    if (!payload.sub) return null;
-    if (payload.exp && payload.exp * 1000 < Date.now()) return null;
-    return payload.sub;
-  } catch {
-    return null;
-  }
 }

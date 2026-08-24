@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { shouldHandoffAuthCode } from "@/lib/auth/auth-code-handoff";
+import { canonicalHostAction } from "@/lib/security/canonical-host";
+import { verifyProductionProxyRequest } from "@/lib/security/production-proxy-attestation";
 
 /**
  * Edge middleware.
@@ -32,6 +34,47 @@ import { shouldHandoffAuthCode } from "@/lib/auth/auth-code-handoff";
  */
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  const canonicalOrigin = configuredCanonicalOrigin();
+  const productionProxyHost =
+    process.env.BOOKING_PROXY_UPSTREAM_HOST ??
+    process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  const trustedProductionProxy = await verifyProductionProxyRequest(
+    request,
+    process.env.BOOKING_PROXY_SHARED_SECRET,
+    {
+      canonicalHost: canonicalOrigin.hostname,
+      productionProxyHost,
+    },
+  );
+  const hostAction = canonicalHostAction({
+    canonicalHost: canonicalOrigin.hostname,
+    forwardedHost: request.headers.get("x-forwarded-host"),
+    host: request.headers.get("host"),
+    method: request.method,
+    pathname: path,
+    productionProxyHost,
+    trustedProductionProxy,
+    vercelEnvironment: process.env.VERCEL_ENV,
+  });
+  if (hostAction === "redirect") {
+    const canonicalUrl = new URL(
+      `${request.nextUrl.pathname}${request.nextUrl.search}`,
+      canonicalOrigin,
+    );
+    const redirectResponse = NextResponse.redirect(canonicalUrl, 307);
+    redirectResponse.headers.set("Cache-Control", "no-store");
+    return redirectResponse;
+  }
+  if (hostAction === "reject") {
+    return NextResponse.json(
+      { error: "Misdirected request." },
+      {
+        status: 421,
+        headers: { "Cache-Control": "no-store" },
+      },
+    );
+  }
+
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(
     "x-current-path",
@@ -68,6 +111,27 @@ export async function middleware(request: NextRequest) {
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
+function configuredCanonicalOrigin(): URL {
+  const fallback = new URL("https://pixelblastermedia.com");
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (!configured) return fallback;
+
+  try {
+    const url = new URL(configured);
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.hostname.endsWith(".vercel.app")
+    ) {
+      return fallback;
+    }
+    return new URL(url.origin);
+  } catch {
+    return fallback;
+  }
+}
+
 /**
  * Check whether the request carries the Supabase session cookie.
  *
@@ -98,9 +162,6 @@ function hasSessionCookie(request: NextRequest): boolean {
 }
 
 export const config = {
-  // Run on everything except static assets, the favicon, and image
-  // optimization output.
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp)$).*)",
-  ],
+  // Host containment must also cover static and extension-suffixed paths.
+  matcher: ["/:path*"],
 };

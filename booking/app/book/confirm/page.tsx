@@ -326,22 +326,11 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 async function loadSessionProfile(): Promise<SessionProfile | null> {
   const supabase = await getServerSupabase();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) return null;
-
-  let userId: string | null = null;
-  try {
-    const parts = session.access_token.split(".");
-    const payload = JSON.parse(
-      Buffer.from(parts[1], "base64url").toString("utf8"),
-    ) as { sub?: string; exp?: number };
-    if (payload.exp && payload.exp * 1000 < Date.now()) return null;
-    userId = payload.sub ?? null;
-  } catch {
-    return null;
-  }
-  if (!userId) return null;
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+  if (error || !user) return null;
+  const userId = user.id;
 
   const { data: profile } = await supabase
     .from("profiles")

@@ -2,6 +2,7 @@
 
 import { getActiveCatalog, type CatalogItemRow } from "@/lib/booking/catalog";
 import { isAddonEligible } from "@/lib/booking/catalog-rules";
+import { publicAIRecommendationsEnabled } from "@/lib/booking/public-ai-recommendations";
 import { getCredential } from "@/lib/integrations/credentials";
 
 const isCatalogAddonEligible = isAddonEligible;
@@ -113,6 +114,9 @@ export async function recommendBookingPackage(input: {
   organizationSlug?: string | null;
   context?: Partial<BookingRecommendationContext> | null;
 }): Promise<{ ok: true; recommendation: BookingRecommendation } | { ok: false; error: string }> {
+  if (!publicAIRecommendationsEnabled()) {
+    return { ok: false, error: "AI recommendations are temporarily unavailable." };
+  }
   const description = input.description.trim().slice(0, 1600);
   if (description.length < 8) {
     return { ok: false, error: "Add a little more detail first." };
@@ -361,22 +365,10 @@ const RECOMMENDATION_SCHEMA = {
 async function getOptionalSessionProfileId(): Promise<string | null> {
   const supabase = await getServerSupabase();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) return null;
-
-  try {
-    const parts = session.access_token.split(".");
-    if (parts.length < 2) return null;
-    const payload = JSON.parse(
-      Buffer.from(parts[1], "base64url").toString("utf8"),
-    ) as { sub?: string; exp?: number };
-    if (!payload.sub) return null;
-    if (payload.exp && payload.exp * 1000 < Date.now()) return null;
-    return payload.sub;
-  } catch {
-    return null;
-  }
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+  return error || !user ? null : user.id;
 }
 
 async function loadRealtorMemory({

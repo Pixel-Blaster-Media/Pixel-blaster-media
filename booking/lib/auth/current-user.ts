@@ -35,14 +35,11 @@ export const getCurrentUser = cache(async function getCurrentUser(): Promise<
   try {
     const supabase = await getServerSupabase();
     const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    const userId = session?.access_token
-      ? decodeUserIdFromJwt(session.access_token)
-      : null;
-
-    if (!userId) return null;
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) return null;
+    const userId = user.id;
 
     const { data: profile, error } = await supabase
       .from("profiles")
@@ -67,18 +64,3 @@ export const getCurrentUser = cache(async function getCurrentUser(): Promise<
     return null;
   }
 });
-
-function decodeUserIdFromJwt(token: string): string | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length < 2) return null;
-    const payload = JSON.parse(
-      Buffer.from(parts[1], "base64url").toString("utf8"),
-    ) as { sub?: string; exp?: number };
-    if (!payload.sub) return null;
-    if (payload.exp && payload.exp * 1000 < Date.now()) return null;
-    return payload.sub;
-  } catch {
-    return null;
-  }
-}

@@ -64,8 +64,8 @@ You need to copy three things from Supabase to Vercel in Stage 2. To find them:
 ### 1.4 Configure auth URLs (do this now even though it feels premature)
 
 1. Left sidebar → **Authentication** → **URL Configuration**.
-2. **Site URL:** put `https://temp.vercel.app` for now. We'll come back and fix this.
-3. Save. Leave the tab open — we'll update it after Vercel gives us a real URL.
+2. **Site URL:** put `https://pixelblastermedia.com`.
+3. Save. This canonical URL must remain the same in Supabase, Vercel environment variables, and external provider dashboards.
 
 **Done with Supabase for now.** ✅
 
@@ -93,30 +93,52 @@ Add these four, one at a time:
 | `NEXT_PUBLIC_SUPABASE_URL` | The Project URL from Stage 1.3 |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | The anon public key from Stage 1.3 |
 | `SUPABASE_SERVICE_ROLE_KEY` | The service_role key from Stage 1.3 |
-| `NEXT_PUBLIC_APP_URL` | `https://temp.vercel.app` (we'll fix in 2.4) |
+| `NEXT_PUBLIC_APP_URL` | `https://pixelblastermedia.com` |
 
 For each one: paste the key name into the **Key** box, paste the value into the **Value** box, click **Save** (or the + button).
 
-### 2.3 Deploy
+### 2.3 Stop before the first booking deploy
 
-Click the big **Deploy** button at the bottom. Wait ~90 seconds while it builds. You'll see log output scrolling. When you see **🎉 Congratulations!** or a green checkmark, you're live.
+Do **not** click the booking project's **Deploy** button yet. Complete every signed-proxy prerequisite in Stage 2.4 first. Deploying the booking verifier before the shared secret and marketing signer are active can break canonical booking traffic.
 
-### 2.4 Fix the app URL
+### 2.4 Confirm the canonical app URL and signed proxy topology
 
-1. Copy the URL Vercel assigned you. It's shown at the top of the deployment page, something like `https://pixelblastermedia-booking-abc123.vercel.app`.
-2. Click **Settings** (top tab) → **Environment Variables** (left sidebar).
-3. Find `NEXT_PUBLIC_APP_URL`, click the `...` → **Edit**. Replace `temp.vercel.app` with your real URL. Save.
-4. Click **Deployments** (top tab) → click the **...** next to the most recent deployment → **Redeploy** → confirm. Wait ~60 seconds.
+Production intentionally uses two Vercel projects:
+
+- `pixel-blaster-media-website` owns `pixelblastermedia.com` and `www.pixelblastermedia.com`. Its repository-root Routing Middleware overwrites the internal proxy-attestation and forwarding-authority headers, signs the method/host/path/query with HMAC-SHA256, and then applies same-origin rewrites for `/_next`, `/book`, `/portal`, `/auth`, `/admin`, `/api`, `/listings`, `/beta`, `/start`, and the booking PWA resources (`/manifest.webmanifest`, `/sw.js`, `/offline.html`, `/icons/*`, `/icon.png`, and `/apple-icon.png`).
+- `pixel-blaster-media` has Root Directory `booking` and serves those rewrites from its stable upstream hostname `pixel-blaster-media.vercel.app`.
+
+Before deployment:
+
+1. Generate one high-entropy shared secret with `openssl rand -hex 32`. Store it in the password manager; never commit or print it in logs.
+2. Add the exact same secret as `BOOKING_PROXY_SHARED_SECRET` to the **Production** environment of both Vercel projects. Add it to Preview only when testing a cross-project preview.
+3. In `pixel-blaster-media-website`, confirm the apex and `www` domains are attached and the root rewrites still target `https://pixel-blaster-media.vercel.app`. `/_next/:path*` must be a rewrite, not a redirect, so JavaScript and CSS remain same-origin under CSP.
+4. In `pixel-blaster-media`, confirm **Settings → General → Root Directory** is `booking` and the latest Production URL is `https://pixel-blaster-media.vercel.app`.
+5. In the app project's Production environment, confirm `NEXT_PUBLIC_APP_URL` is exactly `https://pixelblastermedia.com` with no trailing slash.
+6. Confirm Vercel exposes the system variable `VERCEL_PROJECT_PRODUCTION_URL` to the app as `pixel-blaster-media.vercel.app`; do not create or override this variable manually.
+7. Confirm every configured provider endpoint is canonical before host enforcement:
+   - iGUIDE and Autoenhance webhooks must use `https://pixelblastermedia.com/api/...`, never a generated or stable `*.vercel.app` URL;
+   - Google Calendar and QuickBooks redirect URIs must use `https://pixelblastermedia.com/api/...`;
+   - if a provider is not configured, record it as inactive rather than inventing a callback;
+   - send only bounded unauthenticated synthetic probes and require the canonical URL to reach handler-level authentication, not middleware `421`.
+8. The booking project is Git-linked and deploys `main` automatically, while the marketing project is deployed explicitly:
+   - **Existing production upgrade:** after unchanged-byte approval and green PR CI, add the shared secret to both projects and deploy the marketing signer from the reviewed PR commit **before merging**. Verify canonical rewrites while the old booking app safely ignores the new headers. Then merge the exact reviewed tree so the booking verifier deploys automatically from `main`.
+   - **First-time setup:** add the shared secret to both projects and deploy the marketing signer first. Do not advertise or test booking mutations until the signer deployment is ready. Then return to the booking import screen and perform its first deploy.
+9. If booking verification fails after promotion, roll the booking project back first; the prior booking app safely ignores signed headers. Roll back the marketing signer only after booking is stable.
+
+Never merge the verifier before the marketing signer and shared secret are active. Never deploy booking-app attestation enforcement before the marketing signer and shared secret are active. The app accepts `X-Forwarded-Host` as public authority only after verifying a fresh signature from the marketing project and matching the signed host, forwarded host, raw stable upstream, and HTTPS protocol to the configured topology. Client-supplied forwarding or attestation headers alone are rejected. Normal GET/HEAD traffic on generated or direct noncanonical Vercel hosts is redirected to the apex domain, and mutation requests are rejected. Do not configure OAuth or webhook providers with a generated Vercel URL.
+
+Only after every applicable Stage 2.4 check passes may you click the booking project's **Deploy** button. Wait for a green deployment result, then continue to Stage 2.5. A successful build alone is not enough; the canonical `/book`, `/auth/sign-in`, and one real `/_next` asset must work through the marketing hostname.
 
 ### 2.5 Update Supabase with the real URL
 
 Go back to the Supabase tab you left open (URL Configuration).
 
-1. **Site URL:** replace `https://temp.vercel.app` with your real Vercel URL.
-2. **Redirect URLs:** paste these two (one per line), replacing with your real URL:
+1. **Site URL:** set it to `https://pixelblastermedia.com`.
+2. **Redirect URLs:** paste these canonical URLs:
    ```
-   https://your-vercel-url.vercel.app/**
-   https://your-vercel-url.vercel.app/auth/callback
+   https://pixelblastermedia.com/**
+   https://pixelblastermedia.com/auth/callback
    ```
 3. Save.
 
@@ -129,8 +151,8 @@ In Supabase, go to **Authentication → URL Configuration** and make sure these
 redirect URLs are allowed:
 
 ```
-https://your-vercel-url.vercel.app/**
-https://your-vercel-url.vercel.app/auth/callback
+https://pixelblastermedia.com/**
+https://pixelblastermedia.com/auth/callback
 http://localhost:3000/**
 http://localhost:3000/auth/callback
 ```
@@ -160,7 +182,7 @@ periodically, so Google is the quickest first win.
 
 ### 2.7 Smoke test
 
-1. Open your Vercel URL in an incognito window.
+1. Open `https://pixelblastermedia.com` in an incognito window.
 2. You should see the Pixel Blaster Booking landing page (teal headline, "Book the shoot. Get everything in one place.")
 3. Go to `/auth/sign-in`, enter your admin email, click **Email me a sign-in link**.
 4. Check your inbox (and spam folder). You should get a Supabase-branded magic link. Click it.
@@ -239,7 +261,7 @@ Add env var `IGUIDE_WEBHOOK_SECRET` with that value. Redeploy.
 
 Log into your iGuide portal → find the **Webhooks** or **Integrations** or **Developer** section (varies by iGuide version; ask their support if you can't find it).
 
-- **URL:** `https://your-vercel-url.vercel.app/api/integrations/iguide/webhook?secret=YOUR-SECRET-HERE` (replace both placeholders with your real values)
+- **URL:** `https://pixelblastermedia.com/api/integrations/iguide/webhook?secret=YOUR-SECRET-HERE`
 - **Event:** `ready`
 - **Save**
 
@@ -279,9 +301,9 @@ Redeploy.
 1. In your new app's dashboard, left sidebar → **Development** (or "Sandbox") → **Keys & OAuth**.
 2. Scroll to **Redirect URIs** → **Add URI**. Paste exactly:
    ```
-   https://your-vercel-url.vercel.app/api/integrations/quickbooks/callback
+   https://pixelblastermedia.com/api/integrations/quickbooks/callback
    ```
-   (use your actual Vercel URL, no trailing slash, all lowercase). Save.
+   Save it exactly as shown. Generated `*.vercel.app` callback URLs are not supported in production.
 3. Copy the **Client ID** and **Client Secret** that are on the same page. They're generated by Intuit. Save to password manager.
 
 ### 6.3 Add to Vercel
@@ -298,7 +320,7 @@ Redeploy.
 
 ### 6.4 Connect from admin
 
-1. Sign into your Vercel URL → `/admin/settings/integrations`.
+1. Sign into `https://pixelblastermedia.com/admin/settings/integrations`.
 2. Click **Connect QuickBooks**.
 3. An Intuit popup appears. Pick your company. Click **Connect**.
 4. You'll land back on the settings page with a green "Connected" pill.
@@ -308,7 +330,7 @@ Redeploy.
 
 ## Stage 7 — Prices (~5 min, required for invoicing)
 
-1. Sign into your Vercel URL → `/admin/settings/pricing`.
+1. Sign into `https://pixelblastermedia.com/admin/settings/pricing`.
 2. For every service and add-on, type the dollar amount. Use your Acuity prices.
 3. Any row left at $0 will block invoice creation — you can't accidentally send a blank invoice.
 4. Decide on the "Taxable" checkbox (ON for most real-estate services in Ontario).
@@ -321,7 +343,7 @@ One full dry run to confirm everything's wired up.
 
 ### 8.1 Fake a booking
 
-1. Open your Vercel URL in an **incognito window** → `/book`.
+1. Open `https://pixelblastermedia.com/book` in an **incognito window**.
 2. Fill it out:
    - Pick services (at least Real Estate Photography)
    - Address: "999 Test St"
@@ -370,7 +392,7 @@ Currently `pixelblastermedia.com` has a "Book Now" button pointing at Acuity. Wh
 
 This requires editing `index.html` at the root of your repo. Two options:
 
-- **Easy (ask me):** tell me in chat "swap Acuity for Vercel URL" and I'll do it in one edit.
+- **Easy (ask me):** tell me in chat "swap Acuity for the Pixel booking site" and I'll do it in one edit.
 - **DIY:** open `index.html` in GitHub, click the pencil icon, Find & Replace `https://PixelBlaster.as.me/` with your new URL, commit.
 
 ---

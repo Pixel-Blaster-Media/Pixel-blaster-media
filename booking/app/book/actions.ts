@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 
 import { emailHasAccount } from "@/lib/auth/email-lookup";
+import { isMissingSessionError } from "@/lib/auth/session-error";
 import { provisionRealtorAuthUser } from "@/lib/auth/provision-realtor";
 import { rollbackProvisionedRealtor } from "@/lib/auth/rollback-provisioned-realtor";
 import {
@@ -484,54 +485,72 @@ async function resolveUser(params: {
   const supabase = await getServerSupabase();
   const service = getServiceSupabase();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user: sessionUser },
+    error: sessionUserError,
+  } = await supabase.auth.getUser();
 
-  if (session?.access_token) {
-    const userId = decodeUserId(session.access_token);
-    if (userId) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id, email, full_name, organization_id, archived_at, role")
-        .eq("id", userId)
-        .maybeSingle<{
-          id: string;
-          email: string;
-          full_name: string | null;
-          organization_id: string | null;
-          archived_at: string | null;
-          role: "admin" | "realtor";
-        }>();
-      if (profile) {
-        if (profile.archived_at) {
-          return removedRealtorAccount();
-        }
-        if (profile.organization_id !== params.organizationId) {
-          return organizationMismatch(params.organizationName);
-        }
-        if (
-          profile.role !== "realtor" ||
-          (await hasPrivilegedCompanyMembership(
-            service,
-            profile.id,
-            params.organizationId,
-          ))
-        ) {
-          return companyAccountCannotBook();
-        }
-        return {
-          ok: true,
-          userId: profile.id,
-          email: profile.email,
-          fullName: profile.full_name,
-          organizationId: profile.organization_id ?? DEFAULT_ORGANIZATION_ID,
-          signedInToPortal: true,
-          newlyCreated: false,
-          provisioningId: null,
-          sessionTokens: null,
-        };
-      }
+  if (sessionUserError && !isMissingSessionError(sessionUserError)) {
+    console.error("[book] session verification failed", sessionUserError.name);
+    return authResolutionUnavailable();
+  }
+
+  if (sessionUser) {
+    const userId = sessionUser.id;
+    const { data: profile, error: sessionProfileError } = await supabase
+      .from("profiles")
+      .select("id, email, full_name, organization_id, archived_at, role")
+      .eq("id", userId)
+      .maybeSingle<{
+        id: string;
+        email: string;
+        full_name: string | null;
+        organization_id: string | null;
+        archived_at: string | null;
+        role: "admin" | "realtor";
+      }>();
+    if (sessionProfileError) {
+      console.error("[book] signed-in profile lookup failed", sessionProfileError.code);
+      return authResolutionUnavailable();
     }
+    if (!profile) {
+      return {
+        ok: false,
+        result: {
+          ok: false,
+          errors: {
+            _form:
+              "Your signed-in account is not linked to a booking workspace. Sign out or contact support.",
+          },
+        },
+      };
+    }
+    if (profile.archived_at) {
+      return removedRealtorAccount();
+    }
+    if (profile.organization_id !== params.organizationId) {
+      return organizationMismatch(params.organizationName);
+    }
+    if (
+      profile.role !== "realtor" ||
+      (await hasPrivilegedCompanyMembership(
+        service,
+        profile.id,
+        params.organizationId,
+      ))
+    ) {
+      return companyAccountCannotBook();
+    }
+    return {
+      ok: true,
+      userId: profile.id,
+      email: profile.email,
+      fullName: profile.full_name,
+      organizationId: profile.organization_id ?? DEFAULT_ORGANIZATION_ID,
+      signedInToPortal: true,
+      newlyCreated: false,
+      provisioningId: null,
+      sessionTokens: null,
+    };
   }
 
   // Every anonymous path needs contact details and a password. Public phone
@@ -575,16 +594,20 @@ async function resolveUser(params: {
         },
       };
     }
-    const userId = decodeUserId(signIn.tokens.access_token);
-    if (!userId) {
+    const {
+      data: { user: verifiedUser },
+      error: verifyError,
+    } = await supabase.auth.getUser(signIn.tokens.access_token);
+    if (verifyError || !verifiedUser) {
       return {
         ok: false,
         result: {
           ok: false,
-          errors: { _form: "Could not decode the sign-in token. Try again." },
+          errors: { _form: "Could not verify the sign-in session. Try again." },
         },
       };
     }
+    const userId = verifiedUser.id;
     const { data: profile } = await service
       .from("profiles")
       .select("id, email, full_name, organization_id, archived_at, role")
@@ -712,6 +735,19 @@ async function resolveUser(params: {
   };
 }
 
+function authResolutionUnavailable(): ResolveUserErr {
+  return {
+    ok: false,
+    result: {
+      ok: false,
+      errors: {
+        _form:
+          "We couldn't verify your signed-in account right now. Please try again.",
+      },
+    },
+  };
+}
+
 function organizationMismatch(organizationName: string): ResolveUserErr {
   return {
     ok: false,
@@ -836,18 +872,6 @@ async function maybeFillProfile(
     .update(updates)
     .eq("id", userId);
   if (error) console.warn("[book] profile top-up failed", error);
-}
-function decodeUserId(token: string): string | null {
-  try {
-    const parts = token.split(".");
-    const payload = JSON.parse(
-      Buffer.from(parts[1], "base64url").toString("utf8"),
-    ) as { sub?: string; exp?: number };
-    if (payload.exp && payload.exp * 1000 < Date.now()) return null;
-    return payload.sub ?? null;
-  } catch {
-    return null;
-  }
 }
 
 function isUuid(value: string): boolean {

@@ -1,187 +1,171 @@
-import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
+
+import {
+  AuthTokenVerificationError,
+  requireVerifiedAccessToken,
+} from "@/lib/auth/verified-access-token";
+import {
+  setSupabaseSessionCookie,
+} from "@/lib/auth/set-session-cookie";
+import { exchangeSupabaseRefreshToken } from "@/lib/auth/supabase-refresh-exchange";
+import { readBoundedJsonBody } from "@/lib/security/bounded-json-body";
+import { verifyProductionProxyRequest } from "@/lib/security/production-proxy-attestation";
+import { isSameOriginRequest } from "@/lib/security/request-origin";
+import { getServerSupabase } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type MutableCookieStore = {
-  getAll(): Array<{ name: string; value: string }>;
-  delete(name: string): void;
-  set(options: {
-    name: string;
-    value: string;
-    httpOnly: boolean;
-    secure: boolean;
-    sameSite: "lax";
-    path: string;
-    maxAge: number;
-  }): void;
-};
+const MAX_BODY_BYTES = 40_000;
+const MAX_REFRESH_TOKEN_LENGTH = 16_384;
 
 /**
- * Client-to-server session bridge.
- *
- * Magic links sent from the Supabase dashboard use the implicit flow
- * (`#access_token=...` in the URL fragment). Fragments never reach the
- * server, so middleware can't pick them up.
- *
- * The client extracts tokens from the fragment and POSTs them here.
- * We decode the access_token JWT to extract the user claims + expiry,
- * build a Session object in the shape that @supabase/ssr's cookie
- * storage expects, and write it to the `sb-<project-ref>-auth-token`
- * cookie (chunked if it exceeds cookie size limits).
- *
- * We deliberately do NOT call supabase.auth.setSession() here because
- * that internally makes a fetch to /auth/v1/user for validation, and
- * that outbound call can fail from Vercel's serverless runtime
- * (intermittently — reported as "fetch failed"). The access_token was
- * already signed and issued by Supabase at the /auth/v1/verify
- * endpoint immediately prior to this call, so re-validating it is
- * belt-and-suspenders we don't need.
- *
- * The endpoint is intentionally unauthenticated — it HAS to be
- * callable before a session exists.
+ * Establishes the SSR session for Supabase implicit-flow magic links.
+ * The endpoint is public because the browser has no cookie yet, so access
+ * tokens are verified by Supabase Auth before any cookie is installed.
  */
 export async function POST(request: NextRequest) {
-  let body: { access_token?: string; refresh_token?: string };
-  try {
-    body = (await request.json()) as typeof body;
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: "Invalid JSON body." },
-      { status: 400 },
-    );
-  }
-
-  const { access_token, refresh_token } = body;
-  if (!access_token || !refresh_token) {
-    return NextResponse.json(
-      { ok: false, error: "access_token and refresh_token are required." },
-      { status: 400 },
-    );
-  }
-
-  // Decode the JWT payload (middle segment). Access tokens are signed
-  // by Supabase — if the signature's wrong, the next /auth/v1/user call
-  // will fail and the user will be re-prompted to sign in. For writing
-  // the cookie here, we only need the payload claims.
-  let payload: {
-    sub: string;
-    aud: string;
-    email?: string;
-    role?: string;
-    exp: number;
-    iat: number;
-    app_metadata?: Record<string, unknown>;
-    user_metadata?: Record<string, unknown>;
-    aal?: string;
-    amr?: Array<Record<string, unknown>>;
-    session_id?: string;
-  };
-  try {
-    const parts = access_token.split(".");
-    if (parts.length < 2) throw new Error("Malformed JWT");
-    payload = JSON.parse(
-      Buffer.from(parts[1], "base64url").toString("utf8"),
-    );
-  } catch (err) {
-    console.error("[auth.bridge] JWT decode failed", err);
-    return NextResponse.json(
-      { ok: false, error: "Could not decode access_token." },
-      { status: 400 },
-    );
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!supabaseUrl) {
-    return NextResponse.json(
-      { ok: false, error: "NEXT_PUBLIC_SUPABASE_URL not configured." },
-      { status: 500 },
-    );
-  }
-  const projectRef = new URL(supabaseUrl).hostname.split(".")[0];
-
-  // Shape matches @supabase/supabase-js's `Session` type. Unknown-at-
-  // this-layer fields (e.g. provider tokens from OAuth) are omitted;
-  // supabase-js treats them as optional.
-  const now = Math.floor(Date.now() / 1000);
-  const session = {
-    access_token,
-    refresh_token,
-    token_type: "bearer",
-    expires_in: Math.max(payload.exp - now, 0),
-    expires_at: payload.exp,
-    user: {
-      id: payload.sub,
-      aud: payload.aud,
-      role: payload.role ?? "authenticated",
-      email: payload.email ?? "",
-      phone: "",
-      app_metadata: payload.app_metadata ?? {},
-      user_metadata: payload.user_metadata ?? {},
-      aal: payload.aal,
-      amr: payload.amr,
-      created_at: new Date(payload.iat * 1000).toISOString(),
-      updated_at: new Date().toISOString(),
+  const productionProxyHost =
+    process.env.BOOKING_PROXY_UPSTREAM_HOST ??
+    process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  const trustedProductionProxy = await verifyProductionProxyRequest(
+    request,
+    process.env.BOOKING_PROXY_SHARED_SECRET,
+    {
+      canonicalHost: configuredCanonicalHost(),
+      productionProxyHost,
     },
-  };
-
-  // @supabase/ssr v0.5+ stores the session as `base64-` + base64url
-  // encoded JSON (note: base64URL, not standard base64 — it uses the
-  // URL-safe alphabet with `-` and `_` and no padding). Getting this
-  // wrong means the server client silently fails to parse and treats
-  // the user as signed out.
-  const encoded =
-    "base64-" + Buffer.from(JSON.stringify(session)).toString("base64url");
-
-  const cookieBase = `sb-${projectRef}-auth-token`;
-  const cookieStore = (await cookies()) as unknown as MutableCookieStore;
-
-  // Clear any stale chunks from a previous sign-in before writing new ones.
-  for (const existing of cookieStore.getAll()) {
-    if (
-      existing.name === cookieBase ||
-      existing.name.startsWith(`${cookieBase}.`)
-    ) {
-      cookieStore.delete(existing.name);
-    }
+  );
+  if (!isSameOriginRequest(request.headers.get("origin"), request.nextUrl, {
+    host: request.headers.get("host"),
+    forwardedHost: request.headers.get("x-forwarded-host"),
+    forwardedProto: request.headers.get("x-forwarded-proto"),
+    productionProxyHost,
+    trustedProductionProxy,
+  })) {
+    return jsonError("Cross-origin request rejected.", 403);
   }
 
-  // Match @supabase/ssr's DEFAULT_COOKIE_OPTIONS exactly — notably
-  // httpOnly: false, because the browser client also reads these
-  // cookies to keep its in-memory session state in sync.
-  const baseOptions = {
-    httpOnly: false,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax" as const,
-    path: "/",
-    maxAge: 60 * 60 * 24 * 400,
-  };
-
-  // Cookie value size ceiling is ~4 KB; leave headroom for the name +
-  // cookie attributes.
-  const CHUNK_SIZE = 3180;
-
-  if (encoded.length <= CHUNK_SIZE) {
-    cookieStore.set({
-      name: cookieBase,
-      value: encoded,
-      ...baseOptions,
-    });
-  } else {
-    let index = 0;
-    for (let pos = 0; pos < encoded.length; pos += CHUNK_SIZE) {
-      cookieStore.set({
-        name: `${cookieBase}.${index}`,
-        value: encoded.slice(pos, pos + CHUNK_SIZE),
-        ...baseOptions,
-      });
-      index += 1;
+  const parsedBody = await readBoundedJsonBody(request, MAX_BODY_BYTES);
+  if (!parsedBody.ok) {
+    if (parsedBody.kind === "too_large") {
+      return jsonError("Request body is too large.", 413);
     }
+    if (parsedBody.kind === "unsupported_media_type") {
+      return jsonError("Content-Type must be application/json.", 415);
+    }
+    return jsonError("Invalid JSON body.", 400);
+  }
+  const body = parsedBody.value;
+  if (!isTokenPair(body)) {
+    return jsonError("A valid access and refresh token pair is required.", 400);
+  }
+  const { access_token, refresh_token } = body;
+
+  const supabase = await getServerSupabase();
+  let verifiedUser;
+  try {
+    verifiedUser = await requireVerifiedAccessToken(
+      access_token,
+      async (token) => supabase.auth.getUser(token),
+    );
+  } catch (error) {
+    if (error instanceof AuthTokenVerificationError) {
+      return jsonError(
+        error.kind === "unavailable"
+          ? "Authentication verification is temporarily unavailable."
+          : "The sign-in link is invalid or expired.",
+        error.kind === "unavailable" ? 503 : 401,
+      );
+    }
+    return jsonError("Authentication verification failed.", 503);
   }
 
-  return NextResponse.json({
-    ok: true,
-    user: { id: session.user.id, email: session.user.email },
+  const refreshExchange = await exchangeSupabaseRefreshToken(refresh_token, {
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   });
+  if (!refreshExchange.ok) {
+    return jsonError(
+      refreshExchange.kind === "invalid"
+        ? "The sign-in link is invalid or expired."
+        : "Authentication verification is temporarily unavailable.",
+      refreshExchange.kind === "invalid" ? 401 : 503,
+    );
+  }
+
+  try {
+    await setSupabaseSessionCookie(
+      refreshExchange.tokens,
+      verifiedUser.email ?? "",
+      verifiedUser,
+    );
+  } catch (error) {
+    if (error instanceof AuthTokenVerificationError) {
+      return jsonError(
+        error.kind === "unavailable"
+          ? "Authentication verification is temporarily unavailable."
+          : "The sign-in link token pair is invalid.",
+        error.kind === "unavailable" ? 503 : 401,
+      );
+    }
+    return jsonError("Could not establish the authenticated session.", 503);
+  }
+
+  return NextResponse.json(
+    {
+      ok: true,
+      user: { id: verifiedUser.id, email: verifiedUser.email ?? "" },
+    },
+    { headers: { "Cache-Control": "no-store" } },
+  );
+}
+
+function isTokenPair(
+  value: unknown,
+): value is { access_token: string; refresh_token: string } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  if (
+    Object.keys(record).length !== 2 ||
+    typeof record.access_token !== "string" ||
+    typeof record.refresh_token !== "string"
+  ) {
+    return false;
+  }
+  return (
+    record.access_token.length > 0 &&
+    record.refresh_token.length > 0 &&
+    record.refresh_token.length <= MAX_REFRESH_TOKEN_LENGTH
+  );
+}
+
+function jsonError(error: string, status: number) {
+  return NextResponse.json(
+    { ok: false, error },
+    { status, headers: { "Cache-Control": "no-store" } },
+  );
+}
+
+function configuredCanonicalHost(): string | null {
+  const configured =
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    "https://pixelblastermedia.com";
+  try {
+    const url = new URL(configured);
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.pathname !== "/" ||
+      url.search ||
+      url.hash ||
+      url.hostname.endsWith(".vercel.app")
+    ) {
+      return null;
+    }
+    return url.hostname;
+  } catch {
+    return null;
+  }
 }

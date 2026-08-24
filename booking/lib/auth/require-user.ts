@@ -27,36 +27,25 @@ interface ProfileRow {
 }
 
 /**
- * Server-component / server-action helper that ensures the request is
- * authenticated and returns a small profile context. Does NOT enforce a
- * role — use `requireAdmin()` for that.
- *
- * We resolve the user id from the session cookie (via getSession +
- * JWT decode) rather than calling supabase.auth.getUser() — see
- * require-admin.ts for the rationale. Summary: getUser() makes an
- * outbound fetch that can fail intermittently from Vercel serverless,
- * and a network blip must not log out a valid session.
+ * Verifies the Supabase Auth user and returns the active profile context.
+ * Does not enforce a role; use `requireAdmin()` for company access.
  */
 export async function requireUser(nextPath?: string): Promise<UserContext> {
   const supabase = await getServerSupabase();
+  const suffix = nextPath ? `&next=${encodeURIComponent(nextPath)}` : "";
+  const signInPath = `/auth/sign-in?audience=realtor${suffix}`;
   const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
 
-  if (sessionError && !isMissingSessionError(sessionError)) {
-    console.error("[auth] session refresh failed", sessionError.name);
+  if (userError) {
+    if (isMissingSessionError(userError)) redirect(signInPath);
+    console.error("[auth] user verification failed", userError.name);
     redirect("/auth/access-unavailable");
   }
-
-  const userId = session?.access_token
-    ? decodeUserIdFromJwt(session.access_token)
-    : null;
-
-  if (!userId) {
-    const suffix = nextPath ? `&next=${encodeURIComponent(nextPath)}` : "";
-    redirect(`/auth/sign-in?audience=realtor${suffix}`);
-  }
+  if (!user) redirect(signInPath);
+  const userId = user.id;
 
   const { data: profile, error } = await supabase
     .from("profiles")
@@ -86,19 +75,4 @@ export async function requireUser(nextPath?: string): Promise<UserContext> {
     archived_at: profile.archived_at,
     role: profile.role,
   };
-}
-
-function decodeUserIdFromJwt(token: string): string | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length < 2) return null;
-    const payload = JSON.parse(
-      Buffer.from(parts[1], "base64url").toString("utf8"),
-    ) as { sub?: string; exp?: number };
-    if (!payload.sub) return null;
-    if (payload.exp && payload.exp * 1000 < Date.now()) return null;
-    return payload.sub;
-  } catch {
-    return null;
-  }
 }
