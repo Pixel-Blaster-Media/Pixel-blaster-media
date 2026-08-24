@@ -32,6 +32,24 @@ test("pull requests run fail-closed application and PostgreSQL gates", async () 
   assert.match(workflow, /verify-catalog-item-examples-postgres\.sh/);
   assert.match(workflow, /verify-canonical-media-postgres\.sh/);
   assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
+
+  const applicationJob = workflow.slice(
+    workflow.indexOf("  application:"),
+    workflow.indexOf("  postgresql:"),
+  );
+  const applicationJobHeader = applicationJob.slice(
+    0,
+    applicationJob.indexOf("    steps:"),
+  );
+  assert.doesNotMatch(
+    applicationJobHeader,
+    /VERCEL_ENV:/,
+    "production-only Vercel mode must not contaminate the full test suite",
+  );
+  assert.match(
+    applicationJob,
+    /Build production-shaped artifact[\s\S]*?env:\s*\n\s*VERCEL_ENV: production[\s\S]*?run: npm run build/,
+  );
 });
 
 test("the application exposes a built-artifact HTTP security gate", async () => {
