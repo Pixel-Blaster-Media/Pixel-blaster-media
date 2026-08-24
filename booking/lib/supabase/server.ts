@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
+import { createBoundedSupabaseAuthFetch } from "@/lib/auth/bounded-supabase-auth-fetch";
 import type { Database } from "./database.types";
 
 type CookieStore = {
@@ -15,11 +16,15 @@ type CookieStore = {
  */
 export async function getServerSupabase() {
   const cookieStore = (await cookies()) as unknown as CookieStore;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
   return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseUrl,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      global: {
+        fetch: createBoundedSupabaseAuthFetch(supabaseUrl),
+      },
       cookies: {
         get(name: string) {
           return cookieStore.get(name)?.value;

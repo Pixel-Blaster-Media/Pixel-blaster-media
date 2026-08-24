@@ -11,6 +11,7 @@ import {
   getActiveCatalog,
   type CatalogItemRow,
 } from "@/lib/booking/catalog";
+import { publicAIRecommendationsEnabled } from "@/lib/booking/public-ai-recommendations";
 import { parseWizardState } from "@/lib/booking/wizard-state";
 import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
 
@@ -94,12 +95,14 @@ export default async function BookStep1Page({
         </p>
       ) : null}
 
-      <AIPackageRecommender
-        bundles={bundles}
-        aLaCarte={aLaCarte}
-        addons={addons}
-        organizationSlug={organization.slug}
-      />
+      {publicAIRecommendationsEnabled() ? (
+        <AIPackageRecommender
+          bundles={bundles}
+          aLaCarte={aLaCarte}
+          addons={addons}
+          organizationSlug={organization.slug}
+        />
+      ) : null}
 
       <PackageAccordion
         bundles={bundles}

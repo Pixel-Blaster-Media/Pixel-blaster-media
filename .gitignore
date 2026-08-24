@@ -17,3 +17,6 @@ Images Pt2/
 # Claude
 .claude/
 .vercel
+
+# Root marketing middleware dependencies
+node_modules/
