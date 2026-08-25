@@ -26,12 +26,16 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            booking/package-lock.json
       - name: Install dependencies
         run: npm ci
+      - name: Install locked Next normalization oracle
+        run: npm --prefix booking ci --ignore-scripts --no-audit --no-fund
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
-      - name: Test signed proxy middleware
+      - name: Test signed proxy against locked Next Edge adapter
         run: npm test
 
   application:
@@ -47,6 +51,7 @@ jobs:
       AUTH_RECOVERY_SECRET: ci-recovery-secret
       BOOKING_MANAGE_SECRET: ci-booking-manage-secret
       BOOKING_PROXY_SHARED_SECRET: ci-only-proxy-attestation-secret-0123456789abcdef
+      VERCEL_PROJECT_PRODUCTION_URL: pixel-blaster-media.vercel.app
     defaults:
       run:
         working-directory: booking
@@ -58,9 +63,13 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: booking/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            booking/package-lock.json
       - name: Install dependencies
         run: npm ci
+      - name: Install marketing proxy dependencies
+        run: npm --prefix .. ci --ignore-scripts --no-audit --no-fund
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - name: Lint
@@ -75,6 +84,10 @@ jobs:
         run: npm run build
       - name: Probe built security boundaries
         run: npm run test:http-security
+      - name: Probe marketing signer through built self-hosted Next
+        env:
+          VERCEL_ENV: production
+        run: node --experimental-strip-types ../tests/marketing-next-start-http.mjs
 
   postgresql:
     name: PostgreSQL integration
