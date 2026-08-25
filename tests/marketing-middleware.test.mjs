@@ -67,51 +67,69 @@ test("canonical marketing requests overwrite client routing proof and forwarding
   );
 });
 
-test("proxy proof ignores Next's framework-only RSC discriminator but binds application query", async () => {
+test("proxy proof matches Next's RSC query normalization while binding application query", async () => {
   process.env.BOOKING_PROXY_SHARED_SECRET = SECRET;
-  const response = await middleware(
-    new Request(
-      "https://pixelblastermedia.com/admin/bookings?filter=active&_rsc=client-cache-key",
-    ),
-  );
-  const attestation = forwardedAttestation(response);
-  const upstreamHeaders = new Headers({
-    host: "pixel-blaster-media.vercel.app",
-    "x-forwarded-host": "pixelblastermedia.com",
-    "x-forwarded-proto": "https",
-    [PRODUCTION_PROXY_HEADERS.timestamp]: attestation.timestamp,
-    [PRODUCTION_PROXY_HEADERS.host]: attestation.host,
-    [PRODUCTION_PROXY_HEADERS.signature]: attestation.signature,
-  });
   const topology = {
     canonicalHost: "pixelblastermedia.com",
     productionProxyHost: "pixel-blaster-media.vercel.app",
   };
+  const publicUrls = [
+    "https://pixelblastermedia.com/admin/bookings?filter=active&_rsc=h",
+    "https://pixelblastermedia.com/admin/bookings?q=two%20words",
+    "https://pixelblastermedia.com/admin/bookings?q=two%20words&_rsc=h",
+    "https://pixelblastermedia.com/admin/bookings?q=tilde~value&_rsc=h",
+    "https://pixelblastermedia.com/admin/bookings?x=%2f&y=%41&_rsc=h",
+    "https://pixelblastermedia.com/admin/bookings?x=1&&y=2&_rsc=h",
+    "https://pixelblastermedia.com/admin/bookings?x=1&_rsc=a&_rsc=b&y=2",
+  ];
 
-  assert.equal(
-    await verifyProductionProxyRequest(
-      {
-        method: "GET",
-        url: "https://internal.invalid/admin/bookings?filter=active",
-        headers: upstreamHeaders,
-      },
-      SECRET,
-      topology,
-    ),
-    true,
-  );
-  assert.equal(
-    await verifyProductionProxyRequest(
-      {
-        method: "GET",
-        url: "https://internal.invalid/admin/bookings?filter=archived",
-        headers: upstreamHeaders,
-      },
-      SECRET,
-      topology,
-    ),
-    false,
-  );
+  for (const publicUrl of publicUrls) {
+    const response = await middleware(new Request(publicUrl));
+    const attestation = forwardedAttestation(response);
+    const upstreamHeaders = new Headers({
+      host: "pixel-blaster-media.vercel.app",
+      "x-forwarded-host": "pixelblastermedia.com",
+      "x-forwarded-proto": "https",
+      [PRODUCTION_PROXY_HEADERS.timestamp]: attestation.timestamp,
+      [PRODUCTION_PROXY_HEADERS.host]: attestation.host,
+      [PRODUCTION_PROXY_HEADERS.signature]: attestation.signature,
+    });
+    const appVisibleUrl = new URL(publicUrl);
+    appVisibleUrl.searchParams.delete("_rsc");
+    const upstreamUrl = new URL(
+      appVisibleUrl.pathname + appVisibleUrl.search,
+      "https://internal.invalid",
+    );
+
+    assert.equal(
+      await verifyProductionProxyRequest(
+        {
+          method: "GET",
+          url: upstreamUrl.href,
+          headers: upstreamHeaders,
+        },
+        SECRET,
+        topology,
+      ),
+      true,
+      `attestation must match Next-visible URL for ${publicUrl}`,
+    );
+
+    upstreamUrl.searchParams.append("tampered", "1");
+    assert.equal(
+      await verifyProductionProxyRequest(
+        {
+          method: "GET",
+          url: upstreamUrl.href,
+          headers: upstreamHeaders,
+        },
+        SECRET,
+        topology,
+      ),
+      false,
+      `application query mutation must fail for ${publicUrl}`,
+    );
+  }
 });
 
 test("canonical proxy paths fail closed when the signing secret is missing or weak", async () => {
