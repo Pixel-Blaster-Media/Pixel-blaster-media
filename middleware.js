@@ -2,6 +2,7 @@ import { next } from "@vercel/functions";
 
 const DEFAULT_CANONICAL_HOST = "pixelblastermedia.com";
 const ATTESTATION_VERSION = "pixel-booking-proxy-v1";
+const NEXT_QUERY_PARAM_PREFIXES = ["nxtP", "nxtI"];
 const encoder = new TextEncoder();
 const BOOKING_PROXY_PREFIXES = [
   "/_next",
@@ -40,6 +41,71 @@ function proxyUnavailable() {
       "Content-Type": "text/plain; charset=utf-8",
     },
   });
+}
+
+function invalidProxyUrl() {
+  return new Response("Invalid booking request URL.", {
+    status: 400,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": "text/plain; charset=utf-8",
+    },
+  });
+}
+
+/**
+ * Vercel invokes the booking middleware through Next's Edge adapter, which
+ * normalizes RSC and Pages Router data paths plus reserved rewrite query keys
+ * and removes `_rsc`. Mirror those locked Next 16.3 transformations in order;
+ * reject ambiguous malformed data forms rather than risking another canonical
+ * redirect loop.
+ */
+function proxyAttestationPathAndQuery(url) {
+  const attestationUrl = new URL(url.href.replace(/\.rsc($|\?)/, "$1"));
+
+  if (
+    attestationUrl.pathname.startsWith("/_next/data/") &&
+    attestationUrl.pathname.endsWith(".json")
+  ) {
+    const dataPathParts = attestationUrl.pathname
+      .replace(/^\/_next\/data\//, "")
+      .replace(/\.json$/, "")
+      .split("/");
+    if (dataPathParts[1] === "index" && dataPathParts.length > 2) {
+      return null;
+    }
+    attestationUrl.pathname =
+      dataPathParts[1] === "index"
+        ? "/"
+        : `/${dataPathParts.slice(1).join("/")}`;
+
+    if (
+      attestationUrl.pathname.startsWith("/_next/data/") &&
+      attestationUrl.pathname.endsWith(".json")
+    ) {
+      return null;
+    }
+  }
+
+  const keys = [...attestationUrl.searchParams.keys()];
+
+  for (const key of keys) {
+    const values = attestationUrl.searchParams.getAll(key);
+    const normalizedKey = NEXT_QUERY_PARAM_PREFIXES.find(
+      (prefix) => key !== prefix && key.startsWith(prefix),
+    );
+    if (!normalizedKey) continue;
+
+    const applicationKey = key.slice(normalizedKey.length);
+    attestationUrl.searchParams.delete(applicationKey);
+    for (const value of values) {
+      attestationUrl.searchParams.append(applicationKey, value);
+    }
+    attestationUrl.searchParams.delete(key);
+  }
+
+  attestationUrl.searchParams.delete("_rsc");
+  return `${attestationUrl.pathname}${attestationUrl.search}`;
 }
 
 async function signProxyAttestation({ timestamp, method, host, pathAndQuery }, secret) {
@@ -91,7 +157,10 @@ export default async function middleware(request) {
     const timestamp = String(Math.floor(Date.now() / 1_000));
     const method = request.method.toUpperCase();
     const host = url.hostname.toLowerCase();
-    const pathAndQuery = `${url.pathname}${url.search}`;
+    const pathAndQuery = proxyAttestationPathAndQuery(url);
+    if (pathAndQuery === null) {
+      return invalidProxyUrl();
+    }
     const signature = await signProxyAttestation(
       { timestamp, method, host, pathAndQuery },
       secret,
