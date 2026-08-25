@@ -42,6 +42,32 @@ function proxyUnavailable() {
   });
 }
 
+/**
+ * Next removes its framework-only `_rsc` cache discriminator before the
+ * rewritten request reaches the booking middleware. Sign the same URL the
+ * verifier sees while preserving every application query byte and its order.
+ */
+function proxyAttestationPathAndQuery(url) {
+  const rawQuery = url.search.startsWith("?") ? url.search.slice(1) : url.search;
+  if (!rawQuery) return url.pathname;
+
+  const applicationQuery = rawQuery
+    .split("&")
+    .filter((field) => !isNextRscField(field))
+    .join("&");
+  return applicationQuery ? `${url.pathname}?${applicationQuery}` : url.pathname;
+}
+
+function isNextRscField(field) {
+  const separator = field.indexOf("=");
+  const rawKey = separator === -1 ? field : field.slice(0, separator);
+  try {
+    return decodeURIComponent(rawKey.replace(/\+/g, " ")) === "_rsc";
+  } catch {
+    return rawKey === "_rsc";
+  }
+}
+
 async function signProxyAttestation({ timestamp, method, host, pathAndQuery }, secret) {
   if (encoder.encode(secret).byteLength < 32) {
     throw new Error("Proxy attestation secret is too short.");
@@ -91,7 +117,7 @@ export default async function middleware(request) {
     const timestamp = String(Math.floor(Date.now() / 1_000));
     const method = request.method.toUpperCase();
     const host = url.hostname.toLowerCase();
-    const pathAndQuery = `${url.pathname}${url.search}`;
+    const pathAndQuery = proxyAttestationPathAndQuery(url);
     const signature = await signProxyAttestation(
       { timestamp, method, host, pathAndQuery },
       secret,

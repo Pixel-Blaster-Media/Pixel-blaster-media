@@ -5,6 +5,7 @@ import middleware from "../middleware.js";
 import {
   PRODUCTION_PROXY_HEADERS,
   verifyProductionProxyAttestation,
+  verifyProductionProxyRequest,
 } from "../booking/lib/security/production-proxy-attestation.ts";
 
 const SECRET = "marketing-test-proxy-secret-0123456789abcdef";
@@ -63,6 +64,53 @@ test("canonical marketing requests overwrite client routing proof and forwarding
       SECRET,
     ),
     true,
+  );
+});
+
+test("proxy proof ignores Next's framework-only RSC discriminator but binds application query", async () => {
+  process.env.BOOKING_PROXY_SHARED_SECRET = SECRET;
+  const response = await middleware(
+    new Request(
+      "https://pixelblastermedia.com/admin/bookings?filter=active&_rsc=client-cache-key",
+    ),
+  );
+  const attestation = forwardedAttestation(response);
+  const upstreamHeaders = new Headers({
+    host: "pixel-blaster-media.vercel.app",
+    "x-forwarded-host": "pixelblastermedia.com",
+    "x-forwarded-proto": "https",
+    [PRODUCTION_PROXY_HEADERS.timestamp]: attestation.timestamp,
+    [PRODUCTION_PROXY_HEADERS.host]: attestation.host,
+    [PRODUCTION_PROXY_HEADERS.signature]: attestation.signature,
+  });
+  const topology = {
+    canonicalHost: "pixelblastermedia.com",
+    productionProxyHost: "pixel-blaster-media.vercel.app",
+  };
+
+  assert.equal(
+    await verifyProductionProxyRequest(
+      {
+        method: "GET",
+        url: "https://internal.invalid/admin/bookings?filter=active",
+        headers: upstreamHeaders,
+      },
+      SECRET,
+      topology,
+    ),
+    true,
+  );
+  assert.equal(
+    await verifyProductionProxyRequest(
+      {
+        method: "GET",
+        url: "https://internal.invalid/admin/bookings?filter=archived",
+        headers: upstreamHeaders,
+      },
+      SECRET,
+      topology,
+    ),
+    false,
   );
 });
 
