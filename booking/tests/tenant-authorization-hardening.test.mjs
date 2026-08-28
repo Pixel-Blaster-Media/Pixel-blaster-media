@@ -14,6 +14,14 @@ const requirePlatformAdminSource = readFileSync(
   new URL("../lib/auth/require-platform-admin.ts", import.meta.url),
   "utf8",
 );
+const platformAdminAccessSource = readFileSync(
+  new URL("../lib/auth/platform-admin-access-core.ts", import.meta.url),
+  "utf8",
+);
+const requestVerifiedIdentitySource = readFileSync(
+  new URL("../lib/auth/request-verified-identity.ts", import.meta.url),
+  "utf8",
+);
 const bookingDetailSource = readFileSync(
   new URL("../app/admin/bookings/[id]/page.tsx", import.meta.url),
   "utf8",
@@ -72,11 +80,17 @@ test("admin authorization is derived from an owner or admin membership", () => {
 
 test("platform authorization uses verified auth identity and fails closed", () => {
   assert.doesNotMatch(requirePlatformAdminSource, /DEFAULT_ORGANIZATION_ID/);
-  assert.match(requirePlatformAdminSource, /supabase\.auth\.getUser\(\)/);
-  assert.match(requirePlatformAdminSource, /user\.id !== admin\.userId/);
-  assert.match(requirePlatformAdminSource, /user\.email\.toLowerCase\(\)/);
+  assert.match(requestVerifiedIdentitySource, /supabase\.auth\.getUser\(\)/);
+  assert.doesNotMatch(requirePlatformAdminSource, /getRequestVerifiedIdentity/);
+  assert.match(requirePlatformAdminSource, /user: admin\.verifiedIdentity/);
+  assert.match(requirePlatformAdminSource, /hasVerifiedPlatformAdminAccess/);
+  assert.match(platformAdminAccessSource, /identity\.kind !== "authenticated"/);
+  assert.match(platformAdminAccessSource, /identity\.user\.id !== adminUserId/);
+  assert.match(platformAdminAccessSource, /identity\.user\.email\.toLowerCase\(\)/);
   assert.doesNotMatch(requirePlatformAdminSource, /admin\.email\.toLowerCase\(\)/);
+  assert.doesNotMatch(requirePlatformAdminSource, /auth\.getSession\(\)/);
   assert.match(requirePlatformAdminSource, /explicitEmails\.length === 0/);
+  assert.match(requirePlatformAdminSource, /!admin\.verifiedIdentity/);
 });
 
 test("notification status is loaded only after a tenant-scoped booking is proven", () => {

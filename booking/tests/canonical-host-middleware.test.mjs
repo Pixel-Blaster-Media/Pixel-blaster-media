@@ -15,6 +15,21 @@ test("middleware enforces canonical-host policy before auth processing", () => {
   assert.match(source, /status: 421/);
 });
 
+test("fetch Server Actions reach guarded actions only after host containment", () => {
+  const hostRejectionIndex = source.indexOf('hostAction === "reject"');
+  const currentPathIndex = source.indexOf('requestHeaders.set(\n    "x-current-path"');
+  const actionIndex = source.indexOf('request.headers.get("next-action")');
+  const authHandoffIndex = source.indexOf("shouldHandoffAuthCode(");
+  assert.ok(hostRejectionIndex >= 0);
+  assert.ok(currentPathIndex > hostRejectionIndex);
+  assert.ok(actionIndex > currentPathIndex);
+  assert.ok(actionIndex < authHandoffIndex);
+  assert.match(
+    source,
+    /request\.method === "POST"\s*&&\s*request\.headers\.get\("next-action"\) !== null/,
+  );
+});
+
 test("canonical redirects preserve path and query on the configured app origin", () => {
   assert.match(source, /process\.env\.NEXT_PUBLIC_APP_URL/);
   assert.match(source, /request\.nextUrl\.pathname/);

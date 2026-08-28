@@ -7,8 +7,10 @@ import {
   RECOVERY_GRANT_COOKIE,
   verifyRecoveryGrant,
 } from "@/lib/auth/recovery-flow";
-import { isMissingSessionError } from "@/lib/auth/session-error";
-import { getServerSupabase } from "@/lib/supabase/server";
+import {
+  getRequestVerifiedIdentity,
+} from "@/lib/auth/request-verified-identity";
+import { supabaseSessionExpiryState } from "@/lib/auth/session-cookie-expiry";
 
 import ResetConfirmForm from "./ResetConfirmForm";
 
@@ -16,15 +18,24 @@ export const metadata: Metadata = { title: "Set a new password" };
 export const dynamic = "force-dynamic";
 
 export default async function ResetConfirmPage() {
+  const cookieStore = await cookies();
+  if (
+    supabaseSessionExpiryState(
+      cookieStore.getAll(),
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+    ) === "near_expiry"
+  ) {
+    redirect("/auth/refresh?next=%2Fauth%2Freset%2Fconfirm");
+  }
+
   let userId: string | null = null;
   let accessUnavailable = false;
   try {
-    const supabase = await getServerSupabase();
-    const result = await supabase.auth.getUser();
-    if (result.error && !isMissingSessionError(result.error)) {
+    const identity = await getRequestVerifiedIdentity();
+    if (identity.kind === "authenticated") {
+      userId = identity.user.id;
+    } else if (identity.kind !== "missing") {
       accessUnavailable = true;
-    } else {
-      userId = result.data.user?.id ?? null;
     }
   } catch (error) {
     console.error(
@@ -35,7 +46,6 @@ export default async function ResetConfirmPage() {
   }
   if (accessUnavailable) redirect("/auth/access-unavailable");
 
-  const cookieStore = await cookies();
   let hasRecoveryGrant = false;
   try {
     hasRecoveryGrant = Boolean(

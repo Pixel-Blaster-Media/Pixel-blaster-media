@@ -2,8 +2,7 @@ import "server-only";
 
 import { redirect } from "next/navigation";
 
-import { isMissingSessionError } from "@/lib/auth/session-error";
-import { getServerSupabase } from "@/lib/supabase/server";
+import { getCurrentUserResult } from "@/lib/auth/current-user";
 import type { UserRole } from "@/lib/supabase/database.types";
 
 export interface UserContext {
@@ -16,63 +15,47 @@ export interface UserContext {
   role: UserRole;
 }
 
-interface ProfileRow {
-  id: string;
-  organization_id: string;
-  email: string;
-  full_name: string | null;
-  phone: string | null;
-  archived_at: string | null;
-  role: UserRole;
-}
-
 /**
- * Verifies the Supabase Auth user and returns the active profile context.
+ * Requires the request-scoped authoritative identity and active profile.
  * Does not enforce a role; use `requireAdmin()` for company access.
  */
 export async function requireUser(nextPath?: string): Promise<UserContext> {
-  const supabase = await getServerSupabase();
   const suffix = nextPath ? `&next=${encodeURIComponent(nextPath)}` : "";
   const signInPath = `/auth/sign-in?audience=realtor${suffix}`;
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
+  const invalidSessionPath = `/auth/session-invalid?audience=realtor${suffix}`;
+  const current = await getCurrentUserResult();
 
-  if (userError) {
-    if (isMissingSessionError(userError)) redirect(signInPath);
-    console.error("[auth] user verification failed", userError.name);
+  if (current.kind === "missing") {
+    redirect(signInPath);
+  }
+  if (current.kind === "invalid") {
+    redirect(invalidSessionPath);
+  }
+  if (current.kind === "unavailable") {
+    console.error("[auth] user verification unavailable");
     redirect("/auth/access-unavailable");
   }
-  if (!user) redirect(signInPath);
-  const userId = user.id;
-
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("id, organization_id, email, full_name, phone, archived_at, role")
-    .eq("id", userId)
-    .maybeSingle<ProfileRow>();
-
-  if (error) {
-    console.error("[auth] profile lookup failed", error.code);
-    redirect("/auth/access-unavailable");
-  }
-  if (!profile) {
-    console.warn("[auth] no profile for authed user", userId);
+  if (current.kind === "no_workspace") {
+    console.warn("[auth] no profile for authenticated user");
     redirect("/auth/no-workspace");
   }
-  if (profile.archived_at) {
-    console.warn("[auth] archived user tried to access the application", userId);
+
+  const profile = current.profile;
+  if (profile.archivedAt) {
+    console.warn(
+      "[auth] archived user tried to access the application",
+      profile.userId,
+    );
     redirect("/auth/no-workspace");
   }
 
   return {
-    userId: profile.id,
-    organizationId: profile.organization_id,
+    userId: profile.userId,
+    organizationId: profile.organizationId,
     email: profile.email,
-    fullName: profile.full_name,
+    fullName: profile.fullName,
     phone: profile.phone,
-    archived_at: profile.archived_at,
+    archived_at: profile.archivedAt,
     role: profile.role,
   };
 }

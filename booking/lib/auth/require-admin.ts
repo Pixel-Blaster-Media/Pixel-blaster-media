@@ -2,24 +2,19 @@ import "server-only";
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
-import { isMissingSessionError } from "@/lib/auth/session-error";
+import { getVerifiedAdminActionContext } from "@/lib/auth/admin-action-context";
+import { getCurrentUserResult } from "@/lib/auth/current-user";
+import type { VerifiedIdentityUser } from "@/lib/auth/request-verified-identity";
 import { getServerSupabase } from "@/lib/supabase/server";
 
 export interface AdminContext {
-  userId: string;
-  organizationId: string;
-  email: string;
-  fullName: string | null;
-}
-
-interface ProfileLookupRow {
-  id: string;
-  organization_id: string;
-  email: string;
-  full_name: string | null;
-  archived_at: string | null;
-  role: "admin" | "realtor";
+  readonly userId: string;
+  readonly organizationId: string;
+  readonly email: string;
+  readonly fullName: string | null;
+  readonly verifiedIdentity?: Readonly<VerifiedIdentityUser>;
 }
 
 interface AdminMembershipRow {
@@ -28,48 +23,43 @@ interface AdminMembershipRow {
 }
 
 /**
- * Verifies the Supabase Auth user before resolving tenant membership.
- * Auth verification failure is fail-closed; authorization never relies on
- * locally decoded cookie claims.
+ * Verifies authoritative identity, active profile, and privileged membership.
+ * React request caching keeps layout and page guards present while collapsing
+ * their repeated verification and tenant-membership reads.
  */
-export async function requireAdmin(): Promise<AdminContext> {
-  const supabase = await getServerSupabase();
-  const signInPath = await adminSignInPath();
+export const requireAdmin = cache(async function requireAdmin(): Promise<AdminContext> {
+  const inherited = getVerifiedAdminActionContext();
+  if (inherited) return inherited;
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
+  const current = await getCurrentUserResult();
 
-  if (userError) {
-    if (isMissingSessionError(userError)) redirect(signInPath);
-    console.error("[auth] admin verification failed", userError.name);
+  if (current.kind === "missing") {
+    redirect(await adminAuthPath("/auth/sign-in"));
+  }
+  if (current.kind === "invalid") {
+    redirect(await adminAuthPath("/auth/session-invalid"));
+  }
+  if (current.kind === "unavailable") {
+    console.error("[auth] admin verification unavailable");
     redirect("/auth/access-unavailable");
   }
-  if (!user) redirect(signInPath);
-
-  const userId = user.id;
-
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("id, organization_id, email, full_name, archived_at, role")
-    .eq("id", userId)
-    .maybeSingle<ProfileLookupRow>();
-
-  if (error) {
-    console.error("[auth] profile lookup failed", error.code);
-    redirect("/auth/access-unavailable");
-  }
-  if (!profile || profile.archived_at) {
-    console.warn("[auth] no active profile for authed user", userId);
+  if (current.kind === "no_workspace") {
+    console.warn("[auth] no active profile for authenticated user");
     redirect("/auth/no-workspace");
   }
 
+  const profile = current.profile;
+  if (profile.archivedAt) {
+    console.warn("[auth] archived user tried to access the admin workspace", profile.userId);
+    redirect("/auth/no-workspace");
+  }
+
+  const supabase = await getServerSupabase();
   const { data: membership, error: membershipError } = await supabase
     .from("organization_members")
     .select("organization_id, role")
-    .eq("profile_id", userId)
-    .eq("organization_id", profile.organization_id)
+    .eq("profile_id", profile.userId)
+    .eq("organization_id", profile.organizationId)
     .in("role", ["owner", "admin"])
     .maybeSingle<AdminMembershipRow>();
 
@@ -82,18 +72,21 @@ export async function requireAdmin(): Promise<AdminContext> {
   }
 
   return {
-    userId: profile.id,
+    userId: profile.userId,
     organizationId: membership.organization_id,
     email: profile.email,
-    fullName: profile.full_name,
+    fullName: profile.fullName,
+    verifiedIdentity: current.verifiedIdentity,
   };
-}
+});
 
-async function adminSignInPath(): Promise<string> {
+async function adminAuthPath(
+  pathname: "/auth/sign-in" | "/auth/session-invalid",
+): Promise<string> {
   const headerStore = await headers();
   const currentPath = headerStore.get("x-current-path") ?? "/admin";
   const next = safeNextPath(currentPath);
-  return `/auth/sign-in?audience=company&next=${encodeURIComponent(next)}`;
+  return `${pathname}?audience=company&next=${encodeURIComponent(next)}`;
 }
 
 function safeNextPath(next: string): string {
