@@ -10,23 +10,29 @@ const [
   bridge,
   cookieWriter,
   serverSupabase,
+  requestIdentity,
   requireAdmin,
   requireUser,
   currentUser,
+  requirePlatformAdmin,
   recommendation,
   bookingAction,
   confirmationPage,
+  resetConfirmationPage,
   passwordAction,
 ] = await Promise.all([
   read("app/api/auth/bridge/route.ts"),
   read("lib/auth/set-session-cookie.ts"),
   read("lib/supabase/server.ts"),
+  read("lib/auth/request-verified-identity.ts"),
   read("lib/auth/require-admin.ts"),
   read("lib/auth/require-user.ts"),
   read("lib/auth/current-user.ts"),
+  read("lib/auth/require-platform-admin.ts"),
   read("app/book/recommendation-actions.ts"),
   read("app/book/actions.ts"),
   read("app/book/confirm/page.tsx"),
+  read("app/auth/reset/confirm/page.tsx"),
   read("app/auth/password/actions.ts"),
 ]);
 
@@ -64,16 +70,47 @@ test("every server Auth verifier uses the bounded Supabase fetch", () => {
   assert.match(serverSupabase, /global:\s*{\s*fetch:/);
 });
 
-test("server identity decisions no longer trust locally decoded JWT claims", () => {
+test("server identity decisions use the shared authoritative verifier without local JWT trust", () => {
+  assert.match(requestIdentity, /auth\.getUser\(/);
+  assert.match(requestIdentity, /createRequestVerifiedIdentity/);
+  assert.match(currentUser, /getRequestVerifiedIdentity/);
+  assert.match(currentUser, /verifiedIdentity: Object\.freeze/);
+  assert.match(requireAdmin, /getCurrentUserResult/);
+  assert.match(requireAdmin, /verifiedIdentity: current\.verifiedIdentity/);
+  assert.match(requireUser, /getCurrentUserResult/);
+  assert.doesNotMatch(requirePlatformAdmin, /getRequestVerifiedIdentity/);
+  assert.match(requirePlatformAdmin, /user: admin\.verifiedIdentity/);
+
+  for (const [name, source] of [
+    ["request-identity", requestIdentity],
+    ["recommendation", recommendation],
+    ["booking-action", bookingAction],
+  ]) {
+    assert.match(source, /auth\.getUser\(/, `${name} must call auth.getUser`);
+    assert.doesNotMatch(source, /auth\.getSession\(/, `${name} must not trust getSession`);
+    assert.doesNotMatch(source, /decodeUserId/, `${name} must not decode identity locally`);
+  }
+
+  for (const [name, source, sharedBoundary] of [
+    ["confirmation-page", confirmationPage, /getCurrentUser\(/],
+    ["reset-confirmation-page", resetConfirmationPage, /getRequestVerifiedIdentity\(/],
+  ]) {
+    assert.match(source, sharedBoundary, `${name} must use the shared identity boundary`);
+    assert.doesNotMatch(source, /auth\.getUser\(/, `${name} must not bypass request caching`);
+    assert.doesNotMatch(source, /auth\.getSession\(/, `${name} must not trust getSession`);
+  }
+
   for (const [name, source] of [
     ["require-admin", requireAdmin],
     ["require-user", requireUser],
     ["current-user", currentUser],
-    ["recommendation", recommendation],
-    ["booking-action", bookingAction],
-    ["confirmation-page", confirmationPage],
+    ["require-platform-admin", requirePlatformAdmin],
   ]) {
-    assert.match(source, /auth\.getUser\(/, `${name} must call auth.getUser`);
+    assert.doesNotMatch(
+      source,
+      /auth\.getUser\(/,
+      `${name} must consume the shared verified result`,
+    );
     assert.doesNotMatch(source, /auth\.getSession\(/, `${name} must not trust getSession`);
     assert.doesNotMatch(source, /decodeUserId/, `${name} must not decode identity locally`);
   }

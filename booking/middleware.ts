@@ -1,6 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { shouldHandoffAuthCode } from "@/lib/auth/auth-code-handoff";
+import { supabaseSessionExpiryState } from "@/lib/auth/session-cookie-expiry";
+import {
+  getSupabaseAuthCookieBaseName,
+  isSupabaseAuthCookieName,
+} from "@/lib/auth/supabase-auth-cookie-family";
 import { canonicalHostAction } from "@/lib/security/canonical-host";
 import { verifyProductionProxyRequest } from "@/lib/security/production-proxy-attestation";
 
@@ -81,6 +86,16 @@ export async function middleware(request: NextRequest) {
     `${request.nextUrl.pathname}${request.nextUrl.search}`,
   );
 
+  // Let Next's Server Action handler encode guarded redirects as
+  // x-action-redirect. A raw middleware 307 is followed as a POST and breaks
+  // the Action protocol. Host containment above still runs first.
+  if (
+    request.method === "POST" &&
+    request.headers.get("next-action") !== null
+  ) {
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+
   // 1. Auth-code handoff. Any `?code=` on a non-callback, non-API path
   // gets funnelled through /auth/callback which handles the exchange.
   const authCode = request.nextUrl.searchParams.get("code");
@@ -106,6 +121,20 @@ export async function middleware(request: NextRequest) {
     url.searchParams.set("audience", path.startsWith("/admin") ? "company" : "realtor");
     url.searchParams.set("next", `${path}${request.nextUrl.search}`);
     return NextResponse.redirect(url);
+  }
+
+  if (
+    request.method === "GET" &&
+    supabaseSessionExpiryState(
+      request.cookies.getAll(),
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+    ) === "near_expiry"
+  ) {
+    const refresh = new URL("/auth/refresh", canonicalOrigin);
+    refresh.searchParams.set("next", `${path}${request.nextUrl.search}`);
+    const response = NextResponse.redirect(refresh, 307);
+    response.headers.set("Cache-Control", "no-store");
+    return response;
   }
 
   return NextResponse.next({ request: { headers: requestHeaders } });
@@ -141,24 +170,18 @@ function configuredCanonicalOrigin(): URL {
  *     value exceeds ~3180 bytes.
  */
 function hasSessionCookie(request: NextRequest): boolean {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!supabaseUrl) return false;
+  const cookieName = getSupabaseAuthCookieBaseName(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+  );
+  if (!cookieName) return false;
 
-  let projectRef: string;
-  try {
-    projectRef = new URL(supabaseUrl).hostname.split(".")[0];
-  } catch {
-    return false;
-  }
-  const cookieName = `sb-${projectRef}-auth-token`;
-
-  // The cookie may be a single value or split into numbered chunks.
-  const primary = request.cookies.get(cookieName)?.value;
-  if (primary) return true;
-
-  // A chunked session is only useful when the first chunk exists. The server
-  // auth helper will reject malformed or incomplete values after this gate.
-  return Boolean(request.cookies.get(`${cookieName}.0`)?.value);
+  return request.cookies
+    .getAll()
+    .some(
+      (cookie) =>
+        Boolean(cookie.value) &&
+        isSupabaseAuthCookieName(cookie.name, cookieName),
+    );
 }
 
 export const config = {

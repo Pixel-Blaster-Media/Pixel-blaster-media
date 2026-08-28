@@ -7,6 +7,7 @@ import {
   updateBookingStatus,
 } from "@/app/admin/bookings/[id]/actions";
 import { createAdminShoot } from "@/app/admin/calendar/actions";
+import { runWithVerifiedAdminActionContext } from "@/lib/auth/admin-action-context";
 import { requireAdmin, type AdminContext } from "@/lib/auth/require-admin";
 import {
   isCancellable,
@@ -326,9 +327,11 @@ export async function confirmAdminAssistantAction(
   action: AdminAssistantAction,
 ): Promise<AdminAssistantResult> {
   const admin = await requireAdmin();
-  const result = await executeConfirmedAssistantAction(admin, action);
-  await recordAssistantAction(admin, action, result);
-  return result;
+  return runWithVerifiedAdminActionContext(admin, async () => {
+    const result = await executeConfirmedAssistantAction(admin, action);
+    await recordAssistantAction(admin, action, result);
+    return result;
+  });
 }
 
 export async function getAssistantActionLogs(): Promise<AdminAssistantLog[]> {

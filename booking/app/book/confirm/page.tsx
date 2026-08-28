@@ -13,8 +13,8 @@ import {
   serializeWizardState,
   stepCompleteness,
 } from "@/lib/booking/wizard-state";
+import { getCurrentUser } from "@/lib/auth/current-user";
 import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
-import { getServerSupabase } from "@/lib/supabase/server";
 import type { UserRole } from "@/lib/supabase/database.types";
 
 import BookingBrandHeader, {
@@ -324,34 +324,15 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 async function loadSessionProfile(): Promise<SessionProfile | null> {
-  const supabase = await getServerSupabase();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-  if (error || !user) return null;
-  const userId = user.id;
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, email, full_name, phone, brokerage, role")
-    .eq("id", userId)
-    .maybeSingle<{
-      id: string;
-      email: string;
-      full_name: string | null;
-      phone: string | null;
-      brokerage: string | null;
-      role: UserRole;
-    }>();
-  if (!profile) return null;
+  const user = await getCurrentUser();
+  if (!user) return null;
   return {
-    id: profile.id,
-    email: profile.email,
-    fullName: profile.full_name,
-    phone: profile.phone,
-    brokerage: profile.brokerage,
-    role: profile.role,
+    id: user.userId,
+    email: user.email,
+    fullName: user.fullName,
+    phone: user.phone,
+    brokerage: user.brokerage,
+    role: user.role,
   };
 }
 

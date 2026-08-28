@@ -471,8 +471,14 @@ test("transient access lookup failures use a neutral retry page", () => {
   );
   assert.equal(existsSync(unavailable), true);
   assert.match(readFileSync(unavailable, "utf8"), /couldn.t verify your access/i);
-  assert.match(requireUser, /if \(error\)[\s\S]*\/auth\/access-unavailable/);
-  assert.match(requireAdmin, /if \(error\)[\s\S]*\/auth\/access-unavailable/);
+  assert.match(
+    requireUser,
+    /current\.kind === "unavailable"[\s\S]*\/auth\/access-unavailable/,
+  );
+  assert.match(
+    requireAdmin,
+    /current\.kind === "unavailable"[\s\S]*\/auth\/access-unavailable/,
+  );
   assert.match(requireAdmin, /if \(membershipError\)[\s\S]*\/auth\/access-unavailable/);
 });
 
@@ -616,5 +622,5 @@ test("protected workspaces preselect their correct login audience", () => {
   assert.match(requireAdmin, /audience=company/);
   assert.match(requireAdmin, /profile\.role === "realtor" \? "\/portal" : "\/auth\/no-workspace"/);
   assert.match(requireUser, /audience=realtor/);
-  assert.match(requireUser, /if \(profile\.archived_at\)/);
+  assert.match(requireUser, /if \(profile\.archivedAt\)/);
 });

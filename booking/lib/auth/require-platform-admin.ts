@@ -2,7 +2,7 @@ import "server-only";
 
 import { notFound } from "next/navigation";
 
-import { getServerSupabase } from "@/lib/supabase/server";
+import { hasVerifiedPlatformAdminAccess } from "@/lib/auth/platform-admin-access-core";
 
 import { requireAdmin, type AdminContext } from "./require-admin";
 
@@ -20,16 +20,13 @@ export async function hasPlatformAdminAccess(
   admin: AdminContext,
 ): Promise<boolean> {
   const explicitEmails = configuredPlatformAdminEmails();
-  if (explicitEmails.length === 0) return false;
+  if (explicitEmails.length === 0 || !admin.verifiedIdentity) return false;
 
-  const supabase = await getServerSupabase();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user?.email || user.id !== admin.userId) return false;
-  return explicitEmails.includes(user.email.toLowerCase());
+  return hasVerifiedPlatformAdminAccess(
+    admin.userId,
+    { kind: "authenticated", user: admin.verifiedIdentity },
+    explicitEmails,
+  );
 }
 
 function configuredPlatformAdminEmails(): string[] {
