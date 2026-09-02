@@ -354,7 +354,6 @@ export async function updateBookingDetails(
   const scheduledRaw = str(formData, "scheduled_at");
   const squareFootage = parseOptionalInt(str(formData, "square_footage"));
   const clientNotes = str(formData, "client_notes") || null;
-  const internalNotes = str(formData, "internal_notes") || null;
   const contactName = str(formData, "contact_name");
   const contactPhone = str(formData, "contact_phone") || null;
   const brokerage = str(formData, "brokerage") || null;
@@ -486,7 +485,6 @@ export async function updateBookingDetails(
       square_footage: squareFootage,
       unit_number: unitNumber,
       client_notes: clientNotes,
-      internal_notes: internalNotes,
     })
     .eq("id", booking.id)
     .eq("organization_id", admin.organizationId);

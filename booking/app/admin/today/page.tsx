@@ -6,6 +6,8 @@ import {
   BUSINESS_TZ,
   businessDateTimeLocalToUtc,
 } from "@/lib/booking/availability";
+import type { InternalShootNotesSnapshot } from "@/lib/booking/internal-shoot-notes-core";
+import { loadBookingInternalNotes } from "@/lib/booking/internal-shoot-notes-server";
 import { labelForAddOn, labelForService } from "@/lib/booking/services";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import {
@@ -21,6 +23,7 @@ import type {
   Json,
 } from "@/lib/supabase/database.types";
 import AdminPageHeading from "../AdminPageHeading";
+import InternalShootNotesEditor from "../internal-shoot-notes/InternalShootNotesEditor";
 import {
   loadTodayCommandPreferences,
 } from "./actions";
@@ -42,7 +45,6 @@ interface BookingRow {
   add_ons: string[];
   square_footage: number | null;
   client_notes: string | null;
-  internal_notes: string | null;
   unit_number: string | null;
   iguide_id: string | null;
   iguide_portal_id: string | null;
@@ -94,7 +96,7 @@ export default async function AdminTodayPage() {
   const { data: bookings, error } = await supabase
     .from("bookings")
     .select(
-      "id, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, client_notes, internal_notes, unit_number, iguide_id, iguide_portal_id, properties(street_address, city, province, postal_code), profiles(full_name, email, phone, brokerage, internal_notes, delivery_cc_emails, ai_memory)",
+      "id, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, client_notes, unit_number, iguide_id, iguide_portal_id, properties(street_address, city, province, postal_code), profiles(full_name, email, phone, brokerage, internal_notes, delivery_cc_emails, ai_memory)",
     )
     .eq("organization_id", admin.organizationId)
     .not("scheduled_at", "is", null)
@@ -111,6 +113,12 @@ export default async function AdminTodayPage() {
       </p>
     );
   }
+
+  const privateNotesByBooking = await loadBookingInternalNotes({
+    organizationId: admin.organizationId,
+    actorId: admin.userId,
+    bookingIds: (bookings ?? []).map((booking) => booking.id),
+  });
 
   const bookingIds = (bookings ?? []).map((booking) => booking.id);
   const { data: deliverables } =
@@ -173,6 +181,13 @@ export default async function AdminTodayPage() {
             <ShootCard
               key={booking.id}
               booking={booking}
+              draftScope={admin.userId}
+              privateShootNotes={
+                privateNotesByBooking.get(booking.id) ?? {
+                  notes: null,
+                  revision: 0,
+                }
+              }
               deliverables={deliverablesByBooking.get(booking.id) ?? []}
               preferences={preferences}
               defaultOpen={bookings.length <= 2}
@@ -268,12 +283,16 @@ function TodayOverview({
 
 function ShootCard({
   booking,
+  draftScope,
+  privateShootNotes,
   deliverables,
   preferences,
   defaultOpen,
   weather,
 }: {
   booking: BookingRow;
+  draftScope: string;
+  privateShootNotes: InternalShootNotesSnapshot;
   deliverables: DeliverableRow[];
   preferences: TodayCommandPreferences;
   defaultOpen: boolean;
@@ -460,15 +479,17 @@ function ShootCard({
         </Link>
       </div>
 
-      {preferences.showBookingNotes &&
-      (booking.client_notes || booking.internal_notes) ? (
+      {preferences.showBookingNotes ? (
         <div className="mt-4 space-y-2">
           {booking.client_notes ? (
             <NoteDisclosure title="Realtor notes" body={booking.client_notes} />
           ) : null}
-          {booking.internal_notes ? (
-            <NoteDisclosure title="Internal notes" body={booking.internal_notes} />
-          ) : null}
+          <InternalShootNotesEditor
+            bookingId={booking.id}
+            draftScope={draftScope}
+            initialNotes={privateShootNotes.notes}
+            initialRevision={privateShootNotes.revision}
+          />
         </div>
       ) : null}
 

@@ -23,6 +23,11 @@ import {
   type CatalogItemRow,
 } from "@/lib/booking/catalog";
 import { labelForAddOn, labelForService } from "@/lib/booking/services";
+import type { InternalShootNotesSnapshot } from "@/lib/booking/internal-shoot-notes-core";
+import {
+  loadBookingInternalNote,
+  updateBookingInternalNotes,
+} from "@/lib/booking/internal-shoot-notes-server";
 import { getCredential } from "@/lib/integrations/credentials";
 import {
   parseRealtorAIMemory,
@@ -614,6 +619,7 @@ async function executeConfirmedAssistantAction(
   if (action.type === "update_booking_note") {
     const result = await applyBookingNoteUpdate(
       admin.organizationId,
+      admin.userId,
       action.bookingId,
       action.textUpdate,
     );
@@ -628,6 +634,7 @@ async function executeConfirmedAssistantAction(
     revalidatePath(`/admin/bookings/${action.bookingId}`);
     revalidatePath("/admin/bookings");
     revalidatePath("/admin/today");
+    revalidatePath("/admin/calendar");
     return {
       ok: true,
       kind: "answer",
@@ -760,13 +767,14 @@ async function applyAssistantUndo(
   const supabase = getServiceSupabase();
   const { data: log, error } = await supabase
     .from("assistant_action_logs")
-    .select("id, organization_id, action_type, undo_payload, undone_at")
+    .select("id, organization_id, action_type, target_booking_id, undo_payload, undone_at")
     .eq("organization_id", admin.organizationId)
     .eq("id", logId)
     .maybeSingle<{
       id: string;
       organization_id: string;
       action_type: string;
+      target_booking_id: string | null;
       undo_payload: Json | null;
       undone_at: string | null;
     }>();
@@ -796,9 +804,17 @@ async function applyAssistantUndo(
     };
   }
 
-  const undoResult = await applyUndoPayload(admin.organizationId, log.undo_payload);
+  const undoResult = await applyUndoPayload(
+    admin.organizationId,
+    admin.userId,
+    log.undo_payload,
+  );
   if (!undoResult.ok) {
-    await markAssistantUndo(log.id, admin.userId, `Undo failed: ${undoResult.error}`);
+    await recordAssistantUndoFailure(
+      log.id,
+      admin.organizationId,
+      `Undo failed: ${undoResult.error}`,
+    );
     return {
       ok: false,
       kind: "needs_clarification",
@@ -814,6 +830,9 @@ async function applyAssistantUndo(
   revalidatePath("/admin/realtors");
   revalidatePath("/admin/bookings");
   revalidatePath("/admin/today");
+  if (log.target_booking_id) {
+    revalidatePath(`/admin/bookings/${log.target_booking_id}`);
+  }
   revalidatePath("/book");
 
   return {
@@ -2030,49 +2049,52 @@ async function applyDeliveryCcUpdate(
 
 async function applyBookingNoteUpdate(
   organizationId: string,
+  actorId: string,
   bookingId: string,
   textUpdate: AdminAssistantTextUpdate | undefined,
 ): Promise<{ ok: true; undoPayload: Json } | { ok: false; error: string }> {
   if (!bookingId) return { ok: false, error: "Missing booking." };
   if (!textUpdate) return { ok: false, error: "Missing note update." };
 
-  const supabase = getServiceSupabase();
-  const { data: booking, error: readError } = await supabase
-    .from("bookings")
-    .select("id, internal_notes")
-    .eq("organization_id", organizationId)
-    .eq("id", bookingId)
-    .maybeSingle<{ id: string; internal_notes: string | null }>();
-  if (readError) {
+  let current: InternalShootNotesSnapshot;
+  try {
+    current = await loadBookingInternalNote({
+      organizationId,
+      bookingId,
+      actorId,
+    });
+  } catch {
     return { ok: false, error: "Assistant action could not be completed." };
   }
-  if (!booking) return { ok: false, error: "Booking was not found." };
-
   const nextNotes =
     textUpdate.mode === "clear"
-      ? null
+      ? ""
       : textUpdate.mode === "replace"
-        ? textUpdate.text.trim() || null
-        : appendNote(booking.internal_notes, textUpdate.text);
+        ? textUpdate.text
+        : appendNote(current.notes, textUpdate.text);
 
-  const { error } = await supabase
-    .from("bookings")
-    .update({ internal_notes: nextNotes })
-    .eq("organization_id", organizationId)
-    .eq("id", bookingId);
-  if (error) return { ok: false, error: "Assistant action could not be completed." };
+  const result = await updateBookingInternalNotes({
+    organizationId,
+    bookingId,
+    actorId,
+    expectedRevision: current.revision,
+    value: nextNotes,
+  });
+  if (!result.ok) return { ok: false, error: result.error };
   return {
     ok: true,
     undoPayload: {
       kind: "booking_note",
       booking_id: bookingId,
-      internal_notes: booking.internal_notes,
+      internal_notes: current.notes,
+      expected_revision: result.revision,
     },
   };
 }
 
 async function applyUndoPayload(
   organizationId: string,
+  actorId: string,
   payload: Json,
 ): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -2192,18 +2214,44 @@ async function applyUndoPayload(
   if (kind === "booking_note") {
     const bookingId = typeof undo.booking_id === "string" ? undo.booking_id : "";
     const notes =
-      typeof undo.internal_notes === "string" ? undo.internal_notes : null;
-    if (!bookingId) return { ok: false, error: "Missing booking to undo." };
-    const { error } = await getServiceSupabase()
-      .from("bookings")
-      .update({ internal_notes: notes })
-      .eq("organization_id", organizationId)
-      .eq("id", bookingId);
-    if (error) return { ok: false, error: "Assistant action could not be completed." };
+      typeof undo.internal_notes === "string" ? undo.internal_notes : "";
+    const expectedRevision =
+      typeof undo.expected_revision === "number" &&
+      Number.isSafeInteger(undo.expected_revision) &&
+      undo.expected_revision >= 1
+        ? undo.expected_revision
+        : null;
+    if (!bookingId || expectedRevision === null) {
+      return { ok: false, error: "Booking-note undo data is incomplete." };
+    }
+    const result = await updateBookingInternalNotes({
+      organizationId,
+      bookingId,
+      actorId,
+      expectedRevision,
+      value: notes,
+    });
+    if (!result.ok) return { ok: false, error: result.error };
     return { ok: true, message: "Undone. I restored the booking note." };
   }
 
   return { ok: false, error: "That assistant action does not support undo yet." };
+}
+
+async function recordAssistantUndoFailure(
+  logId: string,
+  organizationId: string,
+  message: string,
+): Promise<void> {
+  const { error } = await getServiceSupabase()
+    .from("assistant_action_logs")
+    .update({ undo_result_message: message })
+    .eq("organization_id", organizationId)
+    .eq("id", logId)
+    .is("undone_at", null);
+  if (error) {
+    console.warn("[admin-assistant] undo failure audit update failed");
+  }
 }
 
 async function markAssistantUndo(

@@ -78,6 +78,8 @@ jobs:
         run: npm run typecheck
       - name: Test
         run: npm test
+      - name: Test private shoot-notes interactions
+        run: npm run test:private-notes-ui
       - name: Build production-shaped artifact with placeholders
         env:
           VERCEL_ENV: production
@@ -125,5 +127,6 @@ jobs:
         run: |
           bash scripts/verify-atomic-booking-postgres.sh
           bash scripts/verify-integration-credentials-postgres.sh
+          bash scripts/verify-private-booking-notes-postgres.sh
           bash scripts/verify-catalog-item-examples-postgres.sh
           LC_ALL=C TMPDIR=/tmp bash scripts/verify-canonical-media-postgres.sh

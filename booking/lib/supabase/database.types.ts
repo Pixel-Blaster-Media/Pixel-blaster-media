@@ -196,7 +196,7 @@ interface BookingsTable {
     services: string[];
     add_ons: string[];
     square_footage: number | null;
-    internal_notes: string | null;
+    internal_notes: null;
     client_notes: string | null;
     iguide_id: string | null;
     iguide_portal_id: string | null;
@@ -231,7 +231,6 @@ interface BookingsTable {
     services?: string[];
     add_ons?: string[];
     square_footage?: number | null;
-    internal_notes?: string | null;
     client_notes?: string | null;
     iguide_id?: string | null;
     iguide_portal_id?: string | null;
@@ -251,6 +250,29 @@ interface BookingsTable {
     suppress_realtor_notifications?: boolean;
   };
   Update: Partial<BookingsTable["Insert"]>;
+  Relationships: [];
+}
+
+interface BookingInternalNotesTable {
+  Row: {
+    booking_id: string;
+    organization_id: string;
+    notes: string | null;
+    revision: number;
+    updated_by: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  Insert: {
+    booking_id: string;
+    organization_id: string;
+    notes?: string | null;
+    revision?: number;
+    updated_by?: string | null;
+    created_at?: string;
+    updated_at?: string;
+  };
+  Update: Partial<BookingInternalNotesTable["Insert"]>;
   Relationships: [];
 }
 
@@ -1244,6 +1266,7 @@ export interface Database {
       beta_company_invites: BetaCompanyInvitesTable;
       properties: PropertiesTable;
       bookings: BookingsTable;
+      booking_internal_notes: BookingInternalNotesTable;
       deliverables: DeliverablesTable;
       booking_requests: BookingRequestsTable;
       business_hours: BusinessHoursTable;
@@ -1398,6 +1421,32 @@ export interface Database {
       is_organization_admin: {
         Args: { target_org_id: string };
         Returns: boolean;
+      };
+      get_booking_internal_notes: {
+        Args: {
+          p_organization_id: string;
+          p_booking_ids: string[];
+          p_actor_id: string;
+        };
+        Returns: Array<{
+          booking_id: string;
+          notes: string | null;
+          revision: number;
+        }>;
+      };
+      update_booking_internal_notes: {
+        Args: {
+          p_organization_id: string;
+          p_booking_id: string;
+          p_expected_revision: number;
+          p_notes: string | null;
+          p_actor_id: string;
+        };
+        Returns: Array<{
+          result_status: string;
+          result_notes: string | null;
+          result_revision: number | null;
+        }>;
       };
       merge_integration_credentials: {
         Args: {

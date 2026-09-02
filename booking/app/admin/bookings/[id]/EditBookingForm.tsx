@@ -31,7 +31,6 @@ export interface EditableBookingInitial {
   contactPhone: string;
   brokerage: string;
   clientNotes: string;
-  internalNotes: string;
   selectedCatalogItemIds: string[];
 }
 
@@ -231,24 +230,14 @@ export default function EditBookingForm({
         />
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <Field label="Realtor notes">
-          <textarea
-            name="client_notes"
-            defaultValue={initial.clientNotes}
-            rows={4}
-            className={inputClass}
-          />
-        </Field>
-        <Field label="Internal notes">
-          <textarea
-            name="internal_notes"
-            defaultValue={initial.internalNotes}
-            rows={4}
-            className={inputClass}
-          />
-        </Field>
-      </div>
+      <Field label="Realtor notes">
+        <textarea
+          name="client_notes"
+          defaultValue={initial.clientNotes}
+          rows={4}
+          className={inputClass}
+        />
+      </Field>
 
       <label className="flex items-start gap-3 rounded-xl border border-realtor-primary/15 bg-white/70 p-3 text-sm text-realtor-text">
         <input
