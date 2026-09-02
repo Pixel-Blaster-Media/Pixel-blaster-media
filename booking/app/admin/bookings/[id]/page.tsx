@@ -24,6 +24,8 @@ import {
   summarizeRealtorAIMemory,
 } from "@/lib/realtors/memory";
 import { getFullCatalog, type Catalog } from "@/lib/booking/catalog";
+import type { InternalShootNotesSnapshot } from "@/lib/booking/internal-shoot-notes-core";
+import { loadBookingInternalNote } from "@/lib/booking/internal-shoot-notes-server";
 import { labelForAddOn, labelForService } from "@/lib/booking/services";
 import {
   isIGuidePhotoZipUrl,
@@ -45,6 +47,7 @@ import type {
 } from "@/lib/supabase/database.types";
 
 import CancelBookingButton from "../CancelBookingButton";
+import InternalShootNotesEditor from "../../internal-shoot-notes/InternalShootNotesEditor";
 import BookingActions, {
   DeliveryEmailPanel,
   ManualLinksPanel,
@@ -78,7 +81,6 @@ interface BookingDetail {
   is_vacant: "vacant" | "occupied" | "partial" | null;
   include_basement: boolean | null;
   client_notes: string | null;
-  internal_notes: string | null;
   iguide_id: string | null;
   iguide_portal_id: string | null;
   quickbooks_invoice_id: string | null;
@@ -199,7 +201,7 @@ export default async function BookingDetailPage({
       supabase
         .from("bookings")
         .select(
-          "id, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, internal_notes, iguide_id, iguide_portal_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, province, postal_code), profiles(id, full_name, email, phone, brokerage, delivery_cc_emails, internal_notes, ai_memory)",
+          "id, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, iguide_id, iguide_portal_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, province, postal_code), profiles(id, full_name, email, phone, brokerage, delivery_cc_emails, internal_notes, ai_memory)",
         )
         .eq("id", id)
         .eq("organization_id", admin.organizationId)
@@ -232,6 +234,12 @@ export default async function BookingDetailPage({
     ]);
 
   if (bookErr || !booking) notFound();
+
+  const privateShootNotes = await loadBookingInternalNote({
+    organizationId: admin.organizationId,
+    bookingId: booking.id,
+    actorId: admin.userId,
+  });
 
   const service = getServiceSupabase();
   const { data: deliveryNotification } = await service
@@ -510,6 +518,8 @@ export default async function BookingDetailPage({
         details={
           <DetailsTab
             booking={booking}
+            draftScope={admin.userId}
+            privateShootNotes={privateShootNotes}
             profile={profile}
             fullAddress={fullAddress}
             transitions={transitions}
@@ -547,6 +557,8 @@ function parseWorkspaceTab(raw: string | undefined): WorkspaceTabId {
 
 function DetailsTab({
   booking,
+  draftScope,
+  privateShootNotes,
   profile,
   fullAddress,
   transitions,
@@ -555,6 +567,8 @@ function DetailsTab({
   invoice,
 }: {
   booking: BookingDetail;
+  draftScope: string;
+  privateShootNotes: InternalShootNotesSnapshot;
   profile: BookingDetail["profiles"];
   fullAddress: string;
   transitions: BookingStatus[];
@@ -577,7 +591,6 @@ function DetailsTab({
     contactPhone: profile?.phone ?? "",
     brokerage: profile?.brokerage ?? "",
     clientNotes: booking.client_notes ?? "",
-    internalNotes: booking.internal_notes ?? "",
     selectedCatalogItemIds,
   };
 
@@ -706,18 +719,18 @@ function DetailsTab({
         </Panel>
 
         <Panel title="Notes">
-          {booking.client_notes || booking.internal_notes ? (
-            <>
-              {booking.client_notes ? (
-                <Note title="Realtor" body={booking.client_notes} />
-              ) : null}
-              {booking.internal_notes ? (
-                <Note title="Internal" body={booking.internal_notes} />
-              ) : null}
-            </>
+          {booking.client_notes ? (
+            <Note title="Realtor" body={booking.client_notes} />
           ) : (
-            <p className="text-sm text-realtor-muted">No notes on this booking.</p>
+            <p className="text-sm text-realtor-muted">No realtor notes on this booking.</p>
           )}
+          <InternalShootNotesEditor
+            key={booking.id}
+            bookingId={booking.id}
+            draftScope={draftScope}
+            initialNotes={privateShootNotes.notes}
+            initialRevision={privateShootNotes.revision}
+          />
         </Panel>
       </div>
     </>

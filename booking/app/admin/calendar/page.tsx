@@ -9,6 +9,7 @@ import {
   businessDateTimeLocalToUtc,
 } from "@/lib/booking/availability";
 import { getFullCatalog } from "@/lib/booking/catalog";
+import { loadBookingInternalNotes } from "@/lib/booking/internal-shoot-notes-server";
 import {
   labelForAddOn,
   labelForService,
@@ -46,7 +47,6 @@ interface BookingRow {
   is_vacant: "vacant" | "occupied" | "partial" | null;
   include_basement: boolean | null;
   client_notes: string | null;
-  internal_notes: string | null;
   properties: {
     street_address: string;
     city: string | null;
@@ -166,7 +166,7 @@ export default async function AdminCalendarPage({
     supabase
       .from("bookings")
       .select(
-        "id, status, scheduled_at, scheduled_ends_at, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, internal_notes, properties(street_address, city, province, postal_code, notes), profiles(full_name, email, phone, brokerage, internal_notes)",
+        "id, status, scheduled_at, scheduled_ends_at, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, properties(street_address, city, province, postal_code, notes), profiles(full_name, email, phone, brokerage, internal_notes)",
       )
       .eq("organization_id", admin.organizationId)
       .not("scheduled_at", "is", null)
@@ -196,6 +196,11 @@ export default async function AdminCalendarPage({
   if (databaseLoadFailed) {
     console.error("[admin-calendar] database load failed");
   }
+  const privateNotesByBooking = await loadBookingInternalNotes({
+    organizationId: admin.organizationId,
+    actorId: admin.userId,
+    bookingIds: (bookingsRes.data ?? []).map((booking) => booking.id),
+  });
   const calendarSources = await getGoogleCalendarSources({
     organizationId: admin.organizationId,
   });
@@ -325,7 +330,7 @@ export default async function AdminCalendarPage({
         brokerage: booking.profiles?.brokerage ?? null,
         realtorNotes: booking.profiles?.internal_notes ?? null,
         clientNotes: booking.client_notes,
-        internalNotes: booking.internal_notes,
+        internalNotes: privateNotesByBooking.get(booking.id)?.notes ?? null,
         propertyNotes: booking.properties?.notes ?? null,
         squareFootage: booking.square_footage,
         occupancy,

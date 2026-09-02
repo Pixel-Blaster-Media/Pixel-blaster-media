@@ -7,6 +7,7 @@ import {
   BUSINESS_TZ,
   businessDateTimeLocalToUtc,
 } from "@/lib/booking/availability";
+import { loadBookingInternalNotes } from "@/lib/booking/internal-shoot-notes-server";
 import { labelForAddOn, labelForService } from "@/lib/booking/services";
 import { getCredential, saveCredentials } from "@/lib/integrations/credentials";
 import {
@@ -38,7 +39,6 @@ interface TodayBookingRow {
   add_ons: string[];
   square_footage: number | null;
   client_notes: string | null;
-  internal_notes: string | null;
   unit_number: string | null;
   iguide_id: string | null;
   iguide_portal_id: string | null;
@@ -143,7 +143,7 @@ export async function generateTodayAIBrief(): Promise<
   const { data: bookings, error } = await supabase
     .from("bookings")
     .select(
-      "id, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, client_notes, internal_notes, unit_number, iguide_id, iguide_portal_id, properties(street_address, city, province, postal_code), profiles(full_name, email, phone, brokerage, internal_notes, delivery_cc_emails, ai_memory)",
+      "id, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, client_notes, unit_number, iguide_id, iguide_portal_id, properties(street_address, city, province, postal_code), profiles(full_name, email, phone, brokerage, internal_notes, delivery_cc_emails, ai_memory)",
     )
     .eq("organization_id", admin.organizationId)
     .not("scheduled_at", "is", null)
@@ -170,6 +170,11 @@ export async function generateTodayAIBrief(): Promise<
   }
 
   const bookingIds = rows.map((booking) => booking.id);
+  const privateNotesByBooking = await loadBookingInternalNotes({
+    organizationId: admin.organizationId,
+    actorId: admin.userId,
+    bookingIds,
+  });
   const { data: deliverables } =
     bookingIds.length > 0
       ? await supabase
@@ -197,6 +202,7 @@ export async function generateTodayAIBrief(): Promise<
           booking,
           rows[index + 1] ?? null,
           deliverablesByBooking.get(booking.id) ?? [],
+          privateNotesByBooking.get(booking.id)?.notes ?? null,
         ),
       ),
     });
@@ -329,6 +335,7 @@ function buildShootContextLine(
   booking: TodayBookingRow,
   nextBooking: TodayBookingRow | null,
   deliverables: TodayDeliverableRow[],
+  privateShootNotes: string | null,
 ): string {
   const services = [...booking.services.map(labelForService), ...booking.add_ons.map(labelForAddOn)];
   const profile = booking.profiles;
@@ -346,7 +353,7 @@ function buildShootContextLine(
     `services=${services.join(", ") || "none"}`,
     `sqft=${booking.square_footage ?? ""}`,
     `clientNotes=${booking.client_notes ?? ""}`,
-    `internalNotes=${booking.internal_notes ?? ""}`,
+    `internalNotes=${privateShootNotes ?? ""}`,
     `agentNotes=${profile?.internal_notes ?? ""}`,
     `structuredMemory=${memory}`,
     `deliveryCCCount=${profile?.delivery_cc_emails?.length ?? 0}`,
