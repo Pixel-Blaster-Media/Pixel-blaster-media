@@ -8,7 +8,7 @@ Vercel deployments are billable for this project. Minimize them without weakenin
 - Vercel root directory: `booking/`.
 - `pixelblastermedia.com` and `www.pixelblastermedia.com` proxy `/book`, `/portal`, `/auth`, `/admin`, and `/api` to this project through the static website's `vercel.json`.
 - The newer Vercel project named `booking` is noncanonical and must never be used for production releases or environment configuration.
-- Automatic Git deployments: production branch `main` only.
+- Automatic Git deployments: disabled for every branch, including `main`. Production is promoted manually only after successful exact-SHA CI and reviewed live-schema compatibility; verify the Vercel control-plane setting before merging.
 - Feature-branch preview deployments: disabled by default.
 - Affected-project filtering: enabled in Vercel project settings.
 - Expected deployment count for normal backend/config work: **one production deployment after merge**.

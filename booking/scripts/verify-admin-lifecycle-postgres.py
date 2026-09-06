@@ -51,8 +51,8 @@ with tempfile.TemporaryDirectory(prefix='pixel-admin-lifecycle-') as temp:
         print('PASS observed two-session CAS conflict and rollback releases contender')
         recovery = pathlib.Path(os.environ.get('RECOVERY_MIGRATIONS', str(ROOT/'supabase/migrations')))
         effects = recovery/'20260905100500_booking_effect_generations.sql'
-        if effects.exists():
-            run(psql + ['-f', effects], stdout=subprocess.DEVNULL)
-            run(psql + ['-f', ROOT/'tests/postgres/admin-lifecycle-integrated.sql'])
+        assert effects.is_file(), 'required recovery migration missing'
+        run(psql + ['-f', effects], stdout=subprocess.DEVNULL)
+        run(psql + ['-f', ROOT/'tests/postgres/admin-lifecycle-integrated.sql'])
     finally:
         run([PG/'pg_ctl', '-D', tmp/'data', '-m', 'immediate', '-w', 'stop'], stdout=subprocess.DEVNULL)
