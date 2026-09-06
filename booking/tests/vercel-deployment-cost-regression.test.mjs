@@ -104,9 +104,9 @@ exit 2
   }
 }
 
-test("Vercel deploys booking automatically only from main", () => {
+test("Vercel Git deployments require manual exact-candidate release gates", () => {
   assert.equal(config.git?.deploymentEnabled?.["**"], false);
-  assert.equal(config.git?.deploymentEnabled?.main, true);
+  assert.equal(config.git?.deploymentEnabled?.main, false);
 });
 
 test("manual production deploys fail closed unless linked to the Realtor-facing project", () => {
@@ -165,17 +165,18 @@ test("clean exact origin/main alone cannot authorize a production deployment", (
   assert.doesNotMatch(clean.result.stdout, /DEPLOY_CWD=/);
 });
 
-test("deployment cost controls keep both jobs daily and document current plan limits", () => {
+test("deployment recovery uses verified Pro cadence with bounded work", () => {
   assert.deepEqual(config.crons, [
     {
       path: "/api/cron/reminders",
-      schedule: "0 21 * * *",
+      schedule: "*/10 * * * *",
     },
     {
       path: "/api/cron/integration-outbox",
-      schedule: "5 21 * * *",
+      schedule: "*/5 * * * *",
     },
+    { path: "/api/cron/autoenhance-sync", schedule: "3-59/10 * * * *" },
   ]);
-  assert.match(outboxDocs, /Hobby[\s\S]*100 cron jobs[\s\S]*once per day/i);
-  assert.match(outboxDocs, /one additional function invocation per day/i);
+  assert.match(outboxDocs, /verified Pro plan/i);
+  assert.match(outboxDocs, /three pages of five/i);
 });

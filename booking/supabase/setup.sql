@@ -10345,6 +10345,127 @@ comment on function public.update_booking_internal_notes(uuid, uuid, bigint, tex
 -- ============================================================================
 
 -- ============================================================================
+-- Begin supabase/migrations/20260905100200_admin_booking_lifecycle.sql
+-- ============================================================================
+
+-- Service-only admin aggregate. No provider calls or new browser grants.
+alter table public.bookings add column lifecycle_version bigint not null default 1;
+create function public.bump_booking_lifecycle_version() returns trigger language plpgsql set search_path='' as $$
+begin
+  if old.status='cancelled' and (new.status is distinct from old.status or new.scheduled_at is distinct from old.scheduled_at or new.scheduled_ends_at is distinct from old.scheduled_ends_at) then
+    raise exception 'Cancelled booking cannot be moved or reopened' using errcode='PB004';
+  end if;
+  new.lifecycle_version := old.lifecycle_version + 1;
+  return new;
+end $$;
+create trigger bookings_lifecycle_version before update on public.bookings for each row execute function public.bump_booking_lifecycle_version();
+
+create table public.admin_booking_requests (
+ organization_id uuid not null, request_id uuid not null, actor_id uuid not null,
+ input jsonb not null, booking_id uuid not null references public.bookings(id), result jsonb not null,
+ primary key(organization_id,request_id)
+);
+alter table public.admin_booking_requests enable row level security;
+revoke all on public.admin_booking_requests from public,anon,authenticated;
+grant all on public.admin_booking_requests to service_role;
+
+create function public.save_admin_booking_aggregate(p_organization_id uuid,p_actor_id uuid,p_request_id uuid,p_booking_id uuid,p_expected_version bigint,p_input jsonb)
+returns jsonb language plpgsql security invoker set search_path='' as $$
+declare
+  v_owner uuid := (p_input->>'owner_id')::uuid;
+  v_ids uuid[]; v_property uuid; v_booking uuid; v_start timestamptz := (p_input->>'scheduled_at')::timestamptz;
+  v_sqft integer := (p_input->>'square_footage')::integer;
+  v_duration integer; v_services text[]; v_addons text[];
+  v_old public.bookings%rowtype; v_request public.admin_booking_requests%rowtype;
+  v_fingerprint jsonb; v_result jsonb; v_retained boolean := false; v_version bigint;
+begin
+  if not exists(select 1 from public.profiles p join public.organization_members m on m.profile_id=p.id and m.organization_id=p_organization_id where p.id=p_actor_id and p.organization_id=p_organization_id and p.archived_at is null and m.role in ('owner','admin'))
+    or not exists(select 1 from public.profiles p where p.id=v_owner and p.organization_id=p_organization_id and p.role='realtor' and p.archived_at is null) then
+    raise exception 'Not authorized' using errcode='PB001';
+  end if;
+  if p_request_id is null then raise exception 'Request key required' using errcode='PB002'; end if;
+  select array_agg(value::uuid order by value::uuid) into v_ids from jsonb_array_elements_text(p_input->'catalog_item_ids');
+  v_fingerprint := jsonb_build_object('booking',p_booking_id,'version',p_expected_version,'input',p_input || jsonb_build_object('catalog_item_ids',to_jsonb(v_ids)));
+  perform pg_advisory_xact_lock(hashtextextended(p_organization_id::text||':'||p_request_id::text,2));
+  select * into v_request from public.admin_booking_requests where organization_id=p_organization_id and request_id=p_request_id;
+  if found then
+    if v_request.actor_id<>p_actor_id or v_request.input is distinct from v_fingerprint then raise exception 'Changed request' using errcode='PB003'; end if;
+    return v_request.result || '{"replayed":true}'::jsonb;
+  end if;
+  if p_booking_id is not null then
+    select * into v_old from public.bookings where id=p_booking_id and organization_id=p_organization_id and owner_id=v_owner for update;
+    if not found or p_expected_version is null or v_old.lifecycle_version<>p_expected_version or v_old.status='cancelled' then raise exception 'Booking changed; reload' using errcode='PB004'; end if;
+    v_retained := v_ids is not distinct from (select array_agg(catalog_item_id order by catalog_item_id) from public.booking_line_items where booking_id=p_booking_id);
+  end if;
+  if nullif(btrim(p_input->>'street_address'),'') is null or (p_booking_id is null and v_start is null) or v_sqft<0 then raise exception 'Invalid input' using errcode='PB002'; end if;
+  if not v_retained then
+  if coalesce(cardinality(v_ids),0)=0 or cardinality(v_ids)<>(select count(distinct x) from unnest(v_ids) x)
+    or exists(select 1 from unnest(v_ids) x left join public.catalog_items c on c.id=x and c.organization_id=p_organization_id and (c.active or exists(select 1 from public.booking_line_items l where l.booking_id=p_booking_id and l.catalog_item_id=x)) where c.id is null)
+    or not exists(select 1 from public.catalog_items c where c.id=any(v_ids) and c.kind in ('bundle','a_la_carte'))
+    or (select count(*) from public.catalog_items c where c.id=any(v_ids) and c.kind='bundle')>1 then
+    raise exception 'Invalid catalog selection' using errcode='PB002';
+  end if;
+  if exists(select 1 from public.catalog_items a where a.id=any(v_ids) and a.kind='addon' and (
+    (a.require_has_video and not exists(select 1 from public.catalog_items c where c.id=any(v_ids) and c.kind<>'addon' and c.is_video)) or
+    (a.require_has_media and not exists(select 1 from public.catalog_items c where c.id=any(v_ids) and c.kind<>'addon' and (c.is_video or c.is_photo or c.is_iguide))) or
+    (a.exclude_has_aerial and exists(select 1 from public.catalog_items c where c.id=any(v_ids) and c.kind<>'addon' and c.is_aerial)))) then
+    raise exception 'Ineligible add-on' using errcode='PB002';
+  end if;
+  select greatest(sum(duration_minutes),60), coalesce(array_agg(slug order by array_position(v_ids,id)) filter(where kind<>'addon'),'{}'), coalesce(array_agg(slug order by array_position(v_ids,id)) filter(where kind='addon'),'{}') into v_duration,v_services,v_addons from public.catalog_items where id=any(v_ids);
+  else
+    select greatest(sum(unit_duration_minutes*quantity),60),coalesce(array_agg(item_slug) filter(where item_kind<>'addon'),'{}'),coalesce(array_agg(item_slug) filter(where item_kind='addon'),'{}') into v_duration,v_services,v_addons from public.booking_line_items where booking_id=p_booking_id;
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_organization_id::text||':'||v_owner::text||':'||lower(btrim(p_input->>'street_address')),1));
+  select id into v_property from public.properties where organization_id=p_organization_id and owner_id=v_owner and lower(btrim(street_address))=lower(btrim(p_input->>'street_address')) and city is not distinct from nullif(p_input->>'city','') and province is not distinct from coalesce(nullif(p_input->>'province',''),'ON') and postal_code is not distinct from nullif(p_input->>'postal_code','') order by created_at,id limit 1;
+  if v_property is null then
+    insert into public.properties(organization_id,owner_id,street_address,city,province,postal_code) values(p_organization_id,v_owner,btrim(p_input->>'street_address'),nullif(p_input->>'city',''),coalesce(nullif(p_input->>'province',''),'ON'),nullif(p_input->>'postal_code','')) returning id into v_property;
+  end if;
+  if p_booking_id is null then
+  insert into public.bookings(organization_id,owner_id,property_id,status,scheduled_at,scheduled_ends_at,allow_schedule_overlap,services,add_ons,square_footage,unit_number,client_notes,suppress_realtor_notifications)
+  values(p_organization_id,v_owner,v_property,'confirmed',v_start,v_start+make_interval(mins=>v_duration),true,v_services,v_addons,v_sqft,nullif(p_input->>'unit_number',''),nullif(p_input->>'client_notes',''),coalesce((p_input->>'suppress_realtor_notifications')::boolean,false)) returning id,lifecycle_version into v_booking,v_version;
+  else
+    update public.bookings set property_id=v_property,scheduled_at=v_start,scheduled_ends_at=v_start+make_interval(mins=>v_duration),allow_schedule_overlap=true,services=v_services,add_ons=v_addons,square_footage=v_sqft,unit_number=nullif(p_input->>'unit_number',''),client_notes=nullif(p_input->>'client_notes','') where id=p_booking_id returning id,lifecycle_version into v_booking,v_version;
+  end if;
+  if not v_retained then
+    delete from public.booking_line_items where booking_id=v_booking and not (catalog_item_id=any(v_ids));
+  insert into public.booking_line_items(booking_id,catalog_item_id,item_name,item_slug,item_kind,quantity,unit_price_cents,unit_duration_minutes)
+  select v_booking,id,name,slug,kind::text,1,price_cents+case when sqft_pricing_enabled and included_sqft>0 and overage_increment_sqft>0 and overage_price_cents>0 and v_sqft>included_sqft then ceil((v_sqft-included_sqft)::numeric/overage_increment_sqft)::integer*overage_price_cents else 0 end,duration_minutes from public.catalog_items c where id=any(v_ids) and not exists(select 1 from public.booking_line_items l where l.booking_id=v_booking and l.catalog_item_id=c.id);
+  end if;
+  if p_input ? 'contact_name' then
+    if nullif(btrim(p_input->>'contact_name'),'') is null then raise exception 'Contact name required' using errcode='PB002'; end if;
+    update public.profiles set full_name=btrim(p_input->>'contact_name'),phone=nullif(p_input->>'contact_phone',''),brokerage=nullif(p_input->>'brokerage','') where id=v_owner and organization_id=p_organization_id;
+  end if;
+  if p_booking_id is null then
+    insert into public.integration_jobs(organization_id,booking_id,job_type,idempotency_key,payload)
+    select p_organization_id,v_booking,j.kind,'booking:'||v_booking||':'||j.kind||':admin-v1',
+      jsonb_build_object(
+        'schema_version',1,'booking_id',v_booking,'organization_id',p_organization_id,'public_request_id',p_request_id,
+        'app_url',coalesce(p_input->>'app_url',''),
+        'organization',jsonb_build_object('name',o.name,'from_name',coalesce(nullif(o.email_from_name,''),o.name),
+          'reply_to_email',coalesce(nullif(o.reply_to_email,''),nullif(o.admin_notification_email,''),nullif(p_input->>'admin_notification_email','')),
+          'admin_notification_email',coalesce(nullif(o.admin_notification_email,''),nullif(p_input->>'admin_notification_email',''))),
+        'realtor',jsonb_build_object('id',p.id,'email',p.email,'full_name',coalesce(nullif(p.full_name,''),p.email),'phone',p.phone,'brokerage',p.brokerage,'delivery_cc_emails',coalesce(p.delivery_cc_emails,'{}'::text[])),
+        'property',jsonb_build_object('street_address',a.street_address,'city',a.city,'postal_code',a.postal_code,'unit_number',b.unit_number),
+        'booking',jsonb_build_object('scheduled_at',b.scheduled_at,'scheduled_ends_at',b.scheduled_ends_at,'square_footage',b.square_footage,'is_vacant',b.is_vacant,'include_basement',b.include_basement,'client_notes',coalesce(b.client_notes,'')),
+        'line_items',(select jsonb_agg(jsonb_build_object('catalog_item_id',l.catalog_item_id,'name',l.item_name,'slug',l.item_slug,'kind',l.item_kind,'quantity',l.quantity,'unit_price_cents',l.unit_price_cents,'unit_duration_minutes',l.unit_duration_minutes) order by array_position(v_ids,l.catalog_item_id)) from public.booking_line_items l where l.booking_id=v_booking))
+    from public.bookings b join public.properties a on a.id=b.property_id and a.organization_id=b.organization_id
+    join public.organizations o on o.id=b.organization_id join public.profiles p on p.id=b.owner_id and p.organization_id=b.organization_id
+    cross join (values ('google_calendar.event.create'),('email.booking.confirmation'),('email.admin.new_booking'),('push.admin.new_booking'),('quickbooks.invoice.create')) j(kind)
+    where b.id=v_booking and (j.kind<>'quickbooks.invoice.create' or o.invoice_timing='at_booking');
+  end if;
+  v_result := jsonb_build_object('booking_id',v_booking,'property_id',v_property,'lifecycle_version',v_version,'replayed',false);
+  insert into public.admin_booking_requests values(p_organization_id,p_request_id,p_actor_id,v_fingerprint,v_booking,v_result);
+  return v_result;
+end $$;
+revoke all on function public.save_admin_booking_aggregate(uuid,uuid,uuid,uuid,bigint,jsonb) from public,anon,authenticated;
+grant execute on function public.save_admin_booking_aggregate(uuid,uuid,uuid,uuid,bigint,jsonb) to service_role;
+revoke all on function public.bump_booking_lifecycle_version() from public,anon,authenticated;
+
+-- ============================================================================
+-- End supabase/migrations/20260905100200_admin_booking_lifecycle.sql
+-- ============================================================================
+
+-- ============================================================================
 -- Begin supabase/migrations/20260905100300_listing_integrity_admin_search.sql
 -- ============================================================================
 
@@ -10449,6 +10570,300 @@ create index admin_booking_owner_history_idx on public.bookings(organization_id,
 
 -- ============================================================================
 -- End supabase/migrations/20260905100400_admin_search.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260905100500_booking_effect_generations.sql
+-- ============================================================================
+
+-- Append-only booking effect generations. Provider requests are never rewritten.
+-- Migration-first compatible with the existing claim-by-booking/type API.
+alter table public.bookings
+  add column effect_version bigint not null default 1 check(effect_version > 0),
+  add column schedule_version bigint not null default 1 check(schedule_version > 0);
+alter table public.integration_jobs
+  add column effect_version bigint not null default 1 check(effect_version > 0);
+alter table public.integration_jobs drop constraint integration_jobs_organization_id_booking_id_job_type_key;
+create unique index integration_jobs_effect_generation_key
+  on public.integration_jobs(organization_id,booking_id,job_type,effect_version);
+-- Only one unresolved dispatch candidate per type; retain all terminal history.
+create unique index integration_jobs_active_effect_key
+  on public.integration_jobs(organization_id,booking_id,job_type)
+  where status in ('pending','retryable','processing');
+
+create function public.guard_integration_effect_generation() returns trigger language plpgsql set search_path='' as $$
+begin
+  if new.effect_version is distinct from old.effect_version then
+    raise exception 'Integration effect generation is immutable' using errcode='23514';
+  end if;
+  return new;
+end $$;
+create trigger integration_effect_generation_immutable before update on public.integration_jobs
+for each row execute function public.guard_integration_effect_generation();
+revoke all on function public.guard_integration_effect_generation() from public,anon,authenticated;
+
+create function public.version_booking_schedule() returns trigger
+language plpgsql set search_path='' as $$
+begin
+  if (new.scheduled_at,new.scheduled_ends_at) is distinct from (old.scheduled_at,old.scheduled_ends_at) then
+    new.schedule_version := old.schedule_version+1;
+    new.reminder_sent_at := null;
+  else
+    new.schedule_version := old.schedule_version;
+  end if;
+  return new;
+end;
+$$;
+create trigger booking_schedule_generation before update on public.bookings
+for each row execute function public.version_booking_schedule();
+
+create function public.refresh_booking_effects(p_organization_id uuid,p_booking_id uuid)
+returns void language plpgsql security definer set search_path='' as $$
+declare
+  b public.bookings%rowtype;
+  seed jsonb;
+  current_payload jsonb;
+  generation bigint;
+  job public.integration_jobs%rowtype;
+begin
+  select * into b from public.bookings where organization_id=p_organization_id and id=p_booking_id for update;
+  if not found then return; end if;
+  select payload into seed from public.integration_jobs
+  where organization_id=b.organization_id and booking_id=b.id
+  order by effect_version desc,created_at desc,id limit 1;
+  -- Existing non-outbox admin bookings do not acquire new creation effects.
+  if seed is null then return; end if;
+  select seed || jsonb_build_object(
+    'realtor',jsonb_build_object('id',r.id,'email',r.email,'full_name',coalesce(nullif(r.full_name,''),r.email),
+      'phone',r.phone,'brokerage',r.brokerage,'delivery_cc_emails',coalesce(r.delivery_cc_emails,'{}'::text[])),
+    'booking',jsonb_build_object('scheduled_at',b.scheduled_at,'scheduled_ends_at',b.scheduled_ends_at,
+      'square_footage',b.square_footage,'is_vacant',b.is_vacant,'include_basement',b.include_basement,
+      'client_notes',coalesce(b.client_notes,'')),
+    'property',jsonb_build_object('street_address',p.street_address,'city',p.city,'postal_code',p.postal_code,'unit_number',b.unit_number),
+    'line_items',coalesce((select jsonb_agg(jsonb_build_object(
+      'catalog_item_id',l.catalog_item_id,'name',l.item_name,'slug',l.item_slug,'kind',l.item_kind,
+      'quantity',l.quantity,'unit_price_cents',l.unit_price_cents,'unit_duration_minutes',l.unit_duration_minutes)
+      order by case when l.item_kind='addon' then 1 else 0 end,
+      case when l.item_kind='addon' then array_position(b.add_ons,l.item_slug) else array_position(b.services,l.item_slug) end,l.id)
+      from public.booking_line_items l where l.booking_id=b.id),'[]'::jsonb))
+    into current_payload from public.properties p
+    join public.profiles r on r.id=b.owner_id and r.organization_id=b.organization_id
+    where p.id=b.property_id and p.organization_id=b.organization_id;
+  if current_payload is null then raise exception 'Booking effect property scope mismatch' using errcode='23514'; end if;
+  generation := b.effect_version;
+  if exists(select 1 from public.integration_jobs where organization_id=b.organization_id and booking_id=b.id
+    and job_type in ('email.booking.confirmation','email.admin.new_booking','quickbooks.invoice.create')
+    and status in ('pending','retryable') and attempts=0 and payload is distinct from current_payload) then
+    generation := b.effect_version+1;
+    update public.bookings set effect_version=generation where id=b.id and organization_id=b.organization_id;
+  end if;
+  -- Never replace attempted requests with a new key: the provider may have
+  -- accepted them. Keep active leases, terminalize obsolete attempts on recovery.
+  update public.integration_jobs set status='dead_letter',completed_at=now(),
+    last_error_code='booking_effect_superseded_ambiguous',
+    last_error_message='Booking changed after provider attempt; reconcile before any replacement',
+    last_error_at=now(),lease_token=null,locked_by=null,locked_at=null,lease_expires_at=null
+  where organization_id=b.organization_id and booking_id=b.id
+    and job_type in ('email.booking.confirmation','email.admin.new_booking','quickbooks.invoice.create')
+    and payload is distinct from current_payload and attempts>0
+    and (status in ('pending','retryable') or (status='processing' and lease_expires_at<=now()));
+  for job in select * from public.integration_jobs where organization_id=b.organization_id and booking_id=b.id
+    and job_type in ('email.booking.confirmation','email.admin.new_booking','quickbooks.invoice.create')
+    and status in ('pending','retryable') and attempts=0 and payload is distinct from current_payload for update
+  loop
+    update public.integration_jobs set status='cancelled',completed_at=now(),last_error_code='booking_effect_superseded',
+      last_error_message='Unclaimed effect superseded by a newer booking generation',last_error_at=now(),updated_at=now()
+      where id=job.id;
+    if b.status <> 'cancelled' then
+      insert into public.integration_jobs(organization_id,booking_id,job_type,idempotency_key,payload,effect_version)
+      values(b.organization_id,b.id,job.job_type,'booking:'||b.id||':'||job.job_type||':generation:'||generation,current_payload,generation);
+    end if;
+  end loop;
+end;
+$$;
+
+create function public.refresh_booking_effects_trigger() returns trigger
+language plpgsql security definer set search_path='' as $$
+declare b record;
+begin
+  if tg_table_name='bookings' then
+    perform public.refresh_booking_effects(new.organization_id,new.id);
+  elsif tg_table_name='properties' then
+    for b in select id,organization_id from public.bookings where property_id=new.id and organization_id=new.organization_id order by id loop
+      perform public.refresh_booking_effects(b.organization_id,b.id);
+    end loop;
+  else
+    for b in select id,organization_id from public.bookings where id=case when tg_op='DELETE' then old.booking_id else new.booking_id end loop
+      perform public.refresh_booking_effects(b.organization_id,b.id);
+    end loop;
+  end if;
+  return null;
+end;
+$$;
+-- Deferred triggers observe the FINAL aggregate (including replacement lines),
+-- not the intermediate state inside the admin aggregate transaction.
+create constraint trigger booking_effect_refresh after update of scheduled_at,scheduled_ends_at,property_id,services,add_ons,client_notes,unit_number,square_footage,is_vacant,include_basement
+on public.bookings deferrable initially deferred for each row execute function public.refresh_booking_effects_trigger();
+create constraint trigger booking_lines_effect_refresh after insert or update or delete
+on public.booking_line_items deferrable initially deferred for each row execute function public.refresh_booking_effects_trigger();
+create constraint trigger property_booking_effect_refresh after update of street_address,city,postal_code
+on public.properties deferrable initially deferred for each row execute function public.refresh_booking_effects_trigger();
+
+revoke all on function public.version_booking_schedule(),public.refresh_booking_effects(uuid,uuid),public.refresh_booking_effects_trigger() from public,anon,authenticated;
+grant execute on function public.refresh_booking_effects(uuid,uuid) to service_role;
+
+alter function public.claim_integration_job(uuid,uuid,text,text,uuid) rename to claim_integration_job_before_generations;
+revoke all on function public.claim_integration_job_before_generations(uuid,uuid,text,text,uuid) from public,anon,authenticated,service_role;
+create function public.claim_integration_job(p_organization_id uuid,p_booking_id uuid,p_job_type text,p_worker_id text,p_lease_token uuid)
+returns jsonb language plpgsql security definer set search_path='' as $$
+begin
+  -- Same parent lock as aggregate edits. Refresh before leasing, including
+  -- jobs whose earlier in-flight attempt has since settled or expired.
+  perform public.refresh_booking_effects(p_organization_id,p_booking_id);
+  return public.claim_integration_job_before_generations(p_organization_id,p_booking_id,p_job_type,p_worker_id,p_lease_token);
+end $$;
+revoke all on function public.claim_integration_job(uuid,uuid,text,text,uuid) from public,anon,authenticated;
+grant execute on function public.claim_integration_job(uuid,uuid,text,text,uuid) to service_role;
+
+-- ============================================================================
+-- End supabase/migrations/20260905100500_booking_effect_generations.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260905100700_booking_reminder_recovery.sql
+-- ============================================================================
+
+-- Private schedule-scoped reminders. No capability URLs or credentials stored.
+create table public.booking_reminder_jobs (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null,
+  booking_id uuid not null,
+  schedule_version bigint not null check(schedule_version>0),
+  payload jsonb not null check(jsonb_typeof(payload)='object'),
+  status text not null default 'pending' check(status in ('pending','processing','retryable','completed','skipped','cancelled','dead_letter')),
+  attempts integer not null default 0 check(attempts between 0 and 8),
+  first_attempt_at timestamptz,
+  next_attempt_at timestamptz not null default now(),
+  lease_token uuid,
+  lease_expires_at timestamptz,
+  request_hash text check(request_hash ~ '^[a-f0-9]{64}$'),
+  provider_id text,
+  completed_at timestamptz,
+  error_code text,
+  created_at timestamptz not null default now(),
+  foreign key(organization_id,booking_id) references public.bookings(organization_id,id),
+  unique(organization_id,booking_id,schedule_version),
+  check((status='processing')=(lease_token is not null and lease_expires_at is not null)),
+  check(status<>'completed' or (completed_at is not null and nullif(provider_id,'') is not null))
+);
+alter table public.booking_reminder_jobs enable row level security;
+revoke all on public.booking_reminder_jobs from public,anon,authenticated,service_role;
+grant select on public.booking_reminder_jobs to service_role;
+create index booking_reminder_jobs_due on public.booking_reminder_jobs(next_attempt_at) where status in ('pending','retryable','processing');
+
+create function public.list_due_booking_reminders(p_limit integer default 20)
+returns table(organization_id uuid,booking_id uuid,schedule_version bigint)
+language sql security definer set search_path='' as $$
+  select x.organization_id,x.booking_id,x.schedule_version from (
+    select j.organization_id,j.booking_id,j.schedule_version,j.next_attempt_at due
+    from public.booking_reminder_jobs j
+    where (j.status in ('pending','retryable') and j.next_attempt_at<=now()) or (j.status='processing' and j.lease_expires_at<=now())
+    union all
+    select b.organization_id,b.id,b.schedule_version,b.scheduled_at-interval '24 hours'
+    from public.bookings b where b.status in ('requested','confirmed')
+      and b.scheduled_at>now() and b.scheduled_at<=now()+interval '24 hours'
+      and b.reminder_sent_at is null
+      and not exists(select 1 from public.booking_reminder_jobs j where j.organization_id=b.organization_id and j.booking_id=b.id and j.schedule_version=b.schedule_version)
+  ) x order by due,organization_id,booking_id limit greatest(1,least(coalesce(p_limit,20),50));
+$$;
+
+create function public.claim_booking_reminder(p_organization_id uuid,p_booking_id uuid,p_schedule_version bigint,p_lease_token uuid)
+returns jsonb language plpgsql security definer set search_path='' as $$
+declare b public.bookings%rowtype; j public.booking_reminder_jobs%rowtype; snapshot jsonb;
+begin
+  if p_lease_token is null then raise exception 'Lease token required'; end if;
+  select * into b from public.bookings where organization_id=p_organization_id and id=p_booking_id for update;
+  if not found then return null; end if;
+  select * into j from public.booking_reminder_jobs where organization_id=p_organization_id and booking_id=p_booking_id and schedule_version=p_schedule_version for update;
+  if j.status='processing' and j.lease_expires_at>now() then return null; end if;
+  if j.status in ('completed','skipped','cancelled','dead_letter') then return null; end if;
+  if b.schedule_version<>p_schedule_version or b.status not in ('requested','confirmed') or b.scheduled_at is null or b.scheduled_at<=now() then
+    update public.booking_reminder_jobs set status=case when attempts>0 then 'dead_letter' else 'cancelled' end,
+      completed_at=now(),error_code='reminder_schedule_obsolete',lease_token=null,lease_expires_at=null where id=j.id;
+    return null;
+  end if;
+  if b.scheduled_at>now()+interval '24 hours' then return null; end if;
+  if j.id is null and b.reminder_sent_at is not null then return null; end if;
+  select jsonb_build_object('scheduled_at',b.scheduled_at,'street_address',p.street_address,'city',p.city,
+    'email',r.email,'contact_name',coalesce(r.full_name,r.email),'company_name',o.name,
+    'from_name',coalesce(o.email_from_name,o.name),'reply_to',o.reply_to_email,
+    'suppress_realtor_notifications',b.suppress_realtor_notifications)
+  into snapshot from public.properties p join public.profiles r on r.id=b.owner_id and r.organization_id=b.organization_id and r.archived_at is null
+    join public.organizations o on o.id=b.organization_id
+  where p.id=b.property_id and p.organization_id=b.organization_id;
+  if snapshot is null then
+    update public.booking_reminder_jobs set status='dead_letter',completed_at=now(),error_code='reminder_snapshot_unavailable',lease_token=null,lease_expires_at=null where id=j.id;
+    return null;
+  end if;
+  if j.id is null then
+    insert into public.booking_reminder_jobs(organization_id,booking_id,schedule_version,payload)
+    values(p_organization_id,p_booking_id,p_schedule_version,snapshot) returning * into j;
+  end if;
+  if j.payload is distinct from snapshot or j.attempts>=8 or j.first_attempt_at<=now()-interval '23 hours' then
+    update public.booking_reminder_jobs set status='dead_letter',completed_at=now(),error_code='reminder_reconciliation_required',lease_token=null,lease_expires_at=null where id=j.id;
+    return null;
+  end if;
+  if j.next_attempt_at>now() then return null; end if;
+  update public.booking_reminder_jobs set status='processing',attempts=attempts+1,first_attempt_at=coalesce(first_attempt_at,now()),
+    lease_token=p_lease_token,lease_expires_at=now()+interval '2 minutes' where id=j.id returning * into j;
+  return to_jsonb(j)||jsonb_build_object('idempotency_key','reminder:'||j.id);
+end $$;
+
+-- Bind rendered provider bytes (including transient signed link) without storing
+-- the capability. Template/secret/origin drift on retry is manual, never re-keyed.
+create function public.authorize_booking_reminder(p_organization_id uuid,p_job_id uuid,p_lease_token uuid,p_request_hash text)
+returns boolean language plpgsql security definer set search_path='' as $$
+declare j public.booking_reminder_jobs%rowtype; b public.bookings%rowtype;
+begin
+  if p_request_hash is null or p_request_hash !~ '^[a-f0-9]{64}$' then return false; end if;
+  select b0.* into b from public.bookings b0 join public.booking_reminder_jobs j0 on j0.booking_id=b0.id and j0.organization_id=b0.organization_id
+    where j0.id=p_job_id and j0.organization_id=p_organization_id for update of b0;
+  select * into j from public.booking_reminder_jobs where id=p_job_id and organization_id=p_organization_id for update;
+  if not found or j.status<>'processing' or j.lease_token is distinct from p_lease_token or j.lease_expires_at<=now() then return false; end if;
+  if b.schedule_version<>j.schedule_version or b.status not in ('requested','confirmed') or b.scheduled_at<=now()
+    or (j.request_hash is not null and j.request_hash<>p_request_hash) then
+    update public.booking_reminder_jobs set status='dead_letter',completed_at=now(),error_code='reminder_request_changed',lease_token=null,lease_expires_at=null where id=j.id;
+    return false;
+  end if;
+  update public.booking_reminder_jobs set request_hash=p_request_hash where id=j.id;
+  return true;
+end $$;
+
+create function public.finish_booking_reminder(p_organization_id uuid,p_job_id uuid,p_lease_token uuid,p_outcome text,p_provider_id text default null)
+returns boolean language plpgsql security definer set search_path='' as $$
+declare j public.booking_reminder_jobs%rowtype;
+begin
+  if p_outcome is null or p_outcome not in ('completed','retryable','skipped','dead_letter') then return false; end if;
+  -- Parent-first lock ordering matches claim, authorization and schedule edits.
+  perform 1 from public.bookings b join public.booking_reminder_jobs r on r.booking_id=b.id and r.organization_id=b.organization_id
+    where r.id=p_job_id and r.organization_id=p_organization_id for update of b;
+  select * into j from public.booking_reminder_jobs where id=p_job_id and organization_id=p_organization_id for update;
+  if not found or j.status<>'processing' or j.lease_token is distinct from p_lease_token or j.lease_expires_at<=now() then return false; end if;
+  if p_outcome='completed' and nullif(p_provider_id,'') is null then return false; end if;
+  if p_outcome='retryable' and (j.attempts>=8 or j.first_attempt_at<=now()-interval '23 hours') then p_outcome:='dead_letter'; end if;
+  update public.booking_reminder_jobs set status=p_outcome,provider_id=p_provider_id,lease_token=null,lease_expires_at=null,
+    next_attempt_at=now()+interval '5 minutes',completed_at=case when p_outcome='retryable' then null else now() end,
+    error_code=case when p_outcome in ('retryable','dead_letter') then 'reminder_send_unconfirmed' else null end where id=j.id;
+  if p_outcome='completed' then
+    update public.bookings set reminder_sent_at=now() where organization_id=p_organization_id and id=j.booking_id and schedule_version=j.schedule_version;
+  end if;
+  return true;
+end $$;
+revoke all on function public.list_due_booking_reminders(integer),public.claim_booking_reminder(uuid,uuid,bigint,uuid),public.authorize_booking_reminder(uuid,uuid,uuid,text),public.finish_booking_reminder(uuid,uuid,uuid,text,text) from public,anon,authenticated;
+grant execute on function public.list_due_booking_reminders(integer),public.claim_booking_reminder(uuid,uuid,bigint,uuid),public.authorize_booking_reminder(uuid,uuid,uuid,text),public.finish_booking_reminder(uuid,uuid,uuid,text,text) to service_role;
+
+-- ============================================================================
+-- End supabase/migrations/20260905100700_booking_reminder_recovery.sql
 -- ============================================================================
 
 -- ============================================================================

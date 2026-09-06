@@ -1,239 +1,101 @@
+import { createHash, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-
-import {
-  BUSINESS_TZ,
-  businessDateTimeLocalToUtc,
-} from "@/lib/booking/availability";
+import { BUSINESS_TZ } from "@/lib/booking/availability";
 import { createManageToken } from "@/lib/booking/manage-token";
 import { sendEmail } from "@/lib/email/resend";
-import { getOrganizationEmailSettings } from "@/lib/email/settings";
 import { shootReminderEmail } from "@/lib/email/templates";
 import { sendPushBestEffort } from "@/lib/notifications/push";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
-/**
- * Day-before shoot reminders, invoked daily by Vercel Cron (see
- * booking/vercel.json — 21:00 UTC, i.e. late afternoon in Toronto).
- *
- * Finds every active booking scheduled on TOMORROW's calendar date in the
- * business timezone and emails the realtor a short "is the property ready?"
- * checklist plus a self-serve reschedule link. Each booking is stamped with
- * `reminder_sent_at` only after its own email succeeds, so one bad send
- * never blocks (or double-sends) the rest.
- *
- * Best-effort by design: the handler never throws — failures are counted,
- * logged, and retried on the next run because the stamp stays null.
- */
-
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
-interface ReminderBookingRow {
-  id: string;
-  organization_id: string;
-  scheduled_at: string;
-  suppress_realtor_notifications: boolean;
-  properties: {
-    street_address: string;
-    city: string | null;
-  } | null;
-  profiles: {
-    email: string;
-    full_name: string | null;
-  } | null;
+interface ReminderClaim {
+  id: string; organization_id: string; booking_id: string; schedule_version: number;
+  lease_token: string; idempotency_key: string; attempts: number;
+  payload: { scheduled_at: string; street_address: string; city: string | null;
+    email: string; contact_name: string; company_name: string; from_name: string;
+    reply_to: string | null; suppress_realtor_notifications: boolean };
 }
 
+/** Rolling 24-hour eligibility includes same-day recovery, never past shoots.
+ * The DB owns generation, lease, retry window and immutable snapshot. */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          "CRON_SECRET must be configured. Set it in Vercel env vars — Vercel Cron sends it automatically as a Bearer token.",
-      },
-      { status: 503 },
-    );
-  }
+  if (!secret) return NextResponse.json({ ok: false, error: "Cron unavailable" }, { status: 503 });
   if (request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
-
-  let start: Date;
-  let end: Date;
-  try {
-    ({ start, end } = tomorrowBusinessDayUtcRange());
-  } catch (err) {
-    console.warn("[reminders] could not compute tomorrow's range", err);
-    return NextResponse.json(
-      { ok: false, error: "Could not compute tomorrow's date range." },
-      { status: 500 },
-    );
-  }
-
   const supabase = getServiceSupabase();
-  const { data: bookings, error } = await supabase
-    .from("bookings")
-    .select(
-      "id, organization_id, scheduled_at, suppress_realtor_notifications, properties(street_address, city), profiles(email, full_name)",
-    )
-    .in("status", ["requested", "confirmed"])
-    .is("reminder_sent_at", null)
-    .gte("scheduled_at", start.toISOString())
-    .lt("scheduled_at", end.toISOString())
-    .returns<ReminderBookingRow[]>();
-
-  if (error) {
-    console.warn("[reminders] booking query failed", error);
-    return NextResponse.json(
-      { ok: false, error: error.message },
-      { status: 500 },
-    );
-  }
-
-  let sent = 0;
-  let skipped = 0;
-  let failed = 0;
-
-  // Org settings barely change run-to-run; cache per org so a busy day
-  // doesn't fan out into one settings lookup per booking.
-  const settingsCache = new Map<
-    string,
-    Awaited<ReturnType<typeof getOrganizationEmailSettings>>
-  >();
-
-  for (const booking of bookings ?? []) {
+  const deadline = Date.now() + 40_000;
+  const due = await supabase.rpc("list_due_booking_reminders", { p_limit: 20 });
+  if (due.error) return NextResponse.json({ ok: false, error: "Reminder lookup failed" }, { status: 503 });
+  let sent = 0, skipped = 0, failed = 0;
+  let deadlineReached = false;
+  for (const identity of due.data ?? []) {
+    if (Date.now() >= deadline) { deadlineReached = true; break; }
     try {
-      if (!booking.properties) {
-        skipped += 1;
-        continue;
-      }
-
-      const timeLabel = new Date(booking.scheduled_at).toLocaleTimeString(
-        "en-CA",
-        { timeZone: BUSINESS_TZ, hour: "numeric", minute: "2-digit" },
-      );
-      const addressLine = [
-        booking.properties.street_address,
-        booking.properties.city,
-      ]
-        .filter(Boolean)
-        .join(", ");
-      await sendPushBestEffort(booking.organization_id, {
-        title: "Shoot tomorrow",
-        body: `${timeLabel} · ${addressLine}`,
-        url: `/admin/bookings/${booking.id}`,
-        tag: `shoot-tomorrow-${booking.id}`,
+      const lease = randomUUID();
+      const claimed = await supabase.rpc("claim_booking_reminder", {
+        p_organization_id: identity.organization_id, p_booking_id: identity.booking_id,
+        p_schedule_version: identity.schedule_version, p_lease_token: lease,
       });
-
-      // Quiet admin bookings still produce the internal operator reminder,
-      // but never send the realtor-facing reminder email.
+      if (claimed.error) { failed++; continue; }
+      if (!claimed.data) { skipped++; continue; }
+      const claim = claimed.data as unknown as ReminderClaim;
+      const finish = async (outcome: string, providerId: string | null = null) => {
+        const result = await supabase.rpc("finish_booking_reminder", {
+          p_organization_id: identity.organization_id, p_job_id: claim.id,
+          p_lease_token: lease, p_outcome: outcome, p_provider_id: providerId,
+        });
+        if (result.error || result.data !== true) throw new Error("Reminder settlement unconfirmed");
+      };
+      const booking = claim.payload;
+      if (claim.organization_id !== identity.organization_id || claim.booking_id !== identity.booking_id ||
+          claim.schedule_version !== identity.schedule_version || claim.lease_token !== lease ||
+          claim.idempotency_key !== `reminder:${claim.id}` || !booking ||
+          typeof booking.suppress_realtor_notifications !== "boolean" ||
+          ![booking.scheduled_at,booking.street_address,booking.email,booking.contact_name,booking.company_name,booking.from_name].every(v => typeof v === "string" && v.length>0) ||
+          !Number.isFinite(Date.parse(booking.scheduled_at)) ||
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(booking.email) ||
+          !(booking.reply_to === null || typeof booking.reply_to === "string") ||
+          !(booking.city === null || typeof booking.city === "string")) {
+        await finish("dead_letter"); failed++; continue;
+      }
+      const timeLabel = new Date(booking.scheduled_at).toLocaleString("en-CA", {
+        timeZone: BUSINESS_TZ, month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+      });
+      // Push is deliberately at-most-once best effort, not provider-idempotent.
+      if (claim.attempts === 1) await sendPushBestEffort(identity.organization_id, {
+        title: "Upcoming shoot", body: `${timeLabel} · ${booking.street_address}`,
+        url: `/admin/bookings/${identity.booking_id}`, tag: `shoot-reminder-${claim.id}`,
+      });
       if (booking.suppress_realtor_notifications) {
-        skipped += 1;
-        continue;
+        await finish("skipped"); skipped++; continue;
       }
-
-      if (!booking.profiles?.email) {
-        skipped += 1;
-        continue;
-      }
-
-      let settings = settingsCache.get(booking.organization_id);
-      if (!settings) {
-        settings = await getOrganizationEmailSettings(booking.organization_id);
-        settingsCache.set(booking.organization_id, settings);
-      }
-
-      const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
-      const manageLink = `${appUrl}/book/manage/${createManageToken(booking.id)}`;
-
-      const email = shootReminderEmail({
-        contactName:
-          booking.profiles.full_name ?? booking.profiles.email,
-        streetAddress: booking.properties.street_address,
-        city: booking.properties.city,
-        timeLabel,
-        manageLink,
-        companyName: settings.organizationName,
+      const origin = new URL(process.env.NEXT_PUBLIC_APP_URL ?? "");
+      if (origin.protocol !== "https:" || origin.username || origin.password) throw new Error("Invalid app origin");
+      const email = shootReminderEmail({ contactName: booking.contact_name,
+        streetAddress: booking.street_address, city: booking.city, timeLabel,
+        companyName: booking.company_name,
+        manageLink: `${origin.origin}/book/manage/${createManageToken(identity.booking_id)}`,
       });
-
-      const result = await sendEmail({
-        to: booking.profiles.email,
-        subject: email.subject,
-        html: email.html,
-        organizationId: booking.organization_id,
+      const args = { to: booking.email, subject: email.subject, html: email.html,
+        organizationId: identity.organization_id, fromName: booking.from_name, replyTo: booking.reply_to,
+        idempotencyKey: claim.idempotency_key };
+      const authorized = await supabase.rpc("authorize_booking_reminder", {
+        p_organization_id: identity.organization_id, p_job_id: claim.id, p_lease_token: lease,
+        p_request_hash: createHash("sha256").update(JSON.stringify({ ...args, transportFrom: process.env.EMAIL_FROM ?? null })).digest("hex"),
       });
-
-      if (!result.ok || result.skipped) {
-        // skipped = Resend not configured; leave the stamp null so the
-        // reminder goes out once email is wired up.
-        if (result.skipped) skipped += 1;
-        else failed += 1;
-        if (!result.ok) {
-          console.warn(
-            "[reminders] send failed for booking",
-            booking.id,
-            result.error,
-          );
-        }
-        continue;
-      }
-
-      const { error: stampError } = await supabase
-        .from("bookings")
-        .update({ reminder_sent_at: new Date().toISOString() })
-        .eq("id", booking.id);
-      if (stampError) {
-        // Email went out but the stamp didn't stick — count it sent, warn
-        // loudly so a re-send tomorrow isn't a silent mystery.
-        console.warn(
-          "[reminders] sent but could not stamp reminder_sent_at for booking",
-          booking.id,
-          stampError,
-        );
-      }
-      sent += 1;
-    } catch (err) {
-      failed += 1;
-      console.warn("[reminders] reminder failed for booking", booking.id, err);
+      if (authorized.error || authorized.data !== true) { failed++; continue; }
+      const result = await sendEmail(args);
+      if (result.skipped) { await finish("retryable"); skipped++; }
+      else if (!result.ok || !result.id) { await finish("retryable"); failed++; }
+      else { await finish("completed", result.id); sent++; }
+    } catch {
+      // Unknown provider/settlement outcome retains the lease for bounded reclaim.
+      failed++;
     }
   }
-
-  return NextResponse.json({ ok: true, sent, skipped, failed });
-}
-
-/**
- * UTC range covering TOMORROW's calendar date in the business timezone:
- * [tomorrow 00:00 BUSINESS_TZ, day-after 00:00 BUSINESS_TZ).
- *
- * Built from Intl date parts + businessDateTimeLocalToUtc so DST shifts
- * are handled by the same offset math the booking flow already uses —
- * no hand-rolled UTC-4/UTC-5 constants.
- */
-function tomorrowBusinessDayUtcRange(now = new Date()): {
-  start: Date;
-  end: Date;
-} {
-  // Today's calendar date as seen in the business timezone.
-  const todayLocal = new Intl.DateTimeFormat("en-CA", {
-    timeZone: BUSINESS_TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now); // "YYYY-MM-DD"
-  const [year, month, day] = todayLocal.split("-").map(Number);
-
-  // Date.UTC normalizes day/month rollover for us (e.g. Dec 31 + 1).
-  const dateOnly = (daysAhead: number) =>
-    new Date(Date.UTC(year, month - 1, day + daysAhead))
-      .toISOString()
-      .slice(0, 10);
-
-  const start = businessDateTimeLocalToUtc(`${dateOnly(1)}T00:00`);
-  const end = businessDateTimeLocalToUtc(`${dateOnly(2)}T00:00`);
-  if (!start || !end) {
-    // Unreachable — the strings above always match the expected format —
-    // but keeps the return type honest without a non-null assertion.
-    throw new Error("Could not compute tomorrow's business-day range.");
-  }
-  return { start, end };
+  return NextResponse.json({ ok: failed === 0, sent, skipped, failed, deadlineReached });
 }

@@ -145,10 +145,11 @@ test("cron route fails closed and uses only a configured rollout watermark", () 
   assert.doesNotMatch(routeSource, /err instanceof Error \? err\.message/);
 });
 
-test("a second daily cron stays inside documented Hobby plan limits", () => {
+test("bounded recovery runs frequently on the verified Pro plan", () => {
   assert.deepEqual(vercelConfig.crons, [
-    { path: "/api/cron/reminders", schedule: "0 21 * * *" },
-    { path: "/api/cron/integration-outbox", schedule: "5 21 * * *" },
+    { path: "/api/cron/reminders", schedule: "*/10 * * * *" },
+    { path: "/api/cron/integration-outbox", schedule: "*/5 * * * *" },
+    { path: "/api/cron/autoenhance-sync", schedule: "3-59/10 * * * *" },
   ]);
 });
 

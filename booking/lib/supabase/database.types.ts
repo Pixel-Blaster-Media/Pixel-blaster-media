@@ -1331,6 +1331,22 @@ export interface Database {
         Args: { p_organization_id: string; p_actor_id: string; p_request_id: string; p_booking_id: string | null; p_expected_version: number | null; p_input: Json };
         Returns: { booking_id: string; property_id: string; lifecycle_version: number; replayed: boolean };
       };
+      list_due_booking_reminders: {
+        Args: { p_limit?: number };
+        Returns: { organization_id: string; booking_id: string; schedule_version: number }[];
+      };
+      claim_booking_reminder: {
+        Args: { p_organization_id: string; p_booking_id: string; p_schedule_version: number; p_lease_token: string };
+        Returns: Json;
+      };
+      authorize_booking_reminder: {
+        Args: { p_organization_id: string; p_job_id: string; p_lease_token: string; p_request_hash: string };
+        Returns: boolean;
+      };
+      finish_booking_reminder: {
+        Args: { p_organization_id: string; p_job_id: string; p_lease_token: string; p_outcome: string; p_provider_id?: string | null };
+        Returns: boolean;
+      };
       attach_external_catalog_example: {
         Args: {
           p_organization_id: string;
