@@ -9,7 +9,7 @@ do $$ begin
 end $$;
 set local role authenticated;
 set local request.jwt.claim.sub='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
-do $$ declare result jsonb; cursor_id uuid; seen uuid[]:='{}'; batch jsonb; item jsonb; begin
+do $$ declare result jsonb; cursor_id uuid; cursor_value jsonb; seen uuid[]:='{}'; batch jsonb; item jsonb; begin
  result:=public.admin_booking_search('11111111-1111-4111-8111-111111111111','beyond-cap','all',null);
  if jsonb_array_length(result)<>1 then raise exception 'search beyond 500 failed: %',result; end if;
  result:=public.admin_booking_search('11111111-1111-4111-8111-111111111111','Real Estate Photography','all',null);
@@ -19,21 +19,23 @@ do $$ declare result jsonb; cursor_id uuid; seen uuid[]:='{}'; batch jsonb; item
  result:=public.admin_realtor_search('11111111-1111-4111-8111-111111111111','a@example.test',null);
  if (result->0->>'bookingCount')::int<>1200 or (result->0->>'deliveredBookingCount')::int<>600 or (result->0->>'activeBookingCount')::int<>600 then raise exception 'full history counts failed: %',result; end if;
  loop
- batch:=public.admin_booking_search('11111111-1111-4111-8111-111111111111','','all',cursor_id);
+ batch:=public.admin_booking_search('11111111-1111-4111-8111-111111111111','','all',cursor_value);
  exit when jsonb_array_length(batch)=0;
  for item in select value from jsonb_array_elements(batch) limit 50 loop
  cursor_id:=(item->>'id')::uuid;
+ cursor_value:=item->'_cursor';
  if cursor_id=any(seen) then raise exception 'pagination duplicate'; end if;
  seen:=array_append(seen,cursor_id);
  end loop;
  end loop;
  if cardinality(seen)<>1200 then raise exception 'pagination lost rows: %',cardinality(seen); end if;
- cursor_id:=null; seen:='{}';
+ cursor_value:=null; seen:='{}';
  loop
- batch:=public.admin_realtor_search('11111111-1111-4111-8111-111111111111','',cursor_id);
+ batch:=public.admin_realtor_search('11111111-1111-4111-8111-111111111111','',cursor_value);
  exit when jsonb_array_length(batch)=0;
  for item in select value from jsonb_array_elements(batch) limit 50 loop
  cursor_id:=(item->>'id')::uuid;
+ cursor_value:=item->'_cursor';
  if cursor_id=any(seen) then raise exception 'realtor pagination duplicate'; end if;
  seen:=array_append(seen,cursor_id);
  end loop;
@@ -50,7 +52,7 @@ end $$;
 set local request.jwt.claim.sub='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 do $$ begin
  begin perform public.admin_realtor_search('11111111-1111-4111-8111-111111111111','',null); raise exception 'realtor allowed admin search'; exception when insufficient_privilege then null; end;
- if has_function_privilege('anon','public.admin_booking_search(uuid,text,text,uuid)','execute') then raise exception 'anon execute granted'; end if;
+ if has_function_privilege('anon','public.admin_booking_search(uuid,text,text,jsonb)','execute') then raise exception 'anon execute granted'; end if;
 end $$;
 reset role;
 update profiles set archived_at=now() where id='cccccccc-cccc-4ccc-8ccc-cccccccccccc';

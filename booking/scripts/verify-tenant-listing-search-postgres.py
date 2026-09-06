@@ -86,6 +86,20 @@ with tempfile.TemporaryDirectory(prefix='pixel-tenant-') as tmp, tempfile.Tempor
             # Execute the old search-after-500 algorithm on the identical fixtures.
             threshold=threshold.replace("result:=public.admin_booking_search('11111111-1111-4111-8111-111111111111','beyond-cap','all',null);", "select coalesce(jsonb_agg(to_jsonb(b)), '[]'::jsonb) into result from (select * from bookings where organization_id='11111111-1111-4111-8111-111111111111' order by created_at desc limit 500) b where 'beyond-cap'=any(b.services);")
             sql(threshold)
+        # Check every existing display mapping in real PostgreSQL, not just SQL text.
+        import re
+        services=(ROOT/'lib/booking/services.ts').read_text()
+        labels=dict(re.findall(r'id: "([^"]+)",\s+label: "([^"]+)"',services[:services.index('export const PREFERRED_TIMES')]))
+        labels.update(re.findall(r'^  (\w+): "([^"]+)"',services,re.M))
+        labels['unknown_custom_service']='unknown_custom_service'
+        for slug,label in labels.items():
+            quote=lambda value: "'"+value.replace("'","''")+"'"
+            fixture=f"insert into bookings(id,organization_id,property_id,owner_id,status,services) select md5('label-'||g)::uuid,'{A}','{LOCAL}','{OWNER}','confirmed',array[{quote(slug)}] from generate_series(1,51) g;"
+            for query in [slug,label]:
+                check=f"do $$ begin if jsonb_array_length(public.admin_booking_search('{A}',{quote(query)},'all',null))<>51 then raise exception 'display-label threshold failed: {label}'; end if; end $$;"
+                sql('begin;'+fixture+f"set local role authenticated; set local request.jwt.claim.sub='{ADMIN}';"+check+'rollback;')
+        print('GREEN all legacy/catalog display-label and raw-slug thresholds passed',flush=True)
+        file(ROOT/'tests/postgres/tenant-search-order.sql')
         file(ROOT/'tests/postgres/tenant-search-thresholds.sql')
         print('GREEN search/pagination/full-history thresholds passed',flush=True)
     finally:

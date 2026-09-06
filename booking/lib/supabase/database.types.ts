@@ -1320,11 +1320,11 @@ export interface Database {
     Views: Record<string, never>;
     Functions: {
       admin_booking_search: {
-        Args: { p_organization_id: string; p_query?: string; p_filter?: string; p_after?: string | null };
+        Args: { p_organization_id: string; p_query?: string; p_filter?: string; p_after?: Json | null };
         Returns: Json;
       };
       admin_realtor_search: {
-        Args: { p_organization_id: string; p_query?: string; p_after?: string | null };
+        Args: { p_organization_id: string; p_query?: string; p_after?: Json | null };
         Returns: Json;
       };
       save_admin_booking_aggregate: {

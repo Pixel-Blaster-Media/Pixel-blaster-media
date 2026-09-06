@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { parseAdminSearchCursor, type RealtorSearchCursor } from "@/lib/booking/admin-search-cursor";
 import { BOOKING_STATUSES } from "@/lib/booking/booking-status";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getServerSupabase } from "@/lib/supabase/server";
@@ -16,7 +17,7 @@ export default async function RealtorsPage({ searchParams }: {
 }) {
   const params = await searchParams;
   const q = (params.q ?? "").trim();
-  const after = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.after ?? "") ? params.after! : null;
+  const after = parseAdminSearchCursor(params.after, "realtor");
   const admin = await requireAdmin();
   const supabase = await getServerSupabase();
   const args: Database["public"]["Functions"]["admin_realtor_search"]["Args"] = {
@@ -25,7 +26,7 @@ export default async function RealtorsPage({ searchParams }: {
   // SSR 0.5 loses RPC inference; args remain checked against Database.
   const { data, error } = await supabase.rpc("admin_realtor_search", args as never);
   if (error) return <p className="text-sm text-red-700">Could not load realtors: {error.message}</p>;
-  const rows = (data ?? []) as unknown as (Omit<RealtorProfileView, "ai_memory"> & { ai_memory: Json })[];
+  const rows = (data ?? []) as unknown as (Omit<RealtorProfileView, "ai_memory"> & { ai_memory: Json; _cursor: RealtorSearchCursor })[];
   const hasMore = rows.length > 50;
   const realtorViews = rows.slice(0, 50).map((profile) => ({
     ...profile,
@@ -35,7 +36,7 @@ export default async function RealtorsPage({ searchParams }: {
       status: BOOKING_STATUSES[profile.latestBooking.status as BookingStatus]?.label ?? profile.latestBooking.status,
     } : null,
   }));
-  const nextParams = new URLSearchParams({ q, after: realtorViews.at(-1)?.id ?? "" });
+  const nextParams = new URLSearchParams({ q, after: JSON.stringify(realtorViews.at(-1)?._cursor ?? null) });
   return (
     <div className="space-y-4">
       <AdminPageHeading
@@ -51,7 +52,7 @@ export default async function RealtorsPage({ searchParams }: {
         }
       />
       <nav aria-label="Realtor result pages" className="flex flex-wrap gap-4 text-sm text-realtor-primary">
-        <span>Up to 50 results per page · stable ID order · counts include full history</span>
+        <span>Up to 50 results per page · alphabetical order · counts include full history</span>
         {after ? <Link href={`/admin/realtors?${new URLSearchParams({ q })}`}>First page</Link> : null}
         {hasMore ? <Link href={`/admin/realtors?${nextParams}`}>Next page</Link> : null}
       </nav>

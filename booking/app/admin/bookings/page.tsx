@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { parseAdminSearchCursor, type BookingSearchCursor } from "@/lib/booking/admin-search-cursor";
 
 import { BUSINESS_TZ } from "@/lib/booking/availability";
 import { BOOKING_STATUSES, isCancellable } from "@/lib/booking/booking-status";
@@ -9,12 +10,13 @@ import type { BookingStatus, Database } from "@/lib/supabase/database.types";
 
 import AdminPageHeading from "../AdminPageHeading";
 import CancelBookingButton from "./CancelBookingButton";
-import { prioritizeActiveJobs } from "./active-jobs";
+
 
 export const metadata = { title: "Jobs Board" };
 export const dynamic = "force-dynamic";
 
 interface BookingRow {
+  _cursor: BookingSearchCursor;
   id: string;
   status: BookingStatus;
   scheduled_at: string | null;
@@ -46,7 +48,7 @@ export default async function BookingsPage({
 
   const admin = await requireAdmin();
   const supabase = await getServerSupabase();
-  const after = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.after ?? "") ? params.after! : null;
+  const after = parseAdminSearchCursor(params.after, "booking");
   const args: Database["public"]["Functions"]["admin_booking_search"]["Args"] = {
     p_organization_id: admin.organizationId, p_query: search, p_filter: filter, p_after: after,
   };
@@ -55,8 +57,8 @@ export default async function BookingsPage({
   const rows = (data ?? []) as unknown as BookingRow[];
   const hasMore = rows.length > 50;
   const window = rows.slice(0, 50);
-  const bookings = visibleBookingsForFilter(window, filter);
-  const nextParams = new URLSearchParams({ filter, q: search, after: window.at(-1)?.id ?? "" });
+  const bookings = window;
+  const nextParams = new URLSearchParams({ filter, q: search, after: JSON.stringify(window.at(-1)?._cursor ?? null) });
 
   if (error) {
     return (
@@ -135,7 +137,7 @@ export default async function BookingsPage({
       </section>
 
       <nav aria-label="Job result pages" className="flex gap-4 text-sm text-realtor-primary">
-        <span>Up to 50 results per page · stable ID order</span>
+        <span>Up to 50 results per page · priority and schedule order</span>
         {after ? <Link href={bookingHref(filter, search)}>First page</Link> : null}
         {hasMore ? <Link href={`/admin/bookings?${nextParams}`}>Next page</Link> : null}
       </nav>
@@ -217,13 +219,6 @@ function bookingHref(filter: (typeof FILTERS)[number]["id"], search: string) {
 }
 
 
-function visibleBookingsForFilter(
-  bookings: BookingRow[],
-  filter: (typeof FILTERS)[number]["id"],
-): BookingRow[] {
-  if (filter !== "active") return bookings;
-  return prioritizeActiveJobs(bookings);
-}
 
 function formatBookingDate(iso: string): string {
   return new Intl.DateTimeFormat("en-US", {
