@@ -225,6 +225,7 @@ const VALID_DELIVERABLE_TYPES: DeliverableType[] = [
 
 export interface ActionResult {
   ok: boolean;
+  lifecycleVersion?: number;
   error?: string;
   confirmationSent?: boolean;
   warning?: string;
@@ -354,6 +355,20 @@ export async function updateBookingDetails(
   const admin = await requireAdminForBooking(bookingId);
   if (!admin) return { ok: false, error: "Booking not found." };
 
+  const requestId = formData.get("admin_request_id");
+  const versionToken = formData.get("lifecycle_version");
+  if (
+    formData.getAll("admin_request_id").length !== 1 ||
+    typeof requestId !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId) ||
+    formData.getAll("lifecycle_version").length !== 1 ||
+    typeof versionToken !== "string" ||
+    !/^[1-9][0-9]*$/.test(versionToken) ||
+    !Number.isSafeInteger(Number(versionToken))
+  ) {
+    return { ok: false, error: "Booking edit identity is missing or invalid. Reload and try again." };
+  }
+
   const streetAddress = str(formData, "street_address");
   const city = str(formData, "city") || null;
   const province = str(formData, "province") || "ON";
@@ -452,9 +467,9 @@ export async function updateBookingDetails(
   const { data: saved, error: updateError } = await service.rpc("save_admin_booking_aggregate", {
     p_organization_id: admin.organizationId,
     p_actor_id: admin.userId,
-    p_request_id: str(formData, "admin_request_id") || crypto.randomUUID(),
+    p_request_id: requestId,
     p_booking_id: booking.id,
-    p_expected_version: Number(str(formData, "lifecycle_version")) || booking.lifecycle_version,
+    p_expected_version: Number(versionToken),
     p_input: {
       owner_id: booking.owner_id, street_address: streetAddress, city, province,
       contact_name: contactName, contact_phone: contactPhone, brokerage,
@@ -465,7 +480,7 @@ export async function updateBookingDetails(
     },
   });
   if (updateError || !saved) return { ok: false, error: "Booking changed or could not be saved. Reload and try again." };
-  if (saved.replayed) return { ok: true };
+  if (saved.replayed) return { ok: true, lifecycleVersion: saved.lifecycle_version };
   const lineItemWarning: string | undefined = undefined;
 
   const profileChanged =
@@ -555,6 +570,7 @@ export async function updateBookingDetails(
   return {
     ok: true,
     confirmationSent,
+    lifecycleVersion: saved.lifecycle_version,
     warning: combineActionWarnings(
       lineItemWarning,
       profileWarning,
@@ -582,6 +598,20 @@ export async function updateBookingServicesFromCalendar(
 ): Promise<ActionResult> {
   const admin = await requireAdminForBooking(bookingId);
   if (!admin) return { ok: false, error: "Booking not found." };
+
+  const requestId = formData.get("admin_request_id");
+  const versionToken = formData.get("lifecycle_version");
+  if (
+    formData.getAll("admin_request_id").length !== 1 ||
+    typeof requestId !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId) ||
+    formData.getAll("lifecycle_version").length !== 1 ||
+    typeof versionToken !== "string" ||
+    !/^[1-9][0-9]*$/.test(versionToken) ||
+    !Number.isSafeInteger(Number(versionToken))
+  ) {
+    return { ok: false, error: "Booking edit identity is missing or invalid. Reload and try again." };
+  }
 
   const shouldSendConfirmation = formData.get("send_confirmation") === "on";
   const selectedCatalogIds = formData
@@ -684,9 +714,9 @@ export async function updateBookingServicesFromCalendar(
 
   const { data: saved, error: updateError } = await service.rpc("save_admin_booking_aggregate", {
     p_organization_id: admin.organizationId, p_actor_id: admin.userId,
-    p_request_id: str(formData, "admin_request_id") || crypto.randomUUID(),
+    p_request_id: requestId,
     p_booking_id: booking.id,
-    p_expected_version: Number(str(formData, "lifecycle_version")) || booking.lifecycle_version,
+    p_expected_version: Number(versionToken),
     p_input: {
       owner_id: booking.owner_id, street_address: booking.properties.street_address,
       city: booking.properties.city, province: booking.properties.province,

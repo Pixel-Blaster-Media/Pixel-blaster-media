@@ -59,6 +59,7 @@ interface CalendarItem {
   syncWarning?: string;
   sourceColor?: string;
   bookingDetails?: {
+    lifecycleVersion: number;
     fullAddress: string;
     services: string[];
     addOns: string[];
@@ -2144,6 +2145,9 @@ function CalendarQuickView({
   const [sendUpdatedConfirmation, setSendUpdatedConfirmation] = useState(
     !details?.realtorNotificationsSuppressed,
   );
+  // Keep the version paired with the draft, even if fresh props arrive.
+  const servicesVersionRef = useRef(details?.lifecycleVersion);
+  const servicesRequestRef = useRef<string | null>(null);
   const [servicesError, setServicesError] = useState<string | null>(null);
   const [servicesPending, startServicesTransition] = useTransition();
   const [blockLabel, setBlockLabel] = useState(
@@ -2298,6 +2302,9 @@ function CalendarQuickView({
     startServicesTransition(async () => {
       try {
         const formData = new FormData();
+        servicesRequestRef.current ??= crypto.randomUUID();
+        formData.set("admin_request_id", servicesRequestRef.current);
+        formData.set("lifecycle_version", String(servicesVersionRef.current));
         for (const catalogItemId of selectedCatalogItemIds) {
           formData.append("catalog_item_id", catalogItemId);
         }

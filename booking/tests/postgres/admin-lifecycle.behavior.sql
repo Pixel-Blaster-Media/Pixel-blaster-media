@@ -18,8 +18,13 @@ begin perform public.test_admin_save('00000000-0000-4000-8000-000000000031',null
 r := public.test_admin_save('00000000-0000-4000-8000-000000000032',b,v,'{"client_notes":"Edited"}');
 assert (select count(*)=1 and min(unit_price_cents)=39000 and min(item_name)='Original' from public.booking_line_items where booking_id=b), 'retained historical snapshot';
 assert (r->>'lifecycle_version')::bigint>v, 'edit advances version';
+r := public.test_admin_save('00000000-0000-4000-8000-000000000032',b,v,'{"client_notes":"Edited"}');
+assert (r->>'replayed')::boolean, 'identical edit replays with original rendered version';
+begin perform public.test_admin_save('00000000-0000-4000-8000-000000000034',b,null); raise exception 'missing version accepted'; exception when sqlstate 'PB004' then null; end;
+begin perform public.test_admin_save(null,b,v); raise exception 'missing request accepted'; exception when sqlstate 'PB002' then null; end;
 begin perform public.test_admin_save('00000000-0000-4000-8000-000000000033',b,v); raise exception 'stale edit accepted'; exception when sqlstate 'PB004' then null; end;
 assert (select client_notes='Edited' from public.bookings where id=b), 'stale edit changes nothing';
+assert (select count(*)=1 and min(unit_price_cents)=39000 and min(item_name)='Original' from public.booking_line_items where booking_id=b), 'replay and rejected edits preserve snapshots';
 end $$;
 rollback;
 \echo 'PASS request replay, drift, retained history and edit CAS'
@@ -78,3 +83,19 @@ assert (select scheduled_ends_at-scheduled_at=interval '120 minutes' from public
 end $$;
 rollback;
 \echo 'PASS partial selection retains immutable history'
+
+begin;
+do $$ declare b uuid; v bigint; r jsonb; begin
+r:=public.test_admin_save('00000000-0000-4000-8000-000000000301');
+b:=(r->>'booking_id')::uuid; v:=(r->>'lifecycle_version')::bigint;
+insert into public.catalog_items(id,organization_id,slug,name,kind,duration_minutes,price_cents) values ('00000000-0000-4000-8000-000000000022','00000000-0000-4000-8000-000000000001','extra','Extra','addon',30,5000);
+perform public.test_admin_save('00000000-0000-4000-8000-000000000302',b,v,'{"catalog_item_ids":["00000000-0000-4000-8000-000000000021","00000000-0000-4000-8000-000000000022"]}');
+r:=public.test_admin_save('00000000-0000-4000-8000-000000000302',b,v,'{"catalog_item_ids":["00000000-0000-4000-8000-000000000021","00000000-0000-4000-8000-000000000022"]}');
+assert (r->>'replayed')::boolean, 'identical package edit replays';
+begin perform public.test_admin_save('00000000-0000-4000-8000-000000000303',b,v); raise exception 'stale package replacement accepted'; exception when sqlstate 'PB004' then null; end;
+assert (select count(*)=2 and sum(unit_price_cents)=44000 from public.booking_line_items where booking_id=b), 'stale package cannot delete winning lines';
+assert (select scheduled_ends_at-scheduled_at=interval '120 minutes' from public.bookings where id=b), 'winning duration preserved';
+assert (select count(*)=2 from public.admin_booking_requests where booking_id=b), 'only create and winning edit recorded';
+end $$;
+rollback;
+\echo 'PASS stale package replacement preserves winning snapshots and identical replay'

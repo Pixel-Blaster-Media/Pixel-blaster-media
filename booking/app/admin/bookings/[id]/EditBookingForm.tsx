@@ -46,6 +46,7 @@ export default function EditBookingForm({
 }) {
   const [isPending, startTransition] = useTransition();
   const requestRef = useRef<string | null>(null);
+  const versionRef = useRef(initial.lifecycleVersion);
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -75,7 +76,7 @@ export default function EditBookingForm({
     startTransition(async () => {
       requestRef.current ??= crypto.randomUUID();
       formData.set("admin_request_id", requestRef.current);
-      formData.set("lifecycle_version", String(initial.lifecycleVersion));
+      formData.set("lifecycle_version", String(versionRef.current));
       const result = await updateBookingDetails(bookingId, formData);
       if (!result.ok) {
         setError(result.error ?? "Could not save booking.");
@@ -87,6 +88,10 @@ export default function EditBookingForm({
           : "Booking saved.",
       );
       setWarning(result.warning ?? null);
+      // Only our acknowledged save may advance the draft's CAS base.
+      if (result.lifecycleVersion !== undefined) {
+        versionRef.current = result.lifecycleVersion;
+      }
       requestRef.current = null;
       router.refresh();
     });
