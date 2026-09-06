@@ -39,8 +39,10 @@ where b.quickbooks_invoice_status='creating' and b.quickbooks_invoice_id is null
 
 -- Rolling deployments still have legacy writers. Capture their committed start
 -- permanently: their later creating -> NULL clear must not permit a fresh POST.
--- New begin inserts its processing intent before updating the booking, so it
--- keeps its lease. Pending requests have not posted and become ambiguous here.
+-- Every creating acquisition must capture an absent/pending intent. Reject all
+-- non-replayable conflicts, including new unknown outcomes during rollback.
+-- New begin uses this same gate before promoting its captured intent, under
+-- the booking lock; no caller-controlled bypass or processing-lease exception.
 create function public.capture_legacy_quickbooks_invoice()
 returns trigger language plpgsql security definer set search_path=public,pg_temp as $$
 begin
@@ -51,6 +53,7 @@ begin
   on conflict(organization_id,booking_id) do update
    set state='unknown',error_code='legacy_creating',realm_id=excluded.realm_id,environment=excluded.environment,updated_at=now()
    where quickbooks_invoice_intents.state='pending';
+  if not found then raise exception 'invoice mutation requires reconciliation'; end if;
  end if;
  return new;
 end $$;
@@ -85,11 +88,16 @@ begin
  if exists(select 1 from jsonb_array_elements(p_snapshot->'lineItems') l where coalesce(jsonb_typeof(l)='object' and jsonb_typeof(l->'description')='string' and length(btrim(l->>'description')) between 1 and 1000 and jsonb_typeof(l->'amountCents')='number' and (l->>'amountCents') ~ '^[0-9]{1,10}$',false) is not true) then raise exception 'invoice line invalid'; end if;
  if exists(select 1 from jsonb_array_elements(p_snapshot->'lineItems') l where (l->>'amountCents')::numeric not between 1 and 2147483647) then raise exception 'invoice amount invalid'; end if;
  if p_realm_id is null or p_realm_id !~ '^[0-9]{1,64}$' then raise exception 'invoice realm invalid'; end if;
- insert into public.quickbooks_invoice_intents(organization_id,booking_id,realm_id,environment,state,snapshot,lease_token,lease_expires_at)
- values(p_organization_id,p_booking_id,p_realm_id,p_environment,'processing',p_snapshot,gen_random_uuid(),clock_timestamp()+interval '2 minutes')
- on conflict(organization_id,booking_id) do update set realm_id=excluded.realm_id,environment=excluded.environment,state=excluded.state,snapshot=excluded.snapshot,lease_token=excluded.lease_token,lease_expires_at=excluded.lease_expires_at,updated_at=now()
- where quickbooks_invoice_intents.state='pending' returning * into i;
+ -- Eligibility was checked under the booking lock above. Acquire through the
+ -- permanent legacy gate first, then promote only the capture made by this
+ -- statement. Both writes commit atomically; old writers never gain a lease.
  update public.bookings set quickbooks_invoice_status='creating' where id=b.id and organization_id=p_organization_id;
+ update public.quickbooks_invoice_intents
+ set realm_id=p_realm_id,environment=p_environment,state='processing',snapshot=p_snapshot,
+     lease_token=gen_random_uuid(),lease_expires_at=clock_timestamp()+interval '2 minutes',error_code=null,updated_at=now()
+ where organization_id=p_organization_id and booking_id=p_booking_id and state='unknown' and error_code='legacy_creating'
+ returning * into i;
+ if not found then raise exception 'invoice acquisition capture missing'; end if;
  return to_jsonb(i);
 end $$;
 revoke all on function public.begin_quickbooks_invoice(uuid,uuid,text,text,jsonb) from public,anon,authenticated;
