@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { createPublicBooking, type BookResult } from "../actions";
@@ -46,8 +46,30 @@ export default function ConfirmForm({
   const [phone, setPhone] = useState(profile?.phone ?? "");
   const [brokerage, setBrokerage] = useState(profile?.brokerage ?? "");
 
+  // Controlled values survive React's post-action form reset, but never leave
+  // browser memory for persistence (especially passwords and private notes).
+  const [password, setPassword] = useState("");
+  const [notes, setNotes] = useState("");
+  const [code, setCode] = useState("");
+  const summary = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (formState?.errors || formState?.verificationRequired) summary.current?.focus();
+  }, [formState]);
+
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} noValidate className="space-y-5">
+      {formState?.errors || formState?.verificationRequired ? (
+        <div ref={summary} role="alert" tabIndex={-1} className="rounded-xl border border-realtor-primary/20 p-4 text-sm">
+          {formState.verificationRequired ? (
+            <p>Check your email for an 8-digit code. No booking has been made yet. Your details stay on this page. Codes expire after 10 minutes; clear the code and submit again after that to request another.</p>
+          ) : <p>Please correct the following before confirming:</p>}
+          {formState.errors ? <ul className="mt-2 list-disc pl-5">
+            {Object.entries(formState.errors).map(([name, message]) => (
+              <li key={name}>{message} {name !== "_form" ? <a className="underline" href={`#${name}`}>Review {name.replaceAll("_", " ")}</a> : null}</li>
+            ))}
+          </ul> : null}
+        </div>
+      ) : null}
       {/* Carry wizard state into the action */}
       <input type="hidden" name="public_request_id" value={requestId} />
       {state.organizationSlug ? (
@@ -148,6 +170,11 @@ export default function ConfirmForm({
                 </span>
                 <input
                   name="password"
+                  id="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.currentTarget.value)}
+                  aria-invalid={!!formState?.errors?.password}
+                  aria-describedby={formState?.errors?.password ? "password-error" : undefined}
                   type="password"
                   required
                   autoComplete="current-password"
@@ -160,11 +187,11 @@ export default function ConfirmForm({
                   }
                 />
                 <span className="mt-1 block text-[11px] text-realtor-muted">
-                  At least 8 characters. If the email is new, this creates your
-                  portal. If it already exists, this signs you in securely.
+                  At least 8 characters. New emails require an inbox code before
+                  we create your portal or booking. Existing accounts sign in securely.
                 </span>
                 {formState?.errors?.password ? (
-                  <span className="mt-1 block text-xs text-red-700">
+                  <span id="password-error" className="mt-1 block text-xs text-red-700">
                     {formState.errors.password}
                   </span>
                 ) : null}
@@ -179,23 +206,27 @@ export default function ConfirmForm({
       )}
 
       {/* Optional notes — for either path. */}
+      {formState?.verificationRequired ? (
+        <Field label="Email verification code" name="verification_code"
+          autoComplete="one-time-code" value={code}
+          onChange={(e) => setCode(e.currentTarget.value)}
+          error={formState.errors?.verification_code} />
+      ) : null}
       <label className="realtor-elevated-panel block rounded-3xl p-4 md:p-5">
         <span className="text-xs font-medium uppercase tracking-wider text-realtor-muted">
           Anything we should know? (optional)
         </span>
         <textarea
           name="notes"
+          value={notes}
+          onChange={(e) => setNotes(e.currentTarget.value)}
           rows={3}
           placeholder="Pets, gate code, lockbox, etc."
           className="realtor-field mt-1 w-full rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-realtor-primary/35"
         />
       </label>
 
-      {formState?.errors?._form ? (
-        <p role="alert" className="text-sm font-medium text-red-700">
-          {formState.errors._form}
-        </p>
-      ) : null}
+
 
       <div className="flex flex-wrap items-center justify-start gap-3 border-t border-realtor-primary/10 pt-5">
         <Link
@@ -271,6 +302,9 @@ function Field({
       </span>
       <input
         name={name}
+        id={name}
+        aria-invalid={!!error}
+        aria-describedby={error ? `${name}-error` : undefined}
         type={type}
         required={required}
         placeholder={placeholder}
@@ -283,7 +317,7 @@ function Field({
         }
       />
       {error ? (
-        <span className="mt-1 block text-xs text-red-700">{error}</span>
+        <span id={`${name}-error`} className="mt-1 block text-xs text-red-700">{error}</span>
       ) : null}
     </label>
   );
