@@ -1,4 +1,5 @@
 import "server-only";
+import { boundedMediaResponse, mediaSignal, readProviderBytes } from "@/lib/integrations/iguide/bounded-media";
 
 import { getCredential } from "@/lib/integrations/credentials";
 import { requirePhotoEditingProviderEnabled } from "@/lib/integrations/provider-enablement";
@@ -134,8 +135,10 @@ async function request<T>(
     url.searchParams.set(key, String(value));
   }
 
+  const signal = mediaSignal(30_000);
   const res = await fetch(url.toString(), {
     method,
+    redirect: "error",
     headers: {
       Accept: "application/json",
       ...(init.body ? { "Content-Type": "application/json" } : {}),
@@ -146,7 +149,7 @@ async function request<T>(
     },
     body: init.body ? JSON.stringify(init.body) : undefined,
     cache: "no-store",
-    signal: AbortSignal.timeout(30_000),
+    signal,
   });
 
   if (!res.ok) {
@@ -159,7 +162,7 @@ async function request<T>(
   }
 
   if (res.status === 204) return {} as T;
-  const text = await res.text();
+  const text = new TextDecoder().decode(await readProviderBytes(res, { maxBytes: 1024 * 1024, signal }));
   if (!text.trim()) return {} as T;
   try {
     return JSON.parse(text) as T;
@@ -375,13 +378,15 @@ export async function fetchEnhancedImage(
   }
   if (options.maxWidth) url.searchParams.set("max_width", String(options.maxWidth));
 
+  const signal = mediaSignal(20_000);
   const res = await fetch(url.toString(), {
+    redirect: "error",
     headers: {
       "x-api-key": await apiKey(options.organizationId),
       ...(options.devMode ? { "x-dev-mode": "true" } : {}),
     },
     cache: "no-store",
-    signal: AbortSignal.timeout(60_000),
+    signal,
   });
   if (!res.ok) {
     await res.body?.cancel();
@@ -391,5 +396,6 @@ export async function fetchEnhancedImage(
       "",
     );
   }
-  return res;
+  return boundedMediaResponse(res, { maxBytes: 20 * 1024 * 1024, signal,
+    allowedTypes: [`image/${options.format ?? "jpeg"}`] });
 }

@@ -1,4 +1,6 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
+import { withMediaDeadline, mediaSignal } from "@/lib/integrations/iguide/bounded-media";
 
 import type { AdminContext } from "@/lib/auth/require-admin";
 import {
@@ -17,7 +19,7 @@ import {
   type AutoenhanceRestageOptions,
   type AutoenhanceWindowPullType,
 } from "@/lib/integrations/autoenhance/client";
-import { uploadAssetToIGuide } from "@/lib/integrations/iguide/portal-client";
+import { uploadAssetToIGuide, getUploadProcessingStatus } from "@/lib/integrations/iguide/portal-client";
 import {
   isPhotoEditingProviderEnabled,
   requirePhotoEditingProviderEnabled,
@@ -411,7 +413,11 @@ export async function startBookingAutoenhanceProcessing({
   });
 }
 
-export async function refreshBookingAutoenhanceBatch({
+export async function refreshBookingAutoenhanceBatch(input: Parameters<typeof refreshBookingAutoenhanceBatchWithinDeadline>[0]) {
+  return withMediaDeadline(120_000, () => refreshBookingAutoenhanceBatchWithinDeadline(input));
+}
+
+async function refreshBookingAutoenhanceBatchWithinDeadline({
   admin,
   bookingId,
   batchId,
@@ -622,7 +628,7 @@ export async function listBookingAutoenhanceBatches({
 }
 
 export async function syncPendingAutoenhanceBatches({
-  limit = 10,
+  limit = 1,
 }: {
   limit?: number;
 } = {}): Promise<{
@@ -638,14 +644,16 @@ export async function syncPendingAutoenhanceBatches({
     error: string | null;
   }>;
 }> {
+  if (!Number.isSafeInteger(limit) || limit <= 0) throw new Error("Invalid recovery limit.");
+  const batchLimit = Math.min(limit, 1);
   const service = getServiceSupabase();
   const { data: pending, error } = await service
     .from("autoenhance_batches")
-    .select("id, organization_id")
-    .in("status", ["processing", "waiting_for_iguide"])
+    .select("id, organization_id, updated_at")
+    .in("status", ["processing", "waiting_for_iguide", "attention"])
     .order("updated_at", { ascending: true })
-    .limit(limit)
-    .returns<PendingAutoenhanceBatchRow[]>();
+    .limit(batchLimit)
+    .returns<Array<PendingAutoenhanceBatchRow & { updated_at: string }>>();
 
   if (error) {
     throw new Error(error.message);
@@ -659,7 +667,17 @@ export async function syncPendingAutoenhanceBatches({
     error: string | null;
   }> = [];
 
+  let scanned = 0;
   for (const batch of pending ?? []) {
+    if (scanned++ >= batchLimit) break;
+    // Rotate even disabled or failed work so the oldest tenant cannot starve the queue.
+    // CAS makes overlapping selectors yield rather than both dispatch this snapshot.
+    const rotated = await service.from("autoenhance_batches")
+      .update({ id: batch.id }) // Existing set_updated_at trigger advances the timestamp.
+      .eq("id", batch.id).eq("organization_id", batch.organization_id)
+      .eq("updated_at", batch.updated_at).select("id").maybeSingle<{ id: string }>();
+    if (rotated.error) throw new Error("Could not advance media recovery selection.");
+    if (!rotated.data) continue;
     if (!(await isPhotoEditingProviderEnabled("autoenhance", batch.organization_id))) {
       continue;
     }
@@ -733,9 +751,14 @@ async function pushFinishedImagesToIGuide({
   );
   let lastError: string | null = null;
 
-  for (const image of images) {
+  let attempted = 0;
+  for (const image of images.slice(0, 100)) {
+    if (attempted >= 1) break;
+    try { mediaSignal(1); } catch { lastError = "Media recovery deadline reached."; break; }
     if (uploaded.has(image.imageId)) continue;
     const filename = safePhotoFilename(image.imageName, image.imageId);
+    let claim: { token: string; attempt: number } | false = false;
+    let mutationStarted = false;
     try {
       const claimed = await claimIGuideUpload({
         admin,
@@ -745,6 +768,8 @@ async function pushFinishedImagesToIGuide({
         filename,
       });
       if (!claimed) continue;
+      claim = claimed;
+      attempted++;
 
       const enhanced = await fetchEnhancedForIGuide(
         image.imageId,
@@ -759,15 +784,26 @@ async function pushFinishedImagesToIGuide({
           contentType: enhanced.headers.get("content-type") ?? "image/jpeg",
           appendToViews: "default",
           waitForProcess: true,
+          checkpoint: async (receipt) => {
+            mutationStarted = true;
+            await upsertIGuideUpload({ admin, batch, iguidePortalId,
+              imageId: image.imageId, filename, status: "pending", claimToken: claimed.token,
+              assetName: receipt.assetName, jobId: receipt.jid,
+              error: "iGUIDE reconciliation required; do not upload again.",
+            });
+          },
         },
         { organizationId: admin.organizationId },
       );
 
-      if (!result.ok || !result.data) {
+      if (!result.ok || !result.data || result.outcome !== "completed") {
         failed.add(image.imageId);
         lastError = result.error ?? "iGUIDE upload failed.";
         await upsertIGuideUpload({
-          status: "failed",
+          status: "pending",
+          claimToken: claimed.token,
+          assetName: result.data?.assetName,
+          jobId: result.data?.jid,
           admin,
           batch,
           iguidePortalId,
@@ -778,10 +814,9 @@ async function pushFinishedImagesToIGuide({
         continue;
       }
 
-      uploaded.add(image.imageId);
-      failed.delete(image.imageId);
       await upsertIGuideUpload({
         status: "uploaded",
+        claimToken: claimed.token,
         admin,
         batch,
         iguidePortalId,
@@ -792,11 +827,16 @@ async function pushFinishedImagesToIGuide({
         processComplete: result.data.processComplete,
         warning: result.data.processWarning ?? undefined,
       });
-    } catch (err) {
+      uploaded.add(image.imageId);
+      failed.delete(image.imageId);
+    } catch {
       failed.add(image.imageId);
-      lastError = errorMessage(err);
+      lastError = mutationStarted ? "iGUIDE reconciliation required; do not upload again." : "Media handoff failed before iGUIDE mutation.";
+      if (!claim) continue;
       await upsertIGuideUpload({
-        status: "failed",
+        status: mutationStarted ? "pending" : "failed",
+        claimToken: claim.token,
+        warning: mutationStarted ? undefined : `media:retryable:${claim.attempt}`,
         admin,
         batch,
         iguidePortalId,
@@ -832,7 +872,8 @@ async function pushFinishedImagesToIGuide({
 }
 
 async function upsertIGuideUpload(input: {
-  status: "uploaded" | "failed";
+  status: "uploaded" | "failed" | "pending";
+  claimToken: string;
   admin: AdminContext;
   batch: AutoenhanceBatchRow;
   iguidePortalId: string;
@@ -845,7 +886,7 @@ async function upsertIGuideUpload(input: {
   error?: string;
 }) {
   const service = getServiceSupabase();
-  const { error } = await service.from("autoenhance_iguide_uploads").upsert(
+  const { data, error } = await service.from("autoenhance_iguide_uploads").update(
     {
       organization_id: input.admin.organizationId,
       batch_id: input.batch.id,
@@ -854,18 +895,17 @@ async function upsertIGuideUpload(input: {
       autoenhance_image_id: input.imageId,
       filename: input.filename,
       status: input.status,
-      iguide_asset_name: input.assetName ?? null,
-      iguide_job_id: input.jobId ?? null,
-      process_complete: input.processComplete ?? null,
-      warning: input.warning || null,
+      ...(input.assetName ? { iguide_asset_name: input.assetName } : {}),
+      ...(input.jobId ? { iguide_job_id: input.jobId } : {}),
+      ...(input.processComplete !== undefined ? { process_complete: input.processComplete } : {}),
+      warning: input.warning ?? input.claimToken,
       error: input.error ?? null,
     },
-    {
-      onConflict:
-        "organization_id,batch_id,iguide_portal_id,autoenhance_image_id",
-    },
-  );
-  if (error) throw new Error(`Could not save iGUIDE upload state: ${error.message}`);
+  ).eq("organization_id", input.admin.organizationId)
+    .eq("batch_id", input.batch.id).eq("iguide_portal_id", input.iguidePortalId)
+    .eq("autoenhance_image_id", input.imageId).eq("status", "pending")
+    .eq("warning", input.claimToken).select("id").maybeSingle<{ id: string }>();
+  if (error || !data) throw new Error("Could not save fenced iGUIDE upload state.");
 }
 
 async function claimIGuideUpload(input: {
@@ -874,8 +914,9 @@ async function claimIGuideUpload(input: {
   iguidePortalId: string;
   imageId: string;
   filename: string;
-}): Promise<boolean> {
+}): Promise<false | { token: string; attempt: number }> {
   const service = getServiceSupabase();
+  const token = `media:claim:${randomUUID()}`;
   const inserted = await service
     .from("autoenhance_iguide_uploads")
     .insert({
@@ -886,10 +927,11 @@ async function claimIGuideUpload(input: {
       autoenhance_image_id: input.imageId,
       filename: input.filename,
       status: "pending",
+      warning: token,
     })
     .select("id")
     .maybeSingle<{ id: string }>();
-  if (!inserted.error && inserted.data) return true;
+  if (!inserted.error && inserted.data) return { token, attempt: 1 };
   if (inserted.error?.code !== "23505") {
     throw new Error(
       `Could not claim iGUIDE upload: ${inserted.error?.message ?? "Unknown database error"}`,
@@ -898,43 +940,49 @@ async function claimIGuideUpload(input: {
 
   const { data: existing, error: readError } = await service
     .from("autoenhance_iguide_uploads")
-    .select("id, status, updated_at")
+    .select("id, status, updated_at, warning, iguide_asset_name, iguide_job_id")
     .eq("organization_id", input.admin.organizationId)
     .eq("batch_id", input.batch.id)
     .eq("iguide_portal_id", input.iguidePortalId)
     .eq("autoenhance_image_id", input.imageId)
-    .maybeSingle<{ id: string; status: string; updated_at: string }>();
+    .maybeSingle<{ id: string; status: string; updated_at: string; warning: string | null; iguide_asset_name: string | null; iguide_job_id: string | null }>();
   if (readError || !existing) {
     throw new Error(
       `Could not inspect iGUIDE upload claim: ${readError?.message ?? "Claim disappeared"}`,
     );
   }
-  if (existing.status === "uploaded") return false;
+  if (existing.status === "pending" && existing.iguide_asset_name && existing.iguide_job_id && existing.warning?.startsWith("media:claim:")) {
+    const checked = await getUploadProcessingStatus(input.iguidePortalId, existing.iguide_asset_name, { organizationId: input.admin.organizationId });
+    if (checked.ok && checked.status === 204) {
+      await upsertIGuideUpload({ ...input, claimToken: existing.warning, status: "uploaded", processComplete: true });
+    }
+    return false;
+  }
+  if (existing.status !== "failed" || !/^media:retryable:[12]$/.test(existing.warning ?? "")) return false;
 
   const updatedAt = Date.parse(existing.updated_at);
-  const claimIsFresh =
-    existing.status === "pending" &&
-    Number.isFinite(updatedAt) &&
-    Date.now() - updatedAt < 15 * 60 * 1000;
-  if (claimIsFresh) return false;
+  if (!Number.isFinite(updatedAt) || Date.now() - updatedAt < 15 * 60 * 1000) return false;
 
   const { data: reclaimed, error: reclaimError } = await service
     .from("autoenhance_iguide_uploads")
     .update({
       filename: input.filename,
       status: "pending",
-      warning: null,
+      warning: token,
       error: null,
       process_complete: null,
     })
     .eq("id", existing.id)
+    .eq("organization_id", input.admin.organizationId)
+    .eq("status", "failed")
+    .eq("warning", existing.warning!)
     .eq("updated_at", existing.updated_at)
     .select("id")
     .maybeSingle<{ id: string }>();
   if (reclaimError) {
     throw new Error(`Could not reclaim iGUIDE upload: ${reclaimError.message}`);
   }
-  return Boolean(reclaimed);
+  return reclaimed ? { token, attempt: Number(existing.warning!.split(":")[2]) + 1 } : false;
 }
 
 async function fetchEnhancedForIGuide(

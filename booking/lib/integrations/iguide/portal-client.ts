@@ -1,4 +1,5 @@
 import "server-only";
+import { readProviderBytes, mediaSignal } from "./bounded-media";
 
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
@@ -92,6 +93,7 @@ async function portalFetch<T>(
   }
 
   let res: Response;
+  const signal = init.signal ?? AbortSignal.timeout(PORTAL_FETCH_TIMEOUT_MS);
   try {
     res = await fetch(url, {
       ...init,
@@ -104,7 +106,7 @@ async function portalFetch<T>(
       },
       cache: "no-store",
       redirect: init.redirect ?? "manual",
-      signal: init.signal ?? AbortSignal.timeout(PORTAL_FETCH_TIMEOUT_MS),
+      signal,
     });
   } catch (err) {
     return {
@@ -128,7 +130,12 @@ async function portalFetch<T>(
     return { ok: true, status: res.status, data: undefined };
   }
 
-  const text = await res.text();
+  let text: string;
+  try {
+    text = new TextDecoder().decode(await readProviderBytes(res, { maxBytes: 1024 * 1024, signal }));
+  } catch {
+    return { ok: false, status: 502, error: "iGUIDE response unavailable or exceeds limits." };
+  }
   let parsed: unknown = undefined;
   if (text) {
     try {
@@ -309,6 +316,25 @@ export interface IGuideUploadAssetInput {
   contentType?: string;
   appendToViews?: "default" | "all";
   waitForProcess?: boolean;
+  signal?: AbortSignal;
+  /** Must durably fence each checkpoint before the next external effect. */
+  checkpoint?: (receipt: IGuideUploadCheckpoint) => Promise<void>;
+}
+
+export interface IGuideUploadCheckpoint {
+  phase: "allocating" | "accepted" | "processing";
+  assetName?: string;
+  jid?: string;
+}
+
+/** Read-only reconciliation of the exact accepted asset; never requests a permit. */
+export async function getUploadProcessingStatus(iguideId: string, assetName: string, scope: PortalScope): Promise<PortalResult<unknown>> {
+  return portalFetch(`/iguides/${encodeURIComponent(iguideId)}/assets/${encodeURIComponent(assetName)}/waitForProcess`,
+    { signal: mediaSignal(15_000) }, scope);
+}
+
+export interface IGuideUploadResult extends PortalResult<IGuideUploadAssetResponse> {
+  outcome: "completed" | "processing" | "rejected" | "reconciliation_required";
 }
 
 export interface IGuideUploadAssetResponse {
@@ -419,16 +445,19 @@ export async function getAssetUrls(
 export async function uploadAssetToIGuide(
   input: IGuideUploadAssetInput,
   scope: PortalScope,
-): Promise<PortalResult<IGuideUploadAssetResponse>> {
+): Promise<IGuideUploadResult> {
+  const signal = input.signal ?? mediaSignal(60_000);
   const bytes = new Uint8Array(input.bytes);
   if (!bytes.byteLength) {
-    return { ok: false, status: 400, error: "Asset file is empty." };
+    return { ok: false, outcome: "rejected", status: 400, error: "Asset file is empty." };
   }
+  await input.checkpoint?.({ phase: "allocating" });
 
   const permit = await portalFetch<IGuideUploadPermitResponse>(
     `/iguides/${encodeURIComponent(input.iguideId)}/assets`,
     {
       method: "POST",
+      signal,
       body: JSON.stringify({
         filename: input.filename,
         filesize: bytes.byteLength,
@@ -439,15 +468,29 @@ export async function uploadAssetToIGuide(
   if (!permit.ok || !permit.data) {
     return {
       ok: false,
+      outcome: permit.status >= 400 && permit.status < 500 && ![408, 429].includes(permit.status) ? "rejected" : "reconciliation_required",
       status: permit.status,
-      error: permit.error ?? "iGUIDE did not return an upload permit.",
+      error: "iGUIDE upload permit was not confirmed.",
     };
   }
 
-  const uploadPermit = permit.data.uploadPermit;
+  if (!permit.data.name || typeof permit.data.name !== "string" || permit.data.name.length > 512) {
+    return { ok: false, outcome: "reconciliation_required", status: 502, error: "Invalid iGUIDE permit receipt." };
+  }
+  const receipt: IGuideUploadAssetResponse = { assetName: permit.data.name };
+  const unknown = (status = 0): IGuideUploadResult => ({
+    ok: false, outcome: "reconciliation_required", status, data: receipt,
+    error: "iGUIDE outcome requires reconciliation; do not upload again.",
+  });
   try {
-    const s3 = new S3Client({
+    await input.checkpoint?.({ phase: "accepted", assetName: receipt.assetName });
+  } catch { return unknown(); }
+  const uploadPermit = permit.data.uploadPermit;
+  let s3: S3Client | undefined;
+  try {
+    s3 = new S3Client({
       region: uploadPermit.region,
+      maxAttempts: 1,
       credentials: {
         accessKeyId: uploadPermit.accessKeyId,
         secretAccessKey: uploadPermit.secretAccessKey,
@@ -462,17 +505,10 @@ export async function uploadAssetToIGuide(
         ACL: "bucket-owner-full-control",
         ContentType: input.contentType ?? "application/octet-stream",
       }),
+      { abortSignal: signal },
     );
-  } catch (err) {
-    return {
-      ok: false,
-      status: 0,
-      error:
-        err instanceof Error
-          ? `Could not upload asset to iGUIDE storage: ${err.message}`
-          : "Could not upload asset to iGUIDE storage.",
-    };
-  }
+  } catch { return unknown(); }
+  finally { s3?.destroy(); }
 
   const query = new URLSearchParams({
     uploadToken: permit.data.uploadToken,
@@ -484,16 +520,16 @@ export async function uploadAssetToIGuide(
     `/iguides/${encodeURIComponent(input.iguideId)}/assets/${encodeURIComponent(
       permit.data.name,
     )}/process?${query.toString()}`,
-    { method: "POST" },
+    { method: "POST", signal },
     scope,
   );
   if (!processed.ok) {
-    return {
-      ok: false,
-      status: processed.status,
-      error: processed.error ?? "iGUIDE could not process the uploaded asset.",
-    };
+    return unknown(processed.status);
   }
+  receipt.jid = typeof processed.data?.jid === "string" ? processed.data.jid : undefined;
+  try {
+    await input.checkpoint?.({ phase: "processing", assetName: receipt.assetName, jid: receipt.jid });
+  } catch { return unknown(); }
 
   let processComplete: boolean | undefined;
   let processWarning: string | undefined;
@@ -502,28 +538,23 @@ export async function uploadAssetToIGuide(
       `/iguides/${encodeURIComponent(input.iguideId)}/assets/${encodeURIComponent(
         permit.data.name,
       )}/waitForProcess`,
-      {},
+      { signal },
       scope,
     );
-    if (wait.ok) {
+    if (wait.ok && wait.status === 204) {
       processComplete = true;
     } else if (wait.status === 581) {
       processComplete = false;
       processWarning =
         "iGUIDE accepted the upload, but the background processor is still working. Check the iGUIDE gallery again in a minute.";
     } else {
-      return {
-        ok: false,
-        status: wait.status,
-        error:
-          wait.error ??
-          "iGUIDE accepted the upload, but processing status could not be confirmed.",
-      };
+      return unknown(wait.status);
     }
   }
 
   return {
     ok: true,
+    outcome: processComplete ? "completed" : "processing",
     status: processed.status,
     data: {
       assetName: permit.data.name,
