@@ -34,6 +34,7 @@ const CALENDAR_DAY_START_HOUR = 7;
 
 interface BookingRow {
   id: string;
+  lifecycle_version: number;
   status: BookingStatus;
   scheduled_at: string;
   scheduled_ends_at: string | null;
@@ -92,6 +93,7 @@ interface CalendarItem {
   sourceName?: string;
   sourceColor?: string;
   bookingDetails?: {
+    lifecycleVersion: number;
     fullAddress: string;
     services: string[];
     addOns: string[];
@@ -166,7 +168,7 @@ export default async function AdminCalendarPage({
     supabase
       .from("bookings")
       .select(
-        "id, status, scheduled_at, scheduled_ends_at, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, properties(street_address, city, province, postal_code, notes), profiles(full_name, email, phone, brokerage, internal_notes)",
+        "id, lifecycle_version, status, scheduled_at, scheduled_ends_at, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, properties(street_address, city, province, postal_code, notes), profiles(full_name, email, phone, brokerage, internal_notes)",
       )
       .eq("organization_id", admin.organizationId)
       .not("scheduled_at", "is", null)
@@ -321,6 +323,7 @@ export default async function AdminCalendarPage({
         ? "Google Calendar out of sync"
         : undefined,
       bookingDetails: {
+        lifecycleVersion: booking.lifecycle_version,
         fullAddress,
         services,
         addOns,

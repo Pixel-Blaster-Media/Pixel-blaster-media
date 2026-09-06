@@ -45,5 +45,10 @@ git -C "$REPO_ROOT" diff --cached --quiet || fail "staged changes are present."
 [[ -z "$(git -C "$REPO_ROOT" status --porcelain --untracked-files=normal)" ]] || fail "untracked files are present."
 [[ "$(git -C "$REPO_ROOT" rev-parse HEAD)" == "$(git -C "$REPO_ROOT" rev-parse origin/main)" ]] || fail "HEAD is not the current origin/main commit."
 
+candidate_sha="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+node "$REPO_ROOT/booking/scripts/verify-production-evidence.mjs" || fail "successful exact-SHA CI and approved schema compatibility evidence are required."
+[[ "$(git -C "$REPO_ROOT" rev-parse HEAD)" == "$candidate_sha" ]] || fail "candidate changed during verification."
+[[ -z "$(git -C "$REPO_ROOT" status --porcelain --untracked-files=normal)" ]] || fail "working tree changed during verification."
+
 cd "$REPO_ROOT"
 exec vercel --prod --yes

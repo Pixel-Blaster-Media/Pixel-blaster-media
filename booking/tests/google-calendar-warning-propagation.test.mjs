@@ -66,7 +66,7 @@ test("admin detail saves and reschedules render Calendar warnings", () => {
 test("calendar create, drag, and inbox acceptance preserve warnings across redirects", () => {
   assert.match(calendarActions, /warning:\s*combineWarnings\(/);
   assert.match(calendarActions, /Google Calendar did not sync/);
-  assert.match(calendarActions, /confirmation email was not sent/);
+  assert.match(calendarActions, /confirmation is pending or needs integration review/);
   assert.match(calendarActions, /return \{ ok: true, warning, bookingId: booking\.id \}/);
   assert.match(calendarView, /result\.warningCode[\s\S]*follow_up=\$\{warningCode\}/);
   assert.match(
@@ -116,13 +116,13 @@ test("assistant creation and cancellation preserve Calendar warnings without fal
   assert.doesNotMatch(manageClient, /frees up the slot/);
 });
 
-test("admin creation checks email delivery and aggregates independent warnings", () => {
+test("admin creation checks durable dispatch outcomes and aggregates independent warnings", () => {
   assert.match(
     calendarActions,
-    /const confirmationSent = await sendConfirmationBestEffort/,
+    /dispatchBookingIntegrationJobs\([\s\S]*jobType === "email.booking.confirmation"[\s\S]*confirmationWarning/,
   );
-  assert.match(calendarActions, /const result = await sendEmail\(/);
-  assert.match(calendarActions, /return result\.ok && !result\.skipped/);
+  assert.doesNotMatch(calendarActions, /await sendConfirmationBestEffort\(/);
+  assert.match(calendarActions, /warning: combineWarnings\([\s\S]*confirmationWarning/);
   assert.doesNotMatch(
     calendarActions,
     /confirmation email failed",\s*err/,

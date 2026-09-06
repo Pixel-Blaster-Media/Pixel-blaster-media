@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { boundedMediaResponse } from "@/lib/integrations/iguide/bounded-media";
 
 import { requireUser } from "@/lib/auth/require-user";
 import {
@@ -104,11 +105,16 @@ export async function GET(req: NextRequest) {
 
 async function fetchIGuideDownload(url: URL): Promise<Response> {
   try {
-    return await fetch(url, {
+    const signal = AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS);
+    const response = await fetch(url, {
       headers: { Accept: "*/*" },
       cache: "no-store",
-      signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+      redirect: "manual",
+      signal,
     });
+    if (!response.ok) { void response.body?.cancel().catch(() => {}); return new Response(null, { status: response.status }); }
+    return await boundedMediaResponse(response, { signal, maxBytes: 64 * 1024 * 1024,
+      allowedTypes: ["application/pdf", "application/zip", "image/jpeg", "image/png"] });
   } catch {
     return new Response(null, { status: 502 });
   }
@@ -206,6 +212,7 @@ function parseSafeIGuideDownloadUrl(rawUrl: string): URL | null {
   }
 
   if (url.protocol !== "https:") return null;
+  if (url.username || url.password || url.port || url.hash) return null;
   if (url.hostname !== "youriguide.com") return null;
   if (!url.pathname.includes("/doc/")) return null;
   if (!isSupportedIGuideDownloadPath(url.pathname)) return null;

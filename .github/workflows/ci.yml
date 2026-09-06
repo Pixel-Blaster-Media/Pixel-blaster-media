@@ -78,8 +78,12 @@ jobs:
         run: npm run typecheck
       - name: Test
         run: npm test
+      - name: Test invoice and delivery outcomes
+        run: npm run test:invoice
       - name: Test private shoot-notes interactions
         run: npm run test:private-notes-ui
+      - name: Test calendar accessibility interactions
+        run: node --import tsx --test tests/calendar-picker.behavior.mjs
       - name: Build production-shaped artifact with placeholders
         env:
           VERCEL_ENV: production
@@ -97,6 +101,8 @@ jobs:
     name: PostgreSQL integration
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      POSTGRES_BIN: /usr/lib/postgresql/17/bin
     defaults:
       run:
         working-directory: booking
@@ -123,6 +129,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes postgresql-17
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+      - name: Execute complete clean Supabase-compatible bootstrap
+        run: |
+          bash scripts/generate-supabase-setup.sh
+          git diff --exit-code -- supabase/setup.sql
+          node --test tests/postgres/clean-bootstrap.test.mjs
+          node --test tests/postgres/audit-runner-fail-closed.test.mjs
       - name: Run disposable PostgreSQL behavior suites
         run: |
           bash scripts/verify-atomic-booking-postgres.sh
@@ -130,3 +142,9 @@ jobs:
           bash scripts/verify-private-booking-notes-postgres.sh
           bash scripts/verify-catalog-item-examples-postgres.sh
           LC_ALL=C TMPDIR=/tmp bash scripts/verify-canonical-media-postgres.sh
+          bash scripts/verify-public-inbox-postgres.sh
+          python3 scripts/verify-tenant-listing-search-postgres.py
+          node scripts/verify-legacy-media-cas.mjs
+          python3 scripts/verify-admin-lifecycle-postgres.py
+          python3 scripts/verify-lifecycle-recovery-postgres.py
+          bash lib/integrations/quickbooks/tests/verify-postgres.sh

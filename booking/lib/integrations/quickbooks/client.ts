@@ -26,15 +26,8 @@ import {
 type ConnectionRow =
   Database["public"]["Tables"]["quickbooks_connection"]["Row"];
 
-export class QBOError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly body: string,
-  ) {
-    super(message);
-  }
-}
+import { createQBOTransport, QBOError } from './transport';
+export { QBOError } from './transport';
 
 export interface QBOClient {
   environment: QBOEnvironment;
@@ -90,42 +83,7 @@ export async function getQBClient(
   const accessToken = await ensureFreshToken(conn, clientId, clientSecret);
   const base = apiBaseUrl(conn.environment);
 
-  async function request<T = unknown>(
-    path: string,
-    init: {
-      method?: "GET" | "POST" | "PUT";
-      body?: Record<string, unknown>;
-      query?: Record<string, string>;
-    } = {},
-  ): Promise<T> {
-    // Intuit prefers `minorversion` on every request to lock to a known
-    // API version. 70 is current at time of writing; pinning here keeps
-    // them from silently changing response shapes under us.
-    const query = new URLSearchParams({ minorversion: "70", ...(init.query ?? {}) });
-    const url = `${base}/v3/company/${conn!.realm_id}${path}?${query.toString()}`;
-
-    const res = await fetch(url, {
-      method: init.method ?? "GET",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: init.body ? JSON.stringify(init.body) : undefined,
-      cache: "no-store",
-    });
-
-    if (!res.ok) {
-      const body = await res.text();
-      throw new QBOError(
-        `QBO ${init.method ?? "GET"} ${path} failed`,
-        res.status,
-        body,
-      );
-    }
-
-    return (await res.json()) as T;
-  }
+  const request = createQBOTransport({base, realmId:conn.realm_id, accessToken});
 
   return {
     environment: conn.environment,

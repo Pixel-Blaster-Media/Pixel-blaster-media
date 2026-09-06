@@ -305,9 +305,9 @@ export function shootReminderEmail({
       }
     </style></head>
     <body><div class="wrap">
-      <p><span class="pill">Shoot tomorrow</span></p>
-      <h1>See you tomorrow, ${escape(firstName)}.</h1>
-      <p>Your shoot at <strong>${escape(address)}</strong> is tomorrow at <strong>${escape(timeLabel)}</strong>.</p>
+      <p><span class="pill">Upcoming shoot</span></p>
+      <h1>See you soon, ${escape(firstName)}.</h1>
+      <p>Your shoot at <strong>${escape(address)}</strong> is scheduled for <strong>${escape(timeLabel)}</strong>.</p>
 
       <h2>Before we arrive</h2>
       <ul>
@@ -324,7 +324,7 @@ export function shootReminderEmail({
   `;
 
   return {
-    subject: `Reminder: your shoot tomorrow at ${timeLabel} — ${streetAddress}`,
+    subject: `Reminder: your shoot ${timeLabel} — ${streetAddress}`,
     html,
   };
 }

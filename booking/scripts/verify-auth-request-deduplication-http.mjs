@@ -292,16 +292,38 @@ const fakeSupabase = http.createServer(async (request, response) => {
         "server_action_revalidate",
         "non-Today booking requests are only modeled in the action scenario",
       );
+      assert.equal(credential.kind, "service_role");
+      assert.equal(
+        url.searchParams.get("organization_id"),
+        `eq.${actors.primary.organizationId}`,
+      );
+      assert.equal(
+        url.searchParams.get("id"),
+        "eq.31111111-1111-4111-8111-111111111111",
+      );
       if (request.method === "GET" && select === "id,status") {
         return json(response, 200, {
           id: "31111111-1111-4111-8111-111111111111",
           status: "confirmed",
         });
       }
-      if (request.method === "GET" && select === "status") {
-        return json(response, 200, { status: "confirmed" });
+      if (request.method === "GET" && select === "status,lifecycle_version") {
+        return json(response, 200, { status: "confirmed", lifecycle_version: 7 });
       }
-      if (request.method === "PATCH") return json(response, 200, []);
+      if (request.method === "PATCH") {
+        // Model the status action's CAS and affected-row representation, not
+        // the old unconditional update whose empty result meant success.
+        assert.equal(select, "id");
+        assert.equal(url.searchParams.get("status"), "eq.confirmed");
+        assert.equal(url.searchParams.get("lifecycle_version"), "eq.7");
+        assert.deepEqual(JSON.parse(await readBody(request)), { status: "shot" });
+        assert.ok(
+          String(request.headers.prefer).split(",").includes("return=representation"),
+        );
+        return json(response, 200, [{
+          id: "31111111-1111-4111-8111-111111111111",
+        }]);
+      }
       if (request.method === "GET" && select === "id") {
         return json(response, 200, {
           id: "31111111-1111-4111-8111-111111111111",

@@ -223,10 +223,11 @@ function DeliveryEmailButton({
               extraRecipients,
             );
             if (!res.ok) {
-              setError(res.error ?? "Could not send delivery email.");
+              setError([res.error ?? "Could not send delivery email.", res.billingWarning].filter(Boolean).join(" "));
               return;
             }
             if (res.sentAt) setSentAt(res.sentAt);
+            if (res.billingWarning) setError(res.billingWarning);
             setMessage(
               res.resent
                 ? `Delivery email resent to ${res.recipientCount ?? 1} recipient(s).`

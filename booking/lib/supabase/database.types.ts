@@ -189,6 +189,7 @@ interface BookingsTable {
     owner_id: string;
     public_request_id: string | null;
     public_request_fingerprint: string | null;
+    lifecycle_version: number;
     status: BookingStatus;
     scheduled_at: string | null;
     scheduled_ends_at: string | null;
@@ -1034,7 +1035,9 @@ interface AutoenhanceIGuideUploadsTable {
     warning?: string | null;
     error?: string | null;
   };
-  Update: Partial<AutoenhanceIGuideUploadsTable["Insert"]>;
+  Update: Partial<AutoenhanceIGuideUploadsTable["Insert"]> & {
+    media_expected_claim?: string | null;
+  };
   Relationships: [];
 }
 
@@ -1318,6 +1321,34 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      admin_booking_search: {
+        Args: { p_organization_id: string; p_query?: string; p_filter?: string; p_after?: Json | null };
+        Returns: Json;
+      };
+      admin_realtor_search: {
+        Args: { p_organization_id: string; p_query?: string; p_after?: Json | null };
+        Returns: Json;
+      };
+      save_admin_booking_aggregate: {
+        Args: { p_organization_id: string; p_actor_id: string; p_request_id: string; p_booking_id: string | null; p_expected_version: number | null; p_input: Json };
+        Returns: { booking_id: string; property_id: string; lifecycle_version: number; replayed: boolean };
+      };
+      list_due_booking_reminders: {
+        Args: { p_limit?: number };
+        Returns: { organization_id: string; booking_id: string; schedule_version: number }[];
+      };
+      claim_booking_reminder: {
+        Args: { p_organization_id: string; p_booking_id: string; p_schedule_version: number; p_lease_token: string };
+        Returns: Json;
+      };
+      authorize_booking_reminder: {
+        Args: { p_organization_id: string; p_job_id: string; p_lease_token: string; p_request_hash: string };
+        Returns: boolean;
+      };
+      finish_booking_reminder: {
+        Args: { p_organization_id: string; p_job_id: string; p_lease_token: string; p_outcome: string; p_provider_id?: string | null };
+        Returns: boolean;
+      };
       attach_external_catalog_example: {
         Args: {
           p_organization_id: string;

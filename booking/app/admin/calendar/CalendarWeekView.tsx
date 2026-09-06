@@ -59,6 +59,7 @@ interface CalendarItem {
   syncWarning?: string;
   sourceColor?: string;
   bookingDetails?: {
+    lifecycleVersion: number;
     fullAddress: string;
     services: string[];
     addOns: string[];
@@ -236,6 +237,7 @@ export default function CalendarWeekView({
     useState<TimeRangeDragState | null>(null);
   const [blockEndsAt, setBlockEndsAt] = useState("");
   const dragRef = useRef<CalendarDragState | null>(null);
+  const createRequestRef = useRef<string | null>(null);
   const timeRangeDragRef = useRef<TimeRangeDragState | null>(null);
   const suppressOpenUntilRef = useRef(0);
   const suppressSlotClickUntilRef = useRef(0);
@@ -1599,6 +1601,8 @@ export default function CalendarWeekView({
               action={(formData) => {
                 setError(null);
                 startTransition(async () => {
+                  createRequestRef.current ??= crypto.randomUUID();
+                  formData.set("admin_request_id", createRequestRef.current);
                   const result = await createAdminShoot(formData);
                   if (!result.ok || !result.bookingId) {
                     setError(result.error ?? "Could not add shoot.");
@@ -2141,6 +2145,9 @@ function CalendarQuickView({
   const [sendUpdatedConfirmation, setSendUpdatedConfirmation] = useState(
     !details?.realtorNotificationsSuppressed,
   );
+  // Keep the version paired with the draft, even if fresh props arrive.
+  const servicesVersionRef = useRef(details?.lifecycleVersion);
+  const servicesRequestRef = useRef<string | null>(null);
   const [servicesError, setServicesError] = useState<string | null>(null);
   const [servicesPending, startServicesTransition] = useTransition();
   const [blockLabel, setBlockLabel] = useState(
@@ -2295,6 +2302,9 @@ function CalendarQuickView({
     startServicesTransition(async () => {
       try {
         const formData = new FormData();
+        servicesRequestRef.current ??= crypto.randomUUID();
+        formData.set("admin_request_id", servicesRequestRef.current);
+        formData.set("lifecycle_version", String(servicesVersionRef.current));
         for (const catalogItemId of selectedCatalogItemIds) {
           formData.append("catalog_item_id", catalogItemId);
         }

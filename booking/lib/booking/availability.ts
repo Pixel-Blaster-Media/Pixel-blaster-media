@@ -26,7 +26,8 @@ import { totalDurationMinutes } from "./services";
 /** The business operates in this timezone. Shoot times are stored in UTC
  *  in Postgres but `business_hours.start_time` / `end_time` are wall-clock
  *  times in this zone. */
-export const BUSINESS_TZ = "America/Toronto";
+import { BUSINESS_TZ } from "@/lib/booking/timezone";
+export { BUSINESS_TZ } from "@/lib/booking/timezone";
 
 /** Granularity of slot offsets — e.g. 30 means slots start every :00 and :30. */
 const SLOT_STEP_MINUTES = 30;
@@ -134,6 +135,9 @@ export async function listAvailableSlots({
     }),
   ]);
 
+  if (hoursRes.error || blocksRes.error || bookingsRes.error || !hoursRes.data || !blocksRes.data || !bookingsRes.data) {
+    throw new Error("Availability is temporarily unavailable. Please try again.");
+  }
   const hoursByDow = new Map<number, BusinessHoursRow>();
   for (const row of hoursRes.data ?? []) {
     if (row.enabled) hoursByDow.set(row.day_of_week, row);
@@ -229,10 +233,7 @@ export function businessDateTimeLocalToUtc(value: string): Date | null {
 // ---- Google Calendar free/busy ----
 
 /**
- * Best-effort fetch of the admin's Google Calendar busy windows.
- * If no calendar is connected or the API errors, we return [] so slot
- * computation falls back to DB-only busy. Better to risk a double-book
- * than to crash the entire booking form when Google is down.
+ * An unconfigured calendar is optional; configured busy sources must load.
  */
 async function fetchGoogleBusy(
   from: Date,
@@ -260,8 +261,7 @@ async function fetchGoogleBusy(
     );
     return windows.flat();
   } catch {
-    console.warn("[availability] google freeBusy failed");
-    return [];
+    throw new Error("Availability is temporarily unavailable. Please try again.");
   }
 }
 

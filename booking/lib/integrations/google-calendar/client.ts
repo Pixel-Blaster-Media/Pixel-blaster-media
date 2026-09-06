@@ -187,10 +187,12 @@ export async function getGoogleCalendarClients(
 ): Promise<GoogleCalendarClient[]> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  if (!clientId || !clientSecret) return [];
-
   const rows = await getGoogleCalendarConnections(scope);
   if (rows.length === 0) return [];
+  if (!clientId || !clientSecret) {
+    if (scope?.blockAvailability) throw new Error("Google Calendar configuration is unavailable");
+    return [];
+  }
   const tokenSource = rows.find((row) => row.write_bookings) ?? rows[0];
   const primaryTokenSource = await getGoogleCalendarConnection({
     organizationId: organizationId(scope),

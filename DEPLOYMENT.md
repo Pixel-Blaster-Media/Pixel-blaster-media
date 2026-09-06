@@ -8,7 +8,7 @@ Vercel deployments are billable for this project. Minimize them without weakenin
 - Vercel root directory: `booking/`.
 - `pixelblastermedia.com` and `www.pixelblastermedia.com` proxy `/book`, `/portal`, `/auth`, `/admin`, and `/api` to this project through the static website's `vercel.json`.
 - The newer Vercel project named `booking` is noncanonical and must never be used for production releases or environment configuration.
-- Automatic Git deployments: production branch `main` only.
+- Automatic Git deployments: disabled for every branch, including `main`. Production is promoted manually only after successful exact-SHA CI and reviewed live-schema compatibility; verify the Vercel control-plane setting before merging.
 - Feature-branch preview deployments: disabled by default.
 - Affected-project filtering: enabled in Vercel project settings.
 - Expected deployment count for normal backend/config work: **one production deployment after merge**.
@@ -26,6 +26,8 @@ booking/scripts/deploy-production.sh
 ```
 
 The script refuses to deploy unless the root link has the canonical project ID, Vercel reports Root Directory `booking`, the tree is clean, and `HEAD` exactly matches `origin/main`. Do not run `vercel --prod` directly from `booking/`.
+
+It additionally requires successful exact-SHA main-push CI (Application, PostgreSQL integration, Marketing proxy) and fresh, reviewer-approved schema compatibility evidence. Set `PRODUCTION_SCHEMA_EVIDENCE` and `PRODUCTION_SUPABASE_PROJECT_REF` as described in [Production release evidence](booking/docs/PRODUCTION_RELEASE_EVIDENCE.md). `--check-only` verifies the target only; it does not authorize a release.
 
 ## Static website (`pixel-blaster-media-website`)
 

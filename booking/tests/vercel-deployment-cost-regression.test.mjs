@@ -48,6 +48,7 @@ function runDeployGuard({
   mkdirSync(bin, { recursive: true });
   const scriptPath = join(scripts, "deploy-production.sh");
   writeFileSync(scriptPath, deployScript);
+  writeFileSync(join(scripts, "verify-production-evidence.mjs"), readFileSync(new URL("../scripts/verify-production-evidence.mjs", import.meta.url)));
   chmodSync(scriptPath, 0o755);
   writeFileSync(join(root, ".vercel", "project.json"), JSON.stringify(link));
 
@@ -103,9 +104,9 @@ exit 2
   }
 }
 
-test("Vercel deploys booking automatically only from main", () => {
+test("Vercel Git deployments require manual exact-candidate release gates", () => {
   assert.equal(config.git?.deploymentEnabled?.["**"], false);
-  assert.equal(config.git?.deploymentEnabled?.main, true);
+  assert.equal(config.git?.deploymentEnabled?.main, false);
 });
 
 test("manual production deploys fail closed unless linked to the Realtor-facing project", () => {
@@ -157,23 +158,25 @@ test("manual production deploys reject the duplicate project and unsafe Git stat
   }
 });
 
-test("manual production deploys execute only from a clean exact origin/main repository root", () => {
-  const clean = runDeployGuard({ args: [] });
-  assert.equal(clean.result.status, 0, clean.result.stderr);
-  assert.match(clean.result.stdout, new RegExp(`DEPLOY_CWD=${clean.root.replaceAll("/", "\\/")}`));
+test("clean exact origin/main alone cannot authorize a production deployment", () => {
+  const clean = runDeployGuard({ args: [], head: "a".repeat(40), originMain: "a".repeat(40) });
+  assert.notEqual(clean.result.status, 0, clean.result.stderr);
+  assert.match(clean.result.stderr, /Production evidence blocked/);
+  assert.doesNotMatch(clean.result.stdout, /DEPLOY_CWD=/);
 });
 
-test("deployment cost controls keep both jobs daily and document current plan limits", () => {
+test("deployment recovery uses verified Pro cadence with bounded work", () => {
   assert.deepEqual(config.crons, [
     {
       path: "/api/cron/reminders",
-      schedule: "0 21 * * *",
+      schedule: "*/10 * * * *",
     },
     {
       path: "/api/cron/integration-outbox",
-      schedule: "5 21 * * *",
+      schedule: "*/5 * * * *",
     },
+    { path: "/api/cron/autoenhance-sync", schedule: "3-59/10 * * * *" },
   ]);
-  assert.match(outboxDocs, /Hobby[\s\S]*100 cron jobs[\s\S]*once per day/i);
-  assert.match(outboxDocs, /one additional function invocation per day/i);
+  assert.match(outboxDocs, /verified Pro plan/i);
+  assert.match(outboxDocs, /three pages of five/i);
 });

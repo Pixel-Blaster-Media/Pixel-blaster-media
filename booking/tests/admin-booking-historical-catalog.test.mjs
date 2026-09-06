@@ -4,6 +4,7 @@ import test from "node:test";
 
 const read = async (path) =>
   readFile(new URL(`../${path}`, import.meta.url), "utf8");
+const aggregate = await read("supabase/migrations/20260905100200_admin_booking_lifecycle.sql");
 
 const [
   pageSource,
@@ -78,7 +79,7 @@ test("admin edits avoid shared-projection drift on realtor and property changes"
   const editSource = actionSource.slice(editStart, editEnd);
   assert.ok(editStart >= 0 && editEnd > editStart);
 
-  const bookingWrite = editSource.indexOf(".update({\n      property_id: propertyId");
+  const bookingWrite = editSource.indexOf('rpc("save_admin_booking_aggregate"');
   const profileWrite = editSource.indexOf('.from("profiles")');
   assert.ok(bookingWrite >= 0 && profileWrite > bookingWrite);
   assert.doesNotMatch(editSource, /if \(lineItemError\) return/);
@@ -95,18 +96,9 @@ test("admin edits avoid shared-projection drift on realtor and property changes"
     /\.not\("scheduled_at",\s*"is",\s*null\)[\s\S]*\.not\("scheduled_ends_at",\s*"is",\s*null\)/,
   );
 
-  const propertyHelperStart = actionSource.indexOf(
-    "async function findOrCreatePropertyForBooking",
-  );
-  const propertyHelperEnd = actionSource.indexOf(
-    "async function syncGoogleCalendarEventBestEffort",
-    propertyHelperStart,
-  );
-  const propertyHelper = actionSource.slice(propertyHelperStart, propertyHelperEnd);
-  assert.ok(propertyHelperStart >= 0 && propertyHelperEnd > propertyHelperStart);
-  assert.doesNotMatch(propertyHelper, /\.from\("properties"\)[\s\S]*\.update\(/);
-  assert.match(propertyHelper, /\.eq\("street_address", args\.streetAddress\)/);
-  assert.doesNotMatch(propertyHelper, /\.ilike\("street_address"/);
+  assert.doesNotMatch(aggregate, /update public\.properties/i);
+  assert.match(aggregate, /lower\(btrim\(street_address\)\)=lower\(btrim\(p_input->>'street_address'\)\)/);
+  assert.match(aggregate, /update public\.profiles[\s\S]*where id=v_owner and organization_id=p_organization_id/);
   assert.doesNotMatch(
     actionSource,
     /\[booking-edit\][^\n]*",\s*(?:err|error|result\.error)/,
@@ -126,8 +118,8 @@ test("admin calendar creation defers shared profile mutation and fans out canoni
     createStart,
   );
   const createSource = calendarActionsSource.slice(createStart, createEnd);
-  const bookingInsert = createSource.indexOf('.from("bookings")\n    .insert');
-  const profileUpdate = createSource.indexOf('.from("profiles")\n      .update');
+  const bookingInsert = aggregate.indexOf('insert into public.bookings');
+  const profileUpdate = aggregate.indexOf('update public.profiles');
   assert.ok(bookingInsert >= 0 && profileUpdate > bookingInsert);
   assert.match(
     createSource,
@@ -135,7 +127,7 @@ test("admin calendar creation defers shared profile mutation and fans out canoni
   );
   assert.match(
     createSource,
-    /lineItemWarning[\s\S]*profileWarning[\s\S]*siblingCalendarWarning[\s\S]*combineWarnings\(/,
+    /profileWarning[\s\S]*siblingCalendarWarning[\s\S]*combineWarnings\(/,
   );
 });
 

@@ -52,6 +52,23 @@ test("pull requests run fail-closed application and PostgreSQL gates", async () 
   );
 });
 
+test("audit remediation behavior suites are enforced in CI", async () => {
+  const workflow = await source(".github/workflows/ci.yml");
+  const app = workflow.slice(workflow.indexOf("  application:"), workflow.indexOf("  postgresql:"));
+  const sql = workflow.slice(workflow.indexOf("  postgresql:"));
+  assert.ok(app.includes("npm run test:invoice"), "invoice runtime behavior must execute in application CI");
+  assert.ok(sql.includes("POSTGRES_BIN: /usr/lib/postgresql/17/bin"), "all audit SQL runners need the actual Linux PostgreSQL 17 path");
+  assert.ok(sql.includes("tests/postgres/audit-runner-fail-closed.test.mjs"), "missing-migration negative oracle must execute");
+  for (const command of [
+    "bash scripts/verify-public-inbox-postgres.sh",
+    "python3 scripts/verify-tenant-listing-search-postgres.py",
+    "node scripts/verify-legacy-media-cas.mjs",
+    "python3 scripts/verify-admin-lifecycle-postgres.py",
+    "python3 scripts/verify-lifecycle-recovery-postgres.py",
+    "bash lib/integrations/quickbooks/tests/verify-postgres.sh",
+  ]) assert.ok(sql.includes(command), `PostgreSQL CI must execute ${command}`);
+});
+
 test("the application exposes a built-artifact HTTP security gate", async () => {
   const packageJson = JSON.parse(await source("booking/package.json"));
   assert.equal(

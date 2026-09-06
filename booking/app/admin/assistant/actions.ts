@@ -102,6 +102,7 @@ type AssistantExecutionResult = AdminAssistantResult & {
 };
 
 interface AdminAssistantBookingDraft {
+  requestId: string;
   sourceBookingId: string;
   scheduledLocal: string;
   contactName: string;
@@ -403,14 +404,14 @@ async function executeConfirmedAssistantAction(
       return {
         ok: false,
         kind: "needs_clarification",
-        message: result.error ?? "I couldn't send that delivery email.",
+        message: [result.error ?? "I couldn't send that delivery email.", result.billingWarning].filter(Boolean).join(" "),
         actions: [],
       };
     }
     return {
       ok: true,
       kind: "answer",
-      message: `Done. I ${result.resent ? "resent" : "sent"} the delivery email to ${result.recipientCount ?? 1} recipient${(result.recipientCount ?? 1) === 1 ? "" : "s"}.`,
+      message: [`Done. I ${result.resent ? "resent" : "sent"} the delivery email to ${result.recipientCount ?? 1} recipient${(result.recipientCount ?? 1) === 1 ? "" : "s"}.`, result.billingWarning].filter(Boolean).join(" "),
       actions: [
         {
           type: "open_booking",
@@ -1493,6 +1494,7 @@ function buildCreateBookingAction(
     .filter(Boolean)
     .join(", ");
   const payload: AdminAssistantBookingDraft = {
+    requestId: crypto.randomUUID(),
     sourceBookingId: sourceBooking?.id ?? "",
     scheduledLocal,
     contactName,
@@ -2368,6 +2370,7 @@ async function createBookingFromAssistant(
   }
 
   const formData = new FormData();
+  formData.set("admin_request_id", draft.requestId);
   formData.set("scheduled_at", draft.scheduledLocal);
   formData.set("contact_name", draft.contactName);
   formData.set("contact_email", draft.contactEmail);

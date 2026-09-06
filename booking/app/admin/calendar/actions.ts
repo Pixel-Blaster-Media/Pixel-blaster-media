@@ -20,9 +20,11 @@ import {
 import { ccRecipientsFor } from "@/lib/email/recipients";
 import { sendEmail } from "@/lib/email/resend";
 import { getOrganizationEmailSettings } from "@/lib/email/settings";
+import { dispatchBookingIntegrationJobs } from "@/lib/integrations/dispatcher";
 
 import { sendPushBestEffort } from "@/lib/notifications/push";
 import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
+import type { BookingStatus } from "@/lib/supabase/database.types";
 
 interface ActionResult {
   ok: boolean;
@@ -151,6 +153,9 @@ export async function createAdminShoot(
   const admin = await requireAdmin();
 
   const scheduledRaw = str(formData, "scheduled_at");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str(formData, "admin_request_id"))) {
+    return { ok: false, error: "Refresh the booking form before submitting." };
+  }
   const scheduledAt = businessDateTimeLocalToUtc(scheduledRaw);
   const contactEmail = str(formData, "contact_email").toLowerCase();
   const contactName = str(formData, "contact_name");
@@ -185,11 +190,7 @@ export async function createAdminShoot(
 
   const cart = selectedCatalogIds
     .map((catalogItemId) => ({ catalogItemId, quantity: 1 }));
-  const cartError = validateCart(cart, catalog);
-  if (cartError) return { ok: false, error: cartError };
-
-  const totals = computeCartTotals(cart, catalog);
-  const duration = Math.max(totals.totalDurationMinutes, 60);
+  // Canonical validation and pricing run inside the RPC after replay lookup.
   // Admin-created shoots intentionally bypass availability checks so the
   // photographer can double-book or override blocked/external calendar time.
   // Realtor-facing booking flows still call isSlotAvailable before insert.
@@ -197,12 +198,7 @@ export async function createAdminShoot(
   const selectedItems = cart
     .map((line) => byId.get(line.catalogItemId))
     .filter((item): item is CatalogItemRow => Boolean(item));
-  const legacyServices = selectedItems
-    .filter((item) => item.kind !== "addon")
-    .map((item) => item.slug);
-  const legacyAddons = selectedItems
-    .filter((item) => item.kind === "addon")
-    .map((item) => item.slug);
+
 
   const supabase = getServiceSupabase();
   const realtor = await findOrCreateRealtor({
@@ -249,57 +245,32 @@ export async function createAdminShoot(
     (currentProfile.phone ?? "") !== contactPhone ||
     (currentProfile.brokerage ?? "") !== brokerage;
 
-  const propertyId = await findOrCreateProperty({
-    organizationId: admin.organizationId,
-    ownerId: userId,
-    streetAddress,
-    city,
-    province,
-    postalCode,
-  });
-  if (!propertyId) {
-    if (realtor.newlyCreated) {
-      const rollback = await rollbackProvisionedRealtor({
-        userId,
-        provisioningId: realtor.provisioningId!,
-        context: "calendar-property",
-      });
-      if (rollback.status !== "deleted") {
-        return { ok: false, error: cleanupReference(rollback.reference) };
-      }
-    }
-    return { ok: false, error: "Could not save property." };
-  }
-
-  const scheduledEndsAt = new Date(
-    scheduledAt.getTime() + duration * 60_000,
-  ).toISOString();
-  const { data: booking, error: bookingError } = await supabase
-    .from("bookings")
-    .insert({
-      organization_id: admin.organizationId,
-      property_id: propertyId,
-      owner_id: userId,
-      status: "confirmed",
-      scheduled_at: scheduledAt.toISOString(),
-      scheduled_ends_at: scheduledEndsAt,
-      allow_schedule_overlap: true,
-      services: legacyServices,
-      add_ons: legacyAddons,
-      square_footage: squareFootage,
-      unit_number: unitNumber || null,
-      client_notes: notes || null,
+  const { data: saved, error: bookingError } = await supabase.rpc("save_admin_booking_aggregate", {
+    p_organization_id: admin.organizationId,
+    p_actor_id: admin.userId,
+    p_request_id: str(formData, "admin_request_id"),
+    p_booking_id: null,
+    p_expected_version: null,
+    p_input: {
+      owner_id: userId, street_address: streetAddress, city, province,
+      app_url: process.env.NEXT_PUBLIC_APP_URL ?? "",
+      admin_notification_email: process.env.ADMIN_NOTIFICATION_EMAIL ?? null,
+      contact_name: contactName, contact_phone: contactPhone, brokerage,
+      postal_code: postalCode, scheduled_at: scheduledAt.toISOString(),
+      square_footage: squareFootage, unit_number: unitNumber, client_notes: notes,
       suppress_realtor_notifications: suppressRealtorNotifications,
-    })
-    .select("id")
-    .single<InsertedRow>();
+      catalog_item_ids: selectedCatalogIds,
+    },
+  });
+  const booking = saved ? { id: String(saved.booking_id) } : null;
+  if (saved?.replayed) return { ok: true, bookingId: String(saved.booking_id) };
 
   if (bookingError || !booking) {
     console.error("[admin-calendar] booking insert failed");
     if (realtor.newlyCreated) {
       const rollback = await rollbackProvisionedRealtor({
         userId,
-        propertyId,
+
         provisioningId: realtor.provisioningId!,
         context: "calendar-booking",
       });
@@ -317,41 +288,10 @@ export async function createAdminShoot(
     return { ok: false, error: "Could not save booking." };
   }
 
-  const lineItems = selectedItems.map((item) => ({
-    booking_id: booking.id,
-    catalog_item_id: item.id,
-    item_name: item.name,
-    item_slug: item.slug,
-    item_kind: item.kind,
-    quantity: 1,
-    unit_price_cents: item.price_cents,
-    unit_duration_minutes: item.duration_minutes,
-  }));
-  const { error: lineItemError } = await supabase
-    .from("booking_line_items")
-    .insert(lineItems);
-  const lineItemWarning = lineItemError
-    ? "Booking saved, but item snapshots could not be recorded."
-    : undefined;
-  if (lineItemError) {
-    console.warn("[admin-calendar] line item insert failed");
-  }
 
-  let profileUpdated = true;
-  if (profileChanged) {
-    const { data: updatedProfile, error: profileUpdateError } = await supabase
-      .from("profiles")
-      .update({
-        full_name: contactName,
-        phone: contactPhone || null,
-        brokerage: brokerage || null,
-      })
-      .eq("organization_id", admin.organizationId)
-      .eq("id", userId)
-      .select("id")
-      .maybeSingle<{ id: string }>();
-    profileUpdated = !profileUpdateError && Boolean(updatedProfile);
-  }
+
+  // Shared contact fields committed in the same aggregate transaction.
+  const profileUpdated = true;
   const profileWarning =
     profileChanged && !profileUpdated
       ? "Booking saved, but the shared realtor profile could not be updated."
@@ -368,35 +308,15 @@ export async function createAdminShoot(
     ? "Booking saved, but one or more other shoots for this realtor did not sync to Google Calendar."
     : undefined;
 
-  const calendarSynced = await createGoogleEventBestEffort({
+  const dispatchResults = await dispatchBookingIntegrationJobs({
     organizationId: admin.organizationId,
     bookingId: booking.id,
+    workerId: `admin-create:${crypto.randomUUID()}`,
   });
-
-  let confirmationWarning: string | undefined =
-    !suppressRealtorNotifications && !profileUpdated
-      ? "Booking saved, but the confirmation email was not sent because the realtor profile update failed."
-      : undefined;
-  if (!suppressRealtorNotifications && profileUpdated) {
-    const confirmationSent = await sendConfirmationBestEffort({
-      email: contactEmail,
-      ccEmails: ccRecipientsFor(
-        contactEmail,
-        currentProfile.delivery_cc_emails,
-      ),
-      organizationId: admin.organizationId,
-      name: contactName,
-      streetAddress: unitNumber
-        ? `${streetAddress}, Unit ${unitNumber}`
-        : streetAddress,
-      scheduledAt,
-      services: selectedItems.map((item) => item.name).join(", "),
-    });
-    if (!confirmationSent) {
-      confirmationWarning =
-        "Booking saved, but the confirmation email was not sent.";
-    }
-  }
+  const calendarSynced = !dispatchResults.some(result => result.jobType === "google_calendar.event.create" && !["completed", "skipped", "not_claimed"].includes(result.outcome));
+  const confirmationWarning = dispatchResults.some(result => result.jobType === "email.booking.confirmation" && !["completed", "skipped", "not_claimed"].includes(result.outcome))
+    ? "Booking saved; confirmation is pending or needs integration review."
+    : undefined;
 
   revalidatePath("/admin/calendar");
   revalidatePath("/admin/bookings");
@@ -404,7 +324,7 @@ export async function createAdminShoot(
     ok: true,
     bookingId: booking.id,
     warning: combineWarnings(
-      lineItemWarning,
+
       profileWarning,
       siblingCalendarWarning,
       calendarSynced
@@ -424,8 +344,9 @@ export async function createAdminShoot(
 }
 
 interface BookingForRescheduleRow {
+  lifecycle_version: number;
   id: string;
-  status: string;
+  status: BookingStatus;
   services: string[] | null;
   add_ons: string[] | null;
   scheduled_at: string | null;
@@ -489,7 +410,7 @@ export async function rescheduleCalendarShoot(
   const { data: booking, error: bookingError } = await supabase
     .from("bookings")
     .select(
-      "id, status, services, add_ons, scheduled_at, scheduled_ends_at, owner_id, unit_number, client_notes, google_calendar_event_id, suppress_realtor_notifications, properties(street_address, city, postal_code), profiles(email, full_name, phone, brokerage)",
+      "id, status, lifecycle_version, services, add_ons, scheduled_at, scheduled_ends_at, owner_id, unit_number, client_notes, google_calendar_event_id, suppress_realtor_notifications, properties(street_address, city, postal_code), profiles(email, full_name, phone, brokerage)",
     )
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
@@ -523,7 +444,7 @@ export async function rescheduleCalendarShoot(
   // Admin calendar moves may intentionally overlap (for example, over the
   // tail of a shoot that will finish early). Realtor-facing writes keep this
   // flag false and remain protected by the database overlap trigger.
-  const { error: updateError } = await supabase
+  const { data: updatedBooking, error: updateError } = await supabase
     .from("bookings")
     .update({
       scheduled_at: scheduledAt.toISOString(),
@@ -531,9 +452,13 @@ export async function rescheduleCalendarShoot(
       allow_schedule_overlap: true,
     })
     .eq("id", booking.id)
-    .eq("organization_id", admin.organizationId);
-  if (updateError) {
-    if (updateError.code === "23P01") {
+    .eq("organization_id", admin.organizationId)
+    .eq("status", booking.status)
+    .eq("lifecycle_version", booking.lifecycle_version)
+    .select("id")
+    .maybeSingle();
+  if (updateError || !updatedBooking) {
+    if (updateError?.code === "23P01") {
       return {
         ok: false,
         error:

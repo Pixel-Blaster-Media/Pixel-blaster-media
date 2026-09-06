@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 
-import { createInvoice, refreshInvoice } from "./actions";
+import { adoptInvoice, createInvoice, refreshInvoice } from "./actions";
+import { useRouter } from 'next/navigation';
 
 interface InvoiceState {
   id: string | null;
@@ -23,6 +24,10 @@ export default function InvoiceSection({
   const [state, setState] = useState<InvoiceState>(initial);
   const [pending, startPending] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [adoptionId,setAdoptionId]=useState('');
+  const [adoptionNote,setAdoptionNote]=useState('');
+  const router=useRouter();
+  const needsReconciliation=['creating','reconciliation_required'].includes(initial.status??'');
 
   function onCreate() {
     setError(null);
@@ -77,7 +82,7 @@ export default function InvoiceSection({
           <StatusPill status={state.status ?? "open"} />
         ) : (
           <span className="rounded-full border border-realtor-primary/20 px-2 py-0.5 text-[10px] uppercase tracking-wider text-realtor-muted">
-            Not invoiced
+            {needsReconciliation ? 'Reconciliation required' : initial.status==='billing_pending' ? 'Billing pending — needs attention' : 'Not invoiced'}
           </span>
         )}
       </div>
@@ -119,12 +124,26 @@ export default function InvoiceSection({
         </p>
       ) : null}
 
+      {!hasInvoice && needsReconciliation ? (
+        <div className="space-y-2 text-sm">
+          <p role="alert">An invoice attempt is unresolved. Do not create another invoice. Verify the existing invoice in QuickBooks, then adopt it below. Legacy attempts without matching request evidence remain blocked. Media access is unchanged.</p>
+          <label className="block">QuickBooks invoice ID<input className="block w-full rounded border p-2" value={adoptionId} onChange={e=>setAdoptionId(e.target.value)} /></label>
+          <label className="block">Investigation note<textarea className="block w-full rounded border p-2" maxLength={500} value={adoptionNote} onChange={e=>setAdoptionNote(e.target.value)} /></label>
+          <button type="button" disabled={pending || !/^[0-9]{1,64}$/.test(adoptionId) || adoptionNote.trim().length<10} className="rounded border px-3 py-2 disabled:opacity-50" onClick={()=>startPending(async()=>{
+            setError(null);
+            const result=await adoptInvoice(bookingId,adoptionId,adoptionNote);
+            if(!result.ok) setError(result.error??'Adoption not confirmed.');
+            router.refresh();
+          })}>Verify and adopt existing invoice</button>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap gap-2 pt-1">
         {!hasInvoice ? (
           <button
             type="button"
             onClick={onCreate}
-            disabled={pending}
+            disabled={pending || needsReconciliation}
             className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-60"
           >
             {pending ? "Creating…" : "Create invoice"}

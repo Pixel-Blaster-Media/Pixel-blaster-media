@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { emailHasAccount } from "@/lib/auth/email-lookup";
 import { isMissingSessionError } from "@/lib/auth/session-error";
 import { provisionRealtorAuthUser } from "@/lib/auth/provision-realtor";
+import { publicBookingFingerprint, requirePublicBookingInbox } from "@/lib/auth/public-booking-verification";
 import { rollbackProvisionedRealtor } from "@/lib/auth/rollback-provisioned-realtor";
 import {
   setSupabaseSessionCookie,
@@ -69,6 +70,7 @@ interface AtomicBookingResult {
 
 export interface BookResult {
   ok: boolean;
+  verificationRequired?: boolean;
   errors?: Record<string, string>;
 }
 
@@ -79,9 +81,8 @@ export interface BookResult {
  *
  *   1. Already signed in → use session.user directly.
  *   2. Not signed in, email has an account → sign in with password.
- *   3. Not signed in, email is new → create the auth user (pre-confirmed
- *      via admin API so there's no verification email click-through),
- *      sign them in, move on.
+ *   3. Not signed in, email is new → prove inbox ownership, then provision
+ *      and sign in. The form retains the provisional booking until proof.
  *
  * Then (in all three paths):
  *   - Re-validate cart slugs against live catalog
@@ -307,6 +308,9 @@ export async function createPublicBooking(
   // Provision only after every non-transactional validation has passed. A user
   // created below is rolled back if the property or booking cannot be committed.
   const authResult = await resolveUser({
+    requestId: publicRequestId,
+    fingerprint: publicBookingFingerprint(formData),
+    verificationCode: str(formData, "verification_code"),
     organizationId: organization.id,
     organizationName: organization.name,
     contactEmail,
@@ -473,6 +477,9 @@ interface ResolveUserErr {
 }
 
 async function resolveUser(params: {
+  requestId: string;
+  fingerprint: string;
+  verificationCode: string;
   contactEmail: string;
   contactName: string;
   contactPhone: string;
@@ -666,7 +673,17 @@ async function resolveUser(params: {
     };
   }
 
-  // 3) New email → create user (pre-confirmed) and sign in.
+  // 3) New email → inbox proof before using the administrative primitive.
+  // Administrative provisioning remains a separate, unchanged entry point.
+  const proof = await requirePublicBookingInbox({
+    requestId: params.requestId,
+    organizationId: params.organizationId,
+    email: params.contactEmail,
+    fingerprint: params.fingerprint,
+    code: params.verificationCode,
+  });
+  if (!proof.ok) return { ok: false, result: proof };
+
   const provisioned = await provisionRealtorAuthUser({
     service,
     email: params.contactEmail,

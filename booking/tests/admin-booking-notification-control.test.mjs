@@ -39,11 +39,11 @@ test("an admin content edit with no schedule field preserves the stored schedule
   const editActions = read("app/admin/bookings/[id]/actions.ts");
   assert.match(
     editActions,
-    /const scheduleUpdate\s*=\s*scheduledAt[\s\S]*scheduled_at:\s*scheduledAt\.toISOString\(\)[\s\S]*:\s*\{\};/,
+    /scheduled_at: scheduledAt\?\.toISOString\(\) \?\? booking\.scheduled_at/,
   );
   assert.match(
     editActions,
-    /\.update\(\{[\s\S]*\.\.\.scheduleUpdate[\s\S]*}\)[\s\S]*syncGoogleCalendarEventBestEffort/,
+    /rpc\("save_admin_booking_aggregate"[\s\S]*syncGoogleCalendarEventBestEffort/,
   );
 });
 
@@ -70,7 +70,7 @@ test("admin booking persists quiet mode and every automatic path honors it", () 
   assert.match(actions, /suppress_realtor_notifications:\s*suppressRealtorNotifications/);
   assert.match(
     actions,
-    /if\s*\(!suppressRealtorNotifications\s*&&\s*profileUpdated\)\s*{[\s\S]*sendConfirmationBestEffort/,
+    /dispatchBookingIntegrationJobs\(\{[\s\S]*organizationId: admin.organizationId[\s\S]*bookingId: booking.id/,
   );
   assert.match(
     projection,

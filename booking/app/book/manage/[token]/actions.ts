@@ -36,6 +36,7 @@ export interface ManageActionResult {
 }
 
 interface ManagedBookingRow {
+  lifecycle_version: number;
   id: string;
   organization_id: string;
   status: BookingStatus;
@@ -71,7 +72,7 @@ async function loadManagedBooking(
   const { data: booking, error } = await service
     .from("bookings")
     .select(
-      "id, organization_id, status, scheduled_at, scheduled_ends_at, services, add_ons, client_notes, google_calendar_event_id, suppress_realtor_notifications, unit_number, properties(street_address, city, postal_code), profiles(email, full_name, phone)",
+      "id, organization_id, status, lifecycle_version, scheduled_at, scheduled_ends_at, services, add_ons, client_notes, google_calendar_event_id, suppress_realtor_notifications, unit_number, properties(street_address, city, postal_code), profiles(email, full_name, phone)",
     )
     .eq("id", bookingId)
     .maybeSingle<ManagedBookingRow>();
@@ -167,7 +168,7 @@ export async function rescheduleManagedBooking(
     };
   }
 
-  const { error: updateError } = await service
+  const { data: updatedBooking, error: updateError } = await service
     .from("bookings")
     .update({
       scheduled_at: newStart.toISOString(),
@@ -175,10 +176,14 @@ export async function rescheduleManagedBooking(
       allow_schedule_overlap: false,
     })
     .eq("id", booking.id)
-    .eq("organization_id", booking.organization_id);
+    .eq("organization_id", booking.organization_id)
+    .eq("status", booking.status)
+    .eq("lifecycle_version", booking.lifecycle_version)
+    .select("id")
+    .maybeSingle();
 
-  if (updateError) {
-    if (updateError.code === "23P01") {
+  if (updateError || !updatedBooking) {
+    if (updateError?.code === "23P01") {
       return {
         ok: false,
         error: "That time was just taken. Please pick another slot.",
