@@ -223,7 +223,7 @@ function DeliveryEmailButton({
               extraRecipients,
             );
             if (!res.ok) {
-              setError(res.error ?? "Could not send delivery email.");
+              setError([res.error ?? "Could not send delivery email.", res.billingWarning].filter(Boolean).join(" "));
               return;
             }
             if (res.sentAt) setSentAt(res.sentAt);

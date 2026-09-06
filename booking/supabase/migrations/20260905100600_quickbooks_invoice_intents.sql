@@ -37,6 +37,28 @@ select b.organization_id,b.id,c.realm_id,c.environment,'unknown','legacy_creatin
 from public.bookings b left join public.quickbooks_connection c on c.organization_id=b.organization_id
 where b.quickbooks_invoice_status='creating' and b.quickbooks_invoice_id is null;
 
+-- Rolling deployments still have legacy writers. Capture their committed start
+-- permanently: their later creating -> NULL clear must not permit a fresh POST.
+-- New begin inserts its processing intent before updating the booking, so it
+-- keeps its lease. Pending requests have not posted and become ambiguous here.
+create function public.capture_legacy_quickbooks_invoice()
+returns trigger language plpgsql security definer set search_path=public,pg_temp as $$
+begin
+ if new.quickbooks_invoice_status='creating' and new.quickbooks_invoice_id is null then
+  insert into public.quickbooks_invoice_intents(organization_id,booking_id,realm_id,environment,state,error_code)
+  select new.organization_id,new.id,c.realm_id,c.environment,'unknown','legacy_creating'
+  from (select 1) seed left join public.quickbooks_connection c on c.organization_id=new.organization_id
+  on conflict(organization_id,booking_id) do update
+   set state='unknown',error_code='legacy_creating',realm_id=excluded.realm_id,environment=excluded.environment,updated_at=now()
+   where quickbooks_invoice_intents.state='pending';
+ end if;
+ return new;
+end $$;
+revoke all on function public.capture_legacy_quickbooks_invoice() from public,anon,authenticated,service_role;
+create trigger capture_legacy_quickbooks_invoice
+ after insert or update of quickbooks_invoice_status on public.bookings
+ for each row execute function public.capture_legacy_quickbooks_invoice();
+
 create function public.begin_quickbooks_invoice(p_organization_id uuid,p_booking_id uuid,p_realm_id text,p_environment text,p_snapshot jsonb)
 returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
 declare b public.bookings%rowtype; i public.quickbooks_invoice_intents%rowtype;

@@ -404,14 +404,14 @@ async function executeConfirmedAssistantAction(
       return {
         ok: false,
         kind: "needs_clarification",
-        message: result.error ?? "I couldn't send that delivery email.",
+        message: [result.error ?? "I couldn't send that delivery email.", result.billingWarning].filter(Boolean).join(" "),
         actions: [],
       };
     }
     return {
       ok: true,
       kind: "answer",
-      message: `Done. I ${result.resent ? "resent" : "sent"} the delivery email to ${result.recipientCount ?? 1} recipient${(result.recipientCount ?? 1) === 1 ? "" : "s"}.`,
+      message: [`Done. I ${result.resent ? "resent" : "sent"} the delivery email to ${result.recipientCount ?? 1} recipient${(result.recipientCount ?? 1) === 1 ? "" : "s"}.`, result.billingWarning].filter(Boolean).join(" "),
       actions: [
         {
           type: "open_booking",

@@ -1131,7 +1131,7 @@ export async function sendDeliveryReadyEmail(
     html: email.html,
     organizationId: admin.organizationId,
   });
-  if (!sent.ok) return { ok: false, error: "Delivery email could not be sent." };
+  if (!sent.ok) return { ok: false, error: "Delivery email could not be sent.", billingWarning };
   if (sent.skipped) return { ok: false, error: 'Delivery email was skipped because email is not configured. Media access is unchanged.', billingWarning };
 
   const sentAt = new Date().toISOString();

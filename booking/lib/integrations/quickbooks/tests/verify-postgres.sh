@@ -23,4 +23,5 @@ MIGRATION="$ROOT/supabase/migrations/20260905100600_quickbooks_invoice_intents.s
 if [[ -f "$MIGRATION" ]]; then "${PSQL[@]}" -1 -f "$MIGRATION"; fi
 "${PSQL[@]}" -f "$TESTS/intent.behavior.sql"
 "${PSQL[@]}" -f "$TESTS/adoption.behavior.sql"
+python3 "$TESTS/rolling.behavior.py" "${PSQL[@]}"
 printf 'QuickBooks PostgreSQL behavior passed\n'
