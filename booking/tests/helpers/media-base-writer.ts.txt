@@ -1,0 +1,110 @@
+// Literal acquisition/completion functions from e625365f2958cb156b5475262bf9d0874c7ae0ac
+import { getServiceSupabase } from "@/lib/supabase/server";
+async function upsertIGuideUpload(input: {
+  status: "uploaded" | "failed";
+  admin: AdminContext;
+  batch: AutoenhanceBatchRow;
+  iguidePortalId: string;
+  imageId: string;
+  filename: string;
+  assetName?: string;
+  jobId?: string;
+  processComplete?: boolean;
+  warning?: string;
+  error?: string;
+}) {
+  const service = getServiceSupabase();
+  const { error } = await service.from("autoenhance_iguide_uploads").upsert(
+    {
+      organization_id: input.admin.organizationId,
+      batch_id: input.batch.id,
+      booking_id: input.batch.booking_id,
+      iguide_portal_id: input.iguidePortalId,
+      autoenhance_image_id: input.imageId,
+      filename: input.filename,
+      status: input.status,
+      iguide_asset_name: input.assetName ?? null,
+      iguide_job_id: input.jobId ?? null,
+      process_complete: input.processComplete ?? null,
+      warning: input.warning || null,
+      error: input.error ?? null,
+    },
+    {
+      onConflict:
+        "organization_id,batch_id,iguide_portal_id,autoenhance_image_id",
+    },
+  );
+  if (error) throw new Error(`Could not save iGUIDE upload state: ${error.message}`);
+}
+
+async function claimIGuideUpload(input: {
+  admin: AdminContext;
+  batch: AutoenhanceBatchRow;
+  iguidePortalId: string;
+  imageId: string;
+  filename: string;
+}): Promise<boolean> {
+  const service = getServiceSupabase();
+  const inserted = await service
+    .from("autoenhance_iguide_uploads")
+    .insert({
+      organization_id: input.admin.organizationId,
+      batch_id: input.batch.id,
+      booking_id: input.batch.booking_id,
+      iguide_portal_id: input.iguidePortalId,
+      autoenhance_image_id: input.imageId,
+      filename: input.filename,
+      status: "pending",
+    })
+    .select("id")
+    .maybeSingle<{ id: string }>();
+  if (!inserted.error && inserted.data) return true;
+  if (inserted.error?.code !== "23505") {
+    throw new Error(
+      `Could not claim iGUIDE upload: ${inserted.error?.message ?? "Unknown database error"}`,
+    );
+  }
+
+  const { data: existing, error: readError } = await service
+    .from("autoenhance_iguide_uploads")
+    .select("id, status, updated_at")
+    .eq("organization_id", input.admin.organizationId)
+    .eq("batch_id", input.batch.id)
+    .eq("iguide_portal_id", input.iguidePortalId)
+    .eq("autoenhance_image_id", input.imageId)
+    .maybeSingle<{ id: string; status: string; updated_at: string }>();
+  if (readError || !existing) {
+    throw new Error(
+      `Could not inspect iGUIDE upload claim: ${readError?.message ?? "Claim disappeared"}`,
+    );
+  }
+  if (existing.status === "uploaded") return false;
+
+  const updatedAt = Date.parse(existing.updated_at);
+  const claimIsFresh =
+    existing.status === "pending" &&
+    Number.isFinite(updatedAt) &&
+    Date.now() - updatedAt < 15 * 60 * 1000;
+  if (claimIsFresh) return false;
+
+  const { data: reclaimed, error: reclaimError } = await service
+    .from("autoenhance_iguide_uploads")
+    .update({
+      filename: input.filename,
+      status: "pending",
+      warning: null,
+      error: null,
+      process_complete: null,
+    })
+    .eq("id", existing.id)
+    .eq("updated_at", existing.updated_at)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+  if (reclaimError) {
+    throw new Error(`Could not reclaim iGUIDE upload: ${reclaimError.message}`);
+  }
+  return Boolean(reclaimed);
+}
+
+
+function pushFinishedImagesToIGuide() { throw new Error("not part of base writer fixture"); }

@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import ts from 'typescript';
 const require = createRequire(import.meta.url);
-export function loadWorkflow(service, providers = {}) {
-  const source = fs.readFileSync(new URL('../../lib/integrations/autoenhance/workflow.ts', import.meta.url), 'utf8') + '\nexport { pushFinishedImagesToIGuide, upsertIGuideUpload, claimIGuideUpload };';
+export function loadWorkflow(service, providers = {}, sourceOverride) {
+  const source = (sourceOverride ?? fs.readFileSync(new URL('../../lib/integrations/autoenhance/workflow.ts', import.meta.url), 'utf8')) + '\nexport { pushFinishedImagesToIGuide, upsertIGuideUpload, claimIGuideUpload };';
   const mod = { exports: {} };
   const mocks = {
     'server-only': {}, '@/lib/supabase/server': { getServiceSupabase: () => service },

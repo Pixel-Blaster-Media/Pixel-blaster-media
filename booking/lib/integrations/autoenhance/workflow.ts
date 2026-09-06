@@ -914,6 +914,7 @@ async function upsertIGuideUpload(input: {
       ...(input.jobId ? { iguide_job_id: input.jobId } : {}),
       ...(input.processComplete !== undefined ? { process_complete: input.processComplete } : {}),
       warning: input.warning ?? input.claimToken,
+      media_expected_claim: input.claimToken,
       error: input.error ?? null,
     },
   ).eq("organization_id", input.admin.organizationId)
@@ -988,6 +989,7 @@ async function claimIGuideUpload(input: {
       filename: input.filename,
       status: "pending",
       warning: token,
+      media_expected_claim: existing.warning,
       error: null,
       process_complete: null,
     })

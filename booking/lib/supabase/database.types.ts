@@ -1035,7 +1035,9 @@ interface AutoenhanceIGuideUploadsTable {
     warning?: string | null;
     error?: string | null;
   };
-  Update: Partial<AutoenhanceIGuideUploadsTable["Insert"]>;
+  Update: Partial<AutoenhanceIGuideUploadsTable["Insert"]> & {
+    media_expected_claim?: string | null;
+  };
   Relationships: [];
 }
 
