@@ -6,9 +6,9 @@ const now = Date.parse('2026-09-06T12:00:00Z');
 const request = (token = 'secret', organizationId = tenant) => new Request(`https://example.test/api/cron/recovery-status?organizationId=${organizationId}`, {headers: {authorization: `Bearer ${token}`}});
 
 test('authenticated tenant telemetry is bounded, ages unresolved work, and never calls unknown empty', async () => {
-  const module = await import('../lib/integrations/recovery-status.ts').catch(() => ({}));
-  assert.equal(typeof module.recoveryStatus, 'function', 'recovery status handler must exist');
-  const { recoveryStatus } = module;
+  const handlerModule = await import('../lib/integrations/recovery-status.ts').catch(() => ({}));
+  assert.equal(typeof handlerModule.recoveryStatus, 'function', 'recovery status handler must exist');
+  const { recoveryStatus } = handlerModule;
   let calls = [];
   let result = {data: [{created_at: '2026-09-05T12:00:00Z'}], count: 4, error: null};
   const client = {from(table) {
