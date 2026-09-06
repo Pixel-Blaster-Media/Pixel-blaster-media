@@ -12,6 +12,7 @@
     "test:private-notes-ui": "node --import tsx --test tests/internal-shoot-notes-editor.behavior.mjs",
     "test:http-security": "node scripts/verify-security-http.mjs",
     "test:http-auth-dedup": "node scripts/verify-auth-request-deduplication-http.mjs",
+    "test:postgres:tenant-search": "python3 scripts/verify-tenant-listing-search-postgres.py",
     "test:postgres:atomic": "bash scripts/verify-atomic-booking-postgres.sh",
     "test:postgres:media": "bash scripts/verify-canonical-media-postgres.sh",
     "test:postgres:credentials": "bash scripts/verify-integration-credentials-postgres.sh",

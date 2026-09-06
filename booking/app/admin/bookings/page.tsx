@@ -5,11 +5,11 @@ import { BOOKING_STATUSES, isCancellable } from "@/lib/booking/booking-status";
 import { labelForService } from "@/lib/booking/services";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getServerSupabase } from "@/lib/supabase/server";
-import type { BookingStatus } from "@/lib/supabase/database.types";
+import type { BookingStatus, Database } from "@/lib/supabase/database.types";
 
 import AdminPageHeading from "../AdminPageHeading";
 import CancelBookingButton from "./CancelBookingButton";
-import { ACTIVE_JOB_STATUSES, prioritizeActiveJobs } from "./active-jobs";
+import { prioritizeActiveJobs } from "./active-jobs";
 
 export const metadata = { title: "Jobs Board" };
 export const dynamic = "force-dynamic";
@@ -37,7 +37,7 @@ const FILTERS: { id: "active" | "all" | BookingStatus; label: string }[] = [
 export default async function BookingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string; q?: string }>;
+  searchParams: Promise<{ filter?: string; q?: string; after?: string }>;
 }) {
   const params = await searchParams;
   const filter = (FILTERS.find((f) => f.id === params.filter)?.id ??
@@ -46,30 +46,17 @@ export default async function BookingsPage({
 
   const admin = await requireAdmin();
   const supabase = await getServerSupabase();
-  let query = supabase
-    .from("bookings")
-    .select(
-      "id, status, scheduled_at, services, created_at, properties(street_address, city), profiles(full_name, email)",
-    )
-    .eq("organization_id", admin.organizationId)
-    .order("scheduled_at", {
-      ascending: true,
-      nullsFirst: filter === "active",
-    })
-    .order("created_at", { ascending: false })
-    .limit(search ? 500 : 200);
-
-  if (filter === "active") {
-    query = query.in("status", ACTIVE_JOB_STATUSES);
-  } else if (filter !== "all") {
-    query = query.eq("status", filter as BookingStatus);
-  }
-
-  const { data, error } = await query.returns<BookingRow[]>();
-  const bookings = visibleBookingsForFilter(
-    filterBookings(data ?? [], search),
-    filter,
-  );
+  const after = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.after ?? "") ? params.after! : null;
+  const args: Database["public"]["Functions"]["admin_booking_search"]["Args"] = {
+    p_organization_id: admin.organizationId, p_query: search, p_filter: filter, p_after: after,
+  };
+  // SSR 0.5 loses RPC inference; args remain checked against Database.
+  const { data, error } = await supabase.rpc("admin_booking_search", args as never);
+  const rows = (data ?? []) as unknown as BookingRow[];
+  const hasMore = rows.length > 50;
+  const window = rows.slice(0, 50);
+  const bookings = visibleBookingsForFilter(window, filter);
+  const nextParams = new URLSearchParams({ filter, q: search, after: window.at(-1)?.id ?? "" });
 
   if (error) {
     return (
@@ -147,6 +134,11 @@ export default async function BookingsPage({
         </nav>
       </section>
 
+      <nav aria-label="Job result pages" className="flex gap-4 text-sm text-realtor-primary">
+        <span>Up to 50 results per page · stable ID order</span>
+        {after ? <Link href={bookingHref(filter, search)}>First page</Link> : null}
+        {hasMore ? <Link href={`/admin/bookings?${nextParams}`}>Next page</Link> : null}
+      </nav>
       {bookings && bookings.length > 0 ? (
         <section>
           <ul className="grid gap-3">
@@ -224,24 +216,6 @@ function bookingHref(filter: (typeof FILTERS)[number]["id"], search: string) {
   return `/admin/bookings?${params.toString()}`;
 }
 
-function filterBookings(bookings: BookingRow[], search: string): BookingRow[] {
-  if (!search) return bookings;
-  const needle = search.toLowerCase();
-  return bookings.filter((booking) => {
-    const haystack = [
-      booking.properties?.street_address,
-      booking.properties?.city,
-      booking.profiles?.full_name,
-      booking.profiles?.email,
-      booking.status,
-      ...booking.services.map(labelForService),
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    return haystack.includes(needle);
-  });
-}
 
 function visibleBookingsForFilter(
   bookings: BookingRow[],

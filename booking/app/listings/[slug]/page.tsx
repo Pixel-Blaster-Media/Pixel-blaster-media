@@ -19,6 +19,7 @@ import {
   parseIGuideAlias,
 } from "@/lib/integrations/iguide/parse-id";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { validListingRelations } from "@/lib/booking/listing-tenant-boundary";
 import type {
   DeliverableSource,
   DeliverableType,
@@ -29,6 +30,7 @@ import type {
 export const dynamic = "force-dynamic";
 
 interface ListingWebsiteRow {
+  organization_id: string;
   property_id: string;
   booking_id: string | null;
   owner_id: string;
@@ -51,6 +53,8 @@ interface ListingWebsiteRow {
 
 interface PropertyRow {
   id: string;
+  organization_id: string;
+  owner_id: string;
   street_address: string;
   city: string | null;
   province: string | null;
@@ -140,29 +144,41 @@ async function loadListing(slug: string): Promise<ListingPageData | null> {
   const { data: website, error: websiteError } = await service
     .from("listing_websites")
     .select(
-      "property_id, booking_id, owner_id, template, slug, is_published, headline, description, feature_bullets, included_sections, gallery_image_urls, hero_image_url, agent_name, agent_email, agent_phone, brokerage_name, cta_text, cta_url",
+      "organization_id, property_id, booking_id, owner_id, template, slug, is_published, headline, description, feature_bullets, included_sections, gallery_image_urls, hero_image_url, agent_name, agent_email, agent_phone, brokerage_name, cta_text, cta_url",
     )
     .eq("slug", slug)
     .maybeSingle<ListingWebsiteRow>();
 
-  if (websiteError || !website) return null;
+  if (websiteError || !website || !website.is_published || !website.organization_id) return null;
 
-  const [{ data: property }, { data: deliverables }] = await Promise.all([
-    service
+  const { data: property, error: propertyError } = await service
       .from("properties")
-      .select("id, street_address, city, province, postal_code")
+      .select("id, organization_id, owner_id, street_address, city, province, postal_code")
       .eq("id", website.property_id)
-      .single<PropertyRow>(),
-    service
+      .eq("organization_id", website.organization_id)
+      .eq("owner_id", website.owner_id)
+      .single<PropertyRow>();
+  const bookingResult = website.booking_id ? await service
+    .from("bookings")
+    .select("id, organization_id, owner_id, property_id")
+    .eq("id", website.booking_id)
+    .eq("organization_id", website.organization_id)
+    .eq("owner_id", website.owner_id)
+    .eq("property_id", website.property_id)
+    .maybeSingle() : { data: null, error: null };
+  if (propertyError || bookingResult.error || !property ||
+      !validListingRelations(website, property, bookingResult.data)) return null;
+
+  // Do not even load media before establishing the parent relationship.
+  const { data: deliverables, error: deliverablesError } = await service
       .from("deliverables")
       .select("id, type, source, url, thumbnail_url, metadata, ready_at, created_at")
       .eq("property_id", website.property_id)
+      .eq("organization_id", website.organization_id)
       .not("ready_at", "is", null)
       .order("created_at", { ascending: false })
-      .returns<DeliverableRow[]>(),
-  ]);
-
-  if (!property) return null;
+      .returns<DeliverableRow[]>();
+  if (deliverablesError) return null;
 
   const ready = (deliverables ?? []).filter(
     (deliverable) =>
