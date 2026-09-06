@@ -86,7 +86,7 @@ export async function cancelBooking(
     return { ok: false, error: "Booking not found." };
   }
 
-  if (!isCancellable(booking.status)) {
+  if (!isCancellable(booking.status, initiator)) {
     return {
       ok: false,
       error: `This booking is ${booking.status} — it can't be cancelled from here.`,

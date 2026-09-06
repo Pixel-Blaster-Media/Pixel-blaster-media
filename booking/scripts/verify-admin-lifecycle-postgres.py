@@ -19,5 +19,40 @@ with tempfile.TemporaryDirectory(prefix='pixel-admin-lifecycle-') as temp:
         migration = ROOT/'supabase/migrations/20260905100200_admin_booking_lifecycle.sql'
         if migration.exists(): run(psql + ['-f', migration], stdout=subprocess.DEVNULL)
         run(psql + ['-f', ROOT/'tests/postgres/admin-lifecycle.behavior.sql'])
+        # Two independent backend sessions; observe a real Lock wait before
+        # releasing the winning transaction (no sleep-as-proof oracle).
+        import time, json
+        def query(sql):
+            return subprocess.check_output(psql + ['-At'], input=sql, text=True).strip()
+        booking = json.loads(query("select public.test_admin_save('00000000-0000-4000-8000-000000000201');"))['booking_id']
+        for commit in (True, False):
+            version = query(f"select lifecycle_version from public.bookings where id='{booking}';")
+            a = subprocess.Popen(psql + ['-At'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            a.stdin.write(f"begin; select public.test_admin_save(gen_random_uuid(),'{booking}',{version},'{{\"client_notes\":\"winner\"}}');\\echo LOCKED\n")
+            a.stdin.flush()
+            while a.stdout.readline().strip() != 'LOCKED':
+                assert a.poll() is None, 'first backend exited before lock'
+            b = subprocess.Popen(psql + ['-At'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            b.stdin.write(f"set application_name='lifecycle_cas_waiter'; select public.test_admin_save(gen_random_uuid(),'{booking}',{version},'{{\"client_notes\":\"second\"}}');\n")
+            b.stdin.close(); b.stdin = None
+            deadline = time.monotonic()+10
+            while query("select count(*) from pg_stat_activity where application_name='lifecycle_cas_waiter' and wait_event_type='Lock';") != '1':
+                assert time.monotonic()<deadline, 'second backend did not block'
+                time.sleep(.02)
+            a.stdin.write('commit;\n' if commit else 'rollback;\n'); a.stdin.close(); a.stdin=None
+            a.communicate(timeout=10)
+            out, err = b.communicate(timeout=10)
+            if commit:
+                assert b.returncode != 0 and 'Booking changed; reload' in err, err
+                assert query(f"select client_notes from public.bookings where id='{booking}';") == 'winner'
+            else:
+                assert b.returncode == 0, err
+                assert query(f"select client_notes from public.bookings where id='{booking}';") == 'second'
+        print('PASS observed two-session CAS conflict and rollback releases contender')
+        recovery = pathlib.Path(os.environ.get('RECOVERY_MIGRATIONS', str(ROOT/'supabase/migrations')))
+        effects = recovery/'20260905100500_booking_effect_generations.sql'
+        if effects.exists():
+            run(psql + ['-f', effects], stdout=subprocess.DEVNULL)
+            run(psql + ['-f', ROOT/'tests/postgres/admin-lifecycle-integrated.sql'])
     finally:
         run([PG/'pg_ctl', '-D', tmp/'data', '-m', 'immediate', '-w', 'stop'], stdout=subprocess.DEVNULL)

@@ -71,9 +71,10 @@ do $$ declare b uuid; v bigint; begin
 b:=(public.test_admin_save('00000000-0000-4000-8000-000000000091')->>'booking_id')::uuid;
 select lifecycle_version into v from public.bookings where id=b;
 insert into public.catalog_items(id,organization_id,slug,name,kind,duration_minutes,price_cents) values ('00000000-0000-4000-8000-000000000022','00000000-0000-4000-8000-000000000001','extra','Extra','addon',30,5000);
-update public.catalog_items set price_cents=99999,active=false where id='00000000-0000-4000-8000-000000000021';
+update public.catalog_items set price_cents=99999,duration_minutes=240,active=false where id='00000000-0000-4000-8000-000000000021';
 perform public.test_admin_save('00000000-0000-4000-8000-000000000092',b,v,'{"catalog_item_ids":["00000000-0000-4000-8000-000000000021","00000000-0000-4000-8000-000000000022"]}');
 assert (select count(*)=2 and sum(unit_price_cents)=44000 from public.booking_line_items where booking_id=b), 'adding item retains historical inactive price';
+assert (select scheduled_ends_at-scheduled_at=interval '120 minutes' from public.bookings where id=b), 'retained duration plus new duration';
 end $$;
 rollback;
 \echo 'PASS partial selection retains immutable history'

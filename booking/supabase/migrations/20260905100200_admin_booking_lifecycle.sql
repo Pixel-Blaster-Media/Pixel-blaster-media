@@ -61,7 +61,7 @@ begin
     (a.exclude_has_aerial and exists(select 1 from public.catalog_items c where c.id=any(v_ids) and c.kind<>'addon' and c.is_aerial)))) then
     raise exception 'Ineligible add-on' using errcode='PB002';
   end if;
-  select greatest(sum(duration_minutes),60), coalesce(array_agg(slug order by array_position(v_ids,id)) filter(where kind<>'addon'),'{}'), coalesce(array_agg(slug order by array_position(v_ids,id)) filter(where kind='addon'),'{}') into v_duration,v_services,v_addons from public.catalog_items where id=any(v_ids);
+  select greatest(sum(coalesce(l.unit_duration_minutes*l.quantity,c.duration_minutes)),60), coalesce(array_agg(coalesce(l.item_slug,c.slug) order by array_position(v_ids,c.id)) filter(where coalesce(l.item_kind,c.kind::text)<>'addon'),'{}'), coalesce(array_agg(coalesce(l.item_slug,c.slug) order by array_position(v_ids,c.id)) filter(where coalesce(l.item_kind,c.kind::text)='addon'),'{}') into v_duration,v_services,v_addons from public.catalog_items c left join public.booking_line_items l on l.booking_id=p_booking_id and l.catalog_item_id=c.id where c.id=any(v_ids);
   else
     select greatest(sum(unit_duration_minutes*quantity),60),coalesce(array_agg(item_slug) filter(where item_kind<>'addon'),'{}'),coalesce(array_agg(item_slug) filter(where item_kind='addon'),'{}') into v_duration,v_services,v_addons from public.booking_line_items where booking_id=p_booking_id;
   end if;
@@ -103,6 +103,12 @@ begin
     cross join (values ('google_calendar.event.create'),('email.booking.confirmation'),('email.admin.new_booking'),('push.admin.new_booking'),('quickbooks.invoice.create')) j(kind)
     where b.id=v_booking and (j.kind<>'quickbooks.invoice.create' or o.invoice_timing='at_booking');
   end if;
+  -- Migration-safe hook: finish effect bookkeeping on final snapshots before
+  -- capturing CAS. Deferred triggers subsequently see the same payload (no-op).
+  if to_regprocedure('public.refresh_booking_effects(uuid,uuid)') is not null then
+    execute 'select public.refresh_booking_effects($1,$2)' using p_organization_id,v_booking;
+  end if;
+  select lifecycle_version into v_version from public.bookings where id=v_booking and organization_id=p_organization_id;
   v_result := jsonb_build_object('booking_id',v_booking,'property_id',v_property,'lifecycle_version',v_version,'replayed',false);
   insert into public.admin_booking_requests values(p_organization_id,p_request_id,p_actor_id,v_fingerprint,v_booking,v_result);
   return v_result;

@@ -147,7 +147,7 @@ test("calendar booking quick view edits packages with impact and notification co
     bookingActionsSource,
     /export async function updateBookingServicesFromCalendar/,
   );
-  assert.match(bookingActionsSource, /allow_schedule_overlap: true/);
+  assert.match(bookingActionsSource, /rpc\("save_admin_booking_aggregate"/);
   assert.match(bookingActionsSource, /quickbooks_invoice_id/);
   assert.match(bookingActionsSource, /syncGoogleCalendarEventBestEffort/);
 });

@@ -74,8 +74,9 @@ export function nextBookingStatuses(current: BookingStatus): BookingStatus[] {
  */
 const CANCELLABLE_STATUSES: BookingStatus[] = ["requested", "confirmed"];
 
-export function isCancellable(status: BookingStatus): boolean {
-  return CANCELLABLE_STATUSES.includes(status);
+export function isCancellable(status: BookingStatus, initiator: "admin" | "realtor" = "realtor"): boolean {
+  return CANCELLABLE_STATUSES.includes(status) ||
+    (initiator === "admin" && (status === "shot" || status === "editing"));
 }
 
 export const BOOKING_REQUEST_STATUSES: Record<BookingRequestStatus, StatusMeta> = {
