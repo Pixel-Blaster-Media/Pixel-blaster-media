@@ -10794,8 +10794,10 @@ where b.quickbooks_invoice_status='creating' and b.quickbooks_invoice_id is null
 
 -- Rolling deployments still have legacy writers. Capture their committed start
 -- permanently: their later creating -> NULL clear must not permit a fresh POST.
--- New begin inserts its processing intent before updating the booking, so it
--- keeps its lease. Pending requests have not posted and become ambiguous here.
+-- Every creating acquisition must capture an absent/pending intent. Reject all
+-- non-replayable conflicts, including new unknown outcomes during rollback.
+-- New begin uses this same gate before promoting its captured intent, under
+-- the booking lock; no caller-controlled bypass or processing-lease exception.
 create function public.capture_legacy_quickbooks_invoice()
 returns trigger language plpgsql security definer set search_path=public,pg_temp as $$
 begin
@@ -10806,6 +10808,7 @@ begin
   on conflict(organization_id,booking_id) do update
    set state='unknown',error_code='legacy_creating',realm_id=excluded.realm_id,environment=excluded.environment,updated_at=now()
    where quickbooks_invoice_intents.state='pending';
+  if not found then raise exception 'invoice mutation requires reconciliation'; end if;
  end if;
  return new;
 end $$;
@@ -10840,11 +10843,16 @@ begin
  if exists(select 1 from jsonb_array_elements(p_snapshot->'lineItems') l where coalesce(jsonb_typeof(l)='object' and jsonb_typeof(l->'description')='string' and length(btrim(l->>'description')) between 1 and 1000 and jsonb_typeof(l->'amountCents')='number' and (l->>'amountCents') ~ '^[0-9]{1,10}$',false) is not true) then raise exception 'invoice line invalid'; end if;
  if exists(select 1 from jsonb_array_elements(p_snapshot->'lineItems') l where (l->>'amountCents')::numeric not between 1 and 2147483647) then raise exception 'invoice amount invalid'; end if;
  if p_realm_id is null or p_realm_id !~ '^[0-9]{1,64}$' then raise exception 'invoice realm invalid'; end if;
- insert into public.quickbooks_invoice_intents(organization_id,booking_id,realm_id,environment,state,snapshot,lease_token,lease_expires_at)
- values(p_organization_id,p_booking_id,p_realm_id,p_environment,'processing',p_snapshot,gen_random_uuid(),clock_timestamp()+interval '2 minutes')
- on conflict(organization_id,booking_id) do update set realm_id=excluded.realm_id,environment=excluded.environment,state=excluded.state,snapshot=excluded.snapshot,lease_token=excluded.lease_token,lease_expires_at=excluded.lease_expires_at,updated_at=now()
- where quickbooks_invoice_intents.state='pending' returning * into i;
+ -- Eligibility was checked under the booking lock above. Acquire through the
+ -- permanent legacy gate first, then promote only the capture made by this
+ -- statement. Both writes commit atomically; old writers never gain a lease.
  update public.bookings set quickbooks_invoice_status='creating' where id=b.id and organization_id=p_organization_id;
+ update public.quickbooks_invoice_intents
+ set realm_id=p_realm_id,environment=p_environment,state='processing',snapshot=p_snapshot,
+     lease_token=gen_random_uuid(),lease_expires_at=clock_timestamp()+interval '2 minutes',error_code=null,updated_at=now()
+ where organization_id=p_organization_id and booking_id=p_booking_id and state='unknown' and error_code='legacy_creating'
+ returning * into i;
+ if not found then raise exception 'invoice acquisition capture missing'; end if;
  return to_jsonb(i);
 end $$;
 revoke all on function public.begin_quickbooks_invoice(uuid,uuid,text,text,jsonb) from public,anon,authenticated;
@@ -11065,6 +11073,80 @@ grant execute on function public.list_due_booking_reminders(integer),public.clai
 
 -- ============================================================================
 -- End supabase/migrations/20260905100700_booking_reminder_recovery.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260905100800_media_rolling_receipt_guard.sql
+-- ============================================================================
+
+-- Additive rolling-deployment fence. Old writers do not supply the per-write
+-- expected claim, so neither their reclaim UPDATE nor stale ON CONFLICT UPDATE
+-- may erase new receipt evidence. Keep this migration installed on app rollback.
+alter table public.autoenhance_iguide_uploads
+  add column media_claim_token text,
+  add column media_expected_claim text;
+
+-- Adopt receipts already emitted by the new application before this migration.
+update public.autoenhance_iguide_uploads
+set media_claim_token = warning
+where warning like 'media:claim:%' or warning ~ '^media:retryable:[123]$';
+
+create function public.guard_media_receipt_transition()
+returns trigger language plpgsql set search_path = pg_catalog, public as $$
+begin
+  if tg_op = 'INSERT' then
+    new.media_claim_token := case
+      when new.warning like 'media:claim:%' or new.warning ~ '^media:retryable:[123]$'
+      then new.warning else null end;
+  elsif old.media_claim_token is not null then
+    if new.media_expected_claim is distinct from old.media_claim_token
+      or new.media_claim_token is distinct from old.media_claim_token
+      or row(new.id, new.organization_id, new.batch_id, new.booking_id,
+             new.iguide_portal_id, new.autoenhance_image_id)
+         is distinct from row(old.id, old.organization_id, old.batch_id, old.booking_id,
+                              old.iguide_portal_id, old.autoenhance_image_id)
+      or old.status = 'uploaded'
+      or (old.iguide_asset_name is not null and new.iguide_asset_name is distinct from old.iguide_asset_name)
+      or (old.iguide_job_id is not null and new.iguide_job_id is distinct from old.iguide_job_id)
+    then
+      raise exception 'media receipt transition fenced' using errcode = '23514';
+    end if;
+    if old.status = 'failed' then
+      if not coalesce(old.warning ~ '^media:retryable:[12]$', false)
+        or new.status <> 'pending'
+        or not coalesce(new.warning like 'media:claim:%', false)
+        or old.updated_at > now() - interval '15 minutes'
+        or old.iguide_asset_name is not null or old.iguide_job_id is not null
+      then
+        raise exception 'media receipt transition fenced' using errcode = '23514';
+      end if;
+      new.media_claim_token := new.warning;
+    elsif new.status = 'pending' and new.warning is distinct from old.warning then
+      raise exception 'media receipt transition fenced' using errcode = '23514';
+    elsif new.status = 'failed' and new.warning ~ '^media:retryable:[123]$' then
+      if old.iguide_asset_name is not null or old.iguide_job_id is not null then
+        raise exception 'media receipt transition fenced' using errcode = '23514';
+      end if;
+      new.media_claim_token := new.warning;
+    end if;
+  else
+    -- Legacy-only rows remain compatible. Once adopted, protection is sticky.
+    new.media_claim_token := case
+      when new.warning like 'media:claim:%' or new.warning ~ '^media:retryable:[123]$'
+      then new.warning else null end;
+  end if;
+  -- A stored authorization must never let a later old writer inherit authority.
+  new.media_expected_claim := null;
+  return new;
+end;
+$$;
+revoke all on function public.guard_media_receipt_transition() from public;
+create trigger autoenhance_iguide_uploads_guard_transition
+before insert or update on public.autoenhance_iguide_uploads
+for each row execute function public.guard_media_receipt_transition();
+
+-- ============================================================================
+-- End supabase/migrations/20260905100800_media_rolling_receipt_guard.sql
 -- ============================================================================
 
 -- ============================================================================
