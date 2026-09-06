@@ -62,6 +62,8 @@ import {
 } from "@/lib/integrations/iguide/sync";
 import {
   createInvoiceForBooking,
+  adoptInvoiceForBooking,
+  requestInvoiceForBooking,
   refreshInvoiceStatus as refreshInvoiceInQBO,
 } from "@/lib/integrations/quickbooks/invoice";
 import { sendPushBestEffort } from "@/lib/notifications/push";
@@ -1021,7 +1023,7 @@ export async function sendDeliveryReadyEmail(
   bookingId: string,
   extraRecipientsInput = "",
 ): Promise<
-  ActionResult & { resent?: boolean; sentAt?: string; recipientCount?: number }
+  ActionResult & { resent?: boolean; sentAt?: string; recipientCount?: number; billingWarning?: string }
 > {
   const admin = await requireAdminForBooking(bookingId);
   if (!admin) return { ok: false, error: "Booking not found." };
@@ -1087,6 +1089,7 @@ export async function sendDeliveryReadyEmail(
   // delivery email. Never block delivery on billing — any failure just
   // means the email goes out without the pay link, exactly as before.
   let invoiceUrl: string | null = null;
+  let billingWarning: string | undefined;
   const emailSettings = await getOrganizationEmailSettings(
     admin.organizationId,
   );
@@ -1101,10 +1104,10 @@ export async function sendDeliveryReadyEmail(
         if (invoiceResult.ok) {
           invoiceUrl = invoiceResult.invoiceUrl ?? null;
         } else {
-          console.warn("[delivery] invoice auto-create skipped");
+          billingWarning = 'Media delivery is available; billing needs attention. The invoice was not confirmed.';
         }
       } catch {
-        console.warn("[delivery] invoice auto-create failed");
+        billingWarning = 'Media delivery is available; billing needs attention. The invoice outcome is unresolved.';
       }
     }
   }
@@ -1129,6 +1132,7 @@ export async function sendDeliveryReadyEmail(
     organizationId: admin.organizationId,
   });
   if (!sent.ok) return { ok: false, error: "Delivery email could not be sent." };
+  if (sent.skipped) return { ok: false, error: 'Delivery email was skipped because email is not configured. Media access is unchanged.', billingWarning };
 
   const sentAt = new Date().toISOString();
   const notificationRows = [primaryRecipient, ...ccRecipients].map(
@@ -1144,10 +1148,11 @@ export async function sendDeliveryReadyEmail(
     .upsert(notificationRows, {
       onConflict: "booking_id,kind,recipient_email",
     });
-  if (notificationError && notificationError.code !== "23505") {
+  if (notificationError) {
     return {
       ok: false,
-      error: "The delivery email was sent, but its notification record could not be saved.",
+      error: "The delivery email was sent, but its notification record could not be saved. Investigate before resending.",
+      billingWarning,
     };
   }
 
@@ -1164,6 +1169,7 @@ export async function sendDeliveryReadyEmail(
     resent: Boolean(existing),
     sentAt,
     recipientCount: notificationRows.length,
+    billingWarning,
   };
 }
 
@@ -1779,6 +1785,7 @@ async function createInvoiceForBookingId(
     totalCents?: number;
   }
 > {
+  if(!await requestInvoiceForBooking(organizationId,bookingId)) return {ok:false,error:'Billing intent could not be saved; manual follow-up required.'};
   if (await hasUnresolvedAmbiguousQuickBooksJob(bookingId, organizationId)) {
     return {
       ok: false,
@@ -1820,6 +1827,14 @@ async function createInvoiceForBookingId(
     invoiceNumber: result.invoiceNumber,
     totalCents: result.totalCents,
   };
+}
+
+export async function adoptInvoice(bookingId:string,invoiceId:string,note:string):Promise<ActionResult> {
+  const admin=await requireAdminForBooking(bookingId);
+  if(!admin) return {ok:false,error:'Booking not found.'};
+  const result=await adoptInvoiceForBooking(admin.organizationId,bookingId,admin.userId,invoiceId,note);
+  revalidatePath(`/admin/bookings/${bookingId}`);
+  return result;
 }
 
 export async function refreshInvoice(

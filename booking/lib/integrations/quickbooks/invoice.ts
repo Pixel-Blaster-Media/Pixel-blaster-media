@@ -5,6 +5,16 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 
 import { getQBClient, QBOError } from "./client";
+import { persistInvoiceReceipt } from './receipt';
+import { verifyAdoption } from './adoption';
+import type { Json } from '@/lib/supabase/database.types';
+
+// Additive migration RPCs: explicit local boundary until generated types refresh.
+function invoiceRPC(name: string, args: Record<string, unknown>) {
+  const rpc = getServiceSupabase().rpc.bind(getServiceSupabase()) as unknown as
+    (name: string, args: Record<string, unknown>) => PromiseLike<{data: Json; error: unknown}>;
+  return rpc(name,args);
+}
 
 type ServicePriceRow = Database["public"]["Tables"]["service_prices"]["Row"];
 type ConnectionRow =
@@ -80,6 +90,13 @@ interface QueryResponse<T> {
   };
 }
 
+export async function requestInvoiceForBooking(organizationId:string,bookingId:string):Promise<boolean> {
+  try {
+    const result=await invoiceRPC('request_quickbooks_invoice',{p_organization_id:organizationId,p_booking_id:bookingId});
+    return !result.error && result.data===true;
+  } catch {return false;}
+}
+
 export async function createInvoiceForBooking(
   input: CreateInvoiceInput,
 ): Promise<CreateInvoiceResult> {
@@ -106,12 +123,10 @@ export async function createInvoiceForBooking(
       invoiceUrl: existing.quickbooks_invoice_url ?? undefined,
     };
   }
-  if (existing?.quickbooks_invoice_status === "creating") {
-    return {
-      ok: false,
-      error:
-        "An invoice is already being created for this booking. Wait a moment, then refresh the invoice status.",
-    };
+  if (!existing) return {ok:false,error:'Booking unavailable.'};
+  if(!await requestInvoiceForBooking(existing.organization_id,input.bookingId)) return {ok:false,error:'Invoice intent could not be saved.'};
+  if (existing.quickbooks_invoice_status === 'creating' || existing.quickbooks_invoice_status === 'reconciliation_required') {
+    return {ok:false,error:'Invoice requires reconciliation. Do not create another invoice.'};
   }
 
   // Connection + default item
@@ -184,6 +199,7 @@ export async function createInvoiceForBooking(
     }
   }
 
+  if(lineItems.some(l=>typeof l.description!=='string' || !l.description.trim() || l.description.length>1000 || !Number.isSafeInteger(l.amountCents) || l.amountCents<=0 || l.amountCents>2147483647)) return {ok:false,error:'Invalid invoice line snapshot.'};
   if (lineItems.length === 0) {
     return {
       ok: false,
@@ -204,40 +220,31 @@ export async function createInvoiceForBooking(
     };
   }
 
-  const { data: locked, error: lockErr } = await supabase
-    .from("bookings")
-    .update({ quickbooks_invoice_status: "creating" })
-    .eq("id", input.bookingId)
-    .eq("organization_id", existing?.organization_id ?? "")
-    .is("quickbooks_invoice_id", null)
-    .or(
-      "quickbooks_invoice_status.is.null,quickbooks_invoice_status.neq.creating",
-    )
-    .select("id")
-    .maybeSingle<{ id: string }>();
-
-  if (lockErr) return { ok: false, error: lockErr.message };
-  if (!locked) {
-    return {
-      ok: false,
-      error:
-        "An invoice is already being created for this booking. Wait a moment, then refresh the invoice status.",
-    };
-  }
+  const { data: claimData, error: lockErr } = await invoiceRPC('begin_quickbooks_invoice', {
+    p_organization_id:existing.organization_id,p_booking_id:input.bookingId,
+    p_realm_id:qb.realmId,p_environment:qb.environment,
+    p_snapshot:{realtor:input.realtor,property:input.property,lineItems,defaultItemId:conn.default_item_id},
+  });
+  const claim=claimData as {id?:string;state?:string;lease_token?:string}|null;
+  if(lockErr || !claim?.id || claim.state!=='processing' || !claim.lease_token) return {ok:false,error:'Invoice intent is unresolved or could not be saved. Reconciliation required.'};
+  const settleFailure=async(state:'rejected'|'unknown')=> {
+    const result=await invoiceRPC('finish_quickbooks_invoice',{p_organization_id:existing.organization_id,p_intent_id:claim.id,p_lease_token:claim.lease_token,p_state:state});
+    return !result.error && result.data===true;
+  };
 
   // Find or create customer.
   let customerId: string | null;
   try {
     customerId = await findOrCreateCustomer(qb, input.realtor);
   } catch (err) {
-    await clearInvoiceCreationLock(input.bookingId);
+    await settleFailure('unknown');
     return {
       ok: false,
       error: err instanceof QBOError ? err.message : String(err),
     };
   }
   if (!customerId) {
-    await clearInvoiceCreationLock(input.bookingId);
+    await settleFailure('unknown');
     return { ok: false, error: "Could not find or create QuickBooks customer." };
   }
 
@@ -250,6 +257,7 @@ export async function createInvoiceForBooking(
     .join(", ");
 
   const invoiceBody = {
+    PrivateNote: `pixel-invoice-intent:${claim.id}`,
     CustomerRef: { value: customerId },
     CustomerMemo: {
       value: `Shoot at ${propertyLine}`,
@@ -266,11 +274,13 @@ export async function createInvoiceForBooking(
     })),
   };
 
+  const staged=await invoiceRPC('stage_quickbooks_invoice',{p_organization_id:existing.organization_id,p_intent_id:claim.id,p_lease_token:claim.lease_token,p_body:invoiceBody});
+  if(staged.error || staged.data!==true) return {ok:false,error:'Invoice request could not be durably staged. Reconciliation required.'};
   let created;
   try {
     created = await qb.request<{ Invoice: QBOInvoice }>(
       "/invoice",
-      { method: "POST", body: invoiceBody },
+      { method: "POST", body: invoiceBody, query:{requestid:claim.id} },
     );
   } catch (err) {
     const msg = err instanceof QBOError
@@ -279,49 +289,19 @@ export async function createInvoiceForBooking(
     console.error("[qbo.invoice] create failed", {
       status: err instanceof QBOError ? err.status : null,
     });
-    await clearInvoiceCreationLock(input.bookingId);
-    return { ok: false, error: msg };
+    const persisted=await settleFailure(err instanceof QBOError ? err.outcome : 'unknown');
+    return { ok: false, error: persisted ? msg + '. Reconciliation required.' : 'Invoice outcome could not be saved; reconciliation required.' };
   }
 
-  const inv = created.Invoice;
-  const totalCents = Math.round((inv.TotalAmt ?? 0) * 100);
-  const invoiceUrl = buildInvoiceUrl(qb.environment, qb.realmId, inv.Id);
-
-  // Persist back to the booking.
-  const { error: updErr } = await supabase
-    .from("bookings")
-    .update({
-      quickbooks_invoice_id: inv.Id,
-      quickbooks_invoice_number: inv.DocNumber ?? null,
-      quickbooks_invoice_url: invoiceUrl,
-      quickbooks_invoice_status: (inv.Balance ?? 0) > 0 ? "open" : "paid",
-      quickbooks_invoice_total_cents: totalCents,
-      quickbooks_invoice_synced_at: new Date().toISOString(),
-    })
-    .eq("id", input.bookingId);
-
-  if (updErr) {
-    console.warn("[qbo.invoice] booking update failed", updErr);
-  }
-
-  return {
-    ok: true,
-    invoiceId: inv.Id,
-    invoiceNumber: inv.DocNumber ?? undefined,
-    invoiceUrl,
-    totalCents,
-  };
-}
-
-async function clearInvoiceCreationLock(bookingId: string): Promise<void> {
-  const supabase = getServiceSupabase();
-  const { error } = await supabase
-    .from("bookings")
-    .update({ quickbooks_invoice_status: null })
-    .eq("id", bookingId)
-    .eq("quickbooks_invoice_status", "creating")
-    .is("quickbooks_invoice_id", null);
-  if (error) console.warn("[qbo.invoice] lock clear failed", error);
+  const result=await persistInvoiceReceipt(created?.Invoice,async(receipt)=>{
+    const saved=await invoiceRPC('finish_quickbooks_invoice',{
+      p_organization_id:existing.organization_id,p_intent_id:claim.id,p_lease_token:claim.lease_token,p_state:'confirmed',
+      p_invoice_id:receipt.invoiceId,p_number:receipt.invoiceNumber,p_total:receipt.totalCents,p_balance:receipt.balanceCents,
+    });
+    return !saved.error && saved.data===true;
+  });
+  if(!result.ok) return result;
+  return {ok:true,invoiceId:result.invoiceId,invoiceNumber:result.invoiceNumber??undefined,totalCents:result.totalCents,invoiceUrl:buildInvoiceUrl(qb.environment,qb.realmId,result.invoiceId)};
 }
 
 /**
@@ -367,20 +347,31 @@ export async function refreshInvoiceStatus(
     };
   }
 
-  const inv = fetched.Invoice;
-  const status = (inv.Balance ?? 0) > 0 ? "open" : "paid";
-  const totalCents = Math.round((inv.TotalAmt ?? 0) * 100);
+  const result=await persistInvoiceReceipt(fetched?.Invoice,async receipt=>{
+    if(receipt.invoiceId!==booking.quickbooks_invoice_id) return false;
+    const {data,error}=await supabase.from('bookings').update({quickbooks_invoice_status:receipt.status,quickbooks_invoice_total_cents:receipt.totalCents,quickbooks_invoice_synced_at:new Date().toISOString()}).eq('id',bookingId).eq('organization_id',booking.organization_id).eq('quickbooks_invoice_id',receipt.invoiceId).select('id').maybeSingle();
+    return !error && Boolean(data);
+  });
+  return result.ok ? {ok:true,status:result.status} : {ok:false,error:result.error};
+}
 
-  await supabase
-    .from("bookings")
-    .update({
-      quickbooks_invoice_status: status,
-      quickbooks_invoice_total_cents: totalCents,
-      quickbooks_invoice_synced_at: new Date().toISOString(),
-    })
-    .eq("id", bookingId);
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-  return { ok: true, status };
+/** GET-only provider verification followed by atomic tenant/admin-fenced adoption. */
+export async function adoptInvoiceForBooking(organizationId:string,bookingId:string,actorId:string,invoiceId:string,note:string):Promise<CreateInvoiceResult> {
+ if(!/^[0-9]{1,64}$/.test(invoiceId) || note.trim().length<10 || note.length>500) return {ok:false,error:'Invoice ID and a 10–500 character investigation note are required.'};
+ try {
+  const service=getServiceSupabase() as SupabaseClient;
+  const {data:intent,error}=await service.from('quickbooks_invoice_intents').select('realm_id,environment,invoice_body').eq('organization_id',organizationId).eq('booking_id',bookingId).maybeSingle();
+  if(error || !intent?.invoice_body) return {ok:false,error:'No verifiable invoice request. Legacy attempts require manual investigation; adoption is blocked.'};
+  const qb=await getQBClient({organizationId});
+  if(qb.realmId!==intent.realm_id || qb.environment!==intent.environment) return {ok:false,error:'QuickBooks connection does not match the invoice intent.'};
+  const fetched=await qb.request<{Invoice:unknown}>(`/invoice/${invoiceId}`);
+  const receipt=verifyAdoption(fetched?.Invoice,intent.invoice_body,invoiceId);
+  const saved=await invoiceRPC('adopt_quickbooks_invoice',{p_organization_id:organizationId,p_booking_id:bookingId,p_actor:actorId,p_note:note,p_realm_id:qb.realmId,p_environment:qb.environment,p_body:intent.invoice_body,p_invoice_id:invoiceId,p_number:receipt.invoiceNumber,p_total:receipt.totalCents,p_balance:receipt.balanceCents});
+  if(saved.error || saved.data!==true) return {ok:false,error:'Adoption was not confirmed. Refresh and investigate; do not recreate.'};
+  return {ok:true,invoiceId,invoiceUrl:buildInvoiceUrl(qb.environment,qb.realmId,invoiceId)};
+ } catch {return {ok:false,error:'Invoice verification or adoption failed. No new invoice was created.'};}
 }
 
 // ---- Internal helpers ----
@@ -399,10 +390,10 @@ async function findOrCreateCustomer(
       const hit = existing.QueryResponse.Customer?.[0];
       if (hit?.Id) return hit.Id;
     } catch {
-      console.warn("[qbo.invoice] customer lookup failed; attempting create");
+      throw new Error('QuickBooks customer lookup unavailable; no create authorized.');
     }
   } else {
-    console.warn("[qbo.invoice] skipped customer lookup for invalid email");
+    throw new Error('Invalid customer email; no create authorized.');
   }
 
   const displayName = [realtor.full_name, realtor.brokerage]
