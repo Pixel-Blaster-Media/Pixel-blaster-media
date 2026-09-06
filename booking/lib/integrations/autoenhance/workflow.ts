@@ -97,6 +97,7 @@ type AutoenhanceIGuideUploadSummary = {
   warning: string | null;
   error: string | null;
   processComplete: boolean | null;
+  updatedAt: string;
 };
 
 type BookingAutoenhanceRow = {
@@ -531,6 +532,9 @@ async function refreshBookingAutoenhanceBatchWithinDeadline({
     })
     .eq("id", batch.id)
     .eq("organization_id", admin.organizationId)
+    // The legacy update trigger versions the snapshot. A losing refresh yields;
+    // it must never regress a newer receipt aggregate, portal, or status.
+    .eq("updated_at", batch.updated_at)
     .select(
       "id, organization_id, booking_id, property_id, order_id, order_name, upload_mode, status, process_status, brackets_per_image, settings, bracket_ids, uploaded_image_ids, finished_image_ids, iguide_portal_id, iguide_uploaded_image_ids, iguide_failed_image_ids, last_iguide_push_at, last_error, created_by, created_at, updated_at",
     )
@@ -752,7 +756,18 @@ async function pushFinishedImagesToIGuide({
   let lastError: string | null = null;
 
   let attempted = 0;
-  for (const image of images.slice(0, 100)) {
+  // Prioritize unclaimed work before ambiguous receipts. Bound external uploads,
+  // not the original array prefix: completed/blocked rows must not hide later work.
+  const known = new Map(existing.map((row) => [row.imageId, row]));
+  const priority = (imageId: string) => {
+    const row = known.get(imageId);
+    return !row ? 0 : row.status === "failed" && /^media:retryable:[12]$/.test(row.warning ?? "") ? 1 : 2;
+  };
+  const candidates = images.filter((image) => !uploaded.has(image.imageId))
+    .sort((a, b) => priority(a.imageId) - priority(b.imageId) ||
+      (Date.parse(known.get(a.imageId)?.updatedAt ?? "") || 0) -
+      (Date.parse(known.get(b.imageId)?.updatedAt ?? "") || 0));
+  for (const image of candidates) {
     if (attempted >= 1) break;
     try { mediaSignal(1); } catch { lastError = "Media recovery deadline reached."; break; }
     if (uploaded.has(image.imageId)) continue;
@@ -952,6 +967,10 @@ async function claimIGuideUpload(input: {
     );
   }
   if (existing.status === "pending" && existing.iguide_asset_name && existing.iguide_job_id && existing.warning?.startsWith("media:claim:")) {
+    // Rotate accepted polls before transport, including timeout/nonterminal cases.
+    // Keep the same claim and accepted identity: this is never a re-upload lease.
+    await upsertIGuideUpload({ ...input, claimToken: existing.warning, status: "pending",
+      error: "iGUIDE reconciliation required; do not upload again." });
     const checked = await getUploadProcessingStatus(input.iguidePortalId, existing.iguide_asset_name, { organizationId: input.admin.organizationId });
     if (checked.ok && checked.status === 204) {
       await upsertIGuideUpload({ ...input, claimToken: existing.warning, status: "uploaded", processComplete: true });
@@ -1067,6 +1086,7 @@ async function loadUploadSummaries(
     warning: row.warning,
     error: row.error,
     processComplete: row.process_complete,
+    updatedAt: row.updated_at,
   }));
 }
 

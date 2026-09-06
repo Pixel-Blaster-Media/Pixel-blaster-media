@@ -69,5 +69,21 @@ export async function boundedMediaResponse(response: Response, options: { maxByt
   if (!options.allowedTypes.includes(mime)) { void response.body?.cancel().catch(() => {}); throw new Error("Unsupported media type."); }
   const bytes = await readProviderBytes(response, options);
   validateMediaSignature(bytes, mime);
+  if (mime.startsWith("image/")) {
+    // Next already ships sharp; decode with hard input limits, not header trust.
+    const { default: sharp } = await import("sharp");
+    const image = sharp(bytes, { limitInputPixels: 40_000_000, failOn: "warning" });
+    try {
+      options.signal.throwIfAborted();
+      const metadata = await image.metadata();
+      if (!metadata.width || !metadata.height || metadata.width > 16_384 || metadata.height > 16_384 ||
+          metadata.width * metadata.height > 40_000_000 || (metadata.pages ?? 1) !== 1) {
+        throw new Error("Media dimension or pixel limit exceeded.");
+      }
+      // Force full decode to catch truncated/corrupt compressed pixel data.
+      await image.timeout({ seconds: 10 }).stats();
+      options.signal.throwIfAborted();
+    } finally { image.destroy(); }
+  }
   return new Response(bytes, { status: 200, headers: { "content-type": mime, "content-length": String(bytes.length) } });
 }

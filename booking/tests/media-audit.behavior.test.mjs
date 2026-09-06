@@ -44,7 +44,7 @@ test('accepted processing receipt is reconciled read-only, never reallocated', a
     getUploadProcessingStatus: async (tour, asset, scope) => { assert.equal(tour, 'tour'); assert.equal(asset, 'asset-1'); assert.equal(scope.organizationId, 'tenant'); checked++; return { ok: true, status: 204 }; },
   });
   assert.equal(await h.workflow.claimIGuideUpload(claimInput), false);
-  assert.equal(checked, 1); assert.equal(h.updates(), 1);
+  assert.equal(checked, 1); assert.equal(h.updates(), 2);
 });
 for (const status of ['pending', 'failed']) test(`historical ${status} cannot be replayed without affirmative safe-retry evidence`, async () => {
   const h = workflowHarness({ id: 'receipt', status, updated_at: '2020-01-01T00:00:00Z', warning: null });
