@@ -26,7 +26,8 @@ import { totalDurationMinutes } from "./services";
 /** The business operates in this timezone. Shoot times are stored in UTC
  *  in Postgres but `business_hours.start_time` / `end_time` are wall-clock
  *  times in this zone. */
-export const BUSINESS_TZ = "America/Toronto";
+import { BUSINESS_TZ } from "@/lib/booking/timezone";
+export { BUSINESS_TZ } from "@/lib/booking/timezone";
 
 /** Granularity of slot offsets — e.g. 30 means slots start every :00 and :30. */
 const SLOT_STEP_MINUTES = 30;

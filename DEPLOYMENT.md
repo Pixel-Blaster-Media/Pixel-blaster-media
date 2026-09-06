@@ -27,6 +27,8 @@ booking/scripts/deploy-production.sh
 
 The script refuses to deploy unless the root link has the canonical project ID, Vercel reports Root Directory `booking`, the tree is clean, and `HEAD` exactly matches `origin/main`. Do not run `vercel --prod` directly from `booking/`.
 
+It additionally requires successful exact-SHA main-push CI (Application, PostgreSQL integration, Marketing proxy) and fresh, reviewer-approved schema compatibility evidence. Set `PRODUCTION_SCHEMA_EVIDENCE` and `PRODUCTION_SUPABASE_PROJECT_REF` as described in [Production release evidence](booking/docs/PRODUCTION_RELEASE_EVIDENCE.md). `--check-only` verifies the target only; it does not authorize a release.
+
 ## Static website (`pixel-blaster-media-website`)
 
 - Vercel root directory: repository root

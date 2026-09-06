@@ -48,6 +48,7 @@ function runDeployGuard({
   mkdirSync(bin, { recursive: true });
   const scriptPath = join(scripts, "deploy-production.sh");
   writeFileSync(scriptPath, deployScript);
+  writeFileSync(join(scripts, "verify-production-evidence.mjs"), readFileSync(new URL("../scripts/verify-production-evidence.mjs", import.meta.url)));
   chmodSync(scriptPath, 0o755);
   writeFileSync(join(root, ".vercel", "project.json"), JSON.stringify(link));
 
@@ -157,10 +158,11 @@ test("manual production deploys reject the duplicate project and unsafe Git stat
   }
 });
 
-test("manual production deploys execute only from a clean exact origin/main repository root", () => {
-  const clean = runDeployGuard({ args: [] });
-  assert.equal(clean.result.status, 0, clean.result.stderr);
-  assert.match(clean.result.stdout, new RegExp(`DEPLOY_CWD=${clean.root.replaceAll("/", "\\/")}`));
+test("clean exact origin/main alone cannot authorize a production deployment", () => {
+  const clean = runDeployGuard({ args: [], head: "a".repeat(40), originMain: "a".repeat(40) });
+  assert.notEqual(clean.result.status, 0, clean.result.stderr);
+  assert.match(clean.result.stderr, /Production evidence blocked/);
+  assert.doesNotMatch(clean.result.stdout, /DEPLOY_CWD=/);
 });
 
 test("deployment cost controls keep both jobs daily and document current plan limits", () => {

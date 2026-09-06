@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import type { SlotsByDay } from "@/lib/booking/slot-display";
+import { BUSINESS_TZ } from "@/lib/booking/timezone";
 
 /**
  * Step 3 — month-grid calendar picker.
@@ -115,6 +116,7 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
 
   return (
     <div className="realtor-elevated-panel space-y-4 rounded-3xl p-4 md:p-5">
+      <p className="text-xs text-realtor-muted">All times in {BUSINESS_TZ} (Eastern Time).</p>
       {/* Month header */}
       <div className="flex items-center justify-between">
         <button
@@ -166,6 +168,8 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
               key={cell.key}
               type="button"
               disabled={!hasSlots}
+              aria-label={`${formatDayLabel(dayKey ?? "")} — ${hasSlots ? `${slots.length} available ${slots.length === 1 ? "time" : "times"}` : "No available times"}`}
+              aria-pressed={isSelected}
               onClick={() => hasSlots && dayKey && setOpenDayKey(dayKey)}
               className={
                 "relative aspect-square rounded-2xl border text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
@@ -205,6 +209,8 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
                 <button
                   type="button"
                   onClick={() => pickSlot(s.start)}
+                  aria-label={`${formatDayLabel(openDayKey ?? "")} at ${s.timeLabel} (${BUSINESS_TZ})`}
+                  aria-pressed={selectedSlot === s.start}
                   className={
                     "w-full rounded-full border px-3 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
                     (selectedSlot === s.start
@@ -290,7 +296,8 @@ function formatDayLabel(dayKey: string): string {
   const date = new Date(y, (m ?? 1) - 1, d ?? 1, 12);
   return date.toLocaleDateString("en-US", {
     weekday: "long",
-    month: "short",
+    month: "long",
     day: "numeric",
+    year: "numeric",
   });
 }
