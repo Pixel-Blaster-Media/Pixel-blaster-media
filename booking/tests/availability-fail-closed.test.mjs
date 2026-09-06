@@ -19,6 +19,12 @@ function load(failure, googleFailure = false) {
     if(name.includes('supabase/server')) return {getServiceSupabase:()=>db};
     if(name.includes('organizations/default')) return {DEFAULT_ORGANIZATION_ID:'org'};
     if(name==='./services') return {totalDurationMinutes:()=>60};
+    if(name==='@/lib/booking/timezone') {
+      const actual = {};
+      const timezone = fs.readFileSync(new URL('../lib/booking/timezone.ts', import.meta.url), 'utf8');
+      vm.runInNewContext(ts.transpileModule(timezone, {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText, {exports:actual});
+      return actual;
+    }
     throw Error(name);
   }});
   return exports;

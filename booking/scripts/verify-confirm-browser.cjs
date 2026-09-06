@@ -262,6 +262,7 @@ async function run() {
           "calendar_blocks",
           "integration_credentials",
           "integration_connections",
+          "google_calendar_connection",
           "organization_members",
           "catalog_item_examples",
         ].includes(table)
