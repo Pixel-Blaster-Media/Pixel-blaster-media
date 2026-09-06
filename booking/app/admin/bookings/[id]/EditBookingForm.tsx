@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type ReactNode } from "react";
+import { useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import AddressAutocomplete, {
@@ -19,6 +19,7 @@ export interface EditCatalogItem {
 }
 
 export interface EditableBookingInitial {
+  lifecycleVersion: number;
   scheduledAtLocal: string;
   streetAddress: string;
   unitNumber: string;
@@ -44,6 +45,7 @@ export default function EditBookingForm({
   catalogItems: EditCatalogItem[];
 }) {
   const [isPending, startTransition] = useTransition();
+  const requestRef = useRef<string | null>(null);
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -71,6 +73,9 @@ export default function EditBookingForm({
     setSavedMessage(null);
     setWarning(null);
     startTransition(async () => {
+      requestRef.current ??= crypto.randomUUID();
+      formData.set("admin_request_id", requestRef.current);
+      formData.set("lifecycle_version", String(initial.lifecycleVersion));
       const result = await updateBookingDetails(bookingId, formData);
       if (!result.ok) {
         setError(result.error ?? "Could not save booking.");
@@ -82,6 +87,7 @@ export default function EditBookingForm({
           : "Booking saved.",
       );
       setWarning(result.warning ?? null);
+      requestRef.current = null;
       router.refresh();
     });
   }

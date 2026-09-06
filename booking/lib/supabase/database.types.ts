@@ -189,6 +189,7 @@ interface BookingsTable {
     owner_id: string;
     public_request_id: string | null;
     public_request_fingerprint: string | null;
+    lifecycle_version: number;
     status: BookingStatus;
     scheduled_at: string | null;
     scheduled_ends_at: string | null;
@@ -1325,6 +1326,10 @@ export interface Database {
       admin_realtor_search: {
         Args: { p_organization_id: string; p_query?: string; p_after?: string | null };
         Returns: Json;
+      };
+      save_admin_booking_aggregate: {
+        Args: { p_organization_id: string; p_actor_id: string; p_request_id: string; p_booking_id: string | null; p_expected_version: number | null; p_input: Json };
+        Returns: { booking_id: string; property_id: string; lifecycle_version: number; replayed: boolean };
       };
       attach_external_catalog_example: {
         Args: {

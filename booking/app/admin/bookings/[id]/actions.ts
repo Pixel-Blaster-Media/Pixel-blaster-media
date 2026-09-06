@@ -74,6 +74,7 @@ import type {
 } from "@/lib/supabase/database.types";
 
 interface BookingStatusRow {
+  lifecycle_version: number;
   status: BookingStatus;
 }
 
@@ -186,6 +187,7 @@ interface BookingForListingWebsiteRow {
 }
 
 interface BookingForManualEditRow {
+  lifecycle_version: number;
   id: string;
   organization_id: string;
   property_id: string;
@@ -284,7 +286,7 @@ export async function updateBookingStatus(
 
   const { data: current, error: loadErr } = await service
     .from("bookings")
-    .select("status")
+    .select("status, lifecycle_version")
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
     .single<BookingStatusRow>();
@@ -299,13 +301,17 @@ export async function updateBookingStatus(
     };
   }
 
-  const { error } = await service
+  const { data: updatedBooking, error } = await service
     .from("bookings")
     .update({ status: next })
     .eq("id", bookingId)
-    .eq("organization_id", admin.organizationId);
+    .eq("organization_id", admin.organizationId)
+    .eq("status", current.status)
+    .eq("lifecycle_version", current.lifecycle_version)
+    .select("id")
+    .maybeSingle();
 
-  if (error) return { ok: false, error: "Could not update booking status." };
+  if (error || !updatedBooking) return { ok: false, error: "Booking changed. Reload before updating its status." };
 
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${bookingId}`);
@@ -377,7 +383,7 @@ export async function updateBookingDetails(
   const { data: booking, error: bookingError } = await service
     .from("bookings")
     .select(
-      "id, organization_id, property_id, owner_id, scheduled_at, scheduled_ends_at, services, add_ons, google_calendar_event_id, suppress_realtor_notifications, properties(street_address, city, province, postal_code), profiles(email, full_name, phone, brokerage, delivery_cc_emails)",
+      "id, lifecycle_version, organization_id, property_id, owner_id, scheduled_at, scheduled_ends_at, services, add_ons, google_calendar_event_id, suppress_realtor_notifications, properties(street_address, city, province, postal_code), profiles(email, full_name, phone, brokerage, delivery_cc_emails)",
     )
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
@@ -441,77 +447,24 @@ export async function updateBookingDetails(
   // realtor-facing booking and self-serve reschedule flows still reject
   // conflicts before they write.
 
-  const propertyId = await findOrCreatePropertyForBooking({
-    organizationId: admin.organizationId,
-    ownerId: booking.owner_id,
-    streetAddress,
-    city,
-    province,
-    postalCode,
-  });
-  if (!propertyId) return { ok: false, error: "Could not save property." };
-
-  const legacyServices = shouldReplaceCatalogItems
-    ? selectedItems
-        .filter((item) => item.kind !== "addon")
-        .map((item) => item.slug)
-    : booking.services;
-  const legacyAddons = shouldReplaceCatalogItems
-    ? selectedItems
-        .filter((item) => item.kind === "addon")
-        .map((item) => item.slug)
-    : booking.add_ons;
-
-  // Guard: an empty time field means "leave the schedule alone", not
-  // "clear it" — otherwise a form variant that omits the field would
-  // silently wipe the booking's time.
-  const scheduleUpdate = scheduledAt
-      ? {
-          scheduled_at: scheduledAt.toISOString(),
-          scheduled_ends_at: scheduledEndsAt
-            ? scheduledEndsAt.toISOString()
-            : null,
-          allow_schedule_overlap: true,
-        }
-    : {};
-
-  const { error: updateError } = await service
-    .from("bookings")
-    .update({
-      property_id: propertyId,
-      ...scheduleUpdate,
-      services: legacyServices,
-      add_ons: legacyAddons,
+  const { data: saved, error: updateError } = await service.rpc("save_admin_booking_aggregate", {
+    p_organization_id: admin.organizationId,
+    p_actor_id: admin.userId,
+    p_request_id: str(formData, "admin_request_id") || crypto.randomUUID(),
+    p_booking_id: booking.id,
+    p_expected_version: Number(str(formData, "lifecycle_version")) || booking.lifecycle_version,
+    p_input: {
+      owner_id: booking.owner_id, street_address: streetAddress, city, province,
+      contact_name: contactName, contact_phone: contactPhone, brokerage,
+      postal_code: postalCode, unit_number: unitNumber, client_notes: clientNotes,
+      scheduled_at: scheduledAt?.toISOString() ?? booking.scheduled_at,
       square_footage: squareFootage,
-      unit_number: unitNumber,
-      client_notes: clientNotes,
-    })
-    .eq("id", booking.id)
-    .eq("organization_id", admin.organizationId);
-
-  if (updateError) {
-    if (updateError.code === "23P01") {
-      return {
-        ok: false,
-        error:
-          "The database still has the no-overlap guard. Apply migration 0037_allow_admin_overlap.sql to enable admin double-booking.",
-      };
-    }
-    return { ok: false, error: "Could not save booking." };
-  }
-
-  let lineItemWarning: string | undefined;
-  if (shouldReplaceCatalogItems) {
-    const lineItemError = await replaceBookingLineItems({
-      bookingId: booking.id,
-      selectedItems,
-      squareFootage,
-    });
-    if (lineItemError) {
-      lineItemWarning =
-        "Booking saved, but its item snapshots did not update. Review the package before invoicing.";
-    }
-  }
+      catalog_item_ids: selectedItems.map(item => item.id),
+    },
+  });
+  if (updateError || !saved) return { ok: false, error: "Booking changed or could not be saved. Reload and try again." };
+  if (saved.replayed) return { ok: true };
+  const lineItemWarning: string | undefined = undefined;
 
   const profileChanged =
     booking.profiles?.full_name !== contactName ||
@@ -580,18 +533,17 @@ export async function updateBookingDetails(
     details: `Edited booking details for ${streetAddress}${city ? `, ${city}` : ""}.`,
     payload: {
       old_property_id: booking.property_id,
-      new_property_id: propertyId,
+      new_property_id: saved.property_id,
       scheduled_at: scheduledAt?.toISOString() ?? null,
       scheduled_ends_at: scheduledEndsAt?.toISOString() ?? null,
-      services: legacyServices,
-      add_ons: legacyAddons,
+      catalog_item_ids: selectedItems.map(item => item.id),
     },
     result_status: "success",
     result_message: "Booking details updated from admin edit form.",
     undo_payload: {
       booking_id: booking.id,
       old_property_id: booking.property_id,
-      new_property_id: propertyId,
+      new_property_id: saved.property_id,
     },
   });
 
@@ -642,7 +594,7 @@ export async function updateBookingServicesFromCalendar(
   const { data: booking, error: bookingError } = await service
     .from("bookings")
     .select(
-      "id, organization_id, owner_id, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, unit_number, client_notes, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, properties(street_address, city, postal_code), profiles(email, full_name, phone, brokerage, delivery_cc_emails)",
+      "id, lifecycle_version, organization_id, owner_id, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, unit_number, client_notes, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, properties(street_address, city, province, postal_code), profiles(email, full_name, phone, brokerage, delivery_cc_emails)",
     )
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
@@ -659,10 +611,12 @@ export async function updateBookingServicesFromCalendar(
       client_notes: string | null;
       google_calendar_event_id: string | null;
       quickbooks_invoice_id: string | null;
+      lifecycle_version: number;
       suppress_realtor_notifications: boolean;
       properties: {
         street_address: string;
         city: string | null;
+        province: string | null;
         postal_code: string | null;
       } | null;
       profiles: {
@@ -726,32 +680,22 @@ export async function updateBookingServicesFromCalendar(
     .filter((item) => item.kind === "addon")
     .map((item) => item.slug);
 
-  const { error: updateError } = await service
-    .from("bookings")
-    .update({
-      services: legacyServices,
-      add_ons: legacyAddons,
-      ...(scheduledEndsAt
-        ? {
-            scheduled_ends_at: scheduledEndsAt.toISOString(),
-            allow_schedule_overlap: true,
-          }
-        : {}),
-    })
-    .eq("id", booking.id)
-    .eq("organization_id", admin.organizationId);
-  if (updateError) {
-    return { ok: false, error: "Could not update booking services." };
-  }
-
-  const lineItemError = await replaceBookingLineItems({
-    bookingId: booking.id,
-    selectedItems,
-    squareFootage: booking.square_footage,
+  const { data: saved, error: updateError } = await service.rpc("save_admin_booking_aggregate", {
+    p_organization_id: admin.organizationId, p_actor_id: admin.userId,
+    p_request_id: str(formData, "admin_request_id") || crypto.randomUUID(),
+    p_booking_id: booking.id,
+    p_expected_version: Number(str(formData, "lifecycle_version")) || booking.lifecycle_version,
+    p_input: {
+      owner_id: booking.owner_id, street_address: booking.properties.street_address,
+      city: booking.properties.city, province: booking.properties.province,
+      postal_code: booking.properties.postal_code, unit_number: booking.unit_number,
+      client_notes: booking.client_notes, scheduled_at: booking.scheduled_at,
+      square_footage: booking.square_footage, catalog_item_ids: selectedCatalogIds,
+    },
   });
-  const lineItemWarning = lineItemError
-    ? "Package selection was saved, but item snapshots could not be refreshed."
-    : undefined;
+  if (updateError || !saved) return { ok: false, error: "Booking changed or could not be saved. Reload and try again." };
+  if (saved.replayed) return { ok: true };
+  const lineItemWarning: string | undefined = undefined;
 
   const calendarSynced = await syncGoogleCalendarEventBestEffort({
     organizationId: admin.organizationId,
@@ -2266,46 +2210,6 @@ function catalogRows(catalog: Catalog): CatalogItemRow[] {
   return [...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons];
 }
 
-async function replaceBookingLineItems({
-  bookingId,
-  selectedItems,
-  squareFootage,
-}: {
-  bookingId: string;
-  selectedItems: CatalogItemRow[];
-  squareFootage: number | null;
-}): Promise<string | null> {
-  const service = getServiceSupabase();
-  const { data: oldLineItems, error: oldLineItemsError } = await service
-    .from("booking_line_items")
-    .select("id")
-    .eq("booking_id", bookingId)
-    .returns<Array<{ id: string }>>();
-  if (oldLineItemsError) return "Could not update booking line items.";
-
-  const lineItems = selectedItems.map((item) => ({
-    booking_id: bookingId,
-    catalog_item_id: item.id,
-    item_name: item.name,
-    item_slug: item.slug,
-    item_kind: item.kind,
-    quantity: 1,
-    unit_price_cents: getCatalogItemPrice(item, squareFootage).totalPriceCents,
-    unit_duration_minutes: item.duration_minutes,
-  }));
-  const { error: lineItemError } = await service
-    .from("booking_line_items")
-    .insert(lineItems);
-  if (lineItemError) return "Could not update booking line items.";
-
-  const oldLineItemIds = (oldLineItems ?? []).map((item) => item.id);
-  if (oldLineItemIds.length === 0) return null;
-  const { error: deleteLineItemsError } = await service
-    .from("booking_line_items")
-    .delete()
-    .in("id", oldLineItemIds);
-  return deleteLineItemsError ? "Could not update booking line items." : null;
-}
 
 async function sendConfirmationForExistingBookingBestEffort(
   bookingId: string,

@@ -102,6 +102,7 @@ type AssistantExecutionResult = AdminAssistantResult & {
 };
 
 interface AdminAssistantBookingDraft {
+  requestId: string;
   sourceBookingId: string;
   scheduledLocal: string;
   contactName: string;
@@ -1493,6 +1494,7 @@ function buildCreateBookingAction(
     .filter(Boolean)
     .join(", ");
   const payload: AdminAssistantBookingDraft = {
+    requestId: crypto.randomUUID(),
     sourceBookingId: sourceBooking?.id ?? "",
     scheduledLocal,
     contactName,
@@ -2368,6 +2370,7 @@ async function createBookingFromAssistant(
   }
 
   const formData = new FormData();
+  formData.set("admin_request_id", draft.requestId);
   formData.set("scheduled_at", draft.scheduledLocal);
   formData.set("contact_name", draft.contactName);
   formData.set("contact_email", draft.contactEmail);

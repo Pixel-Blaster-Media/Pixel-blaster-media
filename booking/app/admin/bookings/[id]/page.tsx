@@ -70,6 +70,7 @@ import VideoLinksSection from "./VideoLinksSection";
 export const dynamic = "force-dynamic";
 
 interface BookingDetail {
+  lifecycle_version: number;
   id: string;
   status: BookingStatus;
   scheduled_at: string | null;
@@ -201,7 +202,7 @@ export default async function BookingDetailPage({
       supabase
         .from("bookings")
         .select(
-          "id, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, iguide_id, iguide_portal_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, province, postal_code), profiles(id, full_name, email, phone, brokerage, delivery_cc_emails, internal_notes, ai_memory)",
+          "id, lifecycle_version, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, iguide_id, iguide_portal_id, quickbooks_invoice_id, quickbooks_invoice_number, quickbooks_invoice_url, quickbooks_invoice_status, quickbooks_invoice_total_cents, quickbooks_invoice_synced_at, created_at, properties(id, street_address, city, province, postal_code), profiles(id, full_name, email, phone, brokerage, delivery_cc_emails, internal_notes, ai_memory)",
         )
         .eq("id", id)
         .eq("organization_id", admin.organizationId)
@@ -577,6 +578,7 @@ function DetailsTab({
   invoice: ReactNode;
 }) {
   const editableInitial: EditableBookingInitial = {
+    lifecycleVersion: booking.lifecycle_version,
     scheduledAtLocal: booking.scheduled_at
       ? formatDateTimeLocalInput(booking.scheduled_at)
       : "",
