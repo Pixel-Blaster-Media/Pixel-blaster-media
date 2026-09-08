@@ -1,7 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
-
 import { safePostAuthPath } from "@/lib/auth/account-destination";
 import {
   setSupabaseSessionCookie,
@@ -10,6 +8,7 @@ import {
 
 export interface PasswordSignInState {
   error?: string;
+  redirectTo?: string;
 }
 
 /**
@@ -48,5 +47,7 @@ export async function signInWithPassword(
     return { error: "The authenticated session could not be established." };
   }
 
-  redirect(next);
+  // Let the browser install Set-Cookie before requesting the destination.
+  // Next's internal redirect fetch can lose cookies across our proxy boundary.
+  return { redirectTo: next };
 }

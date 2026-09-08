@@ -131,166 +131,6 @@ export default async function BookStep4Page({
 
   return (
     <BookingBrandFrame organization={organization}>
-      <BookingBrandHeader organization={organization} compact />
-      <Stepper current={4} state={scopedState} />
-
-      {selectionNotice ? (
-        <p role="status" className="rounded-2xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          {selectionNotice}
-        </p>
-      ) : null}
-
-      <section>
-        <h2 className="text-lg font-semibold text-realtor-text md:text-xl">
-          Review + confirm
-        </h2>
-        {profile ? (
-          <p className="mt-1 text-sm text-realtor-muted">
-            Signed in as{" "}
-            <span className="text-realtor-text">
-              {profile.fullName ?? profile.email}
-            </span>
-            . One click and you&apos;re booked.
-          </p>
-        ) : (
-          <p className="mt-1 text-sm text-realtor-muted">
-            Add your contact details and portal password, then confirm the
-            booking.
-          </p>
-        )}
-      </section>
-
-      {/* Summary first so customers confirm their existing choice before add-ons. */}
-      <section className="realtor-elevated-panel rounded-3xl p-4 text-sm md:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-realtor-primary/10 pb-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
-              Booking summary
-            </p>
-            <h3 className="mt-1 text-base font-semibold text-realtor-text">
-              {addressLine}
-            </h3>
-          </div>
-          <div className="rounded-2xl bg-realtor-surface-muted/70 px-4 py-3 text-right ring-1 ring-realtor-primary/10">
-            <p className="text-xl font-semibold text-realtor-text">
-              ${(totalCents / 100).toFixed(0)}
-            </p>
-            <p className="text-[11px] uppercase tracking-wider text-realtor-muted">
-              ~{duration} min
-            </p>
-          </div>
-        </div>
-
-        <dl className="mt-4 grid gap-3">
-          <Row
-            label="Services"
-            value={
-              <span>
-                {selectedItems.map((s) => s.name).join(", ")}
-                {selectedAddons.length ? (
-                  <span className="text-realtor-muted">
-                    {" · "}
-                    {selectedAddons.map((a) => a.name).join(", ")}
-                  </span>
-                ) : null}
-              </span>
-            }
-          />
-          <Row label="Address" value={addressLine} />
-          {scopedState.squareFootage != null ? (
-            <Row
-              label="Size"
-              value={`${scopedState.squareFootage} sqft (approx.)`}
-            />
-          ) : null}
-          {scopedState.isVacant ? (
-            <Row
-              label="Occupancy"
-              value={
-                scopedState.isVacant === "vacant"
-                  ? "Vacant"
-                  : scopedState.isVacant === "partial"
-                    ? "Partially occupied"
-                    : "Occupied"
-              }
-            />
-          ) : null}
-          {scopedState.includeBasement != null ? (
-            <Row
-              label="Basement"
-              value={scopedState.includeBasement ? "Include in shoot" : "Skip"}
-            />
-          ) : null}
-          {scopedState.shotRequests.length || scopedState.shootNotes ? (
-            <Row
-              label="Shot notes"
-              value={
-                <span className="space-y-1">
-                  {scopedState.shotRequests.length ? (
-                    <span className="block">
-                      {scopedState.shotRequests
-                        .map(formatShotRequest)
-                        .join(", ")}
-                    </span>
-                  ) : null}
-                  {scopedState.shootNotes ? (
-                    <span className="block text-realtor-muted">
-                      {scopedState.shootNotes}
-                    </span>
-                  ) : null}
-                </span>
-              }
-            />
-          ) : null}
-          <Row label="When" value={whenLabel} />
-          {pricedItems.some((row) => row.price.overageCents > 0) ? (
-            <Row
-              label="Sqft pricing"
-              value={
-                <span className="space-y-1">
-                  {pricedItems
-                    .filter((row) => row.price.overageCents > 0)
-                    .map((row) => (
-                      <span key={row.item.id} className="block">
-                        {row.item.name}: +$
-                        {(row.price.overageCents / 100).toFixed(0)} for{" "}
-                        {scopedState.squareFootage?.toLocaleString()} sqft
-                      </span>
-                    ))}
-                </span>
-              }
-            />
-          ) : null}
-        </dl>
-        <p className="mt-3 border-t border-realtor-primary/10 pt-3 text-[11px] text-realtor-muted">
-          Payment happens after the shoot. We&apos;ll adjust if the sqft or
-          details need tweaking. Travel is included within roughly 30 km of
-          the core service area; outside that, any travel fee is reviewed
-          before invoicing.
-        </p>
-      </section>
-
-      <ConfirmUpsellPanel
-        state={scopedState}
-        catalog={[...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(
-          (item) => ({
-            slug: item.slug,
-            name: item.name,
-            kind: item.kind,
-            price_cents: item.price_cents,
-            duration_minutes: item.duration_minutes,
-            is_photo: item.is_photo,
-            is_video: item.is_video,
-            is_iguide: item.is_iguide,
-            is_aerial: item.is_aerial,
-            require_has_video: item.require_has_video,
-            require_has_media: item.require_has_media,
-            require_has_iguide: item.require_has_iguide,
-            exclude_has_aerial: item.exclude_has_aerial,
-          }),
-        )}
-      />
-
       <ConfirmForm
         requestId={randomUUID()}
         state={scopedState}
@@ -307,7 +147,167 @@ export default async function BookStep4Page({
             overage_price_cents: item.overage_price_cents,
           }),
         )}
-      />
+      >
+        <BookingBrandHeader organization={organization} compact />
+        <Stepper current={4} state={scopedState} />
+
+        {selectionNotice ? (
+          <p role="status" className="rounded-2xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {selectionNotice}
+          </p>
+        ) : null}
+
+        <section>
+          <h2 className="text-lg font-semibold text-realtor-text md:text-xl">
+            Review + confirm
+          </h2>
+          {profile ? (
+            <p className="mt-1 text-sm text-realtor-muted">
+              Signed in as{" "}
+              <span className="text-realtor-text">
+                {profile.fullName ?? profile.email}
+              </span>
+              . One click and you&apos;re booked.
+            </p>
+          ) : (
+            <p className="mt-1 text-sm text-realtor-muted">
+              Add your contact details and portal password, then confirm the
+              booking.
+            </p>
+          )}
+        </section>
+
+        {/* Summary first so customers confirm their existing choice before add-ons. */}
+        <section className="realtor-elevated-panel rounded-3xl p-4 text-sm md:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-realtor-primary/10 pb-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
+                Booking summary
+              </p>
+              <h3 className="mt-1 text-base font-semibold text-realtor-text">
+                {addressLine}
+              </h3>
+            </div>
+            <div className="rounded-2xl bg-realtor-surface-muted/70 px-4 py-3 text-right ring-1 ring-realtor-primary/10">
+              <p className="text-xl font-semibold text-realtor-text">
+                ${(totalCents / 100).toFixed(0)}
+              </p>
+              <p className="text-[11px] uppercase tracking-wider text-realtor-muted">
+                ~{duration} min
+              </p>
+            </div>
+          </div>
+
+          <dl className="mt-4 grid gap-3">
+            <Row
+              label="Services"
+              value={
+                <span>
+                  {selectedItems.map((s) => s.name).join(", ")}
+                  {selectedAddons.length ? (
+                    <span className="text-realtor-muted">
+                      {" · "}
+                      {selectedAddons.map((a) => a.name).join(", ")}
+                    </span>
+                  ) : null}
+                </span>
+              }
+            />
+            <Row label="Address" value={addressLine} />
+            {scopedState.squareFootage != null ? (
+              <Row
+                label="Size"
+                value={`${scopedState.squareFootage} sqft (approx.)`}
+              />
+            ) : null}
+            {scopedState.isVacant ? (
+              <Row
+                label="Occupancy"
+                value={
+                  scopedState.isVacant === "vacant"
+                    ? "Vacant"
+                    : scopedState.isVacant === "partial"
+                      ? "Partially occupied"
+                      : "Occupied"
+                }
+              />
+            ) : null}
+            {scopedState.includeBasement != null ? (
+              <Row
+                label="Basement"
+                value={scopedState.includeBasement ? "Include in shoot" : "Skip"}
+              />
+            ) : null}
+            {scopedState.shotRequests.length || scopedState.shootNotes ? (
+              <Row
+                label="Shot notes"
+                value={
+                  <span className="space-y-1">
+                    {scopedState.shotRequests.length ? (
+                      <span className="block">
+                        {scopedState.shotRequests
+                          .map(formatShotRequest)
+                          .join(", ")}
+                      </span>
+                    ) : null}
+                    {scopedState.shootNotes ? (
+                      <span className="block text-realtor-muted">
+                        {scopedState.shootNotes}
+                      </span>
+                    ) : null}
+                  </span>
+                }
+              />
+            ) : null}
+            <Row label="When" value={whenLabel} />
+            {pricedItems.some((row) => row.price.overageCents > 0) ? (
+              <Row
+                label="Sqft pricing"
+                value={
+                  <span className="space-y-1">
+                    {pricedItems
+                      .filter((row) => row.price.overageCents > 0)
+                      .map((row) => (
+                        <span key={row.item.id} className="block">
+                          {row.item.name}: +$
+                          {(row.price.overageCents / 100).toFixed(0)} for{" "}
+                          {scopedState.squareFootage?.toLocaleString()} sqft
+                        </span>
+                      ))}
+                  </span>
+                }
+              />
+            ) : null}
+          </dl>
+          <p className="mt-3 border-t border-realtor-primary/10 pt-3 text-[11px] text-realtor-muted">
+            Payment happens after the shoot. We&apos;ll adjust if the sqft or
+            details need tweaking. Travel is included within roughly 30 km of
+            the core service area; outside that, any travel fee is reviewed
+            before invoicing.
+          </p>
+        </section>
+
+        <ConfirmUpsellPanel
+          state={scopedState}
+          catalog={[...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(
+            (item) => ({
+              slug: item.slug,
+              name: item.name,
+              kind: item.kind,
+              price_cents: item.price_cents,
+              duration_minutes: item.duration_minutes,
+              is_photo: item.is_photo,
+              is_video: item.is_video,
+              is_iguide: item.is_iguide,
+              is_aerial: item.is_aerial,
+              require_has_video: item.require_has_video,
+              require_has_media: item.require_has_media,
+              require_has_iguide: item.require_has_iguide,
+              exclude_has_aerial: item.exclude_has_aerial,
+            }),
+          )}
+        />
+      </ConfirmForm>
     </BookingBrandFrame>
   );
 }
