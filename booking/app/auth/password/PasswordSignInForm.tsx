@@ -1,18 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { useFormStatus } from "react-dom";
 
-import {
-  signInWithPassword,
-  type PasswordSignInState,
-} from "./actions";
+import { signInWithPassword, type PasswordSignInState } from "./actions";
 
 const initial: PasswordSignInState | null = null;
 
 export default function PasswordSignInForm({ next }: { next?: string }) {
   const [state, formAction] = useActionState(signInWithPassword, initial);
+
+  useEffect(() => {
+    if (state?.redirectTo) window.location.replace(state.redirectTo);
+  }, [state]);
+
+  if (state?.redirectTo) {
+    return (
+      <p role="status">
+        Signed in. <a href={state.redirectTo}>Continue to your account</a>
+      </p>
+    );
+  }
 
   return (
     <form action={formAction} className="space-y-4">

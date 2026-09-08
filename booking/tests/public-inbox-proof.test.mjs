@@ -83,7 +83,15 @@ test('controlled inbox code continues the retained request through booking and p
   await f.action(null, f.form);
   const code = f.inbox[0].text.match(/\b\d{8}\b/)[0];
   f.form.set('verification_code', code);
-  await assert.rejects(f.action(null, f.form), /REDIRECT:\/portal\/property-1\?booked=1/);
+  const result = await f.action(null, f.form);
+  assert.equal(result.ok, true);
+  assert.equal(result.redirectTo, '/portal/property-1?booked=1');
+  assert.deepEqual(result.receipt, {
+    address: '1 Fictional Street',
+    when: 'Sunday, January 10, 2027 at 11:00 AM',
+    services: ['Blue Print'],
+    organizationName: 'Controlled company',
+  });
   assert.deepEqual(f.effects, ['proof', 'identity', 'profile', 'password', 'booking', 'cookie', 'dispatch']);
   assert.equal(f.inbox.length, 1);
 });

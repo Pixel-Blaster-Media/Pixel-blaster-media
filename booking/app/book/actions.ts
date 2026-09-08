@@ -2,8 +2,6 @@
 
 import { randomUUID } from "node:crypto";
 
-import { redirect } from "next/navigation";
-
 import { emailHasAccount } from "@/lib/auth/email-lookup";
 import { isMissingSessionError } from "@/lib/auth/session-error";
 import { provisionRealtorAuthUser } from "@/lib/auth/provision-realtor";
@@ -70,6 +68,13 @@ interface AtomicBookingResult {
 
 export interface BookResult {
   ok: boolean;
+  redirectTo?: string;
+  receipt?: {
+    address: string;
+    when: string;
+    services: string[];
+    organizationName: string;
+  };
   verificationRequired?: boolean;
   errors?: Record<string, string>;
 }
@@ -90,7 +95,7 @@ export interface BookResult {
  *   - Commit property, confirmed booking, price snapshots, and durable jobs atomically
  *   - Lease and attempt Calendar, invoice, email, and push jobs after commit
  *   - Preserve failed/skipped provider outcomes for safe reconciliation
- *   - Redirect the signed-in client to /portal
+ *   - Return a committed receipt with a document-navigation portal link
  */
 export async function createPublicBooking(
   _prev: BookResult | null,
@@ -436,6 +441,12 @@ export async function createPublicBooking(
   const emailAddressLine = unitNumber
     ? `${streetAddress}, Unit ${unitNumber}`
     : streetAddress;
+  const receipt = {
+    address: [emailAddressLine, city].filter(Boolean).join(", "),
+    when: whenLabel,
+    services: [...validServices, ...validAddons].map((item) => item.name),
+    organizationName: organization.name,
+  };
   let manageToken: string | null = null;
   try {
     manageToken = createManageToken(booking.id);
@@ -453,10 +464,13 @@ export async function createPublicBooking(
       org: organization.name,
       ...(manageToken ? { manage: manageToken } : {}),
     });
-    redirect(`/book/success?${params.toString()}`);
+    return { ok: true, redirectTo: `/book/success?${params.toString()}`, receipt };
   }
 
-  redirect(`/portal/${propertyId}?booked=1`);
+  // Do not let Next inline an authenticated redirect's RSC response here.
+  // Its internal cross-host fetch can lose cookies at the canonical proxy
+  // redirect even though this action successfully installed browser cookies.
+  return { ok: true, redirectTo: `/portal/${propertyId}?booked=1`, receipt };
 }
 
 // -------- Helpers --------
