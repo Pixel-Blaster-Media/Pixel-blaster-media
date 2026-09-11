@@ -25,7 +25,7 @@ const nextPackage = JSON.parse(
 
 assert.equal(
   nextPackage.version,
-  "16.3.0",
+  "16.3.3",
   "review marketing attestation normalization before changing locked Next",
 );
 

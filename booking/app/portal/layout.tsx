@@ -2,6 +2,7 @@ import type { Viewport } from "next";
 import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth/require-user";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import {
   loadOrganizationBrand,
   organizationThemeStyle,
@@ -28,7 +29,8 @@ export default async function PortalLayout({
 
   return (
     <div
-      className="portal-layout realtor-theme min-h-[60vh]"
+      className="pixel-app-skin portal-layout realtor-theme min-h-[60vh]"
+      data-pixel-default-palette={user.organizationId === DEFAULT_ORGANIZATION_ID ? true : undefined}
       style={brand ? organizationThemeStyle(brand) : undefined}
     >
       {children}

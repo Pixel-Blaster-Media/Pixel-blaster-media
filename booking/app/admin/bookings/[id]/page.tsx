@@ -334,7 +334,7 @@ export default async function BookingDetailPage({
           ← Bookings
         </Link>
         <span
-          className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${meta.pill}`}
+          className={`precision-job-status rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${meta.pill}`}
         >
           {meta.label}
         </span>

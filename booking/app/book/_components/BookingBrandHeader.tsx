@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 
 import {
   initialsForOrganization,
@@ -14,7 +15,7 @@ export function BookingBrandFrame({
   children: ReactNode;
 }) {
   return (
-    <div className="space-y-6" style={organizationThemeStyle(organization)}>
+    <div className="space-y-6" data-pixel-default-palette={organization.id === DEFAULT_ORGANIZATION_ID ? true : undefined} style={organizationThemeStyle(organization)}>
       {children}
     </div>
   );

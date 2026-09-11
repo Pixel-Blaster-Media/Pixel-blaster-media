@@ -199,7 +199,7 @@ export default function ListingWebsiteSection({
                 </p>
                 <p className="mt-1 text-xs text-realtor-muted">{option.helper}</p>
                 {selected ? (
-                  <p className="mt-2 text-xs font-semibold text-realtor-primary">
+                  <p className="precision-template-caption mt-2 text-xs font-semibold text-realtor-primary">
                     Selected
                   </p>
                 ) : null}
