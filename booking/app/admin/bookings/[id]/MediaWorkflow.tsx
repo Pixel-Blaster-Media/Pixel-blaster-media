@@ -22,7 +22,7 @@ export default function MediaWorkflow({
 }) {
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-3">
+      <section className="precision-shoot-planned rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-3">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
           Planned delivery flow
         </p>

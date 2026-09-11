@@ -315,7 +315,7 @@ export default async function BookingDetailPage({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="precision-shoot-workspace space-y-6">
       {followUpWarning ? (
         <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {followUpWarning}
@@ -340,7 +340,7 @@ export default async function BookingDetailPage({
         </span>
       </div>
 
-      <header className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10 md:p-5">
+      <header className="precision-shoot-heading rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10 md:p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-realtor-primary">
@@ -361,7 +361,7 @@ export default async function BookingDetailPage({
               href={`/admin/bookings/${booking.id}?tab=delivery`}
               className="tap-target rounded-full bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-realtor-primary/90"
             >
-              Send delivery
+              Review delivery
             </Link>
             {profile?.phone ? (
               <a
@@ -408,7 +408,7 @@ export default async function BookingDetailPage({
             </Link>
           </div>
         </div>
-        <div className="mt-4 grid gap-2 md:grid-cols-3">
+        <div className="precision-shoot-summary mt-4 grid gap-2 md:grid-cols-3">
           <SummaryStat label="Ready links" value={`${readyDeliverables.length}`} />
           <ContactSummary profile={profile} />
           <ServicesSummary
@@ -978,7 +978,7 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
+    <div className="precision-shoot-panel rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
       <p className="text-[11px] uppercase tracking-wider text-realtor-primary/80">
         {title}
       </p>
