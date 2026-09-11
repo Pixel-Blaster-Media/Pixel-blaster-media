@@ -22,7 +22,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
       - name: Use Node.js 24
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -62,7 +62,7 @@ jobs:
           # Presentation boundary tests compare against the reviewed baseline.
           fetch-depth: 0
       - name: Use Node.js 24
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -116,7 +116,7 @@ jobs:
           # Presentation boundary tests compare against the reviewed baseline.
           fetch-depth: 0
       - name: Use Node.js 24
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
