@@ -1,6 +1,44 @@
 /* Application-only precision skin. Marketing, auth and public listing websites
    do not opt in. Keep this after globals.css: it replaces presentation, not the
    calendar grid, source colors, status pills, action visibility or dock model. */
+
+/* Calendar colors only. Opt in at the resolved admin organization owner, not
+   the body: an unrelated default root must never recolor a custom tenant.
+   Opaque pale tints look translucent without muddying overlapping events.
+   Only confirmed bookings opt in; other lifecycle surfaces/pills and inline
+   connected-calendar source colors remain authoritative and unchanged. */
+.pixel-app-skin.admin-earth[data-pixel-default-palette="true"] .precision-calendar-confirmed,
+.pixel-app-skin.admin-earth[data-pixel-default-palette="true"] .precision-calendar-drag {
+  background-color: #e8f2ff;
+  border-color: #a7c9f4;
+  border-left-color: #0866d8;
+  color: #17324d;
+}
+
+.pixel-app-skin.admin-earth[data-pixel-default-palette="true"] .precision-calendar-confirmed:hover {
+  background-color: #dcebff;
+}
+
+.pixel-app-skin.admin-earth[data-pixel-default-palette="true"] .precision-calendar-block {
+  background-color: #eff2f6;
+  border-color: #bdc6d2;
+  border-left-color: #68788d;
+  color: #233142;
+}
+
+.pixel-app-skin.admin-earth[data-pixel-default-palette="true"] .precision-calendar-block:hover {
+  background-color: #e4e9f0;
+}
+
+.pixel-app-skin.admin-earth[data-pixel-default-palette="true"] .precision-calendar-drag {
+  border-color: #0866d8;
+  --tw-ring-color: rgb(8 102 216 / 0.2);
+  --tw-shadow-color: rgb(23 50 77 / 0.2);
+}
+
+.pixel-app-skin.admin-earth[data-pixel-default-palette="true"] .precision-calendar-drag p {
+  color: #17324d;
+}
 body:has(.pixel-app-skin),
 .pixel-app-skin.realtor-theme,
 .pixel-app-skin .realtor-theme {
