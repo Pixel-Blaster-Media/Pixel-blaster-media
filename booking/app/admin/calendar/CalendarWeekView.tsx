@@ -3005,6 +3005,8 @@ function calendarItemPillClass(item: CalendarItem): string {
 
 function calendarEventSurfaceClass(item: CalendarItem): string {
   switch (item.statusLabel?.toLowerCase()) {
+    case "confirmed":
+      return "precision-calendar-confirmed border-[#8ba98f] bg-[#dce9dc] text-realtor-text hover:bg-[#d2e1d2]";
     case "requested":
       return "border-[#a9b7cf] bg-[#e9eef6] text-[#27364d] hover:bg-[#dfe7f2]";
     case "shot":
@@ -3173,7 +3175,7 @@ function MobileTimelineEvent({
       ? calendarEventSurfaceClass(item)
       : item.kind === "google"
         ? "text-[#17465b]"
-        : "border-realtor-primary/15 bg-realtor-soft text-realtor-text";
+        : "precision-calendar-block border-realtor-primary/15 bg-realtor-soft text-realtor-text";
   const sourceStyle = calendarSourceEventStyle(item);
   const canOpen = item.kind === "block" || Boolean(item.href);
   const body = (
@@ -3257,7 +3259,7 @@ function CalendarEvent({
       ? calendarEventSurfaceClass(item)
       : item.kind === "google"
         ? "text-[#17465b]"
-        : "border-[#a69d8d]/45 bg-[#c9c3b6]/80 text-[#36423a] hover:bg-[#beb7aa]";
+        : "precision-calendar-block border-[#a69d8d]/45 bg-[#c9c3b6]/80 text-[#36423a] hover:bg-[#beb7aa]";
   const sourceStyle = calendarSourceEventStyle(item);
   const layoutStyle = {
     ...eventLayoutStyle({
@@ -3384,7 +3386,7 @@ function CalendarDragPreview({
   return (
     <div
       aria-hidden="true"
-      className={`pointer-events-none absolute z-30 overflow-hidden rounded-xl border-2 border-[#3f7356] bg-[#e8f1e8]/95 px-2.5 py-1.5 text-left text-realtor-text shadow-xl shadow-[#23332b]/20 ring-2 ring-[#3f7356]/20 ${
+      className={`precision-calendar-drag pointer-events-none absolute z-30 overflow-hidden rounded-xl border-2 border-[#3f7356] bg-[#e8f1e8]/95 px-2.5 py-1.5 text-left text-realtor-text shadow-xl shadow-[#23332b]/20 ring-2 ring-[#3f7356]/20 ${
         mobile ? "left-12 right-1.5" : "left-1 right-1"
       }`}
       style={{ top, height }}

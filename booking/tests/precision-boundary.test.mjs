@@ -6,7 +6,12 @@ const base = '3039dbc357f78b3c9a97d5dbe1d5c0c54785f85f';
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const changes = {
   'app/admin/bookings/[id]/BookingWorkspaceTabs.tsx': [['precision-panel ', '']],
-  'app/admin/calendar/CalendarWeekView.tsx': [['precision-panel ', '']],
+  'app/admin/calendar/CalendarWeekView.tsx': [
+    ['precision-panel ', ''],
+    ['precision-calendar-block ', ''],
+    ['precision-calendar-drag ', ''],
+    ['    case "confirmed":\n      return "precision-calendar-confirmed border-[#8ba98f] bg-[#dce9dc] text-realtor-text hover:bg-[#d2e1d2]";\n', ''],
+  ],
   'app/admin/bookings/[id]/page.tsx': [['precision-job-status ', '']],
   'app/admin/bookings/[id]/ListingWebsiteSection.tsx': [['precision-template-caption ', '']],
   'app/book/_components/BookingTotalBar.tsx': [['precision-panel ', '']],
