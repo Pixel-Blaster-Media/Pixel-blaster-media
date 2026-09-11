@@ -24,20 +24,20 @@ function versionAtLeast(actual, minimum) {
 test("the Next 16 security baseline declares its required runtime and lint entrypoint", () => {
   assert.equal(packageJson.engines.node, ">=20.9.0");
   assert.equal(packageJson.scripts.lint, "eslint .");
-  assert.equal(packageJson.dependencies.next, "^16.3.0");
+  assert.equal(packageJson.dependencies.next, "^16.3.3");
   assert.equal(packageJson.dependencies.react, "^19.2.8");
   assert.equal(packageJson.dependencies["react-dom"], "^19.2.8");
   assert.equal(packageJson.devDependencies["@types/react"], "^19.2.18");
   assert.equal(packageJson.devDependencies["@types/react-dom"], "^19.2.4");
-  assert.equal(packageJson.devDependencies["eslint-config-next"], "^16.3.0");
+  assert.equal(packageJson.devDependencies["eslint-config-next"], "^16.3.3");
   assert.equal(packageJson.devDependencies.postcss, "^8.5.26");
   assert.equal(packageJson.overrides.postcss, "^8.5.26");
 });
 
 test("the lockfile resolves patched production and development dependency versions", () => {
   const minimumVersions = {
-    next: "16.3.0",
-    sharp: "0.35.3",
+    next: "16.3.3",
+    sharp: "0.35.4",
     postcss: "8.5.26",
     nanoid: "3.3.18",
     "brace-expansion": "1.1.18",
