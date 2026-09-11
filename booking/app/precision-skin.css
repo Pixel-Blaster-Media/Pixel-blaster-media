@@ -16,18 +16,34 @@ body:has(.pixel-app-skin),
   --realtor-text-rgb: 32 33 36;
   --realtor-muted: #59616e;
   --realtor-muted-rgb: 89 97 110;
-  /* Product controls use a consistent accessible blue. Organization logos,
-     names and stored brand settings remain untouched; these scoped tokens
-     intentionally win over the legacy inline green control palette. */
+  --realtor-border: #d5dbe4;
+  --realtor-shadow: 0 2px 8px rgb(32 33 36 / 0.04);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* Only resolved default-organization theme owners override inline branding.
+   The body marker is inert outside app routes. Nested booking frames use the
+   booking organization, independently of the signed-in user's root palette. */
+body[data-pixel-default-palette="true"]:has(.pixel-app-skin),
+.pixel-app-skin[data-pixel-default-palette="true"],
+.pixel-app-skin [data-pixel-default-palette="true"] {
   --realtor-primary: #0766d8 !important;
   --realtor-primary-rgb: 7 102 216 !important;
   --realtor-primary-light: #005abd !important;
   --realtor-primary-light-rgb: 0 90 189 !important;
   --realtor-primary-dark: #004fae !important;
   --realtor-primary-dark-rgb: 0 79 174 !important;
-  --realtor-border: #d5dbe4 !important;
-  --realtor-shadow: 0 2px 8px rgb(32 33 36 / 0.04);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* These two small captions lost contrast on the new tinted surfaces. Keep
+   other status tones and baseline text treatments unchanged. */
+.pixel-app-skin .precision-job-status.text-brand-light {
+  /* Match the existing admin-earth important text alias, only on this badge. */
+  color: var(--realtor-primary-dark) !important;
+}
+
+.pixel-app-skin .precision-template-caption {
+  color: var(--realtor-primary-dark);
 }
 
 body.page-backdrop:has(.pixel-app-skin),
@@ -85,8 +101,8 @@ body:has(.pixel-app-skin) .site-footer {
 .pixel-app-skin :is(.realtor-package-card-selected, .realtor-service-tile-selected, .realtor-choice-selected),
 .pixel-app-skin :is(.realtor-package-card-selected, .realtor-service-tile-selected, .realtor-choice-selected):hover {
   border-color: var(--realtor-primary);
-  background: #f4f8ff;
-  box-shadow: 0 0 0 2px rgb(7 102 216 / 0.2);
+  background: rgb(var(--realtor-primary-rgb) / 0.04);
+  box-shadow: 0 0 0 2px rgb(var(--realtor-primary-rgb) / 0.2);
 }
 
 .pixel-app-skin .booking-package-card {
@@ -107,7 +123,7 @@ body:has(.pixel-app-skin) .site-footer {
 
 .pixel-app-skin :is(.realtor-field, .admin-input):focus {
   border-color: var(--realtor-primary);
-  box-shadow: 0 0 0 3px rgb(7 102 216 / 0.15);
+  box-shadow: 0 0 0 3px rgb(var(--realtor-primary-rgb) / 0.15);
 }
 
 .pixel-app-skin :is(.realtor-field, .admin-input)::placeholder {

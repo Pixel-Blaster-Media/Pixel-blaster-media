@@ -7,6 +7,7 @@ import SiteHeaderMobileMenu, {
 import PwaClient from "./PwaClient";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { signOut } from "@/lib/auth/sign-out";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import {
   initialsForOrganization,
   loadOrganizationBrand,
@@ -51,6 +52,7 @@ export default async function RootLayout({
     <html lang="en">
       <body
         className="min-h-screen page-backdrop"
+        data-pixel-default-palette={!user || user.organizationId === DEFAULT_ORGANIZATION_ID ? true : undefined}
         style={brand ? organizationThemeStyle(brand) : undefined}
       >
         <AuthSessionHandler />

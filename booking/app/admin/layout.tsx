@@ -1,6 +1,7 @@
 import type { Viewport } from "next";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import {
   loadOrganizationBrand,
   organizationThemeStyle,
@@ -26,6 +27,7 @@ export default async function AdminLayout({
   return (
     <div
       className="pixel-app-skin admin-earth realtor-theme realtor-backdrop min-h-screen w-full max-w-full overflow-x-hidden px-3 pb-[calc(6.5rem+env(safe-area-inset-bottom))] sm:px-6 md:px-4 md:pb-8 lg:px-6"
+      data-pixel-default-palette={admin.organizationId === DEFAULT_ORGANIZATION_ID ? true : undefined}
       style={{
         ...(brand ? organizationThemeStyle(brand) : {}),
       }}

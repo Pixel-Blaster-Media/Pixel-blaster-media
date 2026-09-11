@@ -1,65 +1,61 @@
-# Precision application skin — review handoff
+# Precision application skin — corrected review handoff
 
-Status: local presentation candidate. **Not a production release approval.** No push, PR, merge or deployment performed by the implementer.
+Status: **local candidate, independent parent review pending**. No push, PR, merge, deployment, live credentials, booking mutation or provider operation performed.
 
-## Scope and selector inventory
+## Presentation and tenant boundary
 
-- `app/precision-skin.css`, imported after the unchanged `globals.css`, is gated by `.pixel-app-skin` on `/book`, `/portal`, `/admin` route layouts.
-- `body:has(.pixel-app-skin)` supplies the matching backdrop/header/footer tokens only while an opted-in route is present. Root layout has no skin class. Marketing project, auth routes, app landing page and public listing websites do not opt in.
-- Shared `realtor-*` panel/choice/field classes receive the silver/white/blue treatment. Existing selected classes own blue outlines; no selection logic changed.
-- Outer `section/article/fieldset` panels, dialogs and explicitly marked `precision-panel` wrappers use 6px corners. Fields/buttons/pills/date cells retain softer geometry. Explicit markers cover booking total, calendar timeline wrappers and job tab shell.
-- No new display/visibility/overflow/position/z-index/pointer-event rules. No global Tailwind color/radius rewrite. Danger/error/status classes and connected-calendar source styles are not targeted. Existing `globals.css` semantic exceptions remain unchanged.
-- Product primary/hover/dark control tokens intentionally override legacy inline organization control colors within these routes. Names, logos, accent tokens, saved brand settings and branding functions are unchanged. **Reviewer should explicitly approve uniform product-blue controls for custom-branded tenants.**
+- `app/precision-skin.css` is imported after unchanged `globals.css`; `/book`, `/portal`, `/admin` opt in with `.pixel-app-skin`. Root body styling additionally requires an opted-in descendant. Marketing, auth, app landing and public listing routes remain outside the skin.
+- Silver/white surfaces, compact outer panels and softer controls remain the approved presentation. Existing route structure, sticky total, calendar layout and interaction model are retained.
+- **Only default-organization theme owners receive important blue primary/hover/dark tokens and matching RGB values.** `data-pixel-default-palette` is derived from the existing `DEFAULT_ORGANIZATION_ID`: root uses current-user identity (anonymous root may opt in), admin/portal use their required user's organization, and `BookingBrandFrame` uses its resolved booking organization. Names, green color matches and brand-load results never classify a tenant.
+- A known custom tenant remains unmarked even if loading its branding returns an error/null. An unidentified booking frame is not marked. No fallback identity, lookup, authorization or data-loading changes were introduced.
+- Custom inline primary/hover/dark/RGB, border and accent remain authoritative, on same-element shells and nested real booking frames. Generic border is a nonimportant neutral fallback. Selected backgrounds/shadows and focus shadows use the active `--realtor-primary-rgb`.
+- Two explicit presentation-only caption markers repair newly worsened contrast: the job's confirmed status (only its existing `text-brand-light` tone) and the selected listing-template caption. They use the active dark primary; the status override matches the pre-existing important admin text alias. Other statuses, captions, semantic colors and baseline accessibility findings are not broadly hardened.
 
-## Behavior boundary
+## No-behavior-drift proof
 
-Seven existing TSX files changed only by adding `pixel-app-skin`, `precision-panel`, or the CSS import. A byte comparison against base `3039dbc357f78b3c9a97d5dbe1d5c0c54785f85f`, after removing those exact additions, passed for every file (`boundary-proof.json`).
+`tests/precision-boundary.test.mjs` compares every changed production TSX file against base `3039dbc357f78b3c9a97d5dbe1d5c0c54785f85f`, removing only exact allowlisted additions: skin/panel/caption classes, CSS import, `DEFAULT_ORGANIZATION_ID` imports and the four exact marker attributes. All ten TSX files compare byte-identically afterward. The test also fixes the complete changed-TSX file inventory and rejects branding/name/color-based identity classification.
 
-No pricing/catalog rules, booking state/actions/validation, calendar handlers, authentication, payment, media/provider modules, DB schemas/migrations, middleware, configuration or dependencies changed. Existing sticky booking total remains sticky—not the demo's fixed dock. Existing calendar remains Sunday-first, desktop Week, mobile Day with all original controls, source colors, pointer handling and service/block editors.
+No pricing/catalog, booking state/actions/validation, auth, payment, calendar handlers, providers, persistence, schemas, middleware, dependencies or configuration changed. Browser fixture before/after comparisons have identical visible-control counts and rendered text (excluding the fixture's BEFORE/AFTER label).
 
-## Validation performed
+## Verification
 
-- RED → GREEN source contracts: route opt-in, scoped selectors, no behavior/semantic overrides, explicit panel wrappers, dialog corners.
-- Booking suite: **591 passed, 0 failed**. Root marketing/proxy suite: **5 passed, 0 failed**.
-- `npm run lint`, `npm run typecheck`, `npm run build`, `git diff --check`: exit 0.
-- Build emits the existing middleware convention deprecation and `admin verification unavailable` during credential-free prerendering. No backend repair attempted.
-- Chromium real-component fixture comparison: 48 cases (6 surfaces × before/after × 320/390/768/1440). No document overflow, JS exceptions, external request attempts, changed visible-control counts or bottom-total tap misses.
-- Real server-rendered portal home/property-media markup: 16 further before/after cases at the same widths. No document overflow, broken fixture images, JS exceptions, external request attempts or changed control counts.
-- Calendar Day/Agenda switching, booking detail/date disclosure, blocked-time editor, mobile tools opened without submission at all four widths. Package selection/deselection and scheduling date/time URL updates exercised; organization parameter preserved; total unmounted after deselection.
-- Actual desktop pointer-drag ghost exercised before/after. Browser context closed **before pointer-up**; no reschedule mutation invoked.
-- Focused property textarea + bottom-scroll total hit-testing at 320/390 × 568px passed.
-- Token contrast calculations: white/primary 5.38:1, white/hover 6.57:1, muted/white 6.25:1, text/silver 15.02:1. These are token checks, not an exhaustive accessibility audit of every inherited status combination.
+- Booking unit suite: **593 passed, 0 failed**; root marketing/proxy suite: **5 passed, 0 failed**.
+- `npm run lint`, `npm run typecheck`, `npm run build`, `git diff --check`: passed. Existing middleware-deprecation, credential-free admin-prerender and Node module-type warnings remain; no unrelated repair attempted.
+- `tests/precision-palette.browser.mjs`: **31 computed Chromium cases**. Covers default/custom/unknown same-element and nested real frames, non-app contexts, actual async root/admin/portal/book layouts, branding failures and a booking organization differing from the signed-in user's organization. Checks complete primary family, RGB, accent and border preservation plus tenant-colored selected/focus treatments.
+- Initial computed RED preceded production edits. Expanded test replay against immutable original candidate `0e5eaf7358995546a746c614688f8f0a429c3984` fails for the reported cascade/identity defects; corrected source passes.
+- Full real component gap fixture rerun: **42 cases**, seven states × before/after × 320/390/1440; **84 original screenshots** and **36 extra palette/bottom-hit probes**. States: Media, Website, Delivery, Details with expanded invoice, anonymous confirmation, signed-in confirmation and success. Zero overflow/out-of-bounds descendants, console/page errors, intercepted external requests, denied actions/fetches, changed control counts or obstructed sampled bottom controls.
+- Complete default confirmation CTA now computes `rgb(7, 102, 216)` with white text; before skin it is `rgb(63, 115, 86)`. Success and operator actions consistently use blue. Custom palettes remain custom in the separate computed matrix.
+- Computed contrast RED reproduced confirmed **4.06** and selected caption **3.82**; GREEN is **5.81** and **5.45**, respectively. Original baseline was 4.40 and 4.14. Unrelated existing low-contrast combinations are not claimed fixed; this is not an exhaustive WCAG audit.
 
-## Coverage boundaries — do not call this live E2E
+## Evidence and commands
 
-| Surface | Evidence | Remaining gate |
-| --- | --- | --- |
-| Booking services | Actual PackageAccordion/Total/Stepper + actual BookLayout, fictional catalog | Live tenant offerings and sample viewer content |
-| Property | Actual PropertyForm; address provider replaced by plain fixture field | Real Places, physical iOS keyboard, tenant-specific overage extremes |
-| Schedule | Actual CalendarPicker with fictional slots, actual total | Live availability and calendar provider loading |
-| Confirm | Actual ConfirmForm initial contact section | Full server review summary/upsells, account verification, success/receipt, no booking submitted |
-| Realtor home | Actual PortalIndex server-rendered with fictional property/read-only DB boundary | Authenticated header and hydrated archive/navigation actions |
-| Property media | Actual property page server-rendered with placeholder image and pending photo ZIP state | Ready iGUIDE ZIPs, tours/video, downloads, listing editor and authenticated hydration |
-| Operator calendar | Actual CalendarWeekView and AdminBottomNav; navigation/action/autocomplete boundaries replaced | Authenticated source menu, Google data, persisted drag/block/service edits, device/Safari gestures |
-| Operator job | Actual BookingWorkspaceTabs and bottom nav; labeled placeholder tab bodies | Full MediaWorkflow/invoice/website/delivery/details content must receive read-only authenticated review |
+Audit root: `/Users/PlatoTheBot/.hermes/audits/pixel-precision-app-skin/`.
 
-The production CSS applies across those real routes, but **full operator job and booking confirmation route coverage is not established by these fixtures**. No fixtures or demo runtime are in production source. No live credentials copied; no authenticated mutation performed. Harnesses are localhost-only with route/method allowlists and CSP `connect-src 'none'; form-action 'none'`; browser request interception also rejects off-origin requests. This is not an OS network sandbox.
+- `logs/palette-red.log`: original test RED before production edits.
+- `logs/palette-expanded-red.log`, `logs/palette-green.log`: immutable original-candidate RED / corrected GREEN.
+- `logs/correction-{tests,root-tests,lint,types,build}.log`.
+- `correction/`: copied existing gap harness, rebuilt real components, `manifest.json`, `results.json`, `probes.json`, `verified-summary.json`, `contrast-{red,green}.log`, `screenshots/`, `boards/`.
+- Original `gap/` evidence remains unchanged. The corrected fixture uses the actual default ID on its fictional organization, and an anonymous-root palette marker; it does not identify fictional data by company name.
 
-## Evidence and reproduction
+From `booking/`:
 
-Evidence directory: `/Users/PlatoTheBot/.hermes/audits/pixel-precision-app-skin/`
+```sh
+npm test
+npm run lint
+npm run typecheck
+npm run build
+node --test tests/precision*.test.mjs
+PIXEL_BROWSER_TOOLS=/Users/PlatoTheBot/.hermes/designs/pixel-precision-preview/node_modules node tests/precision-palette.browser.mjs
+```
 
-- `screenshots/`: 102 PNGs including before/after, bottom viewports, details/tools/block editors, drag previews and short-phone tests.
-- `visual-results.json`, `ssr-visual-results.json`, `interaction-results.json`, `advanced-results.json`.
-- `module-manifest.json`, `ssr-manifest.json`: resolved module inventories; allowlisted production components only, explicit boundary substitutes.
-- `boundary-proof.json`; `logs/pixel-skin-{tests,root-tests,lint,types,build,red-panels,red-dialog}.log`.
-- External harness scripts: `build.mjs`, `server.mjs`, `qa.mjs`, `interactions.mjs`, `advanced.mjs`; `build-ssr.mjs`, `ssr.tsx`, `server-ssr.mjs`, `qa-ssr.mjs`.
-- Local read-only harness ports: 4379 component, 4380 SSR. Dependency paths are workstation-local; not shipped as repository tooling.
+For RED replay, additionally set `PIXEL_PALETTE_SOURCE` to `correction/red-source/booking` (a `git archive` of the original candidate). Browser tooling lives outside production dependencies.
 
-## Parent review/release instructions
+From `correction/`: `node build.mjs`; start `node server.mjs` on loopback 4381; run `node contrast.mjs && node qa.mjs && node probes.mjs && python3 boards.py`; stop the fixture server afterward. All real component data/auth/provider/action/navigation boundaries are replaced with read-only fictional fixtures; requests/methods/CSP are restricted. No authenticated live E2E, actual submit, provider integration, physical iOS or persisted navigation claim is made.
 
-1. Independently inspect the exact commit and CSS cascade, especially custom tenant branding and untouched semantic colors. `codex` CLI is unavailable and this subagent has no delegate-review tool; **independent review is pending**. Commit is deliberately not marked `[verified]`.
-2. Complete the read-only authenticated coverage gates above, checking all operator job tabs and complete booking confirm/success shells on phone and desktop. Do not submit live bookings or provider jobs merely for screenshots.
-3. Fetch main again; evaluate any base movement and rerun checks against the exact merge candidate. Open a focused PR and wait for CI. No migration/env/provider rollout steps are needed.
-4. Only the parent performs the separately authorized merge/deployment. Verify production route/theme behavior and fresh errors after deployment.
-5. Rollback is a code-only revert of the skin commit; no data rollback or provider reconciliation required.
+Useful screenshots: `boards/confirm-after-phone.png`, `boards/confirm-signed-after-phone.png`, `boards/confirm-desktop.png`, `boards/website-after-phone.png`, `boards/details-after-phone.png`, `boards/success-desktop.png`. Bottom viewport PNGs distinguish the full-page fixed-nav capture artifact from actual page-end obstruction.
+
+Earlier unaffected calendar/property/portal fixture evidence remains in the audit root (original 48 component and 16 SSR cases plus interaction/drag/short-phone probes). The new gap evidence uses complete real job tab bodies and full confirmation/success pages, not the earlier placeholder bodies. It still substitutes data/auth/provider boundaries and omits the root authenticated header in the full gap fixture; the separate palette test renders the real root with child adapters.
+
+## Parent release gate
+
+Independently review this exact finite commit, recheck current main/CI, and perform required authenticated read-only release verification. Only the parent may push/merge/deploy. No schema, environment or provider rollout is required. Rollback is a code-only revert of this correction together with the initial skin commit if reverting the whole presentation.
