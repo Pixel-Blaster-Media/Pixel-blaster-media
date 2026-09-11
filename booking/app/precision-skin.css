@@ -2,6 +2,122 @@
    do not opt in. Keep this after globals.css: it replaces presentation, not the
    calendar grid, source colors, status pills, action visibility or dock model. */
 
+/* Shoot workspace: presentation only. Theme-owner tokens remain authoritative;
+   no lifecycle, source, readiness or action visibility selectors. */
+.pixel-app-skin .precision-shoot-workspace {
+  min-width: 0;
+}
+
+.pixel-app-skin .precision-shoot-heading {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.pixel-app-skin .precision-shoot-heading h1 {
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.pixel-app-skin .precision-shoot-heading > div:first-child {
+  gap: 12px;
+}
+
+.pixel-app-skin .precision-shoot-summary {
+  gap: 0;
+  border: 1px solid var(--realtor-border);
+  border-radius: 6px;
+  background: var(--realtor-surface);
+}
+
+.pixel-app-skin .precision-shoot-summary > div {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.pixel-app-skin .precision-shoot-summary > div + div {
+  border-top: 1px solid var(--realtor-border);
+}
+
+.pixel-app-skin .precision-shoot-summary > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pixel-app-skin .precision-shoot-summary > div:first-child > p {
+  margin: 0;
+}
+
+.pixel-app-skin .precision-shoot-heading :is(a, button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.pixel-app-skin .precision-shoot-tabs {
+  padding: 4px;
+  border-color: var(--realtor-border);
+  background: var(--realtor-surface);
+}
+
+.pixel-app-skin .precision-shoot-tabs > div {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.pixel-app-skin .precision-shoot-tabs a {
+  min-width: 0;
+  min-height: 44px;
+  padding: 12px 2px;
+  border-radius: 6px;
+}
+
+.pixel-app-skin .precision-shoot-workspace :is(details, .precision-shoot-panel) {
+  min-width: 0;
+  border-radius: 6px;
+  border-color: var(--realtor-border);
+  box-shadow: none;
+}
+
+.pixel-app-skin .precision-shoot-workspace summary {
+  min-height: 44px;
+  align-content: center;
+}
+
+.pixel-app-skin .precision-shoot-planned ol {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.pixel-app-skin .precision-shoot-planned li {
+  padding: 8px 4px;
+  border-radius: 4px;
+  border-color: var(--realtor-border);
+  background: var(--realtor-surface-muted);
+}
+
+@media (min-width: 768px) {
+  .pixel-app-skin .precision-shoot-summary > div + div {
+    border-top: 0;
+    border-left: 1px solid var(--realtor-border);
+  }
+}
+
+@media (max-width: 767px) {
+  .pixel-app-skin .precision-shoot-workspace > .precision-shoot-heading,
+  .pixel-app-skin .precision-shoot-heading + div {
+    margin-top: 12px;
+  }
+}
+
 /* Gently soften appointment/block corners only; keep controls, pills, and custom
    organizations unchanged. Agenda rows already have square corners. */
 .pixel-app-skin.admin-earth[data-pixel-default-palette="true"] .precision-calendar-event,
