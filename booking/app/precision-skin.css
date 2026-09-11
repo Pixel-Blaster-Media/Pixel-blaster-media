@@ -1,0 +1,135 @@
+/* Application-only precision skin. Marketing, auth and public listing websites
+   do not opt in. Keep this after globals.css: it replaces presentation, not the
+   calendar grid, source colors, status pills, action visibility or dock model. */
+body:has(.pixel-app-skin),
+.pixel-app-skin.realtor-theme,
+.pixel-app-skin .realtor-theme {
+  --realtor-bg: #f6f7f9;
+  --realtor-bg-rgb: 246 247 249;
+  --realtor-bg-soft: #eef1f6;
+  --realtor-bg-soft-rgb: 238 241 246;
+  --realtor-surface: #ffffff;
+  --realtor-surface-rgb: 255 255 255;
+  --realtor-surface-muted: #f3f5f8;
+  --realtor-surface-muted-rgb: 243 245 248;
+  --realtor-text: #202124;
+  --realtor-text-rgb: 32 33 36;
+  --realtor-muted: #59616e;
+  --realtor-muted-rgb: 89 97 110;
+  /* Product controls use a consistent accessible blue. Organization logos,
+     names and stored brand settings remain untouched; these scoped tokens
+     intentionally win over the legacy inline green control palette. */
+  --realtor-primary: #0766d8 !important;
+  --realtor-primary-rgb: 7 102 216 !important;
+  --realtor-primary-light: #005abd !important;
+  --realtor-primary-light-rgb: 0 90 189 !important;
+  --realtor-primary-dark: #004fae !important;
+  --realtor-primary-dark-rgb: 0 79 174 !important;
+  --realtor-border: #d5dbe4 !important;
+  --realtor-shadow: 0 2px 8px rgb(32 33 36 / 0.04);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body.page-backdrop:has(.pixel-app-skin),
+.pixel-app-skin.realtor-backdrop {
+  background: var(--realtor-bg);
+  color: var(--realtor-text);
+}
+
+body:has(.pixel-app-skin) .site-header,
+body:has(.pixel-app-skin) .site-footer {
+  background: rgb(255 255 255 / 0.96);
+  border-color: var(--realtor-border);
+}
+
+.pixel-app-skin :is(.realtor-panel, .realtor-soft-panel, .realtor-elevated-panel, .realtor-warm-panel, .realtor-green-panel, .booking-hero, .booking-compact-header, .booking-media-panel) {
+  border-radius: 6px;
+  border-color: var(--realtor-border);
+  background: var(--realtor-surface);
+  box-shadow: var(--realtor-shadow);
+}
+
+/* Only outer panels: do not flatten date cells, pills, fields or buttons. */
+.pixel-app-skin :is(section, article, fieldset).rounded-3xl,
+.pixel-app-skin :is(section, article, fieldset).rounded-2xl,
+.pixel-app-skin [role="dialog"],
+.pixel-app-skin .precision-panel {
+  border-radius: 6px;
+}
+
+.pixel-app-skin .booking-hero-copy {
+  min-height: 0;
+  border-radius: 6px;
+  background: var(--realtor-surface-muted);
+}
+
+.pixel-app-skin .booking-hero-copy h1 {
+  font-size: clamp(2rem, 4vw, 3.25rem);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+.pixel-app-skin :is(.realtor-package-card, .realtor-service-tile, .realtor-choice) {
+  border-radius: 6px;
+  border-color: #aeb9c8;
+  background: var(--realtor-surface);
+  box-shadow: 0 2px 5px rgb(32 33 36 / 0.03);
+}
+
+.pixel-app-skin :is(.realtor-package-card, .realtor-service-tile, .realtor-choice):hover {
+  border-color: #687d98;
+  background: var(--realtor-surface);
+  transform: none;
+}
+
+.pixel-app-skin :is(.realtor-package-card-selected, .realtor-service-tile-selected, .realtor-choice-selected),
+.pixel-app-skin :is(.realtor-package-card-selected, .realtor-service-tile-selected, .realtor-choice-selected):hover {
+  border-color: var(--realtor-primary);
+  background: #f4f8ff;
+  box-shadow: 0 0 0 2px rgb(7 102 216 / 0.2);
+}
+
+.pixel-app-skin .booking-package-card {
+  min-height: 0;
+}
+
+.pixel-app-skin .booking-package-details {
+  border-radius: 6px;
+  background: var(--realtor-surface-muted);
+}
+
+.pixel-app-skin :is(.realtor-field, .admin-input) {
+  border-radius: 12px;
+  border-color: var(--realtor-border);
+  background: var(--realtor-surface);
+  color: var(--realtor-text);
+}
+
+.pixel-app-skin :is(.realtor-field, .admin-input):focus {
+  border-color: var(--realtor-primary);
+  box-shadow: 0 0 0 3px rgb(7 102 216 / 0.15);
+}
+
+.pixel-app-skin :is(.realtor-field, .admin-input)::placeholder {
+  color: var(--realtor-muted);
+}
+
+.pixel-app-skin :is(a, button, summary, input, select, textarea):focus-visible {
+  outline: 2px solid var(--realtor-primary);
+  outline-offset: 3px;
+}
+
+@media (max-width: 767px) {
+  .pixel-app-skin .booking-hero-copy { padding: 1.25rem; }
+  .pixel-app-skin :is(.realtor-field, .admin-input) { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pixel-app-skin *,
+  .pixel-app-skin *::before,
+  .pixel-app-skin *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}

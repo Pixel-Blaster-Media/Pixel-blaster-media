@@ -55,7 +55,7 @@ export default function BookingTotalBar({
     <div
       className={
         (sticky ? "sticky bottom-[max(0px,env(safe-area-inset-bottom))] z-20 " : "") +
-        "mt-5 rounded-2xl border border-realtor-primary/15 bg-realtor-surface/95 px-3 py-3 shadow-lg shadow-realtor-primary/5 backdrop-blur md:static md:rounded-3xl md:p-4"
+        "precision-panel mt-5 rounded-2xl border border-realtor-primary/15 bg-realtor-surface/95 px-3 py-3 shadow-lg shadow-realtor-primary/5 backdrop-blur md:static md:rounded-3xl md:p-4"
       }
     >
       <div className="flex flex-wrap items-center justify-between gap-3">

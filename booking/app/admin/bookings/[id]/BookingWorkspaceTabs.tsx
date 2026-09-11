@@ -55,7 +55,7 @@ export default function BookingWorkspaceTabs({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-2">
+      <div className="precision-panel rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-2">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {tabs.map((tab) => {
             const selected = tab.id === activeTab.id;

@@ -13,6 +13,7 @@ import {
   organizationThemeStyle,
 } from "@/lib/organizations/branding";
 import "./globals.css";
+import "./precision-skin.css";
 
 export const metadata: Metadata = {
   title: {

@@ -1150,7 +1150,7 @@ export default function CalendarWeekView({
       ) : (
       <div
         ref={desktopTimelineScrollRef}
-        className="hidden max-h-[calc(100dvh-210px)] overflow-auto rounded-3xl border border-realtor-primary/10 bg-realtor-surface/85 shadow-lg shadow-black/10 md:block xl:max-h-[calc(100dvh-190px)]"
+        className="precision-panel hidden max-h-[calc(100dvh-210px)] overflow-auto rounded-3xl border border-realtor-primary/10 bg-realtor-surface/85 shadow-lg shadow-black/10 md:block xl:max-h-[calc(100dvh-190px)]"
       >
         <div
           className="grid"
@@ -1334,7 +1334,7 @@ export default function CalendarWeekView({
           <section
             onTouchStart={handleMobileSwipeStart}
             onTouchEnd={handleMobileSwipeEnd}
-            className="max-w-full overflow-hidden rounded-3xl border border-realtor-primary/10 bg-realtor-surface shadow-sm shadow-realtor-text/5"
+            className="precision-panel max-w-full overflow-hidden rounded-3xl border border-realtor-primary/10 bg-realtor-surface shadow-sm shadow-realtor-text/5"
           >
             <div className="flex items-center justify-between gap-2 px-4 py-3">
               <div className="min-w-0">

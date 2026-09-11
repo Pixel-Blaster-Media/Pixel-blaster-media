@@ -28,7 +28,7 @@ export default async function PortalLayout({
 
   return (
     <div
-      className="portal-layout realtor-theme min-h-[60vh]"
+      className="pixel-app-skin portal-layout realtor-theme min-h-[60vh]"
       style={brand ? organizationThemeStyle(brand) : undefined}
     >
       {children}
