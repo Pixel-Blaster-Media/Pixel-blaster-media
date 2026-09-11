@@ -3205,7 +3205,7 @@ function MobileTimelineEvent({
     ...eventLayoutStyle({ top, height, layout: item.layout, mobile: true }),
     ...sourceStyle,
   };
-  const eventClass = `absolute z-10 overflow-hidden rounded-xl border border-l-[3px] px-2.5 py-1.5 text-left shadow-sm ${classes}`;
+  const eventClass = `precision-calendar-event absolute z-10 overflow-hidden rounded-xl border border-l-[3px] px-2.5 py-1.5 text-left shadow-sm ${classes}`;
 
   if (canOpen) {
     return (
@@ -3302,7 +3302,7 @@ function CalendarEvent({
       </div>
     </div>
   );
-  const baseClass = `absolute z-10 block overflow-hidden rounded-xl border border-l-[3px] px-3 py-2 text-left shadow-sm transition ${classes}`;
+  const baseClass = `precision-calendar-event absolute z-10 block overflow-hidden rounded-xl border border-l-[3px] px-3 py-2 text-left shadow-sm transition ${classes}`;
 
   if (canMove) {
     return (

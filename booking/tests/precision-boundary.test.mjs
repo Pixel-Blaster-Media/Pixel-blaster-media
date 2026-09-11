@@ -8,6 +8,7 @@ const changes = {
   'app/admin/bookings/[id]/BookingWorkspaceTabs.tsx': [['precision-panel ', '']],
   'app/admin/calendar/CalendarWeekView.tsx': [
     ['precision-panel ', ''],
+    ['precision-calendar-event ', ''],
     ['precision-calendar-block ', ''],
     ['precision-calendar-drag ', ''],
     ['    case "confirmed":\n      return "precision-calendar-confirmed border-[#8ba98f] bg-[#dce9dc] text-realtor-text hover:bg-[#d2e1d2]";\n', ''],

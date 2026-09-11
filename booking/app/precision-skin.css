@@ -2,6 +2,13 @@
    do not opt in. Keep this after globals.css: it replaces presentation, not the
    calendar grid, source colors, status pills, action visibility or dock model. */
 
+/* Square appointment/block corners only; keep controls, pills, and custom
+   organizations unchanged. Agenda rows already have square corners. */
+.pixel-app-skin.admin-earth[data-pixel-default-palette="true"] .precision-calendar-event,
+.pixel-app-skin.admin-earth[data-pixel-default-palette="true"] .precision-calendar-drag {
+  border-radius: 0;
+}
+
 /* Calendar colors only. Opt in at the resolved admin organization owner, not
    the body: an unrelated default root must never recolor a custom tenant.
    Opaque pale tints look translucent without muddying overlapping events.

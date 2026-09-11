@@ -63,8 +63,10 @@ try {
   // Mobile starts on the real day view. Collect its cards and desktop cards,
   // including below-the-fold events without changing their geometry.
   const cards=await page.evaluate(()=>Array.from(document.querySelectorAll('button,div')).filter(e=>e.classList.contains('absolute')&&e.classList.contains('border-l-[3px]')&&e.getBoundingClientRect().width>0).map(e=>{
-   const s=getComputedStyle(e),r=e.getBoundingClientRect();return {text:e.innerText,bg:s.backgroundColor,color:s.color,border:s.borderColor,left:s.borderLeftColor,shadow:s.boxShadow,geometry:[r.x,r.y,r.width,r.height],children:Array.from(e.querySelectorAll('p,span')).map(p=>({text:p.textContent,color:getComputedStyle(p).color,opacity:getComputedStyle(p).opacity}))};
+   const s=getComputedStyle(e),r=e.getBoundingClientRect();return {text:e.innerText,bg:s.backgroundColor,color:s.color,border:s.borderColor,left:s.borderLeftColor,shadow:s.boxShadow,geometry:[r.x,r.y,r.width,r.height],radius:s.borderRadius,overflow:[s.overflowX,s.overflowY,e.scrollWidth,e.scrollHeight,e.clientWidth,e.clientHeight],children:Array.from(e.querySelectorAll('p,span')).map(p=>({text:p.textContent,color:getComputedStyle(p).color,opacity:getComputedStyle(p).opacity,radius:getComputedStyle(p).borderRadius}))};
   }));
+  for(const card of cards)check(baseline||card.radius===(variant==='default'?'0px':'12px'),`${width}/${variant}: square event ${card.text}: ${card.radius}`);
+  const controls=await page.locator('button,a,input,select').evaluateAll(es=>es.filter(e=>e.getBoundingClientRect().width>0&&!e.classList.contains('absolute')).map(e=>({text:e.textContent,radius:getComputedStyle(e).borderRadius})));
   const confirmed=cards.find(c=>c.text.includes('Confirmed fixture'));
   check(cards.length===fixtures.length,`${width}/${variant}: all ${fixtures.length} event fixtures rendered`);
   check(!!confirmed,`${width}/${variant}: confirmed visible`);
@@ -105,12 +107,25 @@ try {
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);
   check(!overflow,`${width}/${variant}: document overflow`);
   check(external.length===0,`${width}/${variant}: no external requests`);
-  results.push({width,variant,cards,hover,overflow,external});
+  results.push({width,variant,cards,controls,hover,overflow,external});
+  await page.getByRole('button',{name:'agenda',exact:true}).filter({visible:true}).click();
+  const agenda=[];
+  for(const fixture of fixtures){
+   const row=page.getByText(fixture.title,{exact:true}).filter({visible:true});
+   agenda.push(await row.evaluate(e=>{const b=e.closest('button'),s=getComputedStyle(b),r=b.getBoundingClientRect();return {text:b.textContent,radius:s.borderRadius,bg:s.backgroundColor,geometry:[r.x,r.y,r.width,r.height],overflow:[b.scrollWidth,b.scrollHeight,b.clientWidth,b.clientHeight],pills:Array.from(b.querySelectorAll('span')).map(p=>({text:p.textContent,radius:getComputedStyle(p).borderRadius,color:getComputedStyle(p).color,bg:getComputedStyle(p).backgroundColor}))}}));
+  }
+  check(agenda.every(r=>r.radius==='0px'),`${width}/${variant}: agenda rows square already`);
+  check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`${width}/${variant}: agenda no document overflow`);
+  results.push({width,variant,agenda});
+  if(evidence&&variant==='default')await page.screenshot({path:path.join(evidence,`calendar-agenda-${width}.png`)});
+  await page.getByRole('button',{name:width===1440?'week':'day',exact:true}).filter({visible:true}).click();
+  await target.hover();await page.waitForTimeout(200);
   if(width===1440){
    const box=await target.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y+box.height/2+48,{steps:10});
    const ghost=page.locator('[aria-hidden="true"]').filter({hasText:'Move here'});
    await ghost.waitFor();
-   const drag=await ghost.evaluate(e=>{const s=getComputedStyle(e);return {bg:s.backgroundColor,border:s.borderColor,color:s.color,children:Array.from(e.querySelectorAll('p')).map(p=>({text:p.textContent,color:getComputedStyle(p).color}))}});
+   const drag=await ghost.evaluate(e=>{const s=getComputedStyle(e);return {radius:s.borderRadius,bg:s.backgroundColor,border:s.borderColor,color:s.color,geometry:[e.offsetLeft,e.offsetTop,e.offsetWidth,e.offsetHeight],children:Array.from(e.querySelectorAll('p')).map(p=>({text:p.textContent,color:getComputedStyle(p).color}))}});
+   check(baseline||drag.radius===(variant==='default'?'0px':'12px'),`${width}/${variant}: square drag ${drag.radius}`);
    if(!baseline&&variant==='default'){
     check(drag.bg==='rgb(232, 242, 255)','drag blue tint');check(drag.border==='rgb(8, 102, 216)','drag blue edge');
     check(drag.children.every(c=>contrast(c.color,drag.bg)>=4.5),'drag text contrast');
@@ -125,17 +140,25 @@ try {
 } finally {await browser.close();}
 if(process.env.PIXEL_CALENDAR_COMPARE){
  const previous=JSON.parse(fs.readFileSync(process.env.PIXEL_CALENDAR_COMPARE,'utf8')).results;
+ for(const row of results.filter(r=>r.agenda||r.drag)){
+  const old=previous.find(r=>r.width===row.width&&r.variant===row.variant&&(row.agenda?r.agenda:r.drag));
+  check(!!old,'baseline agenda/drag exists');
+  if(!old)continue;
+  if(row.agenda)check(JSON.stringify(row.agenda)===JSON.stringify(old.agenda),'agenda geometry/pills/colors unchanged');
+  if(row.drag){const {radius,...current}=row.drag;const {radius:oldRadius,...prior}=old.drag;check(JSON.stringify(current)===JSON.stringify(prior),'drag geometry/colors unchanged');if(row.variant!=='default')check(radius===oldRadius,'custom drag radius unchanged');}
+ }
  for(const row of results.filter(r=>r.cards)){
   const old=previous.find(r=>r.width===row.width&&r.variant===row.variant);
   check(!!old,`baseline exists ${row.width}/${row.variant}`);
   if(!old)continue;
+  check(JSON.stringify(old.controls)===JSON.stringify(row.controls),'controls retain corners');
   check(old.cards.length===row.cards.length,'before/after event counts identical');
   for(const [i,card] of row.cards.entries()){
    const was=old.cards[i];
    check(JSON.stringify(card.geometry)===JSON.stringify(was.geometry),'before/after event geometry identical');
    check(card.text===was.text,'before/after labels identical');
-   const changed=row.variant==='default'&&['Confirmed fixture','Overlap fixture','Blocked fixture'].some(t=>card.text.includes(t));
-   if(!changed)for(const key of ['bg','border','left','color','shadow','children'])check(JSON.stringify(card[key])===JSON.stringify(was[key]),`${row.width}/${row.variant}: untouched ${key} ${card.text}`);
+   // Square-corner refinement must preserve every palette and clipping metric.
+   for(const key of ['bg','border','left','color','shadow','children','overflow'])check(JSON.stringify(card[key])===JSON.stringify(was[key]),`${row.width}/${row.variant}: untouched ${key} ${card.text}`);
   }
  }
 }
