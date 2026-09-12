@@ -17,6 +17,7 @@
     "test:invoice": "node --import tsx --test lib/integrations/quickbooks/tests/*.test.mjs",
     "test:postgres:invoice": "bash lib/integrations/quickbooks/tests/verify-postgres.sh",
     "test:postgres:atomic": "bash scripts/verify-atomic-booking-postgres.sh",
+    "test:postgres:finals-postgrest": "PF_REAL_POSTGREST=1 python3 scripts/verify-photo-finals-http.py",
     "test:postgres:finals-http": "python3 scripts/verify-photo-finals-http.py",
     "test:photo-finals": "node --test tests/photo-finals-*.test.mjs",
     "test:postgres:finals-resource": "PF_PACKAGE_RESOURCE=1 python3 scripts/verify-photo-finals-packages.py",
@@ -38,6 +39,8 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1065.0",
+    "@aws-sdk/s3-request-presigner": "^3.1065.0",
+    "@smithy/node-http-handler": "^4.12.1",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "lucide-react": "1.24.0",

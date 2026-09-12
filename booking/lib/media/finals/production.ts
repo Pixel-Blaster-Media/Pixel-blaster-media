@@ -1,12 +1,19 @@
 import 'server-only';
+import { S3Client } from '@aws-sdk/client-s3';
+import { NodeHttpHandler } from '@smithy/node-http-handler';
 import type { FinalsIdentity, FinalsRuntime } from './http';
-import { photoFinalsEligibility } from './config';
-/** Separate production boundary. Deliberately returns unavailable until the exact
- * schema, dedicated private storage/capability adapter and deployed worker budget
- * have independent proof. Never calls or relaxes the development R2 factory.
- * Flags alone cannot enable this local-execution candidate. */
+import { loadProductionFinalsConfig } from './production-config';
+import { createProductionFinalsDatabase } from './transport';
+import { createFinalsPresigner } from './presigner';
+import { R2Storage } from '../storage/r2-core';
+/** Construct only after complete production opt-in; never uses development config.
+ * Configuration does not replace the external certification/activation gate. */
 export async function createProductionFinalsRuntime(identity:FinalsIdentity):Promise<FinalsRuntime|null>{
- const eligibility=photoFinalsEligibility(process.env,identity.scope);
- if(!eligibility.eligible||eligibility.environment!=='production')return null;
- return null;
+ try{
+  const env=Object.freeze({...process.env}),config=loadProductionFinalsConfig(env,identity.scope);
+  const client=new S3Client({region:'auto',endpoint:config.endpoint,credentials:{...config.credentials},forcePathStyle:false,maxAttempts:1,
+   requestHandler:new NodeHttpHandler({connectionTimeout:5000,requestTimeout:10000,throwOnRequestTimeout:true,socketTimeout:10000}),requestChecksumCalculation:'WHEN_REQUIRED',responseChecksumValidation:'WHEN_REQUIRED'});
+  const db=createProductionFinalsDatabase(config);
+  return {env,db,budgets:{totalMs:240_000},storage:new R2Storage({client,organizationId:identity.scope.organizationId,buckets:{quarantine:config.bucket,masters:config.bucket,delivery:config.bucket}}),issueUpload:createFinalsPresigner(client,db,config.bucket)};
+ }catch{return null;}
 }

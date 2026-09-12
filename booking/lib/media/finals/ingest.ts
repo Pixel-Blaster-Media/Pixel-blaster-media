@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { buildMasterKey, inspectMediaObjectKey, type MediaObjectKey } from "../storage/keys.ts";
 import type { R2Storage } from "../storage/r2-core.ts";
-import { photoFinalsEligibility, type PhotoFinalsScope } from "./config.ts";
+import { finalsExecutionAllowed } from './production-config.ts';
+import { type PhotoFinalsScope } from "./config.ts";
 
 // Compatible with PostgREST's rpc result; no credentials or production factory here.
 export interface FinalsDatabase {
@@ -26,9 +27,7 @@ function text(value: unknown): string {
   return value;
 }
 function localGate(env: Readonly<Record<string,string|undefined>>, scope: PhotoFinalsScope) {
-  const eligibility = photoFinalsEligibility(env,scope);
-  // Production execution intentionally unavailable until factory/budget/release gates pass.
-  if (!eligibility.eligible || eligibility.environment !== "synthetic-local") throw new Error("finals_ingest_disabled");
+  if (!finalsExecutionAllowed(env,scope)) throw new Error("finals_ingest_disabled");
 }
 export async function createFinalIntent(options: {
   db: FinalsDatabase; env: Readonly<Record<string,string|undefined>>; scope: PhotoFinalsScope;

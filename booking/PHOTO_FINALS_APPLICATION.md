@@ -1,5 +1,7 @@
 # Photo finals application — local executable candidate, production unavailable
 
+**Production adapter follow-up:** see `PHOTO_FINALS_PRODUCTION.md` for the real, separately gated R2 presigner/Supabase transport and bounded shared-cron integration. Older nonactivating-factory statements below are historical. Nothing has been activated.
+
 ## Local acceptance closure (base `72524e00ee7304508305fefd3b1aac80175613f7`)
 
 This checkpoint supersedes the three local omissions below. Production remains unavailable; no production factory, schema, resources, credentials, deployment, or email transport was activated.

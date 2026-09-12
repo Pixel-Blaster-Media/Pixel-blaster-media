@@ -1,4 +1,5 @@
-import { photoFinalsEligibility, type PhotoFinalsScope } from './config.ts';
+import { finalsExecutionAllowed } from './production-config.ts';
+import { type PhotoFinalsScope } from './config.ts';
 import { createFinalIntent, processFinalIntent, type FinalsDatabase } from './ingest.ts';
 import {prepareFinalRelease,approveFinalRelease,dispatchFinalReleases} from './packages.ts';
 import {packageRpc} from './package-runtime.ts';
@@ -8,7 +9,7 @@ import type { R2Storage } from '../storage/r2-core.ts';
 import {inspectMediaObjectKey} from '../storage/keys.ts';
 export type FinalsIdentity = { actorId: string; scope: PhotoFinalsScope; operator: boolean };
 export type UploadCapability={url:string;headers:Record<string,string>;expiresAt:string};
-export type FinalsRuntime={db:FinalsDatabase;env:Readonly<Record<string,string|undefined>>;storage:R2Storage;issueUpload(job:Record<string,unknown>,identity:FinalsIdentity):Promise<UploadCapability>};
+export type FinalsRuntime={budgets?:{totalMs:number};db:FinalsDatabase;env:Readonly<Record<string,string|undefined>>;storage:R2Storage;issueUpload(job:Record<string,unknown>,identity:FinalsIdentity):Promise<UploadCapability>};
 export type FinalsHttpDependencies = {
  authorize(request: Request, bookingId: string): Promise<FinalsIdentity | null>;
  runtime(identity: FinalsIdentity): Promise<FinalsRuntime | null>;
@@ -40,8 +41,7 @@ export function createFinalsHandler(deps: FinalsHttpDependencies) {
    const configured=await deps.runtime(identity);
    if(!configured)return finalsJson({status:'disabled',message:'Private photo finals are unavailable. Storage, schema and runtime verification are required.'},503);
    const runtime={...configured,db:createFinalsApplicationDatabase(configured.db)};
-   const gate=photoFinalsEligibility(runtime.env,identity.scope);
-   if(!gate.eligible||gate.environment!=='synthetic-local')return finalsJson({status:'disabled'},503);
+   if(!finalsExecutionAllowed(runtime.env,identity.scope))return finalsJson({status:'disabled'},503);
    await packageRpc(runtime.db,'photo_finals_access',{...common(identity),p_operator:identity.operator});
    if(request.method==='GET'){
     const state=await currentFinals(runtime,identity);

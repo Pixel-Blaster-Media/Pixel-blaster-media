@@ -4,6 +4,7 @@ import {createFinalsHandler} from '@/lib/media/finals/http';
 import {createProductionFinalsRuntime} from '@/lib/media/finals/production';
 import {UUID} from '@/lib/media/finals/manifest';
 export const runtime='nodejs';
+export const maxDuration=300;
 export const dynamic='force-dynamic';
 const handler=createFinalsHandler({
  async authorize(_request,bookingId){

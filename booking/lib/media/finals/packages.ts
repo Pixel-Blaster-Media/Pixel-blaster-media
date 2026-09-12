@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { FinalsDatabase } from './ingest.ts';
 import { verifyFinalJpeg } from './ingest.ts';
-import { photoFinalsEligibility, type PhotoFinalsScope } from './config.ts';
+import { finalsExecutionAllowed } from './production-config.ts';
+import { type PhotoFinalsScope } from './config.ts';
 import { packageRpc as rpc, packageLease } from './package-runtime.ts';
 import { UUID, preparePhotoFinalsManifest } from './manifest.ts';
 import { TRANSFORMS, streamStoredZip, type ZipEntry, transformFinalJpeg } from './transforms.ts';
@@ -11,7 +12,7 @@ import type { R2Storage } from '../storage/r2-core.ts';
 
 type Env=Readonly<Record<string,string|undefined>>;
 type Options={db:FinalsDatabase;storage:R2Storage;env:Env;scope:PhotoFinalsScope;jobId:string;workerId:string;budgets?:{totalMs?:number;heartbeatMs?:number}};
-function gate(env:Env,scope:PhotoFinalsScope){const e=photoFinalsEligibility(env,scope);if(!e.eligible||e.environment!=='synthetic-local')throw new Error('finals_packages_disabled');}
+function gate(env:Env,scope:PhotoFinalsScope){if(!finalsExecutionAllowed(env,scope))throw new Error('finals_packages_disabled');}
 function object(value:unknown):Record<string,unknown>{if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('finals_package_envelope');return value as Record<string,unknown>;}
 function text(value:unknown):string{if(typeof value!=='string')throw new Error('finals_package_envelope');return value;}
 function identifiers(...ids:unknown[]){if(!ids.every(id=>typeof id==='string' && UUID.test(id)))throw new Error('finals_identifier_invalid');}
