@@ -293,6 +293,14 @@ test("multipart upload completes create-only and aborts every failed or cancelle
   assert.equal(unequal.client.calls.at(-1).name, "AbortMultipartUploadCommand");
 
   const cancellation = storage();
+  const sendBeforeCancellation=cancellation.client.send.bind(cancellation.client);
+  cancellation.client.send=async(command,options)=>{
+    if(command.constructor.name==='AbortMultipartUploadCommand'){
+      assert.ok(options?.abortSignal instanceof AbortSignal,'cleanup has its own bounded transport deadline');
+      assert.equal(options.abortSignal.aborted,false,'cleanup is independent of cancelled upload');
+    }
+    return sendBeforeCancellation(command,options);
+  };
   const controller = new AbortController();
   cancellation.client.onUploadPart = (partNumber) => {
     if (partNumber === 1) controller.abort(new Error("synthetic cancellation"));

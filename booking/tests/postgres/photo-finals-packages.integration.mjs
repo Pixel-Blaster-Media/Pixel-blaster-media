@@ -24,10 +24,31 @@ for(const colour of ['#123','#abc']){
  await processFinalIntent({db,storage,env,scope,jobId:job.id,workerId:'fixture'});
 }
 const common={p_org:scope.organizationId,p_actor:actorId,p_booking:scope.bookingId,p_property:scope.propertyId,p_batch:jobs[0].batch_id};
-const draft=await call('photo_finals_prepare_release',{...common,p_release:randomUUID(),p_expected_revision:0,p_versions:jobs.map(j=>j.finals_version_id).reverse()});
+const {prepareFinalRelease,approveFinalRelease}=await import('../../lib/media/finals/packages.ts');
+const input={db,env,scope,actorId,batchId:jobs[0].batch_id,releaseId:randomUUID(),expectedRevision:0,versionIds:jobs.map(j=>j.finals_version_id).reverse()};
+const residue=()=>sql(`select jsonb_build_array((select count(*) from gallery_releases),(select count(*) from gallery_release_items),(select count(*) from media_derivatives),(select count(*) from media_packages),(select count(*) from media_ingest_jobs))`);
+const badIds=['00000000-0000-0000-0000-000000000001','AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA','aaaaaaaa-aaaa-4aaa-7aaa-aaaaaaaaaaaa','{aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa}','aaaaaaaaaaaa4aaa8aaaaaaaaaaaaaaa','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa\n',null];
+let identifierProbes=0;
+for(const id of badIds){
+ for(const field of ['releaseId','batchId','actorId','versionIds']){
+  const before=residue();let calls=0;const spy={rpc(...args){calls++;return db.rpc(...args);}};
+  await assert.rejects(prepareFinalRelease({...input,db:spy,[field]:field==='versionIds'?[id]:id}),/finals_identifier_invalid/);
+  assert.equal(calls,0);assert.equal(residue(),before);identifierProbes++;
+ }
+ // uuid-typed SQL arguments canonicalize spelling, but must reject non-v4 values;
+ // JSON selections retain spelling and must never be normalized before validation.
+ const before=residue();
+ await assert.rejects(call('photo_finals_prepare_release',{...common,p_release:input.releaseId,p_expected_revision:0,p_versions:[id]}));
+ assert.equal(residue(),before);identifierProbes++;
+}
+for(const id of [badIds[0],badIds[2],null]){
+ const before=residue();await assert.rejects(call('photo_finals_prepare_release',{...common,p_release:id,p_expected_revision:0,p_versions:input.versionIds}),/finals_identifier_invalid/);
+ assert.equal(residue(),before);identifierProbes++;
+}
+const draft=await prepareFinalRelease(input);
 assert.equal(draft.revision_number,1);
 const approve={p_org:scope.organizationId,p_actor:actorId,p_booking:scope.bookingId,p_property:scope.propertyId,p_release:draft.id,p_revision:1,p_hash:draft.manifest_sha256.slice(2)};
-const approved=await call('photo_finals_approve_release',approve);
+const approved=await approveFinalRelease({db,env,scope,actorId,releaseId:draft.id,revision:1,manifestSha256:draft.manifest_sha256.slice(2)});
 assert.equal(approved.state,'packaging');
 assert.deepEqual(await call('photo_finals_approve_release',approve),approved);
 const {processFinalRelease,dispatchFinalReleases}=await import('../../lib/media/finals/packages.ts');
@@ -67,12 +88,24 @@ db.rpc=beforeCheckpointRpc;assert.equal(checkpointInjected,true);
 assert.equal(sql(`select state from media_ingest_jobs where id='${approved.job_id}'`),'retryable');
 assert.equal(sql(`select completed_at is null from media_ingest_jobs where id='${approved.job_id}'`),'t');
 sql(`update media_ingest_jobs set next_attempt_at=now() where id='${approved.job_id}'`);
+// A lost checkpoint response after its SQL commit is resumable, not rejected JPEG.
+const beforeLostCheckpoint=db.rpc.bind(db);let lostCheckpoint=false;
+db.rpc=async(name,args)=>{const r=await beforeLostCheckpoint(name,args);if(!lostCheckpoint&&name==='photo_finals_package_checkpoint'&&!r.error){lostCheckpoint=true;return {data:null,error:{message:'lost committed checkpoint response'}};}return r;};
+await assert.rejects(processFinalRelease({db,storage,env,scope,jobId:approved.job_id,workerId:'lost-checkpoint'}),/photo_finals_package_checkpoint/);
+db.rpc=beforeLostCheckpoint;assert.equal(lostCheckpoint,true);
+assert.equal(sql(`select jsonb_array_length(finals_package_checkpoints) from media_ingest_jobs where id='${approved.job_id}'`),'1');
+assert.equal(sql(`select state from media_ingest_jobs where id='${approved.job_id}'`),'retryable');
+sql(`update media_ingest_jobs set next_attempt_at=now() where id='${approved.job_id}'`);
 // Full ZIP and derivatives can physically exist, but failure of MLS must expose NONE ready.
 client.failMls=true;client.loseFullResponse=true;
 await assert.rejects(processFinalRelease({db,storage,env,scope,jobId:approved.job_id,workerId:'partial-test'}),/finals_zip_write_unverified/);
 assert.equal(sql(`select count(*) from media_packages where release_id='${draft.id}' and status='ready'`),'0');
 assert.equal(sql(`select count(*) from media_derivatives where batch_id='${jobs[0].batch_id}' and status='ready'`),'0');
 assert.equal(sql(`select state from gallery_releases where id='${draft.id}'`),'packaging');
+assert.equal(sql(`select jsonb_array_length(finals_package_checkpoints) from media_ingest_jobs where id='${approved.job_id}'`),'4');
+// Resume must use persisted derivative identities without a single transform PUT.
+const sendBeforeResume=client.send.bind(client);let resumedDerivativePuts=0;
+client.send=async(command,...rest)=>{if(command.constructor.name==='PutObjectCommand'&&command.input.Key.startsWith('derivatives/'))resumedDerivativePuts++;return sendBeforeResume(command,...rest);};
 client.failMls=false;sql(`update media_ingest_jobs set next_attempt_at=now() where id='${approved.job_id}'`);
 const originalRpc=db.rpc.bind(db);let finishEvidence;let malformedProbes=0;
 db.rpc=async(name,args)=>{
@@ -94,6 +127,7 @@ db.rpc=async(name,args)=>{
 const result=await processFinalRelease({db,storage,env,scope,jobId:approved.job_id,workerId:'package-test'});
 db.rpc=originalRpc;
 assert.equal(result.status,'ready');
+assert.equal(resumedDerivativePuts,0);client.send=sendBeforeResume;
 assert.equal(sql(`select state from gallery_releases where id='${draft.id}'`),'ready');
 // Inspect actual package bytes independently with Python's ZIP parser and CRC.
 const archiveProofs=[];
@@ -127,6 +161,43 @@ const correctionJob=await call('photo_finals_approve_release',approval(correctio
 assert.equal((await dispatchFinalReleases({db,storage,env,scope,workerId:'correction'}))[0].jobId,correctionJob.job_id);
 assert.equal(sql(`select manifest::text from gallery_releases where id='${draft.id}'`),frozen);
 assert.equal(sql(`select entry_count from media_packages where release_id='${correction.id}' and package_type='full_res_zip'`),'1');
+// Real awaited S3 command with active PG lease renewal. Optional wall-clock probe
+// exceeds the actual 120s SQL lease (not a fake clock or fabricated certification).
+const {setTimeout:delay}=await import('node:timers/promises');
+const slowMs=process.env.PF_PACKAGE_LONG_IO==='1'?125000:150;
+let slowHeartbeats=0;const rpcBeforeSlow=db.rpc.bind(db),sendBeforeSlow=client.send.bind(client);
+const slow=await nextDraft([jobs[0].finals_version_id]);const slowJob=await call('photo_finals_approve_release',approval(slow));
+let uploadDelayed=false,liveAfterUpload=false;
+db.rpc=async(name,args)=>{if(name==='photo_finals_package_heartbeat'&&uploadDelayed)slowHeartbeats++;return rpcBeforeSlow(name,args);};
+client.send=async(command,options)=>{
+ if(!uploadDelayed&&command.constructor.name==='UploadPartCommand'&&command.input.Key.includes('/full_res_zip/')){
+  uploadDelayed=true;await delay(slowMs,undefined,{signal:options?.abortSignal});
+  liveAfterUpload=sql(`select finals_lease_expires_at>clock_timestamp() from media_ingest_jobs where id='${slowJob.job_id}'`)==='t';
+ }
+ return sendBeforeSlow(command,options);
+};
+assert.equal((await processFinalRelease({db,storage,env,scope,jobId:slowJob.job_id,workerId:'slow-io',budgets:{heartbeatMs:slowMs>1000?30000:20}})).status,'ready');
+assert.ok(slowHeartbeats>=3);assert.equal(liveAfterUpload,true);db.rpc=rpcBeforeSlow;client.send=sendBeforeSlow;
+const ioRecovery=[];
+for(const mode of ['budget-timeout','stale-owner']){
+ const r=await nextDraft([jobs[0].finals_version_id]),j=await call('photo_finals_approve_release',approval(r));
+ let injected=false,aborted=false;
+ client.send=async(command,options)=>{
+  if(!injected&&command.constructor.name==='UploadPartCommand'&&command.input.Key.includes('/full_res_zip/')){
+   injected=true;
+   if(mode==='stale-owner')sql(`update media_ingest_jobs set finals_lease_started_at=clock_timestamp()-interval '130 seconds',finals_lease_expires_at=clock_timestamp()-interval '1 second' where id='${j.job_id}'`);
+   try{await delay(1500,undefined,{signal:options?.abortSignal});}catch(e){aborted=options.abortSignal.aborted;throw e;}
+  }
+  return sendBeforeSlow(command,options);
+ };
+ await assert.rejects(processFinalRelease({db,storage,env,scope,jobId:j.job_id,workerId:'io-failure',budgets:{totalMs:mode==='budget-timeout'?500:5000,heartbeatMs:20}}));
+ assert.equal(injected,true);assert.equal(aborted,true);assert.equal(client.uploads.size,0);
+ assert.equal(sql(`select count(*) from media_packages where release_id='${r.id}' and status='ready'`),'0');
+ client.send=sendBeforeSlow;
+ sql(`update media_ingest_jobs set next_attempt_at=now() where id='${j.job_id}'`);
+ assert.equal((await processFinalRelease({db,storage,env,scope,jobId:j.job_id,workerId:'io-recover'})).status,'ready');
+ ioRecovery.push({mode,aborted,multipartResidue:client.uploads.size,recovered:true});
+}
 // Stale head revision and late-child rollback leave no approved residue.
 const oldDraft=await nextDraft();const newer=await nextDraft();
 sql(`update gallery_releases set manifest_sha256=decode(repeat('c',64),'hex') where id='${newer.id}'`);
@@ -159,8 +230,29 @@ const concurrentJob=await call('photo_finals_approve_release',approval(concurren
 const finalClaimArgs={...claimArgs,p_job:concurrentJob.job_id};
 races.push({case:'lease-claim',...await observedRace({sql,socket,first:rpcSql('photo_finals_package_claim',finalClaimArgs),second:rpcSql('photo_finals_package_claim',finalClaimArgs)})});
 assert.equal(sql(`select attempts from media_ingest_jobs where id='${concurrentJob.job_id}'`),'1');
+// Checkpoint validation is independent of readiness and append-only under a live lease.
+const cpLease=sql(`select finals_lease_token from media_ingest_jobs where id='${concurrentJob.job_id}'`);
+const cpArgs={p_org:scope.organizationId,p_job:concurrentJob.job_id,p_lease:cpLease};
+const cp=finishEvidence.find(e=>e.kind==='gallery'&&e.version_id===jobs[0].finals_version_id);
+let checkpointProbes=0;
+for(const key of Object.keys(cp)){
+ const malformed=structuredClone(cp);delete malformed[key];
+ await assert.rejects(call('photo_finals_package_checkpoint',{...cpArgs,p_evidence:malformed}));
+ assert.equal(sql(`select finals_package_checkpoints::text from media_ingest_jobs where id='${concurrentJob.job_id}'`),'[]');checkpointProbes++;
+}
+for(const change of [{width:null},{height:null},{bytes:1.5},{version_id:randomUUID()},{key:'derivatives/wrong'},{kind:'full_res_zip'},{unexpected:'not part of checkpoint grammar'}]){
+ await assert.rejects(call('photo_finals_package_checkpoint',{...cpArgs,p_evidence:{...cp,...change}}));checkpointProbes++;
+}
+await call('photo_finals_package_checkpoint',{...cpArgs,p_evidence:cp});
+await call('photo_finals_package_checkpoint',{...cpArgs,p_evidence:cp});
+assert.equal(sql(`select jsonb_array_length(finals_package_checkpoints) from media_ingest_jobs where id='${concurrentJob.job_id}'`),'1');
+await assert.rejects(call('photo_finals_package_checkpoint',{...cpArgs,p_lease:randomUUID(),p_evidence:cp}),/finals_lease_lost/);
+await assert.rejects(call('photo_finals_package_checkpoint',{...cpArgs,p_evidence:{...cp,bytes:cp.bytes+1}}),/finals_checkpoint_immutable/);
+assert.throws(()=>sql(`set role service_role;update media_ingest_jobs set finals_package_checkpoints='[]' where id='${concurrentJob.job_id}'`),/finals_checkpoint_immutable/);
+races.push({case:'bounded-db-lock-wait',...await observedRace({sql,socket,holdUntilContenderExit:true,first:`select 1 from media_ingest_jobs where id='${concurrentJob.job_id}' for update`,second:rpcSql('photo_finals_package_heartbeat',cpArgs),errorPattern:/55P03:[\s\S]*lock timeout/})});
 // Expired final attempt terminalizes durably; it cannot remain unclaimable retryable.
 sql(`update media_ingest_jobs set max_attempts=1,finals_lease_started_at=now()-interval '130 seconds',finals_lease_expires_at=now()-interval '1 second' where id='${concurrentJob.job_id}'`);
+await assert.rejects(call('photo_finals_package_checkpoint',{...cpArgs,p_evidence:cp}),/finals_lease_lost/);
 assert.equal(await call('photo_finals_package_claim',finalClaimArgs),null);
 assert.equal(sql(`select state from media_ingest_jobs where id='${concurrentJob.job_id}'`),'dead_letter');
-console.log(JSON.stringify({passed:true,realJpeg:true,archives:archiveProofs,malformedEvidenceRollbackProbes:malformedProbes,races:races.map(({case:kind,observedLockWait})=>({case:kind,observedLockWait})),partialFailureRecovered:true,correctionImmutable:true,liveStorageProof:false}));
+console.log(JSON.stringify({passed:true,realJpeg:true,identifierNoWriteProbes:identifierProbes,checkpointValidationProbes:checkpointProbes,slowIO:{delayMs:slowMs,heartbeats:slowHeartbeats,liveAfterUpload},ioRecovery,resumedDerivativePuts,archives:archiveProofs,malformedEvidenceRollbackProbes:malformedProbes,races:races.map(({case:kind,observedLockWait})=>({case:kind,observedLockWait})),partialFailureRecovered:true,correctionImmutable:true,liveStorageProof:false}));

@@ -287,7 +287,7 @@ export class R2Storage {
           Bucket: location.bucket,
           Key: location.key,
           UploadId: uploadId,
-        }));
+        }), { abortSignal: AbortSignal.timeout(10_000) });
       } catch (abortError) {
         throw new AggregateError([error, abortError], "multipart upload failed and cleanup could not be confirmed");
       }

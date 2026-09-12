@@ -46,13 +46,22 @@ $$;
 
 -- Version 2 hash is exclusively SHA256(UTF8(PostgreSQL jsonb::text)); clients echo
 -- the opaque server digest. It deliberately does not alias selection.v1 JSON.stringify.
+create function public.photo_finals_identifiers(variadic ids text[]) returns void language plpgsql immutable set search_path='' as $$
+begin
+ if exists(select 1 from unnest(ids) id where id is null or id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') then
+  raise exception 'finals_identifier_invalid' using errcode='22023';
+ end if;
+end $$;
+
 create function public.photo_finals_release_manifest(p_org uuid,p_booking uuid,p_property uuid,p_batch uuid,p_release uuid,p_revision integer,p_versions jsonb)
 returns jsonb language plpgsql security invoker set search_path='' as $$
 declare v public.media_versions; item jsonb; items jsonb:='[]'; n integer:=0; total bigint:=0; assets uuid[]:='{}';
 begin
+ perform public.photo_finals_identifiers(p_org::text,p_booking::text,p_property::text,p_batch::text,p_release::text);
  if jsonb_typeof(p_versions) is distinct from 'array' or jsonb_array_length(p_versions) not between 1 and 100 then raise exception 'finals_selection_invalid' using errcode='22023';end if;
  if not exists(select 1 from public.media_batches where organization_id=p_org and id=p_batch and property_id=p_property and booking_id=p_booking)
  or not exists(select 1 from public.bookings where organization_id=p_org and id=p_booking and property_id=p_property) then raise exception 'finals_booking_denied' using errcode='42501';end if;
+ perform public.photo_finals_identifiers(variadic array(select value from jsonb_array_elements_text(p_versions)));
  -- Sorted locks avoid reversed-selection deadlocks; output uses submitted ordinality.
  perform 1 from public.media_versions where organization_id=p_org and id in(select value::uuid from jsonb_array_elements_text(p_versions)) order by id for share;
  for item in select value from jsonb_array_elements(p_versions) loop
@@ -66,6 +75,7 @@ begin
    and (v.rights_effective_at is null or v.rights_effective_at<=clock_timestamp())
    and (v.rights_expires_at is null or v.rights_expires_at>clock_timestamp()),false)
    or v.asset_id=any(assets) then raise exception 'finals_selection_invalid' using errcode='23514';end if;
+  perform public.photo_finals_identifiers(v.id::text,v.asset_id::text);
   assets:=array_append(assets,v.asset_id);total:=total+v.byte_size;
   if total>1073741824 then raise exception 'finals_selection_bound' using errcode='54000';end if;
   items:=items||jsonb_build_array(jsonb_build_object('position',n,'media_version_id',v.id,'asset_id',v.asset_id,'version_number',v.version_number,
@@ -81,6 +91,9 @@ create function public.photo_finals_prepare_release(p_org uuid,p_actor uuid,p_bo
 returns public.gallery_releases language plpgsql security invoker set search_path='' as $$
 declare r public.gallery_releases; prev public.gallery_releases; m jsonb; item jsonb; d uuid; download_id uuid;
 begin
+ perform public.photo_finals_identifiers(p_org::text,p_actor::text,p_booking::text,p_property::text,p_batch::text,p_release::text);
+ if jsonb_typeof(p_versions) is distinct from 'array' then raise exception 'finals_selection_invalid' using errcode='22023';end if;
+ perform public.photo_finals_identifiers(variadic array(select value from jsonb_array_elements_text(p_versions)));
  perform public.photo_finals_release_actor(p_org,p_actor);
  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('finals-release:'||p_org||':'||p_batch,0));
  perform 1 from public.media_batches where organization_id=p_org and id=p_batch and booking_id=p_booking and property_id=p_property;
@@ -113,6 +126,7 @@ create function public.photo_finals_approve_release(p_org uuid,p_actor uuid,p_bo
 returns jsonb language plpgsql security invoker set search_path='' as $$
 declare r public.gallery_releases; m jsonb; b public.media_batches; ids jsonb; j uuid;
 begin
+ perform public.photo_finals_identifiers(p_org::text,p_actor::text,p_booking::text,p_property::text,p_release::text);
  perform public.photo_finals_release_actor(p_org,p_actor);
  select * into r from public.gallery_releases where organization_id=p_org and id=p_release;
  if not found or r.property_id is distinct from p_property or not exists(select 1 from public.media_batches where organization_id=p_org and id=r.batch_id and booking_id=p_booking and property_id=p_property) then raise exception 'finals_release_denied' using errcode='42501';end if;
@@ -174,6 +188,53 @@ create function public.photo_finals_package_heartbeat(p_org uuid,p_job uuid,p_le
 begin
  perform public.photo_finals_package_fence(p_org,p_job,p_lease);
  update public.media_ingest_jobs set finals_lease_expires_at=clock_timestamp()+interval '120 seconds' where organization_id=p_org and id=p_job;
+end $$;
+
+-- Private progress only: checkpoints never publish derivatives or packages ready.
+-- Append-only within the existing leased job; no parallel media ownership model.
+alter table public.media_ingest_jobs add column finals_package_checkpoints jsonb not null default '[]'
+ check(jsonb_typeof(finals_package_checkpoints)='array' and jsonb_array_length(finals_package_checkpoints)<=200);
+create function public.photo_finals_checkpoint_guard() returns trigger language plpgsql set search_path='' as $$
+declare j public.media_ingest_jobs; e jsonb; n integer;
+begin
+ if tg_op='INSERT' then
+  if new.finals_package_checkpoints<>'[]'::jsonb then raise exception 'finals_checkpoint_invalid' using errcode='23514';end if;return new;
+ end if;
+ if new.finals_package_checkpoints is not distinct from old.finals_package_checkpoints then return new;end if;
+ j:=public.photo_finals_package_fence(old.organization_id,old.id,old.finals_lease_token);
+ n:=jsonb_array_length(old.finals_package_checkpoints);
+ if jsonb_array_length(new.finals_package_checkpoints)<>n+1 or
+  (select coalesce(jsonb_agg(value order by ord),'[]') from jsonb_array_elements(new.finals_package_checkpoints) with ordinality t(value,ord) where ord<=n) is distinct from old.finals_package_checkpoints
+  then raise exception 'finals_checkpoint_immutable' using errcode='23514';end if;
+ e:=new.finals_package_checkpoints->n;
+ if not coalesce(jsonb_typeof(e)='object' and octet_length(e::text)<=2048
+  and e - array['kind','version_id','sha256','bytes','bucket','key','width','height']='{}'::jsonb
+  and e ?& array['kind','version_id','sha256','bytes','bucket','key','width','height']
+  and jsonb_typeof(e->'kind')='string' and e->>'kind' in ('gallery','mls')
+  and jsonb_typeof(e->'version_id')='string' and e->>'version_id' ~ '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+  and jsonb_typeof(e->'sha256')='string' and e->>'sha256' ~ '^[0-9a-f]{64}$'
+  and jsonb_typeof(e->'bytes')='number' and (e->>'bytes')::numeric=trunc((e->>'bytes')::numeric) and (e->>'bytes')::bigint between 1 and 33554432
+  and jsonb_typeof(e->'width')='number' and (e->>'width')::numeric=trunc((e->>'width')::numeric) and (e->>'width')::integer between 1 and 2048
+  and jsonb_typeof(e->'height')='number' and (e->>'height')::numeric=trunc((e->>'height')::numeric) and (e->>'height')::integer between 1 and 2048
+  and jsonb_typeof(e->'bucket')='string' and e->>'bucket' ~ '^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$'
+  and jsonb_typeof(e->'key')='string' and e->>'key'='derivatives/'||old.organization_id||'/'||(e->>'version_id')||'/1/'||(e->>'sha256')||'.jpg',false)
+  then raise exception 'finals_checkpoint_invalid' using errcode='23514';end if;
+ if not exists(select 1 from public.gallery_release_items where organization_id=old.organization_id and release_id=j.finals_release_id and media_version_id=(e->>'version_id')::uuid)
+  or exists(select 1 from jsonb_array_elements(old.finals_package_checkpoints) x where x->>'kind'=e->>'kind' and x->>'version_id'=e->>'version_id')
+  then raise exception 'finals_checkpoint_invalid' using errcode='23514';end if;
+ return new;
+end $$;
+create trigger finals_checkpoint_guard before insert or update on public.media_ingest_jobs for each row execute function public.photo_finals_checkpoint_guard();
+create function public.photo_finals_package_checkpoint(p_org uuid,p_job uuid,p_lease uuid,p_evidence jsonb) returns void language plpgsql security invoker set search_path='' as $$
+declare j public.media_ingest_jobs; existing jsonb;
+begin
+ j:=public.photo_finals_package_fence(p_org,p_job,p_lease);
+ select value into existing from jsonb_array_elements(j.finals_package_checkpoints) where value->>'kind'=p_evidence->>'kind' and value->>'version_id'=p_evidence->>'version_id';
+ if found then
+  if existing is distinct from p_evidence then raise exception 'finals_checkpoint_immutable' using errcode='23514';end if;return;
+ end if;
+ update public.media_ingest_jobs set finals_package_checkpoints=finals_package_checkpoints||jsonb_build_array(p_evidence) where organization_id=p_org and id=p_job;
+ perform public.photo_finals_package_fence(p_org,p_job,p_lease);
 end $$;
 
 -- Every evidence element is required; NULL never satisfies readiness. Worker drains
@@ -261,7 +322,9 @@ grant execute on function public.photo_finals_ready_guard() to service_role;
 -- All new RPCs are service-only, including helper functions. Forced RLS unchanged.
 do $$ declare f record; begin
  for f in select p.oid::regprocedure as signature from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in
- ('photo_finals_release_job_guard','photo_finals_release_actor','photo_finals_transform_specs','photo_finals_release_manifest','photo_finals_prepare_release','photo_finals_approve_release','photo_finals_package_claim','photo_finals_package_fence','photo_finals_package_heartbeat','photo_finals_package_finish','photo_finals_package_fail','photo_finals_package_due') loop
+ ('photo_finals_checkpoint_guard','photo_finals_package_checkpoint','photo_finals_identifiers','photo_finals_release_job_guard','photo_finals_release_actor','photo_finals_transform_specs','photo_finals_release_manifest','photo_finals_prepare_release','photo_finals_approve_release','photo_finals_package_claim','photo_finals_package_fence','photo_finals_package_heartbeat','photo_finals_package_finish','photo_finals_package_fail','photo_finals_package_due') loop
  execute format('revoke all on function %s from public,anon,authenticated',f.signature);execute format('grant execute on function %s to service_role',f.signature);
+ -- Server-side row/advisory lock waits end before the client's 10-second RPC deadline.
+ execute format('alter function %s set lock_timeout to %L',f.signature,'5s');
  end loop;
 end $$;

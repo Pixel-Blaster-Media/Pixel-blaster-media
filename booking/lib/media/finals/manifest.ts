@@ -13,7 +13,7 @@ type Batch = Pick<Database['public']['Tables']['media_batches']['Row'],
   'id' | 'organization_id' | 'booking_id' | 'property_id'>;
 
 export const PHOTO_FINALS_LIMITS = Object.freeze({ files: 100, fileBytes: 33_554_432, sidePixels: 16_384, pixels: 100_000_000, totalBytes: 1_073_741_824 });
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const EDITS = new Set(['original', 'corrective', 'hdr', 'virtual_staging', 'generative']);
 const DISCLOSURES = new Set(['none', 'virtually_staged', 'material_edit']);
 

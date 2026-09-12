@@ -24,6 +24,39 @@ function crc32(bytes:Buffer) {let crc=0xffffffff;for(const b of bytes) crc=crcTa
 /** Deterministic STORE ZIP32: one bounded JPEG at a time, central metadata only in RAM.
  * Fixed DOS epoch, no filenames supplied by customers, max 100 entries/1.1 GiB.
  */
+
+export type ZipEntry = {name:string;load:()=>Promise<Buffer>};
+/** Same ZIP32 STORE encoding as StoredZip, without filesystem writes. Each pass
+ * reloads one immutable verified object. Only one photo, an 8MiB part and <=100
+ * central headers survive; no whole-release spool and no ZIP64 ambiguity.
+ */
+export async function* streamStoredZip(inputs:readonly ZipEntry[],signal:AbortSignal):AsyncGenerator<Buffer>{
+ if(inputs.length<1||inputs.length>100)throw new Error('zip_bound');
+ async function* chunks(){
+  let offset=0;const entries:Buffer[]=[];
+  for(const input of inputs){
+   signal.throwIfAborted();const bytes=await input.load();signal.throwIfAborted();
+   if(input.name!==`${String(entries.length+1).padStart(3,'0')}.jpg`||bytes.length<1||bytes.length>33_554_432||offset+bytes.length>1_100_000_000)throw new Error('zip_bound');
+   const filename=Buffer.from(input.name),crc=crc32(bytes),local=Buffer.alloc(30),central=Buffer.alloc(46);
+   local.writeUInt32LE(0x04034b50);local.writeUInt16LE(20,4);local.writeUInt16LE(33,12);local.writeUInt32LE(crc,14);local.writeUInt32LE(bytes.length,18);local.writeUInt32LE(bytes.length,22);local.writeUInt16LE(filename.length,26);
+   central.writeUInt32LE(0x02014b50);central.writeUInt16LE(20,4);central.writeUInt16LE(20,6);central.writeUInt16LE(33,14);central.writeUInt32LE(crc,16);central.writeUInt32LE(bytes.length,20);central.writeUInt32LE(bytes.length,24);central.writeUInt16LE(filename.length,28);central.writeUInt32LE(offset,42);
+   entries.push(Buffer.concat([central,filename]));offset+=local.length+filename.length+bytes.length;
+   yield local;yield filename;yield bytes;
+  }
+  const start=offset;for(const entry of entries){yield entry;offset+=entry.length;}
+  const end=Buffer.alloc(22);end.writeUInt32LE(0x06054b50);end.writeUInt16LE(entries.length,8);end.writeUInt16LE(entries.length,10);end.writeUInt32LE(offset-start,12);end.writeUInt32LE(start,16);yield end;
+ }
+ let part=Buffer.allocUnsafe(8*1024*1024),used=0;
+ for await(const chunk of chunks()){
+  let offset=0;
+  while(offset<chunk.length){
+   signal.throwIfAborted();const n=Math.min(part.length-used,chunk.length-offset);chunk.copy(part,used,offset,offset+n);used+=n;offset+=n;
+   if(used===part.length){yield part;part=Buffer.allocUnsafe(8*1024*1024);used=0;}
+  }
+ }
+ if(used)yield part.subarray(0,used);
+}
+
 export class StoredZip {
  private file: FileHandle; private offset=0; private entries:Buffer[]=[]; private closed=false;
  private constructor(file:FileHandle){this.file=file;}

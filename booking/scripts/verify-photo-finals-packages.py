@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Disposable local PG17 approval/ZIP processor integration. No remote URL."""
-import importlib.util,json,tempfile
+import importlib.util,json,tempfile,os
 from pathlib import Path
 spec=importlib.util.spec_from_file_location('ingest_runner',Path(__file__).with_name('verify-photo-finals-ingest.py'))
 assert spec is not None and spec.loader is not None
@@ -17,7 +17,12 @@ def main():
    migration=m.ROOT/'supabase/migrations/20260912160000_photo_finals_packages.sql'
    if migration.exists():m.run(cmd+['-f',str(migration)])
    m.ENV['PF_TEST_SOCKET']=t;m.ENV['PF_TEST_PSQL']=str(m.PG/'psql')
-   proof=json.loads(m.run(['node',str(m.ROOT/'tests/postgres/photo-finals-packages.integration.mjs')]))
+   test='photo-finals-packages.resource.mjs' if os.environ.get('PF_PACKAGE_RESOURCE')=='1' else 'photo-finals-packages.integration.mjs'
+   # This deliberate 125s I/O proof must outlive the shared ingest runner's 90s cap.
+   import subprocess
+   result=subprocess.run(['node',str(m.ROOT/'tests/postgres'/test)],env=m.ENV,text=True,capture_output=True,timeout=300)
+   if result.returncode:raise RuntimeError(result.stdout+result.stderr)
+   proof=json.loads(result.stdout)
   finally:m.run([str(m.PG/'pg_ctl'),'-D',data,'-m','immediate','-w','stop'])
  print(json.dumps({'passed':True,'adapter':'isolated-local-postgresql-17','proof':proof}))
 if __name__=='__main__':main()

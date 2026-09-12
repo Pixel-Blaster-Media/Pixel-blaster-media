@@ -1213,6 +1213,7 @@ type MediaIngestJobsTable = CanonicalMediaTable<{
   state: string; attempts: number; max_attempts: number; next_attempt_at: string;
   last_error_code: string | null; last_error_at: string | null; completed_at: string | null;
   finals_release_id: string | null;
+  finals_package_checkpoints: Json;
   finals_version_id: string | null; finals_sha256: string | null; finals_byte_size: number | null;
   finals_quarantine_key: string | null; finals_actor_id: string | null; finals_deadline: string | null;
   finals_lease_token: string | null; finals_lease_started_at: string | null;
@@ -1331,6 +1332,8 @@ export interface Database {
       photo_finals_package_claim: {Args:{p_org:string;p_booking:string;p_property:string;p_job:string;p_worker:string};Returns:Json};
       photo_finals_package_fence: {Args:{p_org:string;p_job:string;p_lease:string};Returns:MediaIngestJobsTable["Row"]};
       photo_finals_package_heartbeat: {Args:{p_org:string;p_job:string;p_lease:string};Returns:undefined};
+      photo_finals_package_checkpoint: {Args:{p_org:string;p_job:string;p_lease:string;p_evidence:Json};Returns:undefined};
+      photo_finals_identifiers: {Args:{ids:string[]};Returns:undefined};
       photo_finals_package_finish: {Args:{p_org:string;p_job:string;p_lease:string;p_evidence:Json};Returns:undefined};
       photo_finals_package_fail: {Args:{p_org:string;p_job:string;p_lease:string};Returns:undefined};
       photo_finals_package_due: {Args:{p_org:string;p_booking:string;p_property:string};Returns:Json};
