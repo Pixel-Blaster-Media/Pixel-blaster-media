@@ -1,7 +1,7 @@
 import type {FinalsDatabase} from './ingest.ts';
 import {packageRpc} from './package-runtime.ts';
 const OPERATIONS=new Set([
- 'access','current','upload_target','create_intent','claim','target','stage','fence','accept','fail','due',
+ 'reconcile_expired','recover_intent','inventory','download_begin','download_finish','download_revoke','access','current','upload_target','create_intent','claim','target','stage','fence','accept','fail','due',
  'prepare_release','approve_release','package_claim','package_heartbeat','package_checkpoint','package_finish','package_fail','package_due',
 ].map(name=>'photo_finals_'+name));
 /** Narrow application adapter over a server-owned PostgREST-compatible client.

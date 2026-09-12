@@ -5,6 +5,7 @@ import {packageRpc} from './package-runtime.ts';
 import {createFinalsApplicationDatabase} from './rpc-adapter.ts';
 import {common,currentFinals,currentFinalsDto,finalObjectResponse,id,record} from './application.ts';
 import type { R2Storage } from '../storage/r2-core.ts';
+import {inspectMediaObjectKey} from '../storage/keys.ts';
 export type FinalsIdentity = { actorId: string; scope: PhotoFinalsScope; operator: boolean };
 export type UploadCapability={url:string;headers:Record<string,string>;expiresAt:string};
 export type FinalsRuntime={db:FinalsDatabase;env:Readonly<Record<string,string|undefined>>;storage:R2Storage;issueUpload(job:Record<string,unknown>,identity:FinalsIdentity):Promise<UploadCapability>};
@@ -50,12 +51,19 @@ export function createFinalsHandler(deps: FinalsHttpDependencies) {
    if(!identity.operator)return finalsJson({error:'Operator access required.'},403);
    if(request.headers.get('origin')!==new URL(request.url).origin)return finalsJson({error:'Same-origin request required.'},403);
    const body=await boundedFinalsJson(request);
+   if(body.op==='reconcile'&&Object.keys(body).length===1){const settled=await packageRpc(runtime.db,'photo_finals_reconcile_expired',common(identity));return finalsJson({settled,...record(await packageRpc(runtime.db,'photo_finals_inventory',common(identity)))});}
+   if(body.op==='inventory'&&Object.keys(body).length===1)return finalsJson(await packageRpc(runtime.db,'photo_finals_inventory',common(identity)));
+   if(body.op==='revoke'&&Object.keys(body).sort().join(',')==='grantId,op'){await packageRpc(runtime.db,'photo_finals_download_revoke',{...common(identity),p_grant:id(body.grantId)});return finalsJson({status:'revoked'});}
    if(body.op==='intent'){
     if(Object.keys(body).sort().join(',')!=='byteSize,intentId,op,requestId,sha256')return finalsJson({error:'Invalid input.'},400);
-    const job=await createFinalIntent({...runtime,...identity,requestId:body.requestId as string,intentId:body.intentId as string,sha256:body.sha256 as string,byteSize:body.byteSize as number}) as Record<string,unknown>;
+    const job=await createFinalIntent({...runtime,db:{rpc:(name,args)=>runtime.db.rpc(name==='photo_finals_create_intent'?'photo_finals_recover_intent':name,args)},...identity,requestId:body.requestId as string,intentId:body.intentId as string,sha256:body.sha256 as string,byteSize:body.byteSize as number}) as Record<string,unknown>;
     if(job.completed_at&&job.state==='accepted')return finalsJson({status:'accepted',jobId:id(job.id),versionId:id(job.finals_version_id)});
-    if(['dead_letter','rejected','cancelled'].includes(String(job.state)))return finalsJson({status:'needs_attention',error:'This upload needs operator reconciliation. Its original intent has been retained.'},409);
+    if(['dead_letter','rejected','cancelled'].includes(String(job.state))||Date.parse(String(job.finals_deadline))<=Date.now())return finalsJson({status:'needs_attention',error:'This expired or terminal upload is retained in the authorized inventory. No replacement or deletion was performed.'},409);
     const target=record(await packageRpc(runtime.db,'photo_finals_upload_target',{...common(identity),p_job:id(job.id)}));
+    let present=false;
+    try{const head=await runtime.storage.head(inspectMediaObjectKey(String(target.finals_quarantine_key),identity.scope.organizationId).key,AbortSignal.timeout(10000));if(head.sha256!==String(target.finals_sha256).slice(2)||head.bytes!==Number(target.finals_byte_size))throw new Error('identity');present=true;}
+    catch(error){const e=error as {$metadata?:{httpStatusCode?:number}};if(e.$metadata?.httpStatusCode!==404)throw error;}
+    if(present)return finalsJson({status:'uploaded',jobId:job.id,batchId:job.batch_id});
     const upload=await runtime.issueUpload(target,identity);
     return finalsJson({status:'awaiting_upload',jobId:job.id,batchId:job.batch_id,upload});
    }

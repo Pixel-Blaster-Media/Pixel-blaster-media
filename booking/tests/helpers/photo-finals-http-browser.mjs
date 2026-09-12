@@ -33,16 +33,17 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
  // production factory are replaced, explicitly test-only; HTTP/application/SQL/
  // decode/storage/package logic stays real. ALS prevents cross-request identity.
  const contextStore=new AsyncLocalStorage();
+ const scopes=new Map([[scope.bookingId,scope]]);
  const bridgeKey='__TEST_ONLY_PHOTO_FINALS_ROUTE__';
  globalThis[bridgeKey]={contextStore,runtime,scope};
  const shim=`const b=globalThis.${bridgeKey};`;
  const routeBuild=await build({entryPoints:['app/api/photo-finals/[bookingId]/route.ts'],bundle:true,write:false,metafile:true,platform:'node',packages:'external',format:'esm',plugins:[{name:'test-only-session-and-runtime',setup(build){
   build.onResolve({filter:/^@\/lib\/(auth\/current-user|supabase\/server|media\/finals\/production)$/},args=>({path:args.path,namespace:'test-only'}));
-  build.onLoad({filter:/.*/,namespace:'test-only'},args=>({loader:'js',contents:shim+(args.path.endsWith('current-user')?`export async function getCurrentUserResult(){const i=b.contextStore.getStore();return i?{kind:'active',profile:{userId:i.actorId,organizationId:i.scope.organizationId,archivedAt:null,role:i.operator?'admin':'realtor'}}:{kind:'missing'};}`:args.path.endsWith('production')?`export async function createProductionFinalsRuntime(){return b.runtime;}`:`export async function getServerSupabase(){return {from(){const filters={};const q={select(){return q},eq(k,v){filters[k]=v;return q},async maybeSingle(){const i=b.contextStore.getStore();return {data:i&&filters.id===b.scope.bookingId&&filters.organization_id===b.scope.organizationId?{id:b.scope.bookingId,property_id:b.scope.propertyId,status:'editing'}:null,error:null}}};return q}};}`)}));
+  build.onLoad({filter:/.*/,namespace:'test-only'},args=>({loader:'js',contents:shim+(args.path.endsWith('current-user')?`export async function getCurrentUserResult(){const i=b.contextStore.getStore();return i?{kind:'active',profile:{userId:i.actorId,organizationId:i.scope.organizationId,archivedAt:null,role:i.operator?'admin':'realtor'}}:{kind:'missing'};}`:args.path.endsWith('production')?`export async function createProductionFinalsRuntime(){return b.runtime;}`:`export async function getServerSupabase(){return {from(){const filters={};const q={select(){return q},eq(k,v){filters[k]=v;return q},async maybeSingle(){const i=b.contextStore.getStore();return {data:i&&filters.id===i.scope.bookingId&&filters.organization_id===i.scope.organizationId?{id:i.scope.bookingId,property_id:i.scope.propertyId,status:'editing'}:null,error:null}}};return q}};}`)}));
  }}]});
  const routeDirectory=resolve('node_modules/.cache/photo-finals-test-'+randomUUID());await mkdir(routeDirectory,{recursive:true});const routePath=resolve(routeDirectory,'route.mjs');await writeFile(routePath,routeBuild.outputFiles[0].contents);
  const actualRoute=await import(pathToFileURL(routePath).href+'?'+randomUUID());
- const handler=(request,bookingId)=>contextStore.run(identify(request),()=>actualRoute[request.method](request,{params:Promise.resolve({bookingId})}));
+ const handler=(request,bookingId)=>{const identity=identify(request),target=scopes.get(bookingId);const scoped=identity&&target?{...identity,scope:{...target,organizationId:identity.scope.organizationId}}:null;return contextStore.run(scoped,()=>actualRoute[request.method](request,{params:Promise.resolve({bookingId})}));};
  const server=createServer(async(req,res)=>{
   try{
    const url=new URL(req.url,origin);let response;
@@ -53,7 +54,7 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
     const token=url.pathname.split('/').pop(),cap=caps.get(token),identity=identify(request);
     if(!cap||cap.expires<=Date.now()||identity?.actorId!==cap.identity.actorId||request.headers.get('if-none-match')!=='*'||request.headers.get('x-test-sha256')!==cap.job.finals_sha256.slice(2)||request.headers.get('content-type')!=='image/jpeg'){response=new Response(null,{status:403});}
     else{
-     const checked=await db.rpc('photo_finals_upload_target',{...common(identity),p_job:cap.job.id});if(checked.error)throw new Error('denied');
+     const checked=await db.rpc('photo_finals_upload_target',{...common({...identity,scope:{...cap.identity.scope,organizationId:identity.scope.organizationId}}),p_job:cap.job.id});if(checked.error)throw new Error('denied');
      let size=0;const chunks=[];for await(const chunk of request.body){size+=chunk.length;if(size>cap.job.finals_byte_size)throw new Error('size');chunks.push(Buffer.from(chunk));}
      const bytes=Buffer.concat(chunks);if(size!==cap.job.finals_byte_size||createHash('sha256').update(bytes).digest('hex')!==cap.job.finals_sha256.slice(2))throw new Error('identity');
      caps.delete(token);await storage.putBufferCreateOnly({key:cap.job.finals_quarantine_key,bytes,sha256:cap.job.finals_sha256.slice(2),contentType:'image/jpeg'});uploadCount++;response=new Response(null,{status:201});
@@ -87,6 +88,7 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
   caps.get(new URL(url).pathname.split('/').pop()).expires=Date.now()-1;assert.equal((await put(testBytes)).status,403);
   const crossOrigin=await fetch(origin+'/api/photo-finals/'+scope.bookingId,{method:'POST',headers:{...cookies,origin:'https://wrong.example','content-type':'application/json'},body:'{}'});assert.equal(crossOrigin.status,403);
 
+  const browserActor=randomUUID();sql(`insert into profiles values ('${browserActor}','${scope.organizationId}','admin','browser-operator@example.invalid',null);insert into organization_members values ('${scope.organizationId}','${browserActor}','admin')`);identities.operator.actorId=browserActor;
   for(const width of [320,390,768,1440]){
    const context=await browser.newContext({viewport:{width,height:900}});
    await context.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
@@ -101,6 +103,12 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
    await page.getByLabel('Select photo 2',{exact:true}).waitFor();
    await page.reload();await page.getByLabel('Upload finished JPEGs',{exact:true}).waitFor();await page.getByLabel('Upload finished JPEGs',{exact:true}).setInputFiles(files);
    await page.getByText('Photos remain private until approval and all packages are verified.',{exact:true}).waitFor();
+   if(width===320){
+    await page.evaluate(()=>localStorage.clear());const tab=await context.newPage();await tab.goto(origin);await tab.getByLabel('Upload finished JPEGs',{exact:true}).waitFor();
+    await Promise.all([page.getByLabel('Upload finished JPEGs',{exact:true}).setInputFiles(files),tab.getByLabel('Upload finished JPEGs',{exact:true}).setInputFiles(files)]);
+    await page.getByText('Photos remain private until approval and all packages are verified.',{exact:true}).waitFor();await tab.getByText('Photos remain private until approval and all packages are verified.',{exact:true}).waitFor();await tab.close();
+    await page.getByRole('button',{name:'Check retained uploads',exact:true}).click();await page.getByText('Authorized inventory: 2 retained uploads, 0 incomplete, 0 expired.',{exact:false}).waitFor();
+   }
    const latest=JSON.parse(sql(`select to_jsonb(b) from media_batches b where booking_id='${scope.bookingId}' order by created_at desc,id desc limit 1`));
    assert.equal(sql(`select count(*) from media_versions where batch_id='${latest.id}'`),'2','retry and reload must not duplicate accepted versions');
    await page.getByLabel('Select photo 2',{exact:true}).waitFor();await page.getByLabel('Select photo 1',{exact:true}).check();await page.getByLabel('Select photo 2',{exact:true}).check();
@@ -150,6 +158,14 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
   sql(`update gallery_releases set state='withdrawn',withdrawn_at=now() where id='${before.gallery.releaseId}'`);
   assert.equal((await request('realtor')).status,200);assert.equal((await (await request('realtor')).json()).gallery,null);
   const denied=await fetch(origin+download,{headers:{cookie:'session='+[...sessions].find(([,v])=>v.role==='realtor')[0]}});assert.equal(denied.status,404);
-  const proof={actualNextRouteExports:true,syntheticAuthAndFactoryOnly:true,widths,uploadCount,httpCount,capabilityWrongUserHeadersSizeExpiryRevocation:true,wrongUserTenantRevokedWithdrawn:true,iguideNotNetworkFallback:true,actualResponseError:true,failedRequests};await writeFile(out+'/proof.json',JSON.stringify(proof,null,2));return proof;
+  const second={...scope,bookingId:randomUUID(),propertyId:randomUUID()};scopes.set(second.bookingId,second);env.PHOTO_FINALS_ALLOWED_SCOPES=JSON.stringify([scope,second]);
+  sql(`insert into properties(id,organization_id,owner_id,street_address) values ('${second.propertyId}','${scope.organizationId}','${realtor}','Synthetic property B');insert into bookings(id,organization_id,property_id,owner_id,status) values ('${second.bookingId}','${scope.organizationId}','${second.propertyId}','${realtor}','editing')`);
+  const secondBytes=await sharp({create:{width:31,height:27,channels:3,background:'#14789a'}}).jpeg().toBuffer();
+  const secondPost=body=>fetch(origin+'/api/photo-finals/'+second.bookingId,{method:'POST',headers:{cookie:'session='+opSession,origin,'content-type':'application/json'},body:JSON.stringify(body)});
+  const secondIntentResponse=await secondPost({op:'intent',requestId:randomUUID(),intentId:randomUUID(),sha256:createHash('sha256').update(secondBytes).digest('hex'),byteSize:secondBytes.length});assert.equal(secondIntentResponse.status,200);const secondIntent=await secondIntentResponse.json();
+  assert.equal((await fetch(secondIntent.upload.url,{method:'PUT',headers:{cookie:'session='+opSession,...secondIntent.upload.headers},body:secondBytes})).status,201);assert.equal((await (await secondPost({op:'complete',jobId:secondIntent.jobId})).json()).status,'accepted');
+  const {nextRouterProof}=await import('./photo-finals-next-router.mjs');
+  const nextRouter=await nextRouterProof({browser,backend:origin,session:opSession,bookingId:scope.bookingId,secondBookingId:second.bookingId,alternateSession:[...sessions].find(([,v])=>v.role==='realtor')[0],out,css});
+  const proof={nextRouter,actualNextRouteExports:true,syntheticAuthAndFactoryOnly:true,widths,uploadCount,httpCount,capabilityWrongUserHeadersSizeExpiryRevocation:true,wrongUserTenantRevokedWithdrawn:true,iguideNotNetworkFallback:true,actualResponseError:true,failedRequests};await writeFile(out+'/proof.json',JSON.stringify(proof,null,2));return proof;
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));delete globalThis[bridgeKey];await rm(routeDirectory,{recursive:true,force:true});}
 }

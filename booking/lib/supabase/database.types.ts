@@ -1346,6 +1346,12 @@ export interface Database {
       photo_finals_stage: {Args:{p_org:string;p_job:string;p_lease:string;p_stage:string};Returns:undefined};
       photo_finals_target: {Args:{p_org:string;p_job:string;p_lease:string};Returns:Json};
       photo_finals_access: {Args:{p_org:string;p_actor:string;p_booking:string;p_property:string;p_operator:boolean};Returns:undefined};
+      photo_finals_download_begin: {Args:{p_org:string;p_actor:string;p_booking:string;p_property:string;p_operator:boolean;p_package:string;p_request:string};Returns:Json};
+      photo_finals_download_finish: {Args:{p_org:string;p_actor:string;p_booking:string;p_property:string;p_operator:boolean;p_grant:string;p_request:string;p_completed:boolean};Returns:boolean};
+      photo_finals_download_revoke: {Args:{p_org:string;p_actor:string;p_booking:string;p_property:string;p_grant:string};Returns:undefined};
+      photo_finals_inventory: {Args:{p_org:string;p_actor:string;p_booking:string;p_property:string};Returns:Json};
+      photo_finals_reconcile_expired: {Args:{p_org:string;p_actor:string;p_booking:string;p_property:string};Returns:number};
+      photo_finals_recover_intent: {Args:{p_org:string;p_actor:string;p_booking:string;p_property:string;p_request:string;p_intent:string;p_sha256:string;p_bytes:number};Returns:MediaIngestJobsTable["Row"]};
       photo_finals_current: {Args:{p_org:string;p_actor:string;p_booking:string;p_property:string;p_operator:boolean};Returns:Json};
       photo_finals_upload_target: {Args:{p_org:string;p_actor:string;p_booking:string;p_property:string;p_job:string};Returns:MediaIngestJobsTable["Row"]};
       photo_finals_due: {Args:{p_org:string;p_booking:string;p_property:string};Returns:Json};

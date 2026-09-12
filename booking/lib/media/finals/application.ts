@@ -1,4 +1,5 @@
 import { Readable } from 'node:stream';
+import { randomUUID } from 'node:crypto';
 import { packageRpc } from './package-runtime.ts';
 import { UUID } from './manifest.ts';
 import { inspectMediaObjectKey } from '../storage/keys.ts';
@@ -33,11 +34,25 @@ export async function finalObjectResponse(runtime:FinalsRuntime,identity:FinalsI
   row=mode==='download'?list(state.packages,2).find(p=>p.id===target):list(state.items).filter(i=>i.id===target).map(i=>record(i.derivative))[0];
  }
  if(!row)return new Response(null,{status:404,headers:{'Cache-Control':'private, no-store'}});
+ const requestId=randomUUID();
+ const grant=mode==='download'?record(await packageRpc(runtime.db,'photo_finals_download_begin',{...common(identity),p_operator:identity.operator,p_package:target,p_request:requestId})):null;
+ // Use the locked/current canonical row, never the earlier read for downloads.
+ if(grant)row=record(grant.package);
+ const settle=async(completed:boolean)=>{if(grant){const settled=await packageRpc(runtime.db,'photo_finals_download_finish',{...common(identity),p_operator:identity.operator,p_grant:id(grant.grantId),p_request:requestId,p_completed:completed});if(completed&&settled!==true)throw new Error('finals_download_revoked');}};
+ try {
  const key=inspectMediaObjectKey(String(row.object_key),identity.scope.organizationId);
  if(key.objectClass!==(mode==='download'?'packages':mode==='review'?'masters':'derivatives'))throw new Error('finals_response_invalid');
  const expected=String(mode==='download'?row.package_sha256:row.sha256);
  const size=Number(row.byte_size);if(!/^\\x[a-f0-9]{64}$/.test(expected)||!Number.isSafeInteger(size)||size<1||size>(mode==='download'?1_100_000_000:33_554_432)||runtime.storage.location(key.key).bucket!==row.bucket_name)throw new Error('finals_response_invalid');
  const stream=await runtime.storage.getVerified(key.key,AbortSignal.timeout(60_000));
  if(stream.bytes!==size||stream.sha256!==expected.slice(2)){stream.body.destroy();throw new Error('finals_response_invalid');}
- return new Response(Readable.toWeb(stream.body) as ReadableStream<Uint8Array>,{headers:{'Content-Type':mode==='download'?'application/zip':'image/jpeg','Content-Length':String(size),'Content-Disposition':`${mode==='download'?'attachment':'inline'}; filename="${mode==='download'?(row.package_type==='mls_zip'?'photos-mls-provisional.zip':'photos-full-resolution.zip'):'photo.jpg'}"`,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'"}});
+ const reader=(Readable.toWeb(stream.body) as ReadableStream<Uint8Array>).getReader();
+ let terminal=false,pending:Uint8Array|undefined;
+ const body=new ReadableStream<Uint8Array>({
+  // One-chunk lookahead holds back final bytes until checksum and audit commit.
+  async pull(controller){try{if(!pending){const first=await reader.read();if(first.done)throw new Error('finals_empty_stream');pending=first.value;}const next=await reader.read();if(next.done){terminal=true;await settle(true);controller.enqueue(pending);pending=undefined;controller.close();}else{controller.enqueue(pending);pending=next.value;}}catch(error){stream.body.destroy();if(!terminal){terminal=true;await settle(false);}controller.error(error);}},
+  async cancel(){stream.body.destroy();try{await reader.cancel();}finally{if(!terminal){terminal=true;await settle(false);}}}
+ },{highWaterMark:0});
+ return new Response(body,{headers:{'Content-Type':mode==='download'?'application/zip':'image/jpeg','Content-Length':String(size),'Content-Disposition':`${mode==='download'?'attachment':'inline'}; filename="${mode==='download'?(row.package_type==='mls_zip'?'photos-mls-provisional.zip':'photos-full-resolution.zip'):'photo.jpg'}"`,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'"}});
+ } catch(error) {await settle(false);throw error;}
 }

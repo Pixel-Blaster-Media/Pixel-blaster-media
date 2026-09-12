@@ -36,7 +36,7 @@ for (const file of ['app/layout.tsx', 'app/admin/layout.tsx', 'app/portal/layout
 test('historical skin changes remain exact after the bounded finals UI slice', () => {
   const cwd = new URL('..', import.meta.url);
   const files = execFileSync('git', ['diff', '--name-only', base, '--', '*.tsx'], { cwd, encoding: 'utf8' }).trim().split('\n');
-  assert.deepEqual(files.map(f => f.replace(/^booking\//, '')).filter(f=>!['app/portal/[propertyId]/page.tsx','components/media/PhotoFinalsWorkspace.tsx'].includes(f)).sort(), Object.keys(changes).sort());
+  assert.deepEqual(files.map(f => f.replace(/^booking\//, '')).filter(f=>!['app/portal/[propertyId]/page.tsx','components/media/PhotoFinalsWorkspace.tsx','components/media/FinalsGallery.tsx','components/media/FinalsNavigationOwner.tsx'].includes(f)).sort(), Object.keys(changes).sort());
   for (const [file, replacements] of Object.entries(changes)) {
     let candidate = beforeFinalsUi(file,read(file));
     for (const [addition, removal] of replacements) {

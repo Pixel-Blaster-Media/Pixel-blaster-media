@@ -11856,3 +11856,133 @@ grant execute on function public.photo_finals_access(uuid,uuid,uuid,uuid,boolean
 -- ============================================================================
 -- End supabase/migrations/20260912200000_photo_finals_application.sql
 -- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260912210000_photo_finals_download_accounting.sql
+-- ============================================================================
+
+-- Private, login-authorized proxy accounting. No bearer resolution endpoint.
+-- A grant is scoped to one authorized HTTP stream, not continuing access rights.
+create function public.photo_finals_download_begin(p_org uuid,p_actor uuid,p_booking uuid,p_property uuid,p_operator boolean,p_package uuid,p_request uuid)
+returns jsonb language plpgsql security invoker set search_path='' as $$
+declare s jsonb; p public.media_packages; g public.download_grants;
+begin
+ perform public.photo_finals_access(p_org,p_actor,p_booking,p_property,p_operator);
+ -- Serialize against new batches and newer review revisions as well as withdrawal.
+ perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('finals:'||p_org,0));
+ -- Same release lock as withdrawal and canonical grant insertion.
+ select * into p from public.media_packages where organization_id=p_org and id=p_package and property_id=p_property;
+ if p.id is null or p_request is null then raise exception 'finals_download_denied' using errcode='42501';end if;
+ perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('finals-release:'||p_org||':'||p.batch_id,0));
+ perform 1 from public.gallery_releases where organization_id=p_org and id=p.release_id for update;
+ s:=public.photo_finals_current(p_org,p_actor,p_booking,p_property,p_operator);
+ if s->>'complete' is distinct from 'true' or not exists(select 1 from jsonb_array_elements(s->'packages') x where x->>'id'=p_package::text) then
+ raise exception 'finals_download_denied' using errcode='42501';end if;
+ -- Duplicate begin must never authorize a second stream, even after response loss.
+ if exists(select 1 from public.download_events where organization_id=p_org and request_id=p_request) then
+ raise exception 'finals_download_already_started' using errcode='42501';end if;
+ insert into public.download_grants(organization_id,property_id,batch_id,release_id,package_id,grantee_profile_id,token_key_id,token_hash,expires_at,max_resolutions,resolution_count,created_by)
+ values(p_org,p.property_id,p.batch_id,p.release_id,p.id,p_actor,'private-session-v1',pg_catalog.sha256(pg_catalog.convert_to(pg_catalog.gen_random_uuid()::text,'UTF8')),clock_timestamp()+interval '60 seconds',1,1,p_actor) returning * into g;
+ insert into public.download_events(organization_id,property_id,batch_id,release_id,package_id,grant_id,event_type,actor_profile_id,request_id)
+ values(p_org,p.property_id,p.batch_id,p.release_id,p.id,g.id,'grant_resolved',p_actor,p_request);
+ return jsonb_build_object('grantId',g.id,'package',to_jsonb(p));
+end $$;
+
+-- Settlement records what the server actually observed, not client receipt.
+-- Revocation/expiry/access changes deny successful settlement after bytes drain.
+-- Failed settlement remains an unresolved grant_resolved event, never false success.
+create function public.photo_finals_download_finish(p_org uuid,p_actor uuid,p_booking uuid,p_property uuid,p_operator boolean,p_grant uuid,p_request uuid,p_completed boolean)
+returns boolean language plpgsql security invoker set search_path='' as $$
+declare g public.download_grants; s jsonb; completed boolean:=false;
+begin
+ select * into g from public.download_grants where organization_id=p_org and id=p_grant and property_id=p_property and grantee_profile_id=p_actor for update;
+ if g.id is null or p_completed is null or not exists(select 1 from public.download_events where organization_id=p_org and grant_id=g.id and request_id=p_request and event_type='grant_resolved' and actor_profile_id=p_actor)
+ then raise exception 'finals_download_denied' using errcode='42501';end if;
+ if exists(select 1 from public.download_events where organization_id=p_org and grant_id=g.id and request_id=p_request and event_type in ('controlled_proxy_completed','denied')) then return exists(select 1 from public.download_events where organization_id=p_org and grant_id=g.id and request_id=p_request and event_type='controlled_proxy_completed');end if;
+ if p_completed and g.revoked_at is null and g.expires_at>clock_timestamp() then
+  begin
+   s:=public.photo_finals_current(p_org,p_actor,p_booking,p_property,p_operator);
+   completed:=s->>'complete'='true' and s->'release'->>'id'=g.release_id::text;
+  exception when insufficient_privilege then completed:=false;end;
+ end if;
+ insert into public.download_events(organization_id,property_id,batch_id,release_id,package_id,grant_id,event_type,actor_profile_id,request_id)
+ values(p_org,g.property_id,g.batch_id,g.release_id,g.package_id,g.id,case when completed then 'controlled_proxy_completed' else 'denied' end,p_actor,p_request);
+ update public.download_grants set revoked_at=coalesce(revoked_at,clock_timestamp()) where organization_id=p_org and id=g.id;
+ return completed;
+end $$;
+
+create function public.photo_finals_download_revoke(p_org uuid,p_actor uuid,p_booking uuid,p_property uuid,p_grant uuid)
+returns void language plpgsql security invoker set search_path='' as $$
+begin
+ perform public.photo_finals_access(p_org,p_actor,p_booking,p_property,true);
+ update public.download_grants g set revoked_at=coalesce(g.revoked_at,clock_timestamp())
+ where g.organization_id=p_org and g.property_id=p_property and g.id=p_grant
+ and exists(select 1 from public.media_batches b where b.organization_id=p_org and b.id=g.batch_id and b.booking_id=p_booking);
+ if not found then raise exception 'finals_download_denied' using errcode='42501';end if;
+end $$;
+revoke all on function public.photo_finals_download_begin(uuid,uuid,uuid,uuid,boolean,uuid,uuid),public.photo_finals_download_finish(uuid,uuid,uuid,uuid,boolean,uuid,uuid,boolean),public.photo_finals_download_revoke(uuid,uuid,uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.photo_finals_download_begin(uuid,uuid,uuid,uuid,boolean,uuid,uuid),public.photo_finals_download_finish(uuid,uuid,uuid,uuid,boolean,uuid,uuid,boolean),public.photo_finals_download_revoke(uuid,uuid,uuid,uuid,uuid) to service_role;
+
+-- ============================================================================
+-- End supabase/migrations/20260912210000_photo_finals_download_accounting.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260912220000_photo_finals_recovery.sql
+-- ============================================================================
+
+-- Canonical inventory, not browser storage, owns upload identity.
+create function public.photo_finals_recover_intent(p_org uuid,p_actor uuid,p_booking uuid,p_property uuid,p_request uuid,p_intent uuid,p_sha256 text,p_bytes bigint)
+returns public.media_ingest_jobs language plpgsql security invoker set search_path='' as $$
+declare j public.media_ingest_jobs; latest_batch public.media_batches; request_id uuid;
+begin
+ perform public.photo_finals_access(p_org,p_actor,p_booking,p_property,true);
+ if p_request is null or p_intent is null or p_sha256 is null or p_sha256 !~ '^[0-9a-f]{64}$' or p_bytes is null or p_bytes not between 1 and 33554432 then raise exception 'finals_input_invalid' using errcode='22023';end if;
+ perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('finals:'||p_org,0));
+ select jobs.* into j from public.media_ingest_jobs jobs join public.media_batches b on b.organization_id=jobs.organization_id and b.id=jobs.batch_id
+ where jobs.organization_id=p_org and jobs.property_id=p_property and b.booking_id=p_booking and jobs.finals_actor_id=p_actor and jobs.finals_sha256=decode(p_sha256,'hex') and jobs.finals_byte_size=p_bytes;
+ if found then return j;end if;
+ -- Only the newest batch can be extended: never resurrect an older abandoned batch.
+ select b.* into latest_batch from public.media_batches b
+ where b.organization_id=p_org and b.property_id=p_property and b.booking_id=p_booking and b.source_provider='manual_finals'
+ order by b.created_at desc,b.id desc limit 1;
+ if latest_batch.created_by=p_actor and not exists(select 1 from public.gallery_releases r where r.organization_id=p_org and r.batch_id=latest_batch.id and r.approved_at is not null) then request_id:=latest_batch.provider_job_id::uuid;end if;
+ if request_id is null and exists(select 1 from public.media_batches where organization_id=p_org and source_provider='manual_finals' and provider_job_id=p_request::text) then request_id:=pg_catalog.gen_random_uuid();end if;
+ return public.photo_finals_create_intent(p_org,p_actor,p_booking,p_property,coalesce(request_id,p_request),p_intent,p_sha256,p_bytes);
+end $$;
+create function public.photo_finals_inventory(p_org uuid,p_actor uuid,p_booking uuid,p_property uuid)
+returns jsonb language plpgsql security invoker set search_path='' as $$
+declare inventory jsonb;
+begin
+ perform public.photo_finals_access(p_org,p_actor,p_booking,p_property,true);
+ select coalesce(jsonb_agg(to_jsonb(x)),'[]') into inventory from (
+ select j.id as "jobId",b.id as "batchId",j.state,j.finals_deadline as "expiresAt",j.completed_at as "completedAt",j.finals_version_id as "versionId"
+ from public.media_ingest_jobs j join public.media_batches b on b.organization_id=j.organization_id and b.id=j.batch_id
+ where j.organization_id=p_org and j.property_id=p_property and b.booking_id=p_booking and j.finals_actor_id=p_actor and j.finals_version_id is not null
+ order by j.created_at desc,j.id desc limit 101) x;
+ -- Explicit bound, never claim an incomplete inventory is complete.
+ return jsonb_build_object('items',inventory,'hasMore',jsonb_array_length(inventory)>100);
+end $$;
+create function public.photo_finals_reconcile_expired(p_org uuid,p_actor uuid,p_booking uuid,p_property uuid)
+returns integer language plpgsql security invoker set search_path='' as $$
+declare j public.media_ingest_jobs; settled integer:=0;
+begin
+ perform public.photo_finals_access(p_org,p_actor,p_booking,p_property,true);
+ for j in select jobs.* from public.media_ingest_jobs jobs join public.media_batches b on b.organization_id=jobs.organization_id and b.id=jobs.batch_id
+ where jobs.organization_id=p_org and jobs.property_id=p_property and b.booking_id=p_booking and jobs.finals_actor_id=p_actor and jobs.finals_version_id is not null
+ and jobs.completed_at is null and jobs.finals_deadline<=clock_timestamp() and jobs.next_attempt_at<=clock_timestamp()
+ and (jobs.finals_lease_expires_at is null or jobs.finals_lease_expires_at<=clock_timestamp())
+ order by jobs.created_at,jobs.id limit 100 for update of jobs skip locked loop
+  perform public.photo_finals_claim(p_org,p_booking,p_property,j.id,'application-reconciliation');
+  if exists(select 1 from public.media_ingest_jobs where organization_id=p_org and id=j.id and completed_at is not null and state='dead_letter') then settled:=settled+1;end if;
+ end loop;
+ return settled;
+end $$;
+revoke all on function public.photo_finals_reconcile_expired(uuid,uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.photo_finals_reconcile_expired(uuid,uuid,uuid,uuid) to service_role;
+revoke all on function public.photo_finals_recover_intent(uuid,uuid,uuid,uuid,uuid,uuid,text,bigint),public.photo_finals_inventory(uuid,uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.photo_finals_recover_intent(uuid,uuid,uuid,uuid,uuid,uuid,text,bigint),public.photo_finals_inventory(uuid,uuid,uuid,uuid) to service_role;
+
+-- ============================================================================
+-- End supabase/migrations/20260912220000_photo_finals_recovery.sql
+-- ============================================================================

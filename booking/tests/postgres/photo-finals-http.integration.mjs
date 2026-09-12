@@ -11,7 +11,8 @@ const literal=v=>v===null?'null':typeof v==='boolean'||typeof v==='number'?Strin
 const db={async rpc(name,args){assert.match(name,/^photo_finals_[a-z_]+$/);try{return {data:JSON.parse(sql(`set role service_role; select to_jsonb(public.${name}(${Object.entries(args).map(([k,v])=>`${k}=>${literal(v)}`).join(',')}));`)||'null'),error:null};}catch(error){console.error(error.stderr);return {data:null,error:{message:error.stderr}};}}};
 const scope={organizationId:'11111111-1111-4111-8111-111111111111',bookingId:'21111111-1111-4111-8111-111111111101',propertyId:'11111111-1111-4111-8111-111111111101'};
 const env={PHOTO_FINALS_ENABLED:'true',PHOTO_FINALS_ENVIRONMENT:'synthetic-local',NODE_ENV:'test',PHOTO_FINALS_SYNTHETIC_ACK:'isolated-no-network',PHOTO_FINALS_ALLOWED_SCOPES:JSON.stringify([scope])};
-const actorId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
+const actorId=randomUUID();
+sql(`insert into profiles values ('${actorId}','${scope.organizationId}','admin','http-operator@example.invalid',null);insert into organization_members values ('${scope.organizationId}','${actorId}','admin')`);
 const storage=new R2Storage({client:new PackageLocalS3(),organizationId:scope.organizationId,buckets:{quarantine:'local-private-quarantine',masters:'local-private-masters',delivery:'local-private-delivery'}});
 let durable=false;
 const handler=createFinalsHandler({authorize:async()=>({actorId,scope,operator:true}),runtime:async()=>({db,env,storage,issueUpload:async job=>{durable=sql(`select count(*) from media_ingest_jobs where id='${job.id}'`)==='1';return {url:'http://localhost/test-only-upload',headers:{},expiresAt:new Date(Date.now()+60000).toISOString()};}})});
@@ -44,8 +45,12 @@ for(const item of state.gallery.downloads){const r=await handler(new Request('ht
 assert.ok(!JSON.stringify(state).includes('object_key'));assert.ok(!JSON.stringify(state).includes('quarantine/'));
 const component=await import('node:fs/promises').then(fs=>fs.access(new URL('../../components/media/PhotoFinalsWorkspace.tsx',import.meta.url))).then(()=>true,()=>false);
 assert.equal(component,true,'real upload/review/gallery component must exist');
+const {grantProof}=await import('../helpers/photo-finals-grants.mjs');
+const grants=await grantProof({db,storage,env,scope,actorId,sql,state});
 const {deliveryProof}=await import('../helpers/photo-finals-delivery.mjs');
 const delivery=await deliveryProof({db,storage,env,scope,actorId,sql,state});
 const {browserProof}=await import('../helpers/photo-finals-http-browser.mjs');
 const browser=await browserProof({db,storage,sql,env,scope,actorId});
-console.log(JSON.stringify({durableIntentBeforeCapability:true,actualJpegApprovalZipRoutes:true,staleRevisionAndDigestDenied:true,delivery,browser}));
+const {expiredProof}=await import('../helpers/photo-finals-expired.mjs');
+const expired=await expiredProof({sql,invoke,job,scope,actorId});
+console.log(JSON.stringify({durableIntentBeforeCapability:true,actualJpegApprovalZipRoutes:true,staleRevisionAndDigestDenied:true,expired,grants,delivery,browser}));

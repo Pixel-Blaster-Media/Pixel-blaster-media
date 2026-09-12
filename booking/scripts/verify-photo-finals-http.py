@@ -18,6 +18,8 @@ def main():
     m.run(cmd+['-f',str(m.ROOT/f)])
    extra=m.ROOT/'supabase/migrations/20260912200000_photo_finals_application.sql'
    if extra.exists():m.run(cmd+['-f',str(extra)])
+   m.run(cmd+['-f',str(m.ROOT/'supabase/migrations/20260912210000_photo_finals_download_accounting.sql')])
+   m.run(cmd+['-f',str(m.ROOT/'supabase/migrations/20260912220000_photo_finals_recovery.sql')])
    env={**m.ENV,'PF_TEST_SOCKET':t,'PF_TEST_PSQL':str(m.PG/'psql')}
    result=subprocess.run(['node',str(m.ROOT/'tests/postgres/photo-finals-http.integration.mjs')],env=env,text=True,capture_output=True,timeout=240)
    if result.returncode:raise RuntimeError(result.stdout+result.stderr)
