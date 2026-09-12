@@ -1,5 +1,7 @@
 # Finished JPEGs: code-dark selection foundation (not the complete release slice)
 
+**Follow-up:** `PHOTO_FINALS_INGEST.md` documents the subsequently implemented local transactional intent → actual JPEG decode → immutable acceptance worker. The sections below describe the historical selection-foundation checkpoint, not the current ingest implementation.
+
 Candidate base: `fda144090a12c4abc462eea394dc26a785f0ad71` (`origin/main`).
 
 ## Delivered / intentionally unavailable

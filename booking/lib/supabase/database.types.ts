@@ -1212,6 +1212,10 @@ type MediaIngestJobsTable = CanonicalMediaTable<{
   provider_event_id: string | null; job_kind: string; idempotency_key: string;
   state: string; attempts: number; max_attempts: number; next_attempt_at: string;
   last_error_code: string | null; last_error_at: string | null; completed_at: string | null;
+  finals_version_id: string | null; finals_sha256: string | null; finals_byte_size: number | null;
+  finals_quarantine_key: string | null; finals_actor_id: string | null; finals_deadline: string | null;
+  finals_lease_token: string | null; finals_lease_started_at: string | null;
+  finals_lease_expires_at: string | null; finals_worker_id: string | null;
   created_at: string; updated_at: string;
 }, "organization_id" | "property_id" | "batch_id" | "job_kind" | "idempotency_key">;
 type MediaJobAttemptsTable = CanonicalMediaTable<{
@@ -1321,6 +1325,20 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      photo_finals_create_intent: {
+        Args: {p_org:string;p_actor:string;p_booking:string;p_property:string;p_request:string;p_intent:string;p_sha256:string;p_bytes:number};
+        Returns: MediaIngestJobsTable["Row"];
+      };
+      photo_finals_claim: {Args:{p_org:string;p_job:string;p_worker:string};Returns:MediaIngestJobsTable["Row"] | null};
+      photo_finals_fence: {Args:{p_org:string;p_job:string;p_lease:string};Returns:MediaIngestJobsTable["Row"]};
+      photo_finals_stage: {Args:{p_org:string;p_job:string;p_lease:string;p_stage:string};Returns:undefined};
+      photo_finals_target: {Args:{p_org:string;p_job:string;p_lease:string};Returns:Json};
+      photo_finals_due: {Args:{p_org:string;p_booking:string;p_property:string};Returns:Json};
+      photo_finals_accept: {
+        Args:{p_org:string;p_job:string;p_lease:string;p_bucket:string;p_width:number;p_height:number};
+        Returns:MediaVersionsTable["Row"];
+      };
+      photo_finals_fail: {Args:{p_org:string;p_job:string;p_lease:string;p_reject:boolean};Returns:undefined};
       admin_booking_search: {
         Args: { p_organization_id: string; p_query?: string; p_filter?: string; p_after?: Json | null };
         Returns: Json;

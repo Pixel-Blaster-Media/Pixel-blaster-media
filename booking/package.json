@@ -18,6 +18,7 @@
     "test:postgres:invoice": "bash lib/integrations/quickbooks/tests/verify-postgres.sh",
     "test:postgres:atomic": "bash scripts/verify-atomic-booking-postgres.sh",
     "test:photo-finals": "node --test tests/photo-finals-*.test.mjs",
+    "test:postgres:finals-ingest": "python3 scripts/verify-photo-finals-ingest.py",
     "test:postgres:photo-finals": "python3 scripts/verify-photo-finals-concurrency.py",
     "test:postgres:media": "bash scripts/verify-canonical-media-postgres.sh",
     "test:postgres:credentials": "bash scripts/verify-integration-credentials-postgres.sh",
@@ -39,6 +40,7 @@
     "next": "^16.3.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "sharp": "^0.35.4",
     "web-push": "3.6.7"
   },
   "devDependencies": {

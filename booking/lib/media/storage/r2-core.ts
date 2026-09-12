@@ -118,6 +118,12 @@ export class R2Storage {
     };
   }
 
+  /** Private server metadata: location is derived by this tenant-bound adapter. */
+  location(key: MediaObjectKey): Readonly<{bucket: string; key: MediaObjectKey}> {
+    const resolved = this.resolve(key);
+    return Object.freeze({bucket: resolved.bucket, key: resolved.key});
+  }
+
   private assertChecksumBinding(keySha256: string | null, expected: string): void {
     if (keySha256 !== null && keySha256 !== expected) {
       throw new Error("object key must be checksum-addressed to the expected sha256");
