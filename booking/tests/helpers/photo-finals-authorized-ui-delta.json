@@ -36,5 +36,19 @@
       "  );\n}\n\nfunction PhotoDownloadsSection({ gallery, bookingId }: { gallery: DeliverableRow[]; bookingId?: string }) {\n  const mlsZipUrl = findPhotoDownloadUrl(gallery, \"mls\");\n  const highResZipUrl = findPhotoDownloadUrl(gallery, \"high_res\");\n  const hasAnyDownload = Boolean(mlsZipUrl || highResZipUrl);\n  if (bookingId) return <PhotoFinalsWorkspace bookingId={bookingId} incumbent={[\n    ...(mlsZipUrl ? [{category:'photos' as const,label:'iGUIDE MLS photos',source:'iguide' as const,slot:'photos_mls' as const,url:iGuideDownloadUrl(mlsZipUrl)}] : []),\n    ...(highResZipUrl ? [{category:'photos' as const,label:'iGUIDE high-res photos',source:'iguide' as const,slot:'photos_full_res' as const,url:iGuideDownloadUrl(highResZipUrl)}] : []),\n  ]}/>;\n\n  return (\n    <MediaSection\n",
       "  );\n}\n\nfunction PhotoDownloadsSection({ gallery }: { gallery: DeliverableRow[] }) {\n  const mlsZipUrl = findPhotoDownloadUrl(gallery, \"mls\");\n  const highResZipUrl = findPhotoDownloadUrl(gallery, \"high_res\");\n  const hasAnyDownload = Boolean(mlsZipUrl || highResZipUrl);\n\n  return (\n    <MediaSection\n"
     ]
+  ],
+  "app/admin/bookings/[id]/BookingWorkspaceTabs.tsx": [
+    [
+      "import FinalsNavigationOwner from '@/components/media/FinalsNavigationOwner';\n",
+      ""
+    ],
+    [
+      "    <FinalsNavigationOwner key={baseHref}>\n",
+      ""
+    ],
+    [
+      "    </FinalsNavigationOwner>\n",
+      ""
+    ]
   ]
 }

@@ -25,6 +25,9 @@ import {
   type CatalogItemRow,
 } from "@/lib/booking/catalog";
 import { buildDeliveryLinks } from "@/lib/booking/delivery-links";
+import {resolveFinalsDelivery} from '@/lib/media/finals/delivery';
+import {createProductionFinalsRuntime} from '@/lib/media/finals/production';
+import {currentFinals,currentFinalsDto} from '@/lib/media/finals/application';
 import { createManageToken } from "@/lib/booking/manage-token";
 import { syncRealtorCalendarEventsBestEffort } from "@/lib/booking/realtor-calendar-fanout";
 import { sendEmail } from "@/lib/email/resend";
@@ -1099,7 +1102,17 @@ export async function sendDeliveryReadyEmail(
       deliverable.url &&
       deliverable.url !== "about:blank",
   );
-  if (ready.length === 0) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const finalsIdentity={actorId:admin.userId,operator:true,scope:{organizationId:admin.organizationId,bookingId:booking.id,propertyId:booking.property_id}};
+  const readFinals=async()=>{
+    const runtime=await createProductionFinalsRuntime(finalsIdentity);
+    if(!runtime)return null;
+    const dto=currentFinalsDto(await currentFinals(runtime,finalsIdentity),finalsIdentity);
+    if(dto.gallery)dto.gallery.downloads=dto.gallery.downloads.map(link=>({...link,url:appUrl.replace(/\/+$/, '')+link.url}));
+    return dto;
+  };
+  const incumbentLinks=buildDeliveryLinks(ready,appUrl);
+  if ((await resolveFinalsDelivery(incumbentLinks,readFinals)).length === 0) {
     return {
       ok: false,
       error: "No ready deliverables yet. Add iGUIDE links or a video link before sending.",
@@ -1142,7 +1155,9 @@ export async function sendDeliveryReadyEmail(
     }
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  // Re-read after awaited billing work, immediately before constructing the email.
+  const deliveryLinks=await resolveFinalsDelivery(incumbentLinks,readFinals);
+  if(!deliveryLinks.length)return {ok:false,error:'No currently confirmed media is available for delivery.',billingWarning};
   const portalLink = appUrl
     ? `${appUrl}/portal/${booking.property_id}`
     : `/portal/${booking.property_id}`;
@@ -1150,7 +1165,7 @@ export async function sendDeliveryReadyEmail(
     contactName: booking.profiles.full_name ?? booking.profiles.email,
     streetAddress: booking.properties.street_address,
     portalLink,
-    deliverables: buildDeliveryLinks(ready, appUrl),
+    deliverables: deliveryLinks,
     invoiceUrl,
   });
 

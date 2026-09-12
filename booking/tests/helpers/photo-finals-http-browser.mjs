@@ -15,14 +15,14 @@ import sharp from 'sharp';
 import {common} from '../../lib/media/finals/application.ts';
 export async function browserProof({db,storage,sql,env,scope,actorId}){
  const {chromium}=await import(process.env.PF_PLAYWRIGHT_MODULE??homedir()+'/.hermes/designs/pixel-precision-preview/node_modules/playwright/index.mjs');
- const source=`import React from 'react';import{createRoot}from'react-dom/client';import Workspace from './components/media/PhotoFinalsWorkspace';const q=new URLSearchParams(location.search);createRoot(document.getElementById('root')).render(<Workspace bookingId="${scope.bookingId}" operator={q.get('role')!=='realtor'} incumbent={q.has('iguide')?[{category:'photos',label:'iGUIDE MLS',source:'iguide',slot:'photos_mls',url:'/test-only/iguide-unavailable'}]:[]}/>);`;
+ const source=`import React from 'react';import{createRoot}from'react-dom/client';import Workspace from './components/media/PhotoFinalsWorkspace';import NavigationOwner from './components/media/FinalsNavigationOwner';const q=new URLSearchParams(location.search);createRoot(document.getElementById('root')).render(<NavigationOwner><a style={{display:'inline-flex',minHeight:44,alignItems:'center'}} href="/?tab=delivery">Delivery workspace</a><a style={{display:'inline-flex',minHeight:44,alignItems:'center'}} href="/?record=other">Another property</a><Workspace bookingId="${scope.bookingId}" operator={q.get('role')!=='realtor'} incumbent={q.has('iguide')?[{category:'photos',label:'iGUIDE MLS',source:'iguide',slot:'photos_mls',url:'/test-only/iguide-unavailable'}]:[]}/></NavigationOwner>);`;
  const bundled=await build({stdin:{contents:source,resolveDir:process.cwd(),loader:'tsx'},bundle:true,write:false,metafile:true,format:'esm',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'}});
- const css=(await postcss([tailwind({content:['components/media/PhotoFinalsWorkspace.tsx'],theme:{extend:{}}})]).process('@tailwind base;@tailwind components;@tailwind utilities;',{from:undefined})).css;
+ const css=(await postcss([tailwind({content:['components/media/PhotoFinalsWorkspace.tsx','components/media/FinalsGallery.tsx'],theme:{extend:{}}})]).process('@tailwind base;@tailwind components;@tailwind utilities;',{from:undefined})).css;
  const realtor=randomUUID(),wrong=randomUUID();
  sql(`insert into profiles values ('${realtor}','${scope.organizationId}','realtor','realtor@example.invalid',null),('${wrong}','${scope.organizationId}','realtor','wrong@example.invalid',null);update bookings set owner_id='${realtor}' where id='${scope.bookingId}';update properties set owner_id='${realtor}' where id='${scope.propertyId}'`);
  const identities={operator:{actorId,scope,operator:true},realtor:{actorId:realtor,scope,operator:false},wrong:{actorId:wrong,scope,operator:false},tenant:{actorId,scope:{...scope,organizationId:randomUUID()},operator:true}};
  const sessions=new Map(Object.entries(identities).map(([role,identity])=>[randomUUID(),{role,identity}]));
- const caps=new Map();let origin='',uploadCount=0,httpCount=0,failRead=false,failedRequests=[];
+ const caps=new Map();let origin='',uploadCount=0,httpCount=0,failRead=false,failOnce='',failedRequests=[];
  const identify=req=>sessions.get((req.headers.get('cookie')??'').replace(/^session=/,''))?.identity??null;
  const runtime={db,storage,env,async issueUpload(job,identity){
   assert.equal(sql(`select count(*) from media_ingest_jobs where id='${job.id}'`),'1');
@@ -47,6 +47,7 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
   try{
    const url=new URL(req.url,origin);let response;
    const request=new Request(url,{method:req.method,headers:req.headers,...(!['GET','HEAD'].includes(req.method)?{body:Readable.toWeb(req),duplex:'half'}:{})});
+   const operation=req.method==='POST'?(await request.clone().json()).op:req.method==='PUT'?'put':'';
    if(url.pathname.startsWith('/api/photo-finals/')){httpCount++;response=failRead&&req.method==='GET'?Response.json({error:'Synthetic read error'},{status:503}):await handler(request,url.pathname.split('/').pop());}
    else if(url.pathname.startsWith('/test-only/upload/')&&req.method==='PUT'){
     const token=url.pathname.split('/').pop(),cap=caps.get(token),identity=identify(request);
@@ -62,6 +63,7 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
    else if(req.method==='GET'&&url.pathname==='/fixture.js')response=new Response(bundled.outputFiles[0].contents,{headers:{'content-type':'text/javascript'}});
    else if(req.method==='GET'&&url.pathname==='/fixture.css')response=new Response(css,{headers:{'content-type':'text/css'}});
    else response=new Response(null,{status:404});
+   if(failOnce&&operation===failOnce&&response.ok){failOnce='';response=Response.json({error:'Synthetic response loss after commit'},{status:503});}
    res.writeHead(response.status,Object.fromEntries(response.headers));if(response.body)for await(const chunk of response.body)res.write(chunk);res.end();
   }catch{res.writeHead(503);res.end('Test operation denied');}
  });
@@ -92,8 +94,20 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
    const page=await context.newPage();page.on('response',r=>{if(r.status()>=400)failedRequests.push({url:new URL(r.url()).pathname,status:r.status()});});
    await page.goto(origin);await page.getByLabel('Upload finished JPEGs',{exact:true}).waitFor();
    const buffers=await Promise.all([0,1].map(n=>sharp({create:{width:300,height:150,channels:3,background:{r:width%255,g:n*90+20,b:width%121}}}).jpeg().toBuffer()));
-   await page.getByLabel('Upload finished JPEGs',{exact:true}).setInputFiles(buffers.map((buffer,n)=>({name:`synthetic-${width}-${n}.jpg`,mimeType:'image/jpeg',buffer})));
+   const files=buffers.map((buffer,n)=>({name:`synthetic-${width}-${n}.jpg`,mimeType:'image/jpeg',buffer}));
+   failOnce=width===320?'intent':width===390?'complete':width===768?'put':'';
+   await page.getByLabel('Upload finished JPEGs',{exact:true}).setInputFiles(files);
+   if(width===320||width===390){await page.getByText('Photo finals could not be confirmed.',{exact:false}).waitFor();await page.reload();await page.getByLabel('Upload finished JPEGs',{exact:true}).waitFor();await page.getByLabel('Upload finished JPEGs',{exact:true}).setInputFiles(files);}
+   await page.getByLabel('Select photo 2',{exact:true}).waitFor();
+   await page.reload();await page.getByLabel('Upload finished JPEGs',{exact:true}).waitFor();await page.getByLabel('Upload finished JPEGs',{exact:true}).setInputFiles(files);
+   await page.getByText('Photos remain private until approval and all packages are verified.',{exact:true}).waitFor();
+   const latest=JSON.parse(sql(`select to_jsonb(b) from media_batches b where booking_id='${scope.bookingId}' order by created_at desc,id desc limit 1`));
+   assert.equal(sql(`select count(*) from media_versions where batch_id='${latest.id}'`),'2','retry and reload must not duplicate accepted versions');
    await page.getByLabel('Select photo 2',{exact:true}).waitFor();await page.getByLabel('Select photo 1',{exact:true}).check();await page.getByLabel('Select photo 2',{exact:true}).check();
+   for(const name of ['Delivery workspace','Another property']){
+    page.once('dialog',dialog=>{assert.equal(dialog.type(),'confirm');return dialog.dismiss();});await page.getByRole('link',{name,exact:true}).click();
+    assert.equal(new URL(page.url()).search,'');assert.equal(await page.getByLabel('Select photo 1',{exact:true}).isChecked(),true);
+   }
    await page.getByRole('button',{name:'Move photo 2 earlier',exact:true}).click();
    await page.getByRole('button',{name:'Save review order',exact:true}).click();await page.getByRole('button',{name:'Approve selected finals',exact:true}).waitFor();
    // Drafts are not customer-visible through the actual read handler.
@@ -113,6 +127,17 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
    assert.equal(await page.getByRole('link',{name:'MLS export (provisional)',exact:true}).count(),0);assert.equal(await page.getByRole('link',{name:'iGUIDE MLS',exact:true}).count(),1);
    const incumbent=await context.request.get(origin+'/test-only/iguide-unavailable');assert.equal(incumbent.status(),503);assert.equal(await page.getByRole('link',{name:'iGUIDE MLS',exact:true}).count(),1);
    const metrics=await page.evaluate(()=>({innerWidth,client:document.documentElement.clientWidth,scroll:document.documentElement.scrollWidth}));assert.deepEqual(metrics,{innerWidth:width,client:width,scroll:width});
+   await page.getByRole('button',{name:'Enlarge photo 1',exact:true}).click();
+   const dialog=page.getByRole('dialog',{name:'Photo preview',exact:true});await dialog.waitFor();
+   await page.keyboard.press('ArrowRight');await dialog.getByRole('img',{name:'Approved photo 2',exact:true}).waitFor();
+   await page.keyboard.press('Home');await dialog.getByRole('img',{name:'Approved photo 1',exact:true}).waitFor();
+   const box=await dialog.boundingBox();assert.ok(box.x>=0&&box.y>=0&&box.x+box.width<=width&&box.y+box.height<=900);
+   await page.screenshot({path:out+`/gallery-${width}.png`});
+   for(let n=0;n<8;n++){await page.keyboard.press('Tab');assert.equal(await dialog.evaluate(d=>d.contains(document.activeElement)),true);}
+   await page.keyboard.press('Shift+Tab');assert.equal(await dialog.evaluate(d=>d.contains(document.activeElement)),true);
+   await page.setViewportSize({width,height:480});const short=await dialog.boundingBox();assert.ok(short.x>=0&&short.y>=0&&short.x+short.width<=width&&short.y+short.height<=480);await page.screenshot({path:out+`/gallery-short-${width}.png`});await page.setViewportSize({width,height:900});
+   await page.keyboard.press('Escape');assert.equal(await dialog.count(),0);
+   assert.equal(await page.getByRole('button',{name:'Enlarge photo 1',exact:true}).evaluate(n=>n===document.activeElement),true);
    await page.screenshot({path:out+`/realtor-${width}.png`,fullPage:true});widths.push({operator:operatorMetrics,realtor:metrics});
    failRead=true;await page.getByRole('button',{name:'Refresh photo status',exact:true}).click();await page.getByText('Photo finals could not be confirmed.',{exact:false}).waitFor();assert.equal(await page.getByRole('img',{name:'Approved photo 1',exact:true}).count(),0);failRead=false;
    await context.close();

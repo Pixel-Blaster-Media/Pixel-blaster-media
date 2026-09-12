@@ -1,4 +1,5 @@
 import Link from "next/link";
+import FinalsNavigationOwner from '@/components/media/FinalsNavigationOwner';
 import type { ReactNode } from "react";
 
 export type WorkspaceTabId =
@@ -54,6 +55,7 @@ export default function BookingWorkspaceTabs({
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
 
   return (
+    <FinalsNavigationOwner key={baseHref}>
     <div className="space-y-4">
       <div className="precision-shoot-tabs precision-panel rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-2">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -83,5 +85,6 @@ export default function BookingWorkspaceTabs({
         {activeTab.content}
       </section>
     </div>
+    </FinalsNavigationOwner>
   );
 }

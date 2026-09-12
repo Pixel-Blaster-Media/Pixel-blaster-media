@@ -34,6 +34,8 @@ export function createFinalsHandler(deps: FinalsHttpDependencies) {
   try {
    const identity=await deps.authorize(request,bookingId);
    if(!identity)return finalsJson({error:'Sign in to an authorized workspace.'},401);
+   const expectedIdentity=request.headers.get('x-finals-identity');
+   if(request.method==='POST'&&expectedIdentity!==null&&expectedIdentity!==[identity.scope.organizationId,identity.actorId,identity.scope.bookingId,identity.scope.propertyId].join(':'))return finalsJson({error:'Session changed. Refresh before making changes.'},409);
    const configured=await deps.runtime(identity);
    if(!configured)return finalsJson({status:'disabled',message:'Private photo finals are unavailable. Storage, schema and runtime verification are required.'},503);
    const runtime={...configured,db:createFinalsApplicationDatabase(configured.db)};
@@ -51,6 +53,8 @@ export function createFinalsHandler(deps: FinalsHttpDependencies) {
    if(body.op==='intent'){
     if(Object.keys(body).sort().join(',')!=='byteSize,intentId,op,requestId,sha256')return finalsJson({error:'Invalid input.'},400);
     const job=await createFinalIntent({...runtime,...identity,requestId:body.requestId as string,intentId:body.intentId as string,sha256:body.sha256 as string,byteSize:body.byteSize as number}) as Record<string,unknown>;
+    if(job.completed_at&&job.state==='accepted')return finalsJson({status:'accepted',jobId:id(job.id),versionId:id(job.finals_version_id)});
+    if(['dead_letter','rejected','cancelled'].includes(String(job.state)))return finalsJson({status:'needs_attention',error:'This upload needs operator reconciliation. Its original intent has been retained.'},409);
     const target=record(await packageRpc(runtime.db,'photo_finals_upload_target',{...common(identity),p_job:id(job.id)}));
     const upload=await runtime.issueUpload(target,identity);
     return finalsJson({status:'awaiting_upload',jobId:job.id,batchId:job.batch_id,upload});

@@ -2,9 +2,12 @@
 /* eslint-disable @next/next/no-img-element -- Private session-bound images must not enter a shared image optimizer/cache. */
 
 import {useCallback,useEffect,useRef,useState} from 'react';
+import FinalsGallery from './FinalsGallery';
+import {useFinalsDirty} from './FinalsNavigationOwner';
+import {rememberUpload} from '@/lib/media/finals/upload-journal';
 import {selectDeliverySources,type DeliverySourceCandidate} from '@/lib/booking/delivery-source-policy';
 
-type State={status:'enabled';batchId:string|null;revision:number;release:{id:string;state:string;revision:number}|null;versions:{id:string;status:string;previewUrl:string|null;width:number|null;height:number|null}[];gallery:{releaseId:string;items:{id:string;url:string}[];downloads:DeliverySourceCandidate[]}|null};
+type State={status:'enabled';recoveryKey:string|null;batchId:string|null;revision:number;release:{id:string;state:string;revision:number}|null;versions:{id:string;status:string;previewUrl:string|null;width:number|null;height:number|null}[];gallery:{releaseId:string;items:{id:string;url:string}[];downloads:DeliverySourceCandidate[]}|null};
 type Receipt={id:string;revision:number;manifestSha256:string};
 const button='min-h-11 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 disabled:opacity-50';
 /** Keyed state prevents a booking switch from carrying another booking's draft. */
@@ -13,7 +16,7 @@ function Workspace({bookingId,operator=false,incumbent=[]}:{bookingId:string;ope
  const endpoint='/api/photo-finals/'+bookingId;
  const [state,setState]=useState<State|null>(null),[selected,setSelected]=useState<string[]>([]),[receipt,setReceipt]=useState<Receipt|null>(null);
  const [busy,setBusy]=useState(false),[message,setMessage]=useState('Checking private photo availability…'),[disabled,setDisabled]=useState(false);
- const requestId=useRef<string|null>(null),live=useRef(true);
+ const live=useRef(true);
  const refresh=useCallback(async(signal?:AbortSignal)=>{
   const response=await fetch(endpoint,{cache:'no-store',signal});const value=await response.json();
   if(!live.current)return;
@@ -22,18 +25,25 @@ function Workspace({bookingId,operator=false,incumbent=[]}:{bookingId:string;ope
   setState(value);setDisabled(false);setMessage(value.gallery?'Approved photos are ready.':'Photos remain private until approval and all packages are verified.');
  },[endpoint]);
  useEffect(()=>{live.current=true;const controller=new AbortController();void refresh(controller.signal).catch(e=>{if(live.current&&!controller.signal.aborted)setMessage(e.message);});return()=>{live.current=false;controller.abort();};},[refresh]);
- useEffect(()=>{if(!selected.length)return;const warn=(e:BeforeUnloadEvent)=>{e.preventDefault();};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn);},[selected.length]);
- async function post(body:unknown){const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw new Error(data.error||'Operation could not be confirmed.');return data;}
- async function run(fn:()=>Promise<void>){setBusy(true);setReceipt(null);try{await fn();}catch{if(live.current){setState(null);setMessage('Photo finals could not be confirmed. Refresh before retrying; uploaded files may already be retained.');}}finally{if(live.current)setBusy(false);}}
+ useFinalsDirty(selected.length>0||busy);
+ async function post(body:unknown){const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-Finals-Identity':state?.recoveryKey??''},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw new Error(data.error||'Operation could not be confirmed.');return data;}
+ async function run(fn:()=>Promise<void>){setBusy(true);setReceipt(null);try{await fn();}catch{if(live.current){setState(null);setMessage('Photo finals could not be confirmed. Refresh, then reselect the same JPEGs to resume their saved upload intents; do not clear browser storage. If retry remains unavailable, operator reconciliation is required.');}}finally{if(live.current)setBusy(false);}}
  async function upload(files:FileList|null){if(!files?.length)return;
   const inputs=Array.from(files);if(inputs.length>32||inputs.some(f=>f.type!=='image/jpeg'||f.size<1||f.size>33554432)){setMessage('Choose up to 32 finished JPEGs, no larger than 32 MiB each.');return;}
-  await run(async()=>{requestId.current??=crypto.randomUUID();
-   for(const file of inputs){setMessage('Uploading and verifying '+file.name+'…');const bytes=await file.arrayBuffer();const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
-    const intent=await post({op:'intent',requestId:requestId.current,intentId:crypto.randomUUID(),sha256,byteSize:file.size});
+  await run(async()=>{if(!state?.recoveryKey)throw new Error('Upload identity unavailable');
+   for(const file of inputs){if(!live.current)return;setMessage('Uploading and verifying '+file.name+'…');const bytes=await file.arrayBuffer();const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+    if(!live.current)return;
+    const saved=rememberUpload(localStorage,state.recoveryKey,{sha256,byteSize:file.size});
+    const intent=await post({op:'intent',...saved});
+    if(intent.status==='accepted')continue;
+    if(!live.current)return;
     const capability=new URL(intent.upload.url,location.origin);
     // Only an explicit server-issued capability is used; never accept a file URL.
     if(capability.origin!==location.origin||Date.parse(intent.upload.expiresAt)<=Date.now())throw new Error('Unsupported upload capability');
-    const uploaded=await fetch(capability,{method:'PUT',headers:intent.upload.headers,body:bytes});if(!uploaded.ok)throw new Error('Upload was not confirmed');
+    // A failed/lost PUT response may have committed. Only the canonical worker
+    // can attest acceptance; it also rejects missing or mismatched bytes.
+    await fetch(capability,{method:'PUT',headers:intent.upload.headers,body:bytes}).catch(()=>null);
+    if(!live.current)return;
     const accepted=await post({op:'complete',jobId:intent.jobId});if(accepted.status!=='accepted')throw new Error('Acceptance pending');
    }await refresh();});
  }
@@ -56,7 +66,7 @@ function Workspace({bookingId,operator=false,incumbent=[]}:{bookingId:string;ope
    {receipt&&<button className={button+' border-blue-600 text-blue-700'} disabled={busy} onClick={()=>{const approved=receipt;void run(async()=>{const result=await post({op:'approve',releaseId:approved.id,revision:approved.revision,manifestSha256:approved.manifestSha256});if(result.status!=='packaging')throw new Error('Approval unconfirmed');setSelected([]);await refresh();});}}>Approve selected finals</button>}
    {state.release?.state==='packaging'&&<button className={button} disabled={busy} onClick={()=>void run(async()=>{await post({op:'work'});await refresh();})}>Prepare private packages</button>}</div>
   </>}
-  {state?.gallery&&<div className="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-label="Approved gallery">{state.gallery.items.map((item,index)=>/* eslint-disable-next-line @next/next/no-img-element */<img key={item.id} src={item.url} alt={'Approved photo '+(index+1)} className="h-auto w-full rounded-md"/>)}</div>}
+  {state?.gallery&&<FinalsGallery key={state.gallery.releaseId} items={state.gallery.items}/> }
   {!!downloads.length&&<div className="flex flex-wrap gap-2">{downloads.map(d=><a key={d.slot??d.url} href={d.url} className={button}>{d.label}</a>)}</div>}
  </section>;
 }

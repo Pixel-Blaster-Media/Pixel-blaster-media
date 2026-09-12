@@ -16,7 +16,7 @@ export function currentFinalsDto(state:Record<string,unknown>,identity:FinalsIde
  const items=complete?list(state.items):[],packages=complete?list(state.packages,2):[];
  if(complete&&(packages.length!==2||items.length<1||!release))throw new Error('finals_response_invalid');
  const candidates:DeliverySourceCandidate[]=packages.map(p=>({category:'photos',label:p.package_type==='mls_zip'?'MLS export (provisional)':'Full-resolution ZIP',source:'pixel_release',slot:p.package_type==='mls_zip'?'photos_mls':'photos_full_res',url:base+'?download='+id(p.id)}));
- return {status:'enabled',batchId:batch?id(batch.id):null,revision:release?Number(release.revision_number):0,
+ return {status:'enabled',recoveryKey:identity.operator?[identity.scope.organizationId,identity.actorId,identity.scope.bookingId,identity.scope.propertyId].map(id).join(':'):null,batchId:batch?id(batch.id):null,revision:release?Number(release.revision_number):0,
   release:identity.operator&&release?{id:id(release.id),state:release.state,revision:release.revision_number}:null,
   versions:identity.operator?list(state.versions).map(v=>({id:id(v.id),status:v.ingest_state,width:v.width_px,height:v.height_px,previewUrl:v.ingest_state==='accepted'?base+'?review='+id(v.id):null})):[],
   gallery:complete?{releaseId:id(release!.id),items:items.map(i=>({id:id(i.id),url:base+'?image='+id(i.id)})),downloads:selectDeliverySources(candidates,{pixelFallbackEnabled:true,pixelPackageSetComplete:true})}:null};

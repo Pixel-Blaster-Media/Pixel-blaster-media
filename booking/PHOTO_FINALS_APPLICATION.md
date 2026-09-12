@@ -1,5 +1,38 @@
 # Photo finals application — local executable candidate, production unavailable
 
+## Follow-up application checkpoint (base `99f0477c8c23e7295079675219d5ce43dffcb83c`)
+
+This is a **tested partial acceptance slice**, not completion of every requested application gate.
+
+- Send-time now calls the shared source policy with an authorized fresh canonical Pixel read, then reads again after awaited billing work immediately before rendering the email. No Pixel state is cached from preview. A missing/unavailable production factory still returns no Pixel candidates. A failed Pixel read removes Pixel only; legitimate legacy/video links remain eligible. Valid iGUIDE wins independently per format; no network-fetch fallback is used.
+- Browser upload metadata is persisted before the first intent call, partitioned by server-issued tenant/actor/booking/property identity. Reselecting exact JPEG bytes reuses the same request/file intent after reload or ambiguous responses. Accepted SQL intents replay without allocating another capability. A failed PUT response is not acceptance: the existing canonical worker must still verify bytes. Expired/terminal/corrupt-journal cases retain identities and need reconciliation, not a new duplicate attempt. The UI describes reselect/refresh recovery; it does not claim automated abandoned-intent cleanup. A mutation identity header prevents a stale client session draft from executing under another identity.
+- The booking-tab parent owns dirty flags and captures ordinary tab/property/sidebar link navigation before Next Link handlers. Cancellation retains selection and URL; native unload protection covers reload/close. Busy uploads are dirty too. This does **not** yet implement a general App Router programmatic/history navigation blocker, nor prove delayed-save/property-switch ordering in a real running Next application.
+- Approved photos open a large, safe-area/dvh-bounded native dialog with previous/next, Arrow keys, Home/End, thumbnails, explicit Tab/Shift+Tab containment, Escape and exact opener focus restoration. Presentation retains silver/white/blue and restrained exterior corners. Downloads remain session-authorized, not public grants.
+
+### New executable evidence
+
+`npm run test:postgres:finals-http` passes with actual canonical PG17, actual Next route exports and real React components. The four widths (320/390/768/1440) each complete upload → order → approval → packaging → private gallery/ZIP. Added tests inject response loss after intent, PUT and acceptance; reload and same-file reselect leave exactly two canonical versions per tested batch and eight original browser PUTs overall. Gallery keyboard/focus checks and 480px-short-height bounds pass. Ordinary navigation confirmation cancellation is exercised with synthetic route links above the real editor/owner.
+
+The integration also compiles the **actual `sendDeliveryReadyEmail` action and email template**. Auth/legacy booking query, billing settings, notifications and email transport are explicit test-only boundaries; the finals reader executes real PG. Four mocked transport calls verify exact full/MLS links, iGUIDE MLS precedence, video-only behavior, existing invoice URL preservation and exclusion after withdrawal during the awaited billing-settings step. **No real email, invoice or push is sent.** This does not certify actual email-provider or QuickBooks transport.
+
+Final follow-up local gates: **617 repository tests**, HTTP/browser/PG integration, TypeScript, ESLint, production build and `git diff --check` pass. Full historical skin tests still reverse only exact frozen authorized functional hunks, including the navigation-owner wrapper, before original byte checks. Existing typeless-module and Next middleware warnings remain. Independent exact-candidate review is parent-owned and not claimed here.
+
+Screenshots: `/tmp/pixel-finals-browser-evidence/{operator,realtor,gallery,gallery-short}-{320,390,768,1440}.png`. `proof.json` and `resolved-modules.json` remain there. Fixtures are synthetic colors/JPEGs, not customer photographs; browser emulation is not physical iPhone/Safari certification. Aggregate HTTP evidence is in `/tmp/pf-final-http.log`.
+
+### Still required before application acceptance / production enablement
+
+1. Canonical `download_grants` / `download_events` issuance, atomic accounting, revocation and audited completed/failed private stream behavior are **not implemented in this follow-up**. Existing fresh session authorization is unchanged. No substitute parallel tables or fake grant audit was added.
+2. A real running Next/React application with synthetic local authentication and PG must exercise App Router/history navigation, delayed request/save and session/property switches, plus grant accounting. Existing evidence executes actual route exports in the local HTTP harness, **not Next middleware/server routing or real Supabase authentication/PostgREST**.
+3. Durable recovery still needs reviewed cross-tab journal concurrency, browser-storage-loss and terminal/expired/abandoned-intent reconciliation/operator controls. The current journal stops rather than silently replacing corrupt/full metadata; no historical batch chooser or new correction-batch intent UI was added.
+4. Separate reviewed production storage/presigner factory, private resource dedication/credentials/CORS/retention, live synthetic capability/cleanup certification, exact canonical migration/ledger review and approved rollout. The nonactivating production factory and synthetic-local execution gates remain unchanged.
+5. Actual PostgREST/deployed processor architecture/encoder/max-byte/native-memory/concurrency/timeout budgets and dispatcher, destination-specific MLS approval, kill switch/allowlist review, independent exact-candidate approval, physical Safari and deployed verification.
+
+No remote resource, schema, configuration, deployment, business-data or provider changes. No push/merge/deploy. Local canonical schema/migrations, storage adapter and upload limits are unchanged.
+
+---
+
+The following records the earlier application checkpoint and its then-open gates; the follow-up above supersedes its send-time, recovery and gallery status.
+
 Base: `87caa61815dd9ca8db5f84c41d8615b4b8a7a210`.
 
 ## What is connected
