@@ -73,7 +73,7 @@ export async function processFinalIntent(options: {
   localGate(options.env,options.scope);
   const {db,storage,scope,jobId}=options;
   const common={p_org:scope.organizationId,p_job:jobId};
-  const raw=await rpc(db,"photo_finals_claim",{...common,p_worker:options.workerId});
+  const raw=await rpc(db,"photo_finals_claim",{...common,p_booking:scope.bookingId,p_property:scope.propertyId,p_worker:options.workerId});
   if (!raw || !row(raw).id) return {status:"not_claimed"};
   const claim=row(raw);
   const lease=text(claim.finals_lease_token);
@@ -99,8 +99,10 @@ export async function processFinalIntent(options: {
     await rpc(db,"photo_finals_stage",{...fenced,p_stage:"validating"});
     let evidence: JpegEvidence;
     try {
-      evidence=await verifyFinalJpeg(bytes,hash,size,async()=>{await rpc(db,"photo_finals_stage",{...fenced,p_stage:"scanning"});});
+      evidence=await verifyFinalJpeg(bytes,hash,size);
     } catch(error) { reject=true; throw error; }
+    // Persistence failure is retryable uncertainty, never invalid-content evidence.
+    await rpc(db,"photo_finals_stage",{...fenced,p_stage:"scanning"});
     const master=buildMasterKey(scope.organizationId,text(version.asset_id),text(version.id),hash,"jpg");
     signal.throwIfAborted();
     await rpc(db,"photo_finals_fence",fenced);
@@ -147,7 +149,7 @@ export const FINAL_MAX_PIXELS = 100_000_000;
 export type JpegEvidence = { sha256: string; byteSize: number; width: number; height: number };
 
 /** Fully decode one bounded file; never buffer a shoot or a raw decoded image. */
-export async function verifyFinalJpeg(bytes: Buffer, expectedHash: string, expectedBytes: number, beforePixelScan?: () => Promise<void>): Promise<JpegEvidence> {
+export async function verifyFinalJpeg(bytes: Buffer, expectedHash: string, expectedBytes: number): Promise<JpegEvidence> {
   if (!Buffer.isBuffer(bytes) || !Number.isSafeInteger(expectedBytes) || expectedBytes < 1 ||
       expectedBytes > FINAL_MAX_BYTES || bytes.length !== expectedBytes) throw new Error("jpeg_size_invalid");
   if (!/^[a-f0-9]{64}$/.test(expectedHash)) throw new Error("jpeg_hash_invalid");
@@ -159,7 +161,6 @@ export async function verifyFinalJpeg(bytes: Buffer, expectedHash: string, expec
   const meta = await decoder.metadata();
   if (meta.format !== "jpeg" || !meta.width || !meta.height || meta.width > 16384 || meta.height > 16384 ||
       meta.width * meta.height > FINAL_MAX_PIXELS || (meta.pages ?? 1) !== 1) throw new Error("jpeg_dimensions_invalid");
-  await beforePixelScan?.();
   // stats forces a full libvips decode, returns only bounded aggregates (not raw pixel buffers).
   await decoder.stats();
   return {sha256, byteSize: input.length, width:meta.width, height:meta.height};

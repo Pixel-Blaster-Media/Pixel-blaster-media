@@ -1338,7 +1338,7 @@ export interface Database {
         Args: {p_org:string;p_actor:string;p_booking:string;p_property:string;p_request:string;p_intent:string;p_sha256:string;p_bytes:number};
         Returns: MediaIngestJobsTable["Row"];
       };
-      photo_finals_claim: {Args:{p_org:string;p_job:string;p_worker:string};Returns:MediaIngestJobsTable["Row"] | null};
+      photo_finals_claim: {Args:{p_org:string;p_booking:string;p_property:string;p_job:string;p_worker:string};Returns:MediaIngestJobsTable["Row"] | null};
       photo_finals_fence: {Args:{p_org:string;p_job:string;p_lease:string};Returns:MediaIngestJobsTable["Row"]};
       photo_finals_stage: {Args:{p_org:string;p_job:string;p_lease:string;p_stage:string};Returns:undefined};
       photo_finals_target: {Args:{p_org:string;p_job:string;p_lease:string};Returns:Json};

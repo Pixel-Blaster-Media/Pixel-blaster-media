@@ -41,7 +41,12 @@ await assert.rejects(call('photo_finals_approve_release',approve),/finals_actor_
 sql(`update profiles set archived_at=null where id='${actorId}'`);
 assert.throws(()=>sql(`set role authenticated; select photo_finals_approve_release(${Object.values(approve).map(literal).join(',')})`),/permission denied/);
 const claimArgs={p_org:scope.organizationId,p_booking:scope.bookingId,p_property:scope.propertyId,p_job:approved.job_id,p_worker:'lease-test'};
-assert.equal(await call('photo_finals_package_claim',{...claimArgs,p_booking:randomUUID()}),null);
+const packageSnapshot=()=>sql(`select jsonb_build_object('job',to_jsonb(j),'release',to_jsonb(r),'attempts',(select coalesce(jsonb_agg(a),'[]') from media_job_attempts a where a.job_id=j.id)) from media_ingest_jobs j join gallery_releases r on r.id=j.finals_release_id where j.id='${approved.job_id}'`);
+for(const field of ['p_booking','p_property','p_org']) {
+ const before=packageSnapshot();
+ assert.equal(await call('photo_finals_package_claim',{...claimArgs,[field]:randomUUID()}),null);
+ assert.equal(packageSnapshot(),before);
+}
 const lease1=await call('photo_finals_package_claim',claimArgs);
 assert.equal(await call('photo_finals_package_claim',claimArgs),null);
 const stale={p_org:scope.organizationId,p_job:approved.job_id,p_lease:lease1.job.finals_lease_token};
@@ -50,6 +55,17 @@ for(const name of ['heartbeat','fail','finish'])await assert.rejects(call('photo
 const lease2=await call('photo_finals_package_claim',claimArgs);assert.notEqual(lease1.job.finals_lease_token,lease2.job.finals_lease_token);
 await assert.rejects(call('photo_finals_package_heartbeat',stale),/finals_lease_lost/);
 await call('photo_finals_package_fail',{...stale,p_lease:lease2.job.finals_lease_token});
+sql(`update media_ingest_jobs set next_attempt_at=now() where id='${approved.job_id}'`);
+// Analogous checkpoint transport failure remains retryable under the same job.
+const beforeCheckpointRpc=db.rpc.bind(db);let checkpointInjected=false;
+db.rpc=async(name,args)=>{
+ if(!checkpointInjected && name==='photo_finals_package_heartbeat'){checkpointInjected=true;return {data:null,error:{message:'synthetic checkpoint transport failure'}};}
+ return beforeCheckpointRpc(name,args);
+};
+await assert.rejects(processFinalRelease({db,storage,env,scope,jobId:approved.job_id,workerId:'checkpoint-test'}),/photo_finals_package_heartbeat/);
+db.rpc=beforeCheckpointRpc;assert.equal(checkpointInjected,true);
+assert.equal(sql(`select state from media_ingest_jobs where id='${approved.job_id}'`),'retryable');
+assert.equal(sql(`select completed_at is null from media_ingest_jobs where id='${approved.job_id}'`),'t');
 sql(`update media_ingest_jobs set next_attempt_at=now() where id='${approved.job_id}'`);
 // Full ZIP and derivatives can physically exist, but failure of MLS must expose NONE ready.
 client.failMls=true;client.loseFullResponse=true;

@@ -20,15 +20,15 @@ begin
  begin perform public.photo_finals_create_intent(o,a,b,p,r,i,repeat('a',64),100); raise exception 'revoked actor replay';
  exception when insufficient_privilege then null; end;
  update profiles set archived_at=null where id=a;
- j:=public.photo_finals_claim(o,i,'test_a');
+ j:=public.photo_finals_claim(o,b,p,i,'test_a');
  old_token:=j.finals_lease_token;
- k:=public.photo_finals_claim(o,i,'test_b');
+ k:=public.photo_finals_claim(o,b,p,i,'test_b');
  if k.id is not null then raise exception 'double claim'; end if;
  begin perform public.photo_finals_fence(gen_random_uuid(),i,old_token); raise exception 'cross tenant fence'; exception when object_not_in_prerequisite_state then null; end;
  -- Actual expiration without sleeping; fixture-only privileged lease clock manipulation.
  update media_ingest_jobs set finals_lease_started_at=clock_timestamp()-interval '130 seconds',finals_lease_expires_at=clock_timestamp()-interval '1 second' where id=i;
  begin perform public.photo_finals_accept(o,i,old_token,'local-private-masters',1,1); raise exception 'expired acceptance'; exception when object_not_in_prerequisite_state then null; end;
- k:=public.photo_finals_claim(o,i,'test_b');
+ k:=public.photo_finals_claim(o,b,p,i,'test_b');
  if k.finals_lease_token=old_token or k.attempts<>2 then raise exception 'lease not rotated'; end if;
  begin perform public.photo_finals_fence(o,i,old_token); raise exception 'stale promotion'; exception when object_not_in_prerequisite_state then null; end;
  begin perform public.photo_finals_fail(o,i,old_token,false); raise exception 'stale settlement'; exception when object_not_in_prerequisite_state then null; end;
@@ -43,7 +43,7 @@ begin
  if s<>'dead_letter' then raise exception 'attempt exhaustion'; end if;
  select count(*) into n from media_job_attempts where job_id=i;
  if n<>2 then raise exception 'attempt evidence missing'; end if;
- if (public.photo_finals_claim(o,i,'test_c')).id is not null then raise exception 'dead letter reclaimed'; end if;
+ if (public.photo_finals_claim(o,b,p,i,'test_c')).id is not null then raise exception 'dead letter reclaimed'; end if;
 end $$;
 rollback;
 
@@ -68,7 +68,7 @@ update media_ingest_jobs set finals_deadline=clock_timestamp()-interval '1 secon
 alter table media_ingest_jobs enable trigger finals_intent_immutable;
 set role service_role;
 do $$begin
- if (public.photo_finals_claim('11111111-1111-4111-8111-111111111111','41111111-1111-4111-8111-111111111101','expiry')).id is not null then raise exception 'expired intent claimed'; end if;
+ if (public.photo_finals_claim('11111111-1111-4111-8111-111111111111','21111111-1111-4111-8111-111111111101','11111111-1111-4111-8111-111111111101','41111111-1111-4111-8111-111111111101','expiry')).id is not null then raise exception 'expired intent claimed'; end if;
  if (select state from media_ingest_jobs where id='41111111-1111-4111-8111-111111111101')<>'dead_letter' then raise exception 'expiry not terminal'; end if;
 end$$;
 rollback;

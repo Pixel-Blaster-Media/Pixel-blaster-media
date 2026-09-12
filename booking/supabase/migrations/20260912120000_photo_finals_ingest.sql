@@ -101,12 +101,16 @@ language sql security invoker set search_path='' as $$
  values(p_job.organization_id,p_job.property_id,p_job.batch_id,p_job.id,p_job.attempts,p_job.finals_worker_id,p_outcome,p_job.finals_lease_started_at,clock_timestamp());
 $$;
 
-create function public.photo_finals_claim(p_org uuid,p_job uuid,p_worker text) returns public.media_ingest_jobs
+create function public.photo_finals_claim(p_org uuid,p_booking uuid,p_property uuid,p_job uuid,p_worker text) returns public.media_ingest_jobs
 language plpgsql security invoker set search_path='' as $$
 declare j public.media_ingest_jobs;
 begin
  if p_worker is null or p_worker !~ '^[a-zA-Z0-9_-]{1,96}$' then raise exception 'finals_worker_invalid' using errcode='22023'; end if;
- select * into j from public.media_ingest_jobs where organization_id=p_org and id=p_job and finals_version_id is not null for update;
+ -- Validate exact eligible scope before recording attempts, expiry or lease changes.
+ select jobs.* into j from public.media_ingest_jobs jobs
+ join public.media_batches b on b.organization_id=jobs.organization_id and b.id=jobs.batch_id and b.property_id=jobs.property_id
+ where jobs.organization_id=p_org and jobs.property_id=p_property and b.booking_id=p_booking
+ and jobs.id=p_job and jobs.finals_version_id is not null for update of jobs;
  if not found or j.completed_at is not null or j.next_attempt_at>clock_timestamp() or j.finals_lease_expires_at>clock_timestamp() then return null; end if;
  perform public.photo_finals_actor(p_org,j.finals_actor_id);
  if j.finals_lease_token is not null then perform public.photo_finals_attempt(j,'retryable'); end if;
@@ -177,10 +181,13 @@ declare j public.media_ingest_jobs; s text;
 begin
  j:=public.photo_finals_fence(p_org,p_job,p_lease);
  if p_reject is null then raise exception 'finals_outcome_invalid' using errcode='22023'; end if;
- s:=case when p_reject then 'rejected' when j.attempts>=j.max_attempts or j.state in ('quarantined','validating') then 'dead_letter' else 'retryable' end;
+ s:=case when p_reject then 'rejected' when j.attempts>=j.max_attempts then 'dead_letter' else 'retryable' end;
  perform public.photo_finals_attempt(j,s);
- update public.media_versions set ingest_state=s where organization_id=p_org and id=j.finals_version_id;
- update public.media_ingest_jobs set state=s,completed_at=case when s='retryable' then null else clock_timestamp() end,
+ -- Retain checkpoint phases whose canonical transition graph has no retryable edge.
+ -- A cleared lease + due time makes these phases reclaimable without weakening
+ -- shared job/version transitions (including the later package migration).
+ update public.media_versions set ingest_state=case when s='retryable' and j.state in ('quarantined','validating') then j.state else s end where organization_id=p_org and id=j.finals_version_id;
+ update public.media_ingest_jobs set state=case when s='retryable' and j.state in ('quarantined','validating') then j.state else s end,completed_at=case when s='retryable' then null else clock_timestamp() end,
  next_attempt_at=clock_timestamp()+interval '30 seconds',finals_lease_token=null,finals_lease_started_at=null,finals_lease_expires_at=null,finals_worker_id=null
  where organization_id=p_org and id=j.id;
 end $$;
@@ -215,9 +222,9 @@ grant execute on function public.photo_finals_due(uuid,uuid,uuid) to service_rol
 -- Explicitly service-only, invoker security; actor IDs come only from authenticated server context.
 revoke all on function public.photo_finals_actor(uuid,uuid),public.photo_finals_intent_immutable(),
  public.photo_finals_create_intent(uuid,uuid,uuid,uuid,uuid,uuid,text,bigint),public.photo_finals_attempt(public.media_ingest_jobs,text),
- public.photo_finals_claim(uuid,uuid,text),public.photo_finals_fence(uuid,uuid,uuid),
+ public.photo_finals_claim(uuid,uuid,uuid,uuid,text),public.photo_finals_fence(uuid,uuid,uuid),
  public.photo_finals_accept(uuid,uuid,uuid,text,integer,integer),public.photo_finals_fail(uuid,uuid,uuid,boolean) from public,anon,authenticated;
 grant execute on function public.photo_finals_actor(uuid,uuid),public.photo_finals_intent_immutable(),
  public.photo_finals_create_intent(uuid,uuid,uuid,uuid,uuid,uuid,text,bigint),public.photo_finals_attempt(public.media_ingest_jobs,text),
- public.photo_finals_claim(uuid,uuid,text),public.photo_finals_fence(uuid,uuid,uuid),
+ public.photo_finals_claim(uuid,uuid,uuid,uuid,text),public.photo_finals_fence(uuid,uuid,uuid),
  public.photo_finals_accept(uuid,uuid,uuid,text,integer,integer),public.photo_finals_fail(uuid,uuid,uuid,boolean) to service_role;
