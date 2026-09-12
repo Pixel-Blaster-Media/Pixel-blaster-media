@@ -17,6 +17,7 @@
     "test:invoice": "node --import tsx --test lib/integrations/quickbooks/tests/*.test.mjs",
     "test:postgres:invoice": "bash lib/integrations/quickbooks/tests/verify-postgres.sh",
     "test:postgres:atomic": "bash scripts/verify-atomic-booking-postgres.sh",
+    "test:postgres:finals-http": "python3 scripts/verify-photo-finals-http.py",
     "test:photo-finals": "node --test tests/photo-finals-*.test.mjs",
     "test:postgres:finals-resource": "PF_PACKAGE_RESOURCE=1 python3 scripts/verify-photo-finals-packages.py",
     "test:postgres:finals-long-io": "PF_PACKAGE_LONG_IO=1 python3 scripts/verify-photo-finals-packages.py",

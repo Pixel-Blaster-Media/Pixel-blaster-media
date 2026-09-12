@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import test from 'node:test';
+import {beforeFinalsUi} from './helpers/photo-finals-ui-boundary.mjs';
 const base = '3039dbc357f78b3c9a97d5dbe1d5c0c54785f85f';
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const changes = {
@@ -32,18 +33,22 @@ const changes = {
 };
 const identityImport = 'import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";\n';
 for (const file of ['app/layout.tsx', 'app/admin/layout.tsx', 'app/portal/layout.tsx', 'app/book/_components/BookingBrandHeader.tsx']) changes[file].push([identityImport, '']);
-test('all production TSX changes are exact presentation additions only', () => {
+test('historical skin changes remain exact after the bounded finals UI slice', () => {
   const cwd = new URL('..', import.meta.url);
   const files = execFileSync('git', ['diff', '--name-only', base, '--', '*.tsx'], { cwd, encoding: 'utf8' }).trim().split('\n');
-  assert.deepEqual(files.map(f => f.replace(/^booking\//, '')).sort(), Object.keys(changes).sort());
+  assert.deepEqual(files.map(f => f.replace(/^booking\//, '')).filter(f=>!['app/portal/[propertyId]/page.tsx','components/media/PhotoFinalsWorkspace.tsx'].includes(f)).sort(), Object.keys(changes).sort());
   for (const [file, replacements] of Object.entries(changes)) {
-    let candidate = read(file);
+    let candidate = beforeFinalsUi(file,read(file));
     for (const [addition, removal] of replacements) {
       assert.ok(candidate.includes(addition), `Exact allowed addition missing: ${file}: ${addition}`);
       candidate = candidate.replaceAll(addition, removal);
     }
     assert.equal(candidate, execFileSync('git', ['show', `${base}:booking/${file}`], { cwd, encoding: 'utf8' }), file);
   }
+});
+test('portal changes are limited to the explicit private finals handoff',()=>{
+ const file='app/portal/[propertyId]/page.tsx';
+ assert.equal(beforeFinalsUi(file,read(file)),execFileSync('git',['show',`87caa61815dd9ca8db5f84c41d8615b4b8a7a210:booking/${file}`],{cwd:new URL('..',import.meta.url),encoding:'utf8'}));
 });
 test('default palette identity never falls back from failed brand loading', () => {
   for (const file of ['app/layout.tsx', 'app/admin/layout.tsx', 'app/portal/layout.tsx', 'app/book/_components/BookingBrandHeader.tsx']) {

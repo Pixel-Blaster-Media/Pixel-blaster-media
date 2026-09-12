@@ -93,6 +93,8 @@ interface ListingWebsiteRow {
   is_published: boolean;
 }
 
+import PhotoFinalsWorkspace from '@/components/media/PhotoFinalsWorkspace';
+
 export default async function PropertyDetailPage({
   params,
   searchParams,
@@ -256,7 +258,7 @@ export default async function PropertyDetailPage({
           />
         ) : (
           <>
-            <PhotoDownloadsSection gallery={gallery} />
+            <PhotoDownloadsSection gallery={gallery} bookingId={latestBooking?.id} />
 
             {videos.length > 0 ? (
               <VideoSection
@@ -445,10 +447,14 @@ function pickIGuideAlias(
   );
 }
 
-function PhotoDownloadsSection({ gallery }: { gallery: DeliverableRow[] }) {
+function PhotoDownloadsSection({ gallery, bookingId }: { gallery: DeliverableRow[]; bookingId?: string }) {
   const mlsZipUrl = findPhotoDownloadUrl(gallery, "mls");
   const highResZipUrl = findPhotoDownloadUrl(gallery, "high_res");
   const hasAnyDownload = Boolean(mlsZipUrl || highResZipUrl);
+  if (bookingId) return <PhotoFinalsWorkspace bookingId={bookingId} incumbent={[
+    ...(mlsZipUrl ? [{category:'photos' as const,label:'iGUIDE MLS photos',source:'iguide' as const,slot:'photos_mls' as const,url:iGuideDownloadUrl(mlsZipUrl)}] : []),
+    ...(highResZipUrl ? [{category:'photos' as const,label:'iGUIDE high-res photos',source:'iguide' as const,slot:'photos_full_res' as const,url:iGuideDownloadUrl(highResZipUrl)}] : []),
+  ]}/>;
 
   return (
     <MediaSection

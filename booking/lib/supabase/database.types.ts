@@ -1345,6 +1345,9 @@ export interface Database {
       photo_finals_fence: {Args:{p_org:string;p_job:string;p_lease:string};Returns:MediaIngestJobsTable["Row"]};
       photo_finals_stage: {Args:{p_org:string;p_job:string;p_lease:string;p_stage:string};Returns:undefined};
       photo_finals_target: {Args:{p_org:string;p_job:string;p_lease:string};Returns:Json};
+      photo_finals_access: {Args:{p_org:string;p_actor:string;p_booking:string;p_property:string;p_operator:boolean};Returns:undefined};
+      photo_finals_current: {Args:{p_org:string;p_actor:string;p_booking:string;p_property:string;p_operator:boolean};Returns:Json};
+      photo_finals_upload_target: {Args:{p_org:string;p_actor:string;p_booking:string;p_property:string;p_job:string};Returns:MediaIngestJobsTable["Row"]};
       photo_finals_due: {Args:{p_org:string;p_booking:string;p_property:string};Returns:Json};
       photo_finals_accept: {
         Args:{p_org:string;p_job:string;p_lease:string;p_bucket:string;p_width:number;p_height:number};

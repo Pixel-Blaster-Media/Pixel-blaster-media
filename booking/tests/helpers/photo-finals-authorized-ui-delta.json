@@ -1,0 +1,40 @@
+{
+  "app/admin/bookings/[id]/page.tsx": [
+    [
+      "              body=\"Use the primary source, review the files, and prepare one complete delivery.\"\n            />\n            <MediaWorkflow\n              bookingId={booking.id}\n              incumbent={[\n                ...(iguidePhotoDownloads.mls ? [{category:'photos' as const,label:'iGUIDE MLS photos',source:'iguide' as const,slot:'photos_mls' as const,url:'/api/iguide/download?url='+encodeURIComponent(iguidePhotoDownloads.mls)}] : []),\n                ...(iguidePhotoDownloads.highRes ? [{category:'photos' as const,label:'iGUIDE high-res photos',source:'iguide' as const,slot:'photos_full_res' as const,url:'/api/iguide/download?url='+encodeURIComponent(iguidePhotoDownloads.highRes)}] : []),\n              ]}\n              autoHDREnabled={autoHDREnabled}\n              autoenhanceEnabled={autoenhanceEnabled}\n              hasIGuidePhotos={Boolean(\n",
+      "              body=\"Use the primary source, review the files, and prepare one complete delivery.\"\n            />\n            <MediaWorkflow\n              autoHDREnabled={autoHDREnabled}\n              autoenhanceEnabled={autoenhanceEnabled}\n              hasIGuidePhotos={Boolean(\n"
+    ]
+  ],
+  "app/admin/bookings/[id]/MediaWorkflow.tsx": [
+    [
+      "import type { ReactNode } from \"react\";\nimport PhotoFinalsWorkspace from '@/components/media/PhotoFinalsWorkspace';\nimport type { DeliverySourceCandidate } from '@/lib/booking/delivery-source-policy';\n\nconst PLANNED_FLOW = [\"Upload\", \"Review\", \"Prepare\", \"Ready\"] as const;\n\nexport default function MediaWorkflow({\n  bookingId,\n  incumbent,\n  autoHDREnabled,\n  autoenhanceEnabled,\n  hasIGuidePhotos,\n",
+      "import type { ReactNode } from \"react\";\n\nconst PLANNED_FLOW = [\"Upload\", \"Review\", \"Prepare\", \"Ready\"] as const;\n\nexport default function MediaWorkflow({\n  autoHDREnabled,\n  autoenhanceEnabled,\n  hasIGuidePhotos,\n"
+    ],
+    [
+      "  video,\n  manualLinks,\n}: {\n  bookingId?: string;\n  incumbent?: DeliverySourceCandidate[];\n  autoHDREnabled: boolean;\n  autoenhanceEnabled: boolean;\n  hasIGuidePhotos: boolean;\n",
+      "  video,\n  manualLinks,\n}: {\n  autoHDREnabled: boolean;\n  autoenhanceEnabled: boolean;\n  hasIGuidePhotos: boolean;\n"
+    ],
+    [
+      "}) {\n  return (\n    <div className=\"space-y-4\">\n      {bookingId ? <PhotoFinalsWorkspace bookingId={bookingId} operator incumbent={incumbent} /> : <>\n      <section className=\"precision-shoot-planned rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-3\">\n        <p className=\"text-[10px] font-semibold uppercase tracking-wider text-realtor-muted\">\n          Planned delivery flow\n",
+      "}) {\n  return (\n    <div className=\"space-y-4\">\n      <section className=\"precision-shoot-planned rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-3\">\n        <p className=\"text-[10px] font-semibold uppercase tracking-wider text-realtor-muted\">\n          Planned delivery flow\n"
+    ],
+    [
+      "        ) : null}\n      </section>\n\n      </>}\n      {autoHDREnabled ? (\n      <section className=\"rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4\">\n        <p className=\"text-[11px] font-semibold uppercase tracking-wider text-realtor-primary\">\n",
+      "        ) : null}\n      </section>\n\n      {autoHDREnabled ? (\n      <section className=\"rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4\">\n        <p className=\"text-[11px] font-semibold uppercase tracking-wider text-realtor-primary\">\n"
+    ]
+  ],
+  "app/portal/[propertyId]/page.tsx": [
+    [
+      "  cta_url: string | null;\n  is_published: boolean;\n}\n\nimport PhotoFinalsWorkspace from '@/components/media/PhotoFinalsWorkspace';\n\nexport default async function PropertyDetailPage({\n  params,\n",
+      "  cta_url: string | null;\n  is_published: boolean;\n}\n\nexport default async function PropertyDetailPage({\n  params,\n"
+    ],
+    [
+      "          />\n        ) : (\n          <>\n            <PhotoDownloadsSection gallery={gallery} bookingId={latestBooking?.id} />\n\n            {videos.length > 0 ? (\n              <VideoSection\n",
+      "          />\n        ) : (\n          <>\n            <PhotoDownloadsSection gallery={gallery} />\n\n            {videos.length > 0 ? (\n              <VideoSection\n"
+    ],
+    [
+      "  );\n}\n\nfunction PhotoDownloadsSection({ gallery, bookingId }: { gallery: DeliverableRow[]; bookingId?: string }) {\n  const mlsZipUrl = findPhotoDownloadUrl(gallery, \"mls\");\n  const highResZipUrl = findPhotoDownloadUrl(gallery, \"high_res\");\n  const hasAnyDownload = Boolean(mlsZipUrl || highResZipUrl);\n  if (bookingId) return <PhotoFinalsWorkspace bookingId={bookingId} incumbent={[\n    ...(mlsZipUrl ? [{category:'photos' as const,label:'iGUIDE MLS photos',source:'iguide' as const,slot:'photos_mls' as const,url:iGuideDownloadUrl(mlsZipUrl)}] : []),\n    ...(highResZipUrl ? [{category:'photos' as const,label:'iGUIDE high-res photos',source:'iguide' as const,slot:'photos_full_res' as const,url:iGuideDownloadUrl(highResZipUrl)}] : []),\n  ]}/>;\n\n  return (\n    <MediaSection\n",
+      "  );\n}\n\nfunction PhotoDownloadsSection({ gallery }: { gallery: DeliverableRow[] }) {\n  const mlsZipUrl = findPhotoDownloadUrl(gallery, \"mls\");\n  const highResZipUrl = findPhotoDownloadUrl(gallery, \"high_res\");\n  const hasAnyDownload = Boolean(mlsZipUrl || highResZipUrl);\n\n  return (\n    <MediaSection\n"
+    ]
+  ]
+}
