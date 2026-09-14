@@ -6,7 +6,7 @@
     "test": "node --experimental-strip-types --test tests/*.test.mjs"
   },
   "dependencies": {
-    "@vercel/functions": "3.9.5"
+    "@vercel/functions": "3.9.7"
   },
   "engines": {
     "node": "24.x"
