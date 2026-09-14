@@ -76,6 +76,7 @@ export interface BookResult {
     organizationName: string;
   };
   verificationRequired?: boolean;
+  verificationStatus?: "sent" | "cooldown";
   errors?: Record<string, string>;
 }
 
@@ -308,6 +309,20 @@ export async function createPublicBooking(
         },
       };
     }
+  }
+
+  // Resend is never a confirmation, even if a valid code or session is present.
+  // The database remains the authority for the per-inbox ten-minute cooldown.
+  if (str(formData, "verification_intent") === "resend") {
+    if (!contactEmail.includes("@") || contactEmail.length > 320) {
+      return { ok: false, verificationRequired: true, errors: {
+        contact_email: "Enter a valid email before requesting another code.",
+      } };
+    }
+    return requirePublicBookingInbox({
+      requestId: publicRequestId, organizationId: organization.id,
+      email: contactEmail, fingerprint: publicBookingFingerprint(formData), code: "",
+    });
   }
 
   // Provision only after every non-transactional validation has passed. A user

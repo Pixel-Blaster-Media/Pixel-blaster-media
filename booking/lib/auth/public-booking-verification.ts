@@ -6,7 +6,7 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 export function publicBookingFingerprint(form: FormData): string {
   // The password stays in browser memory only; never persist it in the draft.
   const entries = [...form.entries()]
-    .filter(([key]) => !key.startsWith("$ACTION_") && !["password", "verification_code"].includes(key))
+    .filter(([key]) => !key.startsWith("$ACTION_") && !["password", "verification_code", "verification_intent"].includes(key))
     .map(([key, value]) => [key, String(value)]).sort();
   return createHash("sha256").update(JSON.stringify(entries)).digest("hex");
 }
@@ -14,7 +14,7 @@ export function publicBookingFingerprint(form: FormData): string {
 export async function requirePublicBookingInbox(params: {
   requestId: string; organizationId: string; email: string; fingerprint: string;
   code: string;
-}): Promise<{ ok: boolean; verificationRequired?: boolean; errors?: Record<string, string> }> {
+}): Promise<{ ok: boolean; verificationRequired?: boolean; verificationStatus?: "sent" | "cooldown"; errors?: Record<string, string> }> {
 
   const scope = {
     p_request_id: params.requestId, p_organization_id: params.organizationId,
@@ -32,7 +32,7 @@ export async function requirePublicBookingInbox(params: {
       });
       if (!verified.error && verified.data === true) return { ok: true };
       return { ok: false, verificationRequired: true, errors: {
-        verification_code: "That code is invalid or expired. Check your inbox or request a new code after 10 minutes.",
+        verification_code: "We couldn't verify that code for these booking details. Use the latest code on the page where you requested it, or select Resend code once 10 minutes have passed since the last email.",
       } };
     }
     const code = String(randomInt(0, 100_000_000)).padStart(8, "0");
@@ -50,7 +50,7 @@ export async function requirePublicBookingInbox(params: {
       });
       if (!sent.ok || sent.skipped || !sent.id) throw new Error("verification unavailable");
     }
-    return { ok: false, verificationRequired: true };
+    return { ok: false, verificationRequired: true, verificationStatus: begun.data === true ? "sent" : "cooldown" };
   } catch {
     return { ok: false, verificationRequired: true, errors: {
       _form: "We couldn't send a verification code right now. Wait 10 minutes and try again. No booking has been made.",
