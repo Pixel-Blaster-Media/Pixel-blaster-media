@@ -165,7 +165,8 @@ test("public booking aggregate is committed through one service-role-only RPC", 
 
 test("inline and scheduled integration attempts share the durable dispatcher", () => {
   assert.match(confirmPageSource, /requestId=\{randomUUID\(\)\}/);
-  assert.match(confirmFormSource, /name="public_request_id"\s+value=\{requestId\}/);
+  assert.match(confirmFormSource, /const \[draftRequestId\] = useState\(requestId\)/);
+  assert.match(confirmFormSource, /name="public_request_id"\s+value=\{draftRequestId\}/);
 
   assert.equal(existsSync(integrationJobsUrl), true, "missing integration job helper");
   const jobsSource = readFileSync(integrationJobsUrl, "utf8");

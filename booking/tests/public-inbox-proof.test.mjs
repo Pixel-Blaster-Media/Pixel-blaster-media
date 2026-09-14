@@ -21,6 +21,7 @@ const org = '11111111-1111-4111-8111-111111111111';
 const requestId = '22222222-2222-4222-8222-222222222222';
 function fixture() {
   const effects = []; const inbox = []; const challenges = new Map();
+  let now = 0;
   let existing = false;
   const profile = { id: 'user-1', email: 'controlled@example.test', organization_id: org, role: 'realtor', archived_at: null };
   const service = {
@@ -33,13 +34,13 @@ function fixture() {
     },
     async rpc(name, args) {
       if (name === 'begin_public_booking_verification') {
-        const prior = challenges.get(args.p_request_id);
-        if (prior) return { data: false, error: null };
-        challenges.set(args.p_request_id, args); return { data: true, error: null };
+        const prior = challenges.get(args.p_email);
+        if (prior && prior.expiresAt > now) return { data: false, error: null };
+        challenges.set(args.p_email, {...args, expiresAt: now + 600_000}); return { data: true, error: null };
       }
       if (name === 'verify_public_booking_inbox') {
-        const row = challenges.get(args.p_request_id);
-        const valid = row && row.p_organization_id === args.p_organization_id && row.p_email === args.p_email && row.p_fingerprint === args.p_fingerprint && row.p_code_hash === args.p_code_hash;
+        const row = challenges.get(args.p_email);
+        const valid = row && row.expiresAt > now && row.p_request_id === args.p_request_id && row.p_organization_id === args.p_organization_id && row.p_email === args.p_email && row.p_fingerprint === args.p_fingerprint && row.p_code_hash === args.p_code_hash;
         if (valid) effects.push('proof');
         return { data: !!valid, error: null };
       }
@@ -67,7 +68,7 @@ function fixture() {
   const action = load(resolve(root, 'app/book/actions.ts'), mocks).createPublicBooking;
   const form = new FormData();
   for (const [key, value] of Object.entries({ public_request_id: requestId, services: 'blue-print', slot: '2027-01-10T16:00:00Z', street_address: '1 Fictional Street', contact_name: 'Controlled Test', contact_email: profile.email, contact_phone: '555-0100', password: 'controlled-password' })) form.set(key, value);
-  return { action, form, effects, inbox, mocks };
+  return { action, form, effects, inbox, mocks, advanceTime(ms) { now += ms; } };
 }
 test('unused email must prove its inbox before identity, session, or booking effects', async () => {
   const f = fixture();
@@ -120,5 +121,43 @@ for (const mutation of ['wrong-code','changed-email','changed-notes','rpc-error'
   if(mutation==='changed-email') f.form.set('contact_email','other@example.test');
   if(mutation==='changed-notes') f.form.set('notes','changed private instructions');
   const second=await f.action(null,f.form); assert.equal(second.ok,false); assert.deepEqual(f.effects,[]);
+});
+test('resend with a filled valid code never verifies or books and reports the server cooldown', async () => {
+  const f = fixture();
+  await f.action(null, f.form);
+  f.form.set('verification_code', f.inbox[0].text.match(/\b\d{8}\b/)[0]);
+  f.form.set('verification_intent', 'resend');
+  const result = await f.action(null, f.form);
+  assert.equal(result.ok, false);
+  assert.equal(result.verificationStatus, 'cooldown');
+  assert.equal(f.inbox.length, 1);
+  assert.deepEqual(f.effects, []);
+});
+test('resend after expiry issues a usable code without binding the resend button to the draft', async () => {
+  const f = fixture();
+  await f.action(null, f.form);
+  f.form.set('verification_code', f.inbox[0].text.match(/\b\d{8}\b/)[0]);
+  f.advanceTime(600_000);
+  f.form.set('verification_intent', 'resend');
+  const resent = await f.action(null, f.form);
+  assert.equal(resent.verificationStatus, 'sent');
+  assert.equal(f.inbox.length, 2);
+  assert.deepEqual(f.effects, []);
+  f.form.delete('verification_intent');
+  f.form.set('verification_code', f.inbox[1].text.match(/\b\d{8}\b/)[0]);
+  const confirmed = await f.action(resent, f.form);
+  assert.equal(confirmed.ok, true);
+  assert.equal(f.effects[0], 'proof');
+});
+test('a fresh server-render request ID invalidates a still-live code and cannot bypass inbox cooldown', async () => {
+  const f = fixture();
+  await f.action(null, f.form);
+  f.form.set('public_request_id', '33333333-3333-4333-8333-333333333333');
+  f.form.set('verification_code', f.inbox[0].text.match(/\b\d{8}\b/)[0]);
+  assert.equal((await f.action(null, f.form)).ok, false);
+  f.form.set('verification_intent', 'resend');
+  assert.equal((await f.action(null, f.form)).verificationStatus, 'cooldown');
+  assert.equal(f.inbox.length, 1);
+  assert.deepEqual(f.effects, []);
 });
 export { fixture, load, root };

@@ -3,6 +3,8 @@ import {test} from 'node:test';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import {createRequire} from 'node:module';
+const {resolveFinalsDelivery}=createRequire(import.meta.url)('../../../media/finals/delivery.ts');
 const root=new URL('../../../../',import.meta.url);
 const compile=s=>ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 function ast(path){return ts.createSourceFile(path,readFileSync(new URL(path,root),'utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX)}
@@ -33,6 +35,6 @@ const harness=readFileSync(new URL('lib/integrations/quickbooks/tests/delivery.t
 const runSource=harness.slice(harness.indexOf('async function run('),harness.indexOf("test('delivery receipt"));
 const actionAst=ast('app/admin/bookings/[id]/actions.ts');
 const action=actionAst.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='sendDeliveryReadyEmail').getText(actionAst);
-const context={ts,vm,action};
+const context={ts,vm,action,assert,resolveFinalsDelivery};
 vm.runInNewContext(runSource+'\nglobalThis.run=run;',context);
 for(const [name,sent,receipt] of [['rejected',{ok:false},null],['skipped',{ok:true,skipped:true},null],['receipt failure',{ok:true},{code:'23505'}]])test(`delivery preserves billing warning on ${name}`,async()=>{const {result}=await context.run(sent,true,receipt);assert.equal(result.ok,false);assert.match(result.billingWarning??'',/billing needs attention/)});

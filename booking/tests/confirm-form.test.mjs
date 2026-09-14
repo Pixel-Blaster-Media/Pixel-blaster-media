@@ -31,12 +31,24 @@ test('confirmation exposes persistent associated errors and focuses summary; ver
   await act(async()=>password.props.onChange({currentTarget:{value:'memory-only-password'}}));
   await act(async()=>view.root.findByType('textarea').props.onChange({currentTarget:{value:'private gate code'}}));
   result={ok:false,verificationRequired:true};
-  await act(async()=>view.update(React.createElement(Form,props)));
+  // Next re-renders the server page after actions; page.tsx generates a new UUID.
+  await act(async()=>view.update(React.createElement(Form,{...props, requestId: 'new-server-render-request'})));
   const inputs=view.root.findAllByType('input');
   assert.equal(inputs.find(n=>n.props.name==='password').props.value,'memory-only-password');
   assert.equal(view.root.findByType('textarea').props.value,'private gate code');
   assert.equal(inputs.find(n=>n.props.name==='verification_code').props.autoComplete,'one-time-code');
   assert.equal(inputs.find(n=>n.props.name==='shoot_notes').props.value,'private shoot instructions');
   assert.equal(inputs.find(n=>n.props.name==='public_request_id').props.value,'retained-request');
+  const resend = view.root.findAllByType('button').find(n => n.children.join('') === 'Resend code');
+  assert.ok(resend, 'explicit resend control must be visible');
+  assert.equal(resend.props.type, 'submit');
+  assert.equal(resend.props.name, 'verification_intent');
+  assert.equal(resend.props.value, 'resend');
+  result={ok:false,verificationRequired:true,verificationStatus:'cooldown'};
+  await act(async()=>view.update(React.createElement(Form,props)));
+  assert.match(JSON.stringify(view.toJSON()), /No new code was sent/);
+  result={ok:false,verificationRequired:true,verificationStatus:'sent'};
+  await act(async()=>view.update(React.createElement(Form,props)));
+  assert.match(JSON.stringify(view.toJSON()), /new verification code/);
   await act(async()=>view.unmount());
 });
