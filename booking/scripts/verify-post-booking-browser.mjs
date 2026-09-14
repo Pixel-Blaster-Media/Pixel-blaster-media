@@ -305,10 +305,13 @@ try {
     password: "controlled-password",
   }))
     await page.locator(`[name="${name}"]`).fill(value);
+  const draftRequestId = await page.locator('[name="public_request_id"]').inputValue();
   await page.getByRole("button", { name: /confirm/i }).click();
-  await page
-    .getByText("Check your email for an 8-digit code.", { exact: false })
-    .waitFor();
+  await page.locator('[name="verification_code"]').waitFor();
+  assert.equal(await page.locator('[name="public_request_id"]').inputValue(), draftRequestId,
+    "Server Action re-render preserves the inbox challenge request scope");
+  await page.getByRole("button", { name: "Resend code", exact: true }).waitFor();
+  await page.screenshot({ path: resolve(fixture, "verification-mobile.png"), fullPage: true });
   await page.locator('[name="verification_code"]').fill("12345678");
   await page.getByRole("button", { name: /confirm/i }).click();
   await page
