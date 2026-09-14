@@ -42,6 +42,9 @@ export default function ConfirmForm({
   children?: React.ReactNode;
 }) {
   const [formState, formAction] = useActionState(createPublicBooking, initial);
+  // Server Action re-renders can supply a fresh page UUID. Keep the challenge
+  // scope for this mounted draft, just like its contact details and password.
+  const [draftRequestId] = useState(requestId);
 
   const [contactName, setContactName] = useState(profile?.fullName ?? "");
   const [email, setEmail] = useState(profile?.email ?? "");
@@ -168,10 +171,14 @@ export default function ConfirmForm({
           >
             {formState.verificationRequired ? (
               <p>
-                Check your email for an 8-digit code. No booking has been made
-                yet. Your details stay on this page. Codes expire after 10
-                minutes; clear the code and submit again after that to request
-                another.
+                {formState.verificationStatus === "cooldown"
+                  ? "No new code was sent. For security, you can request another code 10 minutes after the last code was sent. Check your inbox and spam folder for that email."
+                  : formState.verificationStatus === "sent"
+                    ? "We sent a new verification code. Check your inbox and spam folder for the latest 8-digit code."
+                    : "Check your email for the latest 8-digit code."}{" "}
+                No booking has been made yet. Your details stay on this page.
+                Codes expire after 10 minutes. Keep this page open while checking
+                your email; use Resend code if you need another.
               </p>
             ) : (
               <p>Please correct the following before confirming:</p>
@@ -193,7 +200,7 @@ export default function ConfirmForm({
           </div>
         ) : null}
         {/* Carry wizard state into the action */}
-        <input type="hidden" name="public_request_id" value={requestId} />
+        <input type="hidden" name="public_request_id" value={draftRequestId} />
         {state.organizationSlug ? (
           <input type="hidden" name="org" value={state.organizationSlug} />
         ) : null}
@@ -373,8 +380,25 @@ export default function ConfirmForm({
           selectedAddOnSlugs={state.addOns}
           squareFootage={state.squareFootage}
         />
+        {/* Keep confirmation first in DOM order so Enter verifies, not resends. */}
+        {formState?.verificationRequired ? <ResendCodeButton /> : null}
       </form>
     </>
+  );
+}
+
+function ResendCodeButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      name="verification_intent"
+      value="resend"
+      disabled={pending}
+      className="min-h-11 rounded-full border border-realtor-primary/25 px-4 py-2 text-sm font-semibold text-realtor-primary disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      Resend code
+    </button>
   );
 }
 
