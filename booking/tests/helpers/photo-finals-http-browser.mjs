@@ -14,6 +14,15 @@ import tailwind from 'tailwindcss';
 import sharp from 'sharp';
 import {packageJobStatus} from '../../lib/media/finals/operator-status.ts';
 import {common} from '../../lib/media/finals/application.ts';
+// A prior release can still render two disabled photos during a new upload.
+// The generic private-status text also exists before a queued lock is acquired.
+// Neither proves this upload completed: require the actual workspace to be idle.
+async function waitForAcceptedUploads(page){
+ const idle=page.locator('section[aria-label="Finished photo finals"][aria-busy="false"]');
+ await idle.getByText('Photos remain private until approval and all packages are verified.',{exact:true}).waitFor();
+ await idle.locator('input[aria-label="Select photo 2"]:enabled').waitFor();
+ assert.equal(await idle.getByRole('checkbox').count(),2);
+}
 export async function browserProof({db,storage,sql,env,scope,actorId}){
  const {chromium}=await import(process.env.PF_PLAYWRIGHT_MODULE??homedir()+'/.hermes/designs/pixel-precision-preview/node_modules/playwright/index.mjs');
  const source=`import React from 'react';import{createRoot}from'react-dom/client';import Workspace from './components/media/PhotoFinalsWorkspace';import NavigationOwner from './components/media/FinalsNavigationOwner';const q=new URLSearchParams(location.search);createRoot(document.getElementById('root')).render(<NavigationOwner><a style={{display:'inline-flex',minHeight:44,alignItems:'center'}} href="/?tab=delivery">Delivery workspace</a><a style={{display:'inline-flex',minHeight:44,alignItems:'center'}} href="/?record=other">Another property</a><Workspace bookingId="${scope.bookingId}" operator={q.get('role')!=='realtor'} incumbent={q.has('iguide')?[{category:'photos',label:'iGUIDE MLS',source:'iguide',slot:'photos_mls',url:'/test-only/iguide-unavailable'}]:[]}/></NavigationOwner>);`;
@@ -24,6 +33,9 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
  const identities={operator:{actorId,scope,operator:true},realtor:{actorId:realtor,scope,operator:false},wrong:{actorId:wrong,scope,operator:false},tenant:{actorId,scope:{...scope,organizationId:randomUUID()},operator:true}};
  const sessions=new Map(Object.entries(identities).map(([role,identity])=>[randomUUID(),{role,identity}]));
  const caps=new Map();let origin='',uploadCount=0,httpCount=0,failRead=false,failOnce='',failedRequests=[];
+ let heldSha=null,releaseHeld,markHeld;
+ const held=new Promise(resolve=>{markHeld=resolve;});
+ const hold=new Promise(resolve=>{releaseHeld=resolve;});
  const identify=req=>sessions.get((req.headers.get('cookie')??'').replace(/^session=/,''))?.identity??null;
  const runtime={db,storage,env,async readPackageStatus(releaseId){assert.match(releaseId,/^[a-f0-9-]{36}$/);return packageJobStatus(JSON.parse(sql(`select to_jsonb(j) from media_ingest_jobs j where finals_release_id='${releaseId}'`)));},async issueUpload(job,identity){
   assert.equal(sql(`select count(*) from media_ingest_jobs where id='${job.id}'`),'1');
@@ -55,6 +67,7 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
    const url=new URL(req.url,origin);let response;
    const request=new Request(url,{method:req.method,headers:req.headers,...(!['GET','HEAD'].includes(req.method)?{body:Readable.toWeb(req),duplex:'half'}:{})});
    const operation=req.method==='POST'?(await request.clone().json()).op:req.method==='PUT'?'put':'';
+   if(operation==='intent'&&heldSha&&(await request.clone().json()).sha256===heldSha){markHeld();await hold;}
    if(url.pathname.startsWith('/api/photo-finals/')){httpCount++;response=failRead&&req.method==='GET'?Response.json({error:'Synthetic read error'},{status:503}):await handler(request,url.pathname.split('/').pop());}
    else if(url.pathname.startsWith('/test-only/upload/')&&req.method==='PUT'){
     const token=url.pathname.split('/').pop(),cap=caps.get(token),identity=identify(request);
@@ -80,7 +93,7 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
  const browser=await chromium.launch({executablePath:process.env.PF_CHROME_PATH??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
  const out=process.env.PF_EVIDENCE_DIR??'/tmp/pixel-finals-browser-evidence';await mkdir(out,{recursive:true});
  await writeFile(out+'/resolved-modules.json',JSON.stringify({client:Object.keys(bundled.metafile.inputs),route:Object.keys(routeBuild.metafile.inputs),clientSha256:createHash('sha256').update(bundled.outputFiles[0].contents).digest('hex'),routeSha256:createHash('sha256').update(routeBuild.outputFiles[0].contents).digest('hex')},null,2));
- const widths=[];
+ const widths=[];let controlledUploadTiming;
  try{
   const opSession=[...sessions].find(([,v])=>v.role==='operator')[0];
   const cookies={cookie:'session='+opSession};
@@ -98,6 +111,7 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
 
   const browserActor=randomUUID();sql(`insert into profiles values ('${browserActor}','${scope.organizationId}','admin','browser-operator@example.invalid',null);insert into organization_members values ('${scope.organizationId}','${browserActor}','admin')`);identities.operator.actorId=browserActor;
   for(const width of [320,390,768,1440]){
+   const uploadsBefore=uploadCount;
    const context=await browser.newContext({viewport:{width,height:900}});
    await context.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
    const session=[...sessions].find(([,v])=>v.role==='operator')[0];await context.addCookies([{name:'session',value:session,url:origin}]);
@@ -106,19 +120,58 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
    const buffers=await Promise.all([0,1].map(n=>sharp({create:{width:300,height:150,channels:3,background:{r:width%255,g:n*90+20,b:width%121}}}).jpeg().toBuffer()));
    const files=buffers.map((buffer,n)=>({name:`synthetic-${width}-${n}.jpg`,mimeType:'image/jpeg',buffer}));
    failOnce=width===320?'intent':width===390?'complete':width===768?'put':'';
+   if(width===768)heldSha=createHash('sha256').update(buffers[1]).digest('hex');
    await page.getByLabel('Upload finished JPEGs',{exact:true}).setInputFiles(files);
    if(width===320||width===390){await page.getByText('Photo finals could not be confirmed.',{exact:false}).waitFor();await page.reload();await page.getByLabel('Upload finished JPEGs',{exact:true}).waitFor();await page.getByLabel('Upload finished JPEGs',{exact:true}).setInputFiles(files);}
-   await page.getByLabel('Select photo 2',{exact:true}).waitFor();
+   if(width===768){
+    // Stop the second file before intent creation, AFTER the first is accepted.
+    // This makes stale prior-release DOM deterministic rather than CPU-dependent.
+    await held;
+    await page.getByLabel('Select photo 2',{exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Select photo 2',{exact:true}).isDisabled(),true);
+    const batch=JSON.parse(sql(`select to_jsonb(b) from media_batches b where booking_id='${scope.bookingId}' order by created_at desc,id desc limit 1`));
+    assert.equal(sql(`select count(*) from media_versions where batch_id='${batch.id}'`),'1','controlled barrier must hold the second acceptance');
+    const waiting=waitForAcceptedUploads(page);
+    try{
+     assert.equal(await Promise.race([waiting.then(()=> 'premature'),new Promise(resolve=>setTimeout(()=>resolve('pending'),250))]),'pending','stale prior-release photos must not satisfy upload completion');
+    }finally{releaseHeld();}
+    await waiting;
+    controlledUploadTiming={secondIntentHeld:true,stalePhotoVisible:true,stalePhotoDisabled:true,acceptedWhileHeld:1,completionWaitStayedPending:true};
+   }else{
+    await waitForAcceptedUploads(page);
+   }
    await page.reload();await page.getByLabel('Upload finished JPEGs',{exact:true}).waitFor();await page.getByLabel('Upload finished JPEGs',{exact:true}).setInputFiles(files);
-   await page.getByText('Photos remain private until approval and all packages are verified.',{exact:true}).waitFor();
+   await waitForAcceptedUploads(page);
    if(width===320){
     await page.evaluate(()=>localStorage.clear());const tab=await context.newPage();await tab.goto(origin);await tab.getByLabel('Upload finished JPEGs',{exact:true}).waitFor();
-    await Promise.all([page.getByLabel('Upload finished JPEGs',{exact:true}).setInputFiles(files),tab.getByLabel('Upload finished JPEGs',{exact:true}).setInputFiles(files)]);
-    await page.getByText('Photos remain private until approval and all packages are verified.',{exact:true}).waitFor();await tab.getByText('Photos remain private until approval and all packages are verified.',{exact:true}).waitFor();await tab.close();
+    // Hold the real Web Lock: both tabs retain the generic private message
+    // while their uploads are queued. Waiting for that text alone is premature.
+    await tab.evaluate(async bookingId=>{
+     const response=await fetch('/api/photo-finals/'+bookingId);if(!response.ok)throw Error('test lock identity unavailable');
+     const {recoveryKey}=await response.json();if(!recoveryKey)throw Error('test lock identity unavailable');
+     await new Promise((acquired,reject)=>{
+      navigator.locks.request('pixel-finals:'+recoveryKey,()=>new Promise(release=>{window.__releaseTestUploadLock=release;acquired();})).catch(reject);
+     });
+    },scope.bookingId);
+    try{
+     await Promise.all([page.getByLabel('Upload finished JPEGs',{exact:true}).setInputFiles(files),tab.getByLabel('Upload finished JPEGs',{exact:true}).setInputFiles(files)]);
+     await tab.getByText('Photos remain private until approval and all packages are verified.',{exact:true}).waitFor();
+     assert.equal(await tab.getByRole('region',{name:'Finished photo finals',exact:true}).getAttribute('aria-busy'),'true');
+     const waiting=Promise.all([waitForAcceptedUploads(page),waitForAcceptedUploads(tab)]);
+     try{
+      assert.equal(await Promise.race([waiting.then(()=> 'premature'),new Promise(resolve=>setTimeout(()=>resolve('pending'),250))]),'pending','private status text must not satisfy queued upload completion');
+     }finally{await tab.evaluate(()=>window.__releaseTestUploadLock());}
+     await waiting;
+    }finally{await tab.evaluate(()=>window.__releaseTestUploadLock());}
+    await tab.close();
     await page.getByRole('button',{name:'Check retained uploads',exact:true}).click();await page.getByText('Authorized inventory: 2 retained uploads, 0 incomplete, 0 expired.',{exact:false}).waitFor();
    }
    const latest=JSON.parse(sql(`select to_jsonb(b) from media_batches b where booking_id='${scope.bookingId}' order by created_at desc,id desc limit 1`));
    assert.equal(sql(`select count(*) from media_versions where batch_id='${latest.id}'`),'2','retry and reload must not duplicate accepted versions');
+   assert.equal(latest.organization_id,scope.organizationId);assert.equal(latest.property_id,scope.propertyId);
+   const accepted=JSON.parse(sql(`select jsonb_agg(encode(sha256,'hex') order by encode(sha256,'hex')) from media_versions where batch_id='${latest.id}' and ingest_state='accepted'`));
+   assert.deepEqual(accepted,buffers.map(bytes=>createHash('sha256').update(bytes).digest('hex')).sort(),'accepted bytes must be this viewport upload, not a previous release');
+   assert.equal(uploadCount-uploadsBefore,2,'all retries and cross-tab replays must perform exactly two physical uploads');
    await page.getByLabel('Select photo 2',{exact:true}).waitFor();await page.getByLabel('Select photo 1',{exact:true}).check();await page.getByLabel('Select photo 2',{exact:true}).check();
    for(const name of ['Delivery workspace','Another property']){
     page.once('dialog',dialog=>{assert.equal(dialog.type(),'confirm');return dialog.dismiss();});await page.getByRole('link',{name,exact:true}).click();
@@ -174,6 +227,6 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
   assert.equal((await fetch(secondIntent.upload.url,{method:'PUT',headers:{cookie:'session='+opSession,...secondIntent.upload.headers},body:secondBytes})).status,201);assert.equal((await (await secondPost({op:'complete',jobId:secondIntent.jobId})).json()).status,'accepted');
   const {nextRouterProof}=await import('./photo-finals-next-router.mjs');
   const nextRouter=await nextRouterProof({browser,backend:origin,session:opSession,bookingId:scope.bookingId,secondBookingId:second.bookingId,alternateSession:[...sessions].find(([,v])=>v.role==='realtor')[0],out,css});
-  const proof={nextRouter,actualNextRouteExports:true,syntheticAuthFactoryAndJoinedScheduler:true,widths,uploadCount,httpCount,capabilityWrongUserHeadersSizeExpiryRevocation:true,wrongUserTenantRevokedWithdrawn:true,iguideNotNetworkFallback:true,actualResponseError:true,failedRequests};await writeFile(out+'/proof.json',JSON.stringify(proof,null,2));return proof;
- }finally{await browser.close();await new Promise(resolve=>server.close(resolve));delete globalThis[bridgeKey];await rm(routeDirectory,{recursive:true,force:true});}
+  const proof={nextRouter,actualNextRouteExports:true,syntheticAuthFactoryAndJoinedScheduler:true,controlledUploadTiming,widths,uploadCount,httpCount,capabilityWrongUserHeadersSizeExpiryRevocation:true,wrongUserTenantRevokedWithdrawn:true,iguideNotNetworkFallback:true,actualResponseError:true,failedRequests};await writeFile(out+'/proof.json',JSON.stringify(proof,null,2));return proof;
+ }finally{releaseHeld();await browser.close();await new Promise(resolve=>server.close(resolve));delete globalThis[bridgeKey];await rm(routeDirectory,{recursive:true,force:true});}
 }
