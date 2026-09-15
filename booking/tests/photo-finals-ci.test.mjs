@@ -36,6 +36,22 @@ test('hosted CI runs every finals PostgreSQL gate with isolated pinned prerequis
     assert.equal(steps[0]['continue-on-error'], undefined);
     assert.doesNotMatch(steps[0].run, /\|\|\s*true|&\s*$/);
   }
+  const operatorCommand = 'npm run test:photo-finals:operator';
+  const operatorSteps = job.steps.filter(step => step.run?.startsWith(operatorCommand + ' |'));
+  assert.equal(operatorSteps.length, 1, 'built after, PG tail and actual React gates must run');
+  const operator = operatorSteps[0];
+  assert.equal(operator.if, undefined);
+  assert.equal(operator['continue-on-error'], undefined);
+  assert.doesNotMatch(operator.run, /\|\|\s*true|&\s*$/);
+  assert.equal(operator.env.PF_AFTER_LOG, '${{ runner.temp }}/photo-finals-evidence/operator-after-build.log');
+  const operatorIndex = job.steps.indexOf(operator);
+  for (const prerequisite of ['npm ci', 'apt-get install --yes postgresql-17', 'postgrest-v16.3-linux-static-x86-64.tar.xz']) {
+    assert.ok(job.steps.some((step, index) => index < operatorIndex && step.run?.includes(prerequisite)), prerequisite);
+  }
+  assert.equal(scripts['test:photo-finals:operator'], 'node --test tests/photo-finals-operator*.test.mjs && node --import tsx --test tests/photo-finals-operator-client.behavior.mjs && python3 scripts/verify-photo-finals-after-postgres.py');
+  const runner = await readFile(new URL('../scripts/verify-photo-finals-after-postgres.py', import.meta.url), 'utf8');
+  assert.match(runner, /\['node','scripts\/verify-photo-finals-after\.mjs'\]/);
+  assert.match(runner, /\['node','scripts\/verify-photo-finals-operator-tail\.mjs'\]/);
   const artifact = job.steps.find(step => step.uses?.startsWith('actions/upload-artifact@'));
   assert.ok(artifact, 'retain actual runner logs and browser evidence');
   assert.equal(artifact.if, 'always()');

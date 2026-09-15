@@ -228,6 +228,10 @@ jobs:
         run: npm run test:postgres:finals-resource | tee "$RUNNER_TEMP/photo-finals-evidence/resource.log"
       - name: Finals long I/O
         run: npm run test:postgres:finals-long-io | tee "$RUNNER_TEMP/photo-finals-evidence/long-io.log"
+      - name: Finals operator built after, PostgreSQL tail and React
+        env:
+          PF_AFTER_LOG: ${{ runner.temp }}/photo-finals-evidence/operator-after-build.log
+        run: npm run test:photo-finals:operator | tee "$RUNNER_TEMP/photo-finals-evidence/operator.log"
       - name: Retain finals runner and browser evidence
         if: always()
         uses: actions/upload-artifact@v4
