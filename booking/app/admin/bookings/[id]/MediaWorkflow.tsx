@@ -1,8 +1,12 @@
 import type { ReactNode } from "react";
+import PhotoFinalsWorkspace from '@/components/media/PhotoFinalsWorkspace';
+import type { DeliverySourceCandidate } from '@/lib/booking/delivery-source-policy';
 
 const PLANNED_FLOW = ["Upload", "Review", "Prepare", "Ready"] as const;
 
 export default function MediaWorkflow({
+  bookingId,
+  incumbent,
   autoHDREnabled,
   autoenhanceEnabled,
   hasIGuidePhotos,
@@ -11,6 +15,8 @@ export default function MediaWorkflow({
   video,
   manualLinks,
 }: {
+  bookingId?: string;
+  incumbent?: DeliverySourceCandidate[];
   autoHDREnabled: boolean;
   autoenhanceEnabled: boolean;
   hasIGuidePhotos: boolean;
@@ -22,6 +28,7 @@ export default function MediaWorkflow({
 }) {
   return (
     <div className="space-y-4">
+      {bookingId ? <PhotoFinalsWorkspace bookingId={bookingId} operator incumbent={incumbent} /> : <>
       <section className="precision-shoot-planned rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-3">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-muted">
           Planned delivery flow
@@ -79,6 +86,7 @@ export default function MediaWorkflow({
         ) : null}
       </section>
 
+      </>}
       {autoHDREnabled ? (
       <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-realtor-primary">

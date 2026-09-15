@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Homebrew PG17 on macOS must start under a deterministic single-threaded locale.
+export LC_ALL=C
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -33,7 +35,7 @@ cleanup() {
 trap cleanup EXIT
 
 "$PG_BIN/initdb" -D "$TMP_DIR/data" -A trust -U postgres --no-locale >/dev/null
-"$PG_BIN/pg_ctl" -D "$TMP_DIR/data" -o "-F -p $PORT -k $TMP_DIR" -w start >/dev/null
+"$PG_BIN/pg_ctl" -D "$TMP_DIR/data" -o "-F -p $PORT -k $TMP_DIR -c listen_addresses=" -w start
 STARTED=1
 
 PSQL=("$PG_BIN/psql" -X -v ON_ERROR_STOP=1 -h "$TMP_DIR" -p "$PORT" -U postgres -d postgres)

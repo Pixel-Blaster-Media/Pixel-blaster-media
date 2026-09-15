@@ -11211,3 +11211,778 @@ grant execute on function public.verify_public_booking_inbox(uuid,uuid,text,text
 -- ============================================================================
 -- End supabase/migrations/20260906110000_public_booking_inbox_proof.sql
 -- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260912120000_photo_finals_ingest.sql
+-- ============================================================================
+
+-- Code-dark, additive; requires canonical_media_releases. No storage configuration.
+-- One canonical job is the durable file intent. Hash collisions are rejected, never shared.
+alter table public.media_ingest_jobs
+  add column finals_version_id uuid,
+  add column finals_sha256 bytea,
+  add column finals_byte_size bigint,
+  add column finals_quarantine_key text,
+  add column finals_actor_id uuid,
+  add column finals_deadline timestamptz,
+  add column finals_lease_token uuid,
+  add column finals_lease_started_at timestamptz,
+  add column finals_lease_expires_at timestamptz,
+  add column finals_worker_id text,
+  add constraint finals_version_fkey foreign key (organization_id,finals_version_id,property_id,batch_id)
+    references public.media_versions(organization_id,id,property_id,batch_id) on delete restrict,
+  add constraint finals_actor_fkey foreign key (organization_id,finals_actor_id)
+    references public.profiles(organization_id,id) on delete restrict,
+  add constraint finals_intent_shape check (finals_version_id is null or coalesce((
+    job_kind='ingest' and octet_length(finals_sha256)=32 and finals_byte_size between 1 and 33554432
+    and finals_quarantine_key ~ ('^quarantine/'||organization_id||'/'||id||'/[0-9a-f-]{36}$')
+    and finals_actor_id is not null and finals_deadline is not null),false)),
+  add constraint finals_lease_shape check (
+    (finals_lease_token is null and finals_lease_started_at is null and finals_lease_expires_at is null and finals_worker_id is null)
+    or (finals_lease_token is not null and finals_lease_started_at is not null and finals_lease_expires_at is not null
+        and finals_lease_expires_at>finals_lease_started_at and finals_worker_id is not null));
+create unique index finals_reserved_hash on public.media_ingest_jobs(organization_id,finals_sha256) where finals_version_id is not null;
+create index finals_due on public.media_ingest_jobs(organization_id,next_attempt_at) where finals_version_id is not null and completed_at is null;
+
+create function public.photo_finals_actor(p_org uuid,p_actor uuid) returns void
+language plpgsql security invoker set search_path='' as $$
+begin
+  if not exists (select 1 from public.profiles p join public.organization_members m
+    on m.organization_id=p.organization_id and m.profile_id=p.id
+    where p.organization_id=p_org and p.id=p_actor and p.archived_at is null
+      and p.role='admin' and m.role in ('owner','admin')) then
+    raise exception 'finals_actor_denied' using errcode='42501';
+  end if;
+end $$;
+
+create function public.photo_finals_intent_immutable() returns trigger
+language plpgsql set search_path='' as $$
+begin
+ if (new.finals_version_id,new.finals_sha256,new.finals_byte_size,new.finals_quarantine_key,new.finals_actor_id,new.finals_deadline)
+ is distinct from (old.finals_version_id,old.finals_sha256,old.finals_byte_size,old.finals_quarantine_key,old.finals_actor_id,old.finals_deadline) then
+ raise exception 'finals_intent_immutable' using errcode='23514'; end if;
+ return new;
+end $$;
+create trigger finals_intent_immutable before update on public.media_ingest_jobs
+for each row execute function public.photo_finals_intent_immutable();
+
+create function public.photo_finals_create_intent(p_org uuid,p_actor uuid,p_booking uuid,p_property uuid,p_request uuid,p_intent uuid,p_sha256 text,p_bytes bigint)
+returns public.media_ingest_jobs language plpgsql security invoker set search_path='' as $$
+declare j public.media_ingest_jobs; b public.media_batches; a uuid; v uuid;
+begin
+ perform public.photo_finals_actor(p_org,p_actor);
+ if p_request is null or p_intent is null or p_sha256 is null or p_sha256 !~ '^[0-9a-f]{64}$'
+ or p_bytes is null or p_bytes not between 1 and 33554432 then raise exception 'finals_input_invalid' using errcode='22023'; end if;
+ -- All intent/quota writers serialize by tenant; idempotency before mutable quota checks.
+ perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('finals:'||p_org,0));
+ if not exists(select 1 from public.bookings where organization_id=p_org and id=p_booking and property_id=p_property) then
+ raise exception 'finals_booking_denied' using errcode='42501'; end if;
+ select * into j from public.media_ingest_jobs where organization_id=p_org and idempotency_key='manual_finals:'||p_intent;
+ if found then
+   if j.finals_sha256 is distinct from decode(p_sha256,'hex') or j.finals_byte_size is distinct from p_bytes or j.property_id<>p_property
+   or not exists(select 1 from public.media_batches where organization_id=p_org and id=j.batch_id and booking_id=p_booking and provider_job_id=p_request::text)
+   then raise exception 'finals_intent_payload_conflict' using errcode='23514'; end if;
+   return j;
+ end if;
+ if exists(select 1 from public.media_versions where organization_id=p_org and sha256=decode(p_sha256,'hex') and accepted_at is not null)
+ or exists(select 1 from public.media_ingest_jobs where organization_id=p_org and finals_sha256=decode(p_sha256,'hex')) then
+ raise exception 'finals_hash_collision_other_intent_or_booking' using errcode='23505'; end if;
+ if (select count(*) from public.media_ingest_jobs where organization_id=p_org and finals_version_id is not null and completed_at is null)>=32
+ or (select count(*) from public.media_ingest_jobs where organization_id=p_org and finals_version_id is not null and created_at>clock_timestamp()-interval '1 hour')>=200 then
+ raise exception 'finals_tenant_quota' using errcode='54000'; end if;
+ select * into b from public.media_batches where organization_id=p_org and source_provider='manual_finals'
+ and provider_connection_key='manual_finals.v1' and provider_job_id=p_request::text and provider_revision=0;
+ if found and (b.booking_id<>p_booking or b.property_id<>p_property) then raise exception 'finals_batch_conflict' using errcode='23514'; end if;
+ if b.id is null then
+ insert into public.media_batches(organization_id,property_id,booking_id,source_provider,provider_connection_key,provider_job_id,created_by)
+ values(p_org,p_property,p_booking,'manual_finals','manual_finals.v1',p_request::text,p_actor) returning * into b;
+ end if;
+ if (select count(*) from public.media_ingest_jobs where organization_id=p_org and batch_id=b.id)>=100
+ or (select coalesce(sum(finals_byte_size),0) from public.media_ingest_jobs where organization_id=p_org and batch_id=b.id)+p_bytes>1073741824 then
+ raise exception 'finals_batch_quota' using errcode='54000'; end if;
+ insert into public.media_assets(organization_id,property_id,batch_id,source_provider,provider_connection_key,provider_job_id,provider_output_id)
+ values(p_org,p_property,b.id,'manual_finals','manual_finals.v1',p_request::text,p_intent::text) returning id into a;
+ insert into public.media_versions(organization_id,property_id,batch_id,asset_id,version_number)
+ values(p_org,p_property,b.id,a,1) returning id into v;
+ insert into public.media_ingest_jobs(id,organization_id,property_id,batch_id,job_kind,idempotency_key,finals_version_id,finals_sha256,finals_byte_size,finals_quarantine_key,finals_actor_id,finals_deadline)
+ values(p_intent,p_org,p_property,b.id,'ingest','manual_finals:'||p_intent,v,decode(p_sha256,'hex'),p_bytes,
+ 'quarantine/'||p_org||'/'||p_intent||'/'||pg_catalog.gen_random_uuid(),p_actor,clock_timestamp()+interval '24 hours') returning * into j;
+ update public.media_versions set ingest_state='url_ready' where organization_id=p_org and id=v;
+ update public.media_ingest_jobs set state='url_ready' where organization_id=p_org and id=j.id returning * into j;
+ return j;
+end $$;
+
+-- Attempts are append-only: write the final outcome once, including expired takeovers.
+create function public.photo_finals_attempt(p_job public.media_ingest_jobs,p_outcome text) returns void
+language sql security invoker set search_path='' as $$
+ insert into public.media_job_attempts(organization_id,property_id,batch_id,job_id,attempt_number,worker_id,outcome,started_at,finished_at)
+ values(p_job.organization_id,p_job.property_id,p_job.batch_id,p_job.id,p_job.attempts,p_job.finals_worker_id,p_outcome,p_job.finals_lease_started_at,clock_timestamp());
+$$;
+
+create function public.photo_finals_claim(p_org uuid,p_booking uuid,p_property uuid,p_job uuid,p_worker text) returns public.media_ingest_jobs
+language plpgsql security invoker set search_path='' as $$
+declare j public.media_ingest_jobs;
+begin
+ if p_worker is null or p_worker !~ '^[a-zA-Z0-9_-]{1,96}$' then raise exception 'finals_worker_invalid' using errcode='22023'; end if;
+ -- Validate exact eligible scope before recording attempts, expiry or lease changes.
+ select jobs.* into j from public.media_ingest_jobs jobs
+ join public.media_batches b on b.organization_id=jobs.organization_id and b.id=jobs.batch_id and b.property_id=jobs.property_id
+ where jobs.organization_id=p_org and jobs.property_id=p_property and b.booking_id=p_booking
+ and jobs.id=p_job and jobs.finals_version_id is not null for update of jobs;
+ if not found or j.completed_at is not null or j.next_attempt_at>clock_timestamp() or j.finals_lease_expires_at>clock_timestamp() then return null; end if;
+ perform public.photo_finals_actor(p_org,j.finals_actor_id);
+ if j.finals_lease_token is not null then perform public.photo_finals_attempt(j,'retryable'); end if;
+ if j.attempts>=j.max_attempts or j.finals_deadline<=clock_timestamp() then
+ update public.media_ingest_jobs set state='dead_letter',completed_at=clock_timestamp(),finals_lease_token=null,finals_lease_started_at=null,finals_lease_expires_at=null,finals_worker_id=null
+ where organization_id=p_org and id=p_job;
+ update public.media_versions set ingest_state='dead_letter' where organization_id=p_org and id=j.finals_version_id;
+ return null;
+ end if;
+ update public.media_ingest_jobs set state=case when state in ('url_ready','retryable') then 'fetching' else state end,attempts=attempts+1,finals_lease_token=pg_catalog.gen_random_uuid(),
+ finals_lease_started_at=clock_timestamp(),finals_lease_expires_at=clock_timestamp()+interval '120 seconds',finals_worker_id=p_worker
+ where organization_id=p_org and id=p_job returning * into j;
+ update public.media_versions set ingest_state=j.state where organization_id=p_org and id=j.finals_version_id;
+ return j;
+end $$;
+
+create function public.photo_finals_fence(p_org uuid,p_job uuid,p_lease uuid) returns public.media_ingest_jobs
+language plpgsql security invoker set search_path='' as $$
+declare j public.media_ingest_jobs;
+begin
+ select * into j from public.media_ingest_jobs where organization_id=p_org and id=p_job and finals_version_id is not null for update;
+ if not found or j.completed_at is not null or j.finals_lease_token is distinct from p_lease or p_lease is null
+ or j.finals_lease_expires_at<=clock_timestamp() or j.finals_lease_expires_at is null then raise exception 'finals_lease_lost' using errcode='55000'; end if;
+ perform public.photo_finals_actor(p_org,j.finals_actor_id);
+ return j;
+end $$;
+
+create function public.photo_finals_stage(p_org uuid,p_job uuid,p_lease uuid,p_stage text) returns void
+language plpgsql security invoker set search_path='' as $$
+declare j public.media_ingest_jobs; stages text[]:=array['fetching','quarantined','validating','scanning']; old_pos integer; new_pos integer;
+begin
+ j:=public.photo_finals_fence(p_org,p_job,p_lease);
+ old_pos:=array_position(stages,j.state); new_pos:=array_position(stages,p_stage);
+ if old_pos is null or new_pos is null or new_pos<2 or new_pos>old_pos+1 then raise exception 'finals_stage_invalid' using errcode='22023'; end if;
+ -- Reclaimed workers may safely repeat completed validation work without moving state backwards.
+ if new_pos<=old_pos then return; end if;
+ update public.media_versions set ingest_state=p_stage where organization_id=p_org and id=j.finals_version_id;
+ update public.media_ingest_jobs set state=p_stage where organization_id=p_org and id=j.id;
+end $$;
+revoke all on function public.photo_finals_stage(uuid,uuid,uuid,text) from public,anon,authenticated;
+grant execute on function public.photo_finals_stage(uuid,uuid,uuid,text) to service_role;
+
+create function public.photo_finals_accept(p_org uuid,p_job uuid,p_lease uuid,p_bucket text,p_width integer,p_height integer)
+returns public.media_versions language plpgsql security invoker set search_path='' as $$
+declare j public.media_ingest_jobs; v public.media_versions; s text;
+begin
+ j:=public.photo_finals_fence(p_org,p_job,p_lease);
+ if p_bucket is null or p_bucket !~ '^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$'
+ or p_width is null or p_height is null or p_width not between 1 and 16384 or p_height not between 1 and 16384
+ or p_width::bigint*p_height>100000000 then raise exception 'finals_evidence_invalid' using errcode='22023'; end if;
+ select * into v from public.media_versions where organization_id=p_org and id=j.finals_version_id for update;
+ if exists(select 1 from public.media_versions where organization_id=p_org and sha256=j.finals_sha256 and accepted_at is not null and id<>v.id) then
+ raise exception 'finals_hash_collision_other_intent_or_booking' using errcode='23505'; end if;
+ if j.state<>'scanning' then raise exception 'finals_scan_required' using errcode='55000'; end if;
+ update public.media_versions set ingest_state='accepted',accepted_at=clock_timestamp(),object_tier='master',bucket_name=p_bucket,
+ object_key='masters/'||p_org||'/'||v.asset_id||'/'||v.id||'/'||encode(j.finals_sha256,'hex')||'.jpg',sha256=j.finals_sha256,
+ byte_size=j.finals_byte_size,mime_type='image/jpeg',width_px=p_width,height_px=p_height
+ where organization_id=p_org and id=v.id returning * into v;
+ perform public.photo_finals_attempt(j,'succeeded');
+ update public.media_ingest_jobs set state='accepted',completed_at=clock_timestamp(),finals_lease_token=null,finals_lease_started_at=null,finals_lease_expires_at=null,finals_worker_id=null
+ where organization_id=p_org and id=j.id;
+ return v;
+end $$;
+
+create function public.photo_finals_fail(p_org uuid,p_job uuid,p_lease uuid,p_reject boolean) returns void
+language plpgsql security invoker set search_path='' as $$
+declare j public.media_ingest_jobs; s text;
+begin
+ j:=public.photo_finals_fence(p_org,p_job,p_lease);
+ if p_reject is null then raise exception 'finals_outcome_invalid' using errcode='22023'; end if;
+ s:=case when p_reject then 'rejected' when j.attempts>=j.max_attempts then 'dead_letter' else 'retryable' end;
+ perform public.photo_finals_attempt(j,s);
+ -- Retain checkpoint phases whose canonical transition graph has no retryable edge.
+ -- A cleared lease + due time makes these phases reclaimable without weakening
+ -- shared job/version transitions (including the later package migration).
+ update public.media_versions set ingest_state=case when s='retryable' and j.state in ('quarantined','validating') then j.state else s end where organization_id=p_org and id=j.finals_version_id;
+ update public.media_ingest_jobs set state=case when s='retryable' and j.state in ('quarantined','validating') then j.state else s end,completed_at=case when s='retryable' then null else clock_timestamp() end,
+ next_attempt_at=clock_timestamp()+interval '30 seconds',finals_lease_token=null,finals_lease_started_at=null,finals_lease_expires_at=null,finals_worker_id=null
+ where organization_id=p_org and id=j.id;
+end $$;
+
+-- Server-only snapshot authorizes the exact one-object promotion, never a browser DTO.
+create function public.photo_finals_target(p_org uuid,p_job uuid,p_lease uuid) returns jsonb
+language plpgsql security invoker set search_path='' as $$
+declare j public.media_ingest_jobs; result jsonb;
+begin
+ j:=public.photo_finals_fence(p_org,p_job,p_lease);
+ select jsonb_build_object('job',to_jsonb(j),'version',to_jsonb(v),'booking_id',b.booking_id) into result
+ from public.media_versions v join public.media_batches b on b.organization_id=v.organization_id and b.id=v.batch_id
+ where v.organization_id=p_org and v.id=j.finals_version_id;
+ return result;
+end $$;
+revoke all on function public.photo_finals_target(uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.photo_finals_target(uuid,uuid,uuid) to service_role;
+
+-- Fixed-size advisory due list; the exact job claim remains authoritative.
+create function public.photo_finals_due(p_org uuid,p_booking uuid,p_property uuid) returns jsonb
+language sql security invoker set search_path='' as $$
+ select coalesce(jsonb_agg(t.id),'[]'::jsonb) from (
+ select j.id from public.media_ingest_jobs j join public.media_batches b on b.organization_id=j.organization_id and b.id=j.batch_id
+ where j.organization_id=p_org and j.property_id=p_property and b.booking_id=p_booking
+ and j.finals_version_id is not null and j.completed_at is null and j.next_attempt_at<=clock_timestamp()
+ and (j.finals_lease_expires_at is null or j.finals_lease_expires_at<=clock_timestamp())
+ order by j.next_attempt_at,j.id limit 2) t;
+$$;
+revoke all on function public.photo_finals_due(uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.photo_finals_due(uuid,uuid,uuid) to service_role;
+
+-- Explicitly service-only, invoker security; actor IDs come only from authenticated server context.
+revoke all on function public.photo_finals_actor(uuid,uuid),public.photo_finals_intent_immutable(),
+ public.photo_finals_create_intent(uuid,uuid,uuid,uuid,uuid,uuid,text,bigint),public.photo_finals_attempt(public.media_ingest_jobs,text),
+ public.photo_finals_claim(uuid,uuid,uuid,uuid,text),public.photo_finals_fence(uuid,uuid,uuid),
+ public.photo_finals_accept(uuid,uuid,uuid,text,integer,integer),public.photo_finals_fail(uuid,uuid,uuid,boolean) from public,anon,authenticated;
+grant execute on function public.photo_finals_actor(uuid,uuid),public.photo_finals_intent_immutable(),
+ public.photo_finals_create_intent(uuid,uuid,uuid,uuid,uuid,uuid,text,bigint),public.photo_finals_attempt(public.media_ingest_jobs,text),
+ public.photo_finals_claim(uuid,uuid,uuid,uuid,text),public.photo_finals_fence(uuid,uuid,uuid),
+ public.photo_finals_accept(uuid,uuid,uuid,text,integer,integer),public.photo_finals_fail(uuid,uuid,uuid,boolean) to service_role;
+
+-- ============================================================================
+-- End supabase/migrations/20260912120000_photo_finals_ingest.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260912160000_photo_finals_packages.sql
+-- ============================================================================
+
+-- Local code-dark approval + package worker; requires canonical + finals ingest.
+-- Reuses releases/items/derivatives/packages/jobs. No credentials or routes.
+alter table public.media_ingest_jobs add column finals_release_id uuid,
+ add constraint finals_release_job_fkey foreign key(organization_id,finals_release_id,property_id,batch_id)
+ references public.gallery_releases(organization_id,id,property_id,batch_id) on delete restrict,
+ add constraint finals_release_job_shape check(finals_release_id is null or
+ (job_kind='package' and finals_version_id is null and finals_actor_id is not null));
+create unique index finals_release_one_job on public.media_ingest_jobs(organization_id,finals_release_id) where finals_release_id is not null;
+
+create function public.photo_finals_release_job_guard() returns trigger language plpgsql set search_path='' as $$
+begin
+ if new.finals_release_id is distinct from old.finals_release_id then raise exception 'finals_release_job_immutable' using errcode='23514'; end if;
+ return new;
+end $$;
+create trigger finals_release_job_guard before update on public.media_ingest_jobs for each row execute function public.photo_finals_release_job_guard();
+-- Preserve all existing ingest rules, allow only the package-specific bounded lifecycle.
+create or replace function public.enforce_media_ingest_job_transition() returns trigger language plpgsql set search_path='' as $$
+begin
+ if (new.id,new.organization_id,new.property_id,new.batch_id,new.provider_event_id,new.job_kind,new.idempotency_key,new.created_at)
+ is distinct from (old.id,old.organization_id,old.property_id,old.batch_id,old.provider_event_id,old.job_kind,old.idempotency_key,old.created_at)
+ then raise exception 'Media ingest job identity is immutable' using errcode='23514'; end if;
+ if new.state is distinct from old.state then
+  if old.finals_release_id is not null then
+   if not ((old.state='discovered' and new.state in ('deriving','dead_letter')) or
+    (old.state='deriving' and new.state in ('review_pending','retryable','dead_letter')) or
+    (old.state='retryable' and new.state in ('deriving','dead_letter'))) then
+     raise exception 'Invalid package job transition' using errcode='23514'; end if;
+  elsif not public.is_valid_media_ingest_transition(old.state,new.state) then
+   raise exception 'Invalid media ingest job transition' using errcode='23514';
+  end if;
+ end if;
+ new.updated_at:=now();return new;
+end $$;
+
+create function public.photo_finals_release_actor(p_org uuid,p_actor uuid) returns void language plpgsql security invoker set search_path='' as $$
+begin
+ -- Membership/archive mutation participates through ordinary row locking.
+ perform 1 from public.profiles p join public.organization_members m on m.organization_id=p.organization_id and m.profile_id=p.id
+ where p.organization_id=p_org and p.id=p_actor for share of p,m;
+ perform public.photo_finals_actor(p_org,p_actor);
+end $$;
+
+create function public.photo_finals_transform_specs() returns jsonb language sql immutable set search_path='' as $$
+ select '{"full_res":{"id":"client.fullres.share.v1","version":1,"operation":"original_bytes","metadata":"preserve","status":"defined"},"gallery":{"id":"web.listing.2048.v1","version":1,"operation":"jpeg","encoder":"sharp-0.35.4_libvips-8.18.6_mozjpeg-0826579","progressive":false,"mozjpeg":false,"fit":"inside","maxSide":2048,"quality":82,"chroma":"4:2:0","orientation":"auto","colour":"srgb","metadata":"strip","enlarge":false,"status":"defined"},"mls":{"id":"ontario.proptx.provisional.2026-08-11.v1","version":1,"operation":"jpeg","encoder":"sharp-0.35.4_libvips-8.18.6_mozjpeg-0826579","progressive":false,"mozjpeg":false,"fit":"inside","maxSide":2048,"quality":90,"chroma":"4:2:0","orientation":"auto","colour":"srgb","metadata":"strip","enlarge":false,"status":"provisional","label":"Provisional MLS export — verify destination requirements"}}'::jsonb;
+$$;
+
+-- Version 2 hash is exclusively SHA256(UTF8(PostgreSQL jsonb::text)); clients echo
+-- the opaque server digest. It deliberately does not alias selection.v1 JSON.stringify.
+create function public.photo_finals_identifiers(variadic ids text[]) returns void language plpgsql immutable set search_path='' as $$
+begin
+ if exists(select 1 from unnest(ids) id where id is null or id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') then
+  raise exception 'finals_identifier_invalid' using errcode='22023';
+ end if;
+end $$;
+
+create function public.photo_finals_release_manifest(p_org uuid,p_booking uuid,p_property uuid,p_batch uuid,p_release uuid,p_revision integer,p_versions jsonb)
+returns jsonb language plpgsql security invoker set search_path='' as $$
+declare v public.media_versions; item jsonb; items jsonb:='[]'; n integer:=0; total bigint:=0; assets uuid[]:='{}';
+begin
+ perform public.photo_finals_identifiers(p_org::text,p_booking::text,p_property::text,p_batch::text,p_release::text);
+ if jsonb_typeof(p_versions) is distinct from 'array' or jsonb_array_length(p_versions) not between 1 and 100 then raise exception 'finals_selection_invalid' using errcode='22023';end if;
+ if not exists(select 1 from public.media_batches where organization_id=p_org and id=p_batch and property_id=p_property and booking_id=p_booking)
+ or not exists(select 1 from public.bookings where organization_id=p_org and id=p_booking and property_id=p_property) then raise exception 'finals_booking_denied' using errcode='42501';end if;
+ perform public.photo_finals_identifiers(variadic array(select value from jsonb_array_elements_text(p_versions)));
+ -- Sorted locks avoid reversed-selection deadlocks; output uses submitted ordinality.
+ perform 1 from public.media_versions where organization_id=p_org and id in(select value::uuid from jsonb_array_elements_text(p_versions)) order by id for share;
+ for item in select value from jsonb_array_elements(p_versions) loop
+  if jsonb_typeof(item) is distinct from 'string' then raise exception 'finals_selection_invalid' using errcode='22023';end if;
+  select * into v from public.media_versions where organization_id=p_org and id=(item#>>'{}')::uuid and property_id=p_property and batch_id=p_batch;
+  if not found or not coalesce(v.ingest_state in ('accepted','deriving','review_pending') and v.object_tier='master'
+   and v.mime_type='image/jpeg' and v.accepted_at<=clock_timestamp() and v.byte_size between 1 and 33554432
+   and v.width_px between 1 and 16384 and v.height_px between 1 and 16384 and v.width_px::bigint*v.height_px<=100000000
+   and v.bucket_name is not null and octet_length(v.sha256)=32
+   and v.object_key='masters/'||p_org||'/'||v.asset_id||'/'||v.id||'/'||encode(v.sha256,'hex')||'.jpg'
+   and (v.rights_effective_at is null or v.rights_effective_at<=clock_timestamp())
+   and (v.rights_expires_at is null or v.rights_expires_at>clock_timestamp()),false)
+   or v.asset_id=any(assets) then raise exception 'finals_selection_invalid' using errcode='23514';end if;
+  perform public.photo_finals_identifiers(v.id::text,v.asset_id::text);
+  assets:=array_append(assets,v.asset_id);total:=total+v.byte_size;
+  if total>1073741824 then raise exception 'finals_selection_bound' using errcode='54000';end if;
+  items:=items||jsonb_build_array(jsonb_build_object('position',n,'media_version_id',v.id,'asset_id',v.asset_id,'version_number',v.version_number,
+   'display_filename',lpad((n+1)::text,3,'0')||'.jpg','bucket_name',v.bucket_name,'object_key',v.object_key,'sha256',encode(v.sha256,'hex'),
+   'byte_size',v.byte_size,'mime_type',v.mime_type,'width_px',v.width_px,'height_px',v.height_px,'edit_class',v.edit_class,'disclosure_class',v.disclosure_class,
+   'rights_effective_at',v.rights_effective_at,'rights_expires_at',v.rights_expires_at));n:=n+1;
+ end loop;
+ return jsonb_build_object('kind','finished_jpeg_release.v2','manifest_version',2,'organization_id',p_org,'booking_id',p_booking,'property_id',p_property,
+  'batch_id',p_batch,'release_id',p_release,'revision_number',p_revision,'transforms',public.photo_finals_transform_specs(),'items',items);
+end $$;
+
+create function public.photo_finals_prepare_release(p_org uuid,p_actor uuid,p_booking uuid,p_property uuid,p_batch uuid,p_release uuid,p_expected_revision integer,p_versions jsonb)
+returns public.gallery_releases language plpgsql security invoker set search_path='' as $$
+declare r public.gallery_releases; prev public.gallery_releases; m jsonb; item jsonb; d uuid; download_id uuid;
+begin
+ perform public.photo_finals_identifiers(p_org::text,p_actor::text,p_booking::text,p_property::text,p_batch::text,p_release::text);
+ if jsonb_typeof(p_versions) is distinct from 'array' then raise exception 'finals_selection_invalid' using errcode='22023';end if;
+ perform public.photo_finals_identifiers(variadic array(select value from jsonb_array_elements_text(p_versions)));
+ perform public.photo_finals_release_actor(p_org,p_actor);
+ perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('finals-release:'||p_org||':'||p_batch,0));
+ perform 1 from public.media_batches where organization_id=p_org and id=p_batch and booking_id=p_booking and property_id=p_property;
+ if not found then raise exception 'finals_booking_denied' using errcode='42501';end if;
+ select * into r from public.gallery_releases where organization_id=p_org and id=p_release;
+ if found then
+  if r.batch_id is distinct from p_batch or r.property_id is distinct from p_property or r.revision_number is distinct from p_expected_revision+1
+   or (select jsonb_agg(x->'media_version_id' order by ord) from jsonb_array_elements(r.manifest->'items') with ordinality as t(x,ord)) is distinct from p_versions
+   then raise exception 'finals_release_replay_conflict' using errcode='23514';end if;return r;
+ end if;
+ select * into prev from public.gallery_releases where organization_id=p_org and property_id=p_property and batch_id=p_batch order by revision_number desc limit 1;
+ if p_expected_revision is null or coalesce(prev.revision_number,0)<>p_expected_revision then raise exception 'finals_stale_revision' using errcode='40001';end if;
+ m:=public.photo_finals_release_manifest(p_org,p_booking,p_property,p_batch,p_release,p_expected_revision+1,p_versions);
+ insert into public.gallery_releases(id,organization_id,property_id,batch_id,revision_number,supersedes_release_id,manifest_version,manifest,manifest_sha256,created_by)
+ values(p_release,p_org,p_property,p_batch,p_expected_revision+1,prev.id,2,m,pg_catalog.sha256(convert_to(m::text,'UTF8')),p_actor) returning * into r;
+ for item in select value from jsonb_array_elements(m->'items') loop
+  insert into public.media_derivatives(organization_id,property_id,batch_id,source_version_id,profile_id,profile_version,derivative_class,profile_status)
+  values(p_org,p_property,p_batch,(item->>'media_version_id')::uuid,'web.listing.2048.v1',1,'web','defined') on conflict(organization_id,source_version_id,profile_id,profile_version) do nothing;
+  select id into d from public.media_derivatives where organization_id=p_org and source_version_id=(item->>'media_version_id')::uuid and profile_id='web.listing.2048.v1' and profile_version=1;
+  insert into public.media_derivatives(organization_id,property_id,batch_id,source_version_id,profile_id,profile_version,derivative_class,profile_status)
+  values(p_org,p_property,p_batch,(item->>'media_version_id')::uuid,'ontario.proptx.provisional.2026-08-11.v1',1,'mls','provisional') on conflict(organization_id,source_version_id,profile_id,profile_version) do nothing;
+  select id into download_id from public.media_derivatives where organization_id=p_org and source_version_id=(item->>'media_version_id')::uuid and profile_id='ontario.proptx.provisional.2026-08-11.v1' and profile_version=1;
+  insert into public.gallery_release_items(organization_id,property_id,batch_id,release_id,media_version_id,display_derivative_id,download_derivative_id,position,display_filename)
+  values(p_org,p_property,p_batch,r.id,(item->>'media_version_id')::uuid,d,download_id,(item->>'position')::integer,item->>'display_filename');
+ end loop;
+ update public.gallery_releases set state='review_pending' where organization_id=p_org and id=r.id returning * into r;return r;
+end $$;
+
+create function public.photo_finals_approve_release(p_org uuid,p_actor uuid,p_booking uuid,p_property uuid,p_release uuid,p_revision integer,p_hash text)
+returns jsonb language plpgsql security invoker set search_path='' as $$
+declare r public.gallery_releases; m jsonb; b public.media_batches; ids jsonb; j uuid;
+begin
+ perform public.photo_finals_identifiers(p_org::text,p_actor::text,p_booking::text,p_property::text,p_release::text);
+ perform public.photo_finals_release_actor(p_org,p_actor);
+ select * into r from public.gallery_releases where organization_id=p_org and id=p_release;
+ if not found or r.property_id is distinct from p_property or not exists(select 1 from public.media_batches where organization_id=p_org and id=r.batch_id and booking_id=p_booking and property_id=p_property) then raise exception 'finals_release_denied' using errcode='42501';end if;
+ perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('finals-release:'||p_org||':'||r.batch_id,0));
+ select * into b from public.media_batches where organization_id=p_org and id=r.batch_id;
+ select * into r from public.gallery_releases where organization_id=p_org and id=p_release for update;
+ if p_revision is distinct from r.revision_number or p_hash is distinct from encode(r.manifest_sha256,'hex') then raise exception 'finals_stale_selection' using errcode='40001';end if;
+ if r.approved_at is not null then
+  select id into j from public.media_ingest_jobs where organization_id=p_org and finals_release_id=r.id;
+  if j is null then raise exception 'finals_job_missing' using errcode='23514';end if;
+  return jsonb_build_object('id',r.id,'state',r.state,'job_id',j);
+ end if;
+ if r.state<>'review_pending' or exists(select 1 from public.gallery_releases where organization_id=p_org and batch_id=r.batch_id and revision_number>r.revision_number) then raise exception 'finals_stale_revision' using errcode='40001';end if;
+ select jsonb_agg(to_jsonb(media_version_id) order by position) into ids from public.gallery_release_items where organization_id=p_org and release_id=r.id;
+ m:=public.photo_finals_release_manifest(p_org,b.booking_id,r.property_id,r.batch_id,r.id,r.revision_number,ids);
+ if m is distinct from r.manifest or pg_catalog.sha256(convert_to(m::text,'UTF8')) is distinct from r.manifest_sha256 or exists(select 1 from public.gallery_release_items i where i.organization_id=p_org and i.release_id=r.id and
+  (i.position not between 0 and jsonb_array_length(ids)-1 or i.display_filename<>lpad((i.position+1)::text,3,'0')||'.jpg'
+   or not exists(select 1 from public.media_derivatives d where d.organization_id=p_org and d.id=i.display_derivative_id and d.source_version_id=i.media_version_id and d.profile_id='web.listing.2048.v1' and d.profile_version=1)
+   or not exists(select 1 from public.media_derivatives d where d.organization_id=p_org and d.id=i.download_derivative_id and d.source_version_id=i.media_version_id and d.profile_id='ontario.proptx.provisional.2026-08-11.v1' and d.profile_version=1))) then raise exception 'finals_stale_selection' using errcode='40001';end if;
+ update public.gallery_release_items set approval_state='approved',approved_by=p_actor,approved_at=clock_timestamp() where organization_id=p_org and release_id=r.id;
+ update public.gallery_releases set state='approved',approved_by=p_actor,approved_at=clock_timestamp() where organization_id=p_org and id=r.id;
+ insert into public.media_packages(organization_id,property_id,batch_id,release_id,package_type,manifest_sha256)
+ select p_org,r.property_id,r.batch_id,r.id,x,r.manifest_sha256 from unnest(array['full_res_zip','mls_zip']) x;
+ insert into public.media_ingest_jobs(organization_id,property_id,batch_id,job_kind,idempotency_key,finals_release_id,finals_actor_id)
+ values(p_org,r.property_id,r.batch_id,'package','finals_package:'||r.id,r.id,p_actor) returning id into j;
+ update public.gallery_releases set state='packaging' where organization_id=p_org and id=r.id;
+ return jsonb_build_object('id',r.id,'state','packaging','job_id',j);
+end $$;
+
+create function public.photo_finals_package_claim(p_org uuid,p_booking uuid,p_property uuid,p_job uuid,p_worker text) returns jsonb language plpgsql security invoker set search_path='' as $$
+declare j public.media_ingest_jobs; r public.gallery_releases; b public.media_batches;
+begin
+ if p_worker is null or p_worker !~ '^[a-zA-Z0-9_-]{1,96}$' then raise exception 'finals_worker_invalid' using errcode='22023';end if;
+ select * into j from public.media_ingest_jobs where organization_id=p_org and id=p_job and property_id=p_property and finals_release_id is not null
+ and batch_id in(select id from public.media_batches where organization_id=p_org and booking_id=p_booking and property_id=p_property) for update;
+ if not found or j.completed_at is not null or j.next_attempt_at>clock_timestamp() or j.finals_lease_expires_at>clock_timestamp() then return null;end if;
+ select * into r from public.gallery_releases where organization_id=p_org and id=j.finals_release_id for update;
+ if j.finals_lease_token is not null then perform public.photo_finals_attempt(j,'retryable');end if;
+ if j.attempts>=j.max_attempts or r.state<>'packaging' then
+  update public.media_ingest_jobs set state='dead_letter',completed_at=clock_timestamp(),finals_lease_token=null,finals_lease_started_at=null,finals_lease_expires_at=null,finals_worker_id=null where organization_id=p_org and id=p_job;return null;
+ end if;
+ perform public.photo_finals_release_actor(p_org,j.finals_actor_id);
+ update public.media_ingest_jobs set state='deriving',attempts=attempts+1,finals_lease_token=gen_random_uuid(),finals_lease_started_at=clock_timestamp(),finals_lease_expires_at=clock_timestamp()+interval '120 seconds',finals_worker_id=p_worker where organization_id=p_org and id=p_job returning * into j;
+ select * into b from public.media_batches where organization_id=p_org and id=j.batch_id;
+ return jsonb_build_object('job',to_jsonb(j),'release',to_jsonb(r),'booking_id',b.booking_id);
+end $$;
+
+create function public.photo_finals_package_fence(p_org uuid,p_job uuid,p_lease uuid) returns public.media_ingest_jobs language plpgsql security invoker set search_path='' as $$
+declare j public.media_ingest_jobs;
+begin
+ select * into j from public.media_ingest_jobs where organization_id=p_org and id=p_job and finals_release_id is not null for update;
+ if not found or j.state<>'deriving' or j.completed_at is not null or j.finals_lease_token is distinct from p_lease or j.finals_lease_expires_at<=clock_timestamp() or p_lease is null then raise exception 'finals_lease_lost' using errcode='40001';end if;
+ perform 1 from public.gallery_releases where organization_id=p_org and id=j.finals_release_id and state='packaging' for update;
+ if not found then raise exception 'finals_release_unavailable' using errcode='23514';end if;
+ perform public.photo_finals_release_actor(p_org,j.finals_actor_id);return j;
+end $$;
+
+create function public.photo_finals_package_heartbeat(p_org uuid,p_job uuid,p_lease uuid) returns void language plpgsql security invoker set search_path='' as $$
+begin
+ perform public.photo_finals_package_fence(p_org,p_job,p_lease);
+ update public.media_ingest_jobs set finals_lease_expires_at=clock_timestamp()+interval '120 seconds' where organization_id=p_org and id=p_job;
+end $$;
+
+-- Private progress only: checkpoints never publish derivatives or packages ready.
+-- Append-only within the existing leased job; no parallel media ownership model.
+alter table public.media_ingest_jobs add column finals_package_checkpoints jsonb not null default '[]'
+ check(jsonb_typeof(finals_package_checkpoints)='array' and jsonb_array_length(finals_package_checkpoints)<=200);
+create function public.photo_finals_checkpoint_guard() returns trigger language plpgsql set search_path='' as $$
+declare j public.media_ingest_jobs; e jsonb; n integer;
+begin
+ if tg_op='INSERT' then
+  if new.finals_package_checkpoints<>'[]'::jsonb then raise exception 'finals_checkpoint_invalid' using errcode='23514';end if;return new;
+ end if;
+ if new.finals_package_checkpoints is not distinct from old.finals_package_checkpoints then return new;end if;
+ j:=public.photo_finals_package_fence(old.organization_id,old.id,old.finals_lease_token);
+ n:=jsonb_array_length(old.finals_package_checkpoints);
+ if jsonb_array_length(new.finals_package_checkpoints)<>n+1 or
+  (select coalesce(jsonb_agg(value order by ord),'[]') from jsonb_array_elements(new.finals_package_checkpoints) with ordinality t(value,ord) where ord<=n) is distinct from old.finals_package_checkpoints
+  then raise exception 'finals_checkpoint_immutable' using errcode='23514';end if;
+ e:=new.finals_package_checkpoints->n;
+ if not coalesce(jsonb_typeof(e)='object' and octet_length(e::text)<=2048
+  and e - array['kind','version_id','sha256','bytes','bucket','key','width','height']='{}'::jsonb
+  and e ?& array['kind','version_id','sha256','bytes','bucket','key','width','height']
+  and jsonb_typeof(e->'kind')='string' and e->>'kind' in ('gallery','mls')
+  and jsonb_typeof(e->'version_id')='string' and e->>'version_id' ~ '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+  and jsonb_typeof(e->'sha256')='string' and e->>'sha256' ~ '^[0-9a-f]{64}$'
+  and jsonb_typeof(e->'bytes')='number' and (e->>'bytes')::numeric=trunc((e->>'bytes')::numeric) and (e->>'bytes')::bigint between 1 and 33554432
+  and jsonb_typeof(e->'width')='number' and (e->>'width')::numeric=trunc((e->>'width')::numeric) and (e->>'width')::integer between 1 and 2048
+  and jsonb_typeof(e->'height')='number' and (e->>'height')::numeric=trunc((e->>'height')::numeric) and (e->>'height')::integer between 1 and 2048
+  and jsonb_typeof(e->'bucket')='string' and e->>'bucket' ~ '^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$'
+  and jsonb_typeof(e->'key')='string' and e->>'key'='derivatives/'||old.organization_id||'/'||(e->>'version_id')||'/1/'||(e->>'sha256')||'.jpg',false)
+  then raise exception 'finals_checkpoint_invalid' using errcode='23514';end if;
+ if not exists(select 1 from public.gallery_release_items where organization_id=old.organization_id and release_id=j.finals_release_id and media_version_id=(e->>'version_id')::uuid)
+  or exists(select 1 from jsonb_array_elements(old.finals_package_checkpoints) x where x->>'kind'=e->>'kind' and x->>'version_id'=e->>'version_id')
+  then raise exception 'finals_checkpoint_invalid' using errcode='23514';end if;
+ return new;
+end $$;
+create trigger finals_checkpoint_guard before insert or update on public.media_ingest_jobs for each row execute function public.photo_finals_checkpoint_guard();
+create function public.photo_finals_package_checkpoint(p_org uuid,p_job uuid,p_lease uuid,p_evidence jsonb) returns void language plpgsql security invoker set search_path='' as $$
+declare j public.media_ingest_jobs; existing jsonb;
+begin
+ j:=public.photo_finals_package_fence(p_org,p_job,p_lease);
+ select value into existing from jsonb_array_elements(j.finals_package_checkpoints) where value->>'kind'=p_evidence->>'kind' and value->>'version_id'=p_evidence->>'version_id';
+ if found then
+  if existing is distinct from p_evidence then raise exception 'finals_checkpoint_immutable' using errcode='23514';end if;return;
+ end if;
+ update public.media_ingest_jobs set finals_package_checkpoints=finals_package_checkpoints||jsonb_build_array(p_evidence) where organization_id=p_org and id=p_job;
+ perform public.photo_finals_package_fence(p_org,p_job,p_lease);
+end $$;
+
+-- Every evidence element is required; NULL never satisfies readiness. Worker drains
+-- actual stored bytes first. One transaction publishes both packages AND all derivatives.
+create function public.photo_finals_package_finish(p_org uuid,p_job uuid,p_lease uuid,p_evidence jsonb) returns void language plpgsql security invoker set search_path='' as $$
+declare j public.media_ingest_jobs; r public.gallery_releases; e jsonb; i public.gallery_release_items; d public.media_derivatives; p public.media_packages; n integer:=0; key text; h bytea;
+begin
+ j:=public.photo_finals_package_fence(p_org,p_job,p_lease);
+ select * into r from public.gallery_releases where organization_id=p_org and id=j.finals_release_id;
+ if jsonb_typeof(p_evidence) is distinct from 'array' or jsonb_array_length(p_evidence)<>2+2*jsonb_array_length(r.manifest->'items') then raise exception 'finals_evidence_incomplete' using errcode='23514';end if;
+ for e in select value from jsonb_array_elements(p_evidence) loop
+  if not coalesce(jsonb_typeof(e)='object' and e ?& array['kind','sha256','bytes','bucket','key'] and jsonb_typeof(e->'kind')='string'
+   and jsonb_typeof(e->'sha256')='string' and e->>'sha256' ~ '^[0-9a-f]{64}$'
+   and jsonb_typeof(e->'bytes')='number' and (e->>'bytes')::bigint between 1 and 1100000000
+   and jsonb_typeof(e->'bucket')='string' and e->>'bucket' ~ '^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$'
+   and jsonb_typeof(e->'key')='string',false) then raise exception 'finals_evidence_invalid' using errcode='23514';end if;
+  h:=decode(e->>'sha256','hex');
+  if e->>'kind' in ('full_res_zip','mls_zip') then
+   key:='packages/'||p_org||'/'||r.id||'/'||(e->>'kind')||'/'||(e->>'sha256')||'.zip';
+   if e->>'key' is distinct from key or not coalesce(jsonb_typeof(e->'entries')='number' and (e->>'entries')::integer=jsonb_array_length(r.manifest->'items'),false) then raise exception 'finals_package_evidence_invalid' using errcode='23514';end if;
+   select * into p from public.media_packages where organization_id=p_org and release_id=r.id and package_type=e->>'kind' for update;
+   if not found or p.status='ready' then raise exception 'finals_duplicate_evidence' using errcode='23514';end if;
+   update public.media_packages set status='building' where organization_id=p_org and id=p.id;
+   update public.media_packages set status='ready',bucket_name=e->>'bucket',object_key=key,package_sha256=h,byte_size=(e->>'bytes')::bigint,entry_count=(e->>'entries')::integer,ready_at=clock_timestamp() where organization_id=p_org and id=p.id;
+  elsif e->>'kind' in ('gallery','mls') then
+   if not coalesce(e ?& array['version_id','width','height'] and jsonb_typeof(e->'version_id')='string' and jsonb_typeof(e->'width')='number' and jsonb_typeof(e->'height')='number'
+    and (e->>'width')::integer between 1 and 2048 and (e->>'height')::integer between 1 and 2048 and (e->>'bytes')::bigint<=33554432,false) then raise exception 'finals_derivative_evidence_invalid' using errcode='23514';end if;
+   select * into i from public.gallery_release_items where organization_id=p_org and release_id=r.id and media_version_id=(e->>'version_id')::uuid;
+   if not found then raise exception 'finals_derivative_evidence_invalid' using errcode='23514';end if;
+   key:='derivatives/'||p_org||'/'||i.media_version_id||'/1/'||(e->>'sha256')||'.jpg';
+   if e->>'key' is distinct from key then raise exception 'finals_derivative_evidence_invalid' using errcode='23514';end if;
+   -- Duplicate evidence is rejected even when a canonical derivative was reused.
+   if (select count(*) from jsonb_array_elements(p_evidence) x where x->>'kind'=e->>'kind' and x->>'version_id'=e->>'version_id')<>1 then raise exception 'finals_duplicate_evidence' using errcode='23514';end if;
+   select * into d from public.media_derivatives where organization_id=p_org and id=case when e->>'kind'='gallery' then i.display_derivative_id else i.download_derivative_id end for update;
+   if d.status='ready' then
+    if (d.object_key,d.bucket_name,d.sha256,d.byte_size,d.width_px,d.height_px) is distinct from (key,e->>'bucket',h,(e->>'bytes')::bigint,(e->>'width')::integer,(e->>'height')::integer) then raise exception 'finals_derivative_conflict' using errcode='23514';end if;
+   else
+    update public.media_derivatives set status='processing' where organization_id=p_org and id=d.id;
+    update public.media_derivatives set status='ready',bucket_name=e->>'bucket',object_key=key,sha256=h,byte_size=(e->>'bytes')::bigint,mime_type='image/jpeg',width_px=(e->>'width')::integer,height_px=(e->>'height')::integer,ready_at=clock_timestamp() where organization_id=p_org and id=d.id;
+   end if;
+  else raise exception 'finals_evidence_invalid' using errcode='23514';end if;n:=n+1;
+ end loop;
+ if (select count(*) from public.media_packages where organization_id=p_org and release_id=r.id and status='ready')<>2
+ or exists(select 1 from public.gallery_release_items ri join public.media_derivatives md on md.organization_id=ri.organization_id and md.id in(ri.display_derivative_id,ri.download_derivative_id) where ri.organization_id=p_org and ri.release_id=r.id and md.status<>'ready') then raise exception 'finals_evidence_incomplete' using errcode='23514';end if;
+ -- Rights may expire while encoding. Verify current selected versions once more.
+ perform public.photo_finals_release_manifest(p_org,(r.manifest->>'booking_id')::uuid,r.property_id,r.batch_id,r.id,r.revision_number,
+  (select jsonb_agg(x->'media_version_id' order by ord) from jsonb_array_elements(r.manifest->'items') with ordinality t(x,ord)));
+ perform public.photo_finals_package_fence(p_org,p_job,p_lease);
+ perform public.photo_finals_attempt(j,'succeeded');
+ update public.media_ingest_jobs set state='review_pending',completed_at=clock_timestamp(),finals_lease_token=null,finals_lease_started_at=null,finals_lease_expires_at=null,finals_worker_id=null where organization_id=p_org and id=p_job;
+ update public.gallery_releases set state='ready' where organization_id=p_org and id=r.id;
+end $$;
+
+create function public.photo_finals_package_fail(p_org uuid,p_job uuid,p_lease uuid) returns void language plpgsql security invoker set search_path='' as $$
+declare j public.media_ingest_jobs; terminal boolean;
+begin
+ j:=public.photo_finals_package_fence(p_org,p_job,p_lease);terminal:=j.attempts>=j.max_attempts;
+ perform public.photo_finals_attempt(j,case when terminal then 'dead_letter' else 'retryable' end);
+ update public.media_ingest_jobs set state=case when terminal then 'dead_letter' else 'retryable' end,completed_at=case when terminal then clock_timestamp() else null end,
+ next_attempt_at=clock_timestamp()+interval '10 seconds',last_error_code='finals_package_failed',last_error_at=clock_timestamp(),
+ finals_lease_token=null,finals_lease_started_at=null,finals_lease_expires_at=null,finals_worker_id=null where organization_id=p_org and id=p_job;
+end $$;
+create function public.photo_finals_package_due(p_org uuid,p_booking uuid,p_property uuid) returns jsonb language sql security invoker set search_path='' as $$
+ select coalesce(jsonb_agg(id),'[]') from(select j.id from public.media_ingest_jobs j join public.media_batches b on b.organization_id=j.organization_id and b.id=j.batch_id
+ where j.organization_id=p_org and j.property_id=p_property and b.booking_id=p_booking and j.finals_release_id is not null and j.completed_at is null
+ and j.next_attempt_at<=clock_timestamp() and (j.finals_lease_expires_at is null or j.finals_lease_expires_at<=clock_timestamp()) order by j.next_attempt_at,j.id limit 1) due;
+$$;
+
+create function public.photo_finals_ready_guard() returns trigger language plpgsql set search_path='' as $$
+begin
+ if new.manifest->>'kind'='finished_jpeg_release.v2' and new.state in ('ready','published') then
+  if (select count(*) from public.media_packages where organization_id=new.organization_id and release_id=new.id and status='ready')<>2
+   or not exists(select 1 from public.media_ingest_jobs where organization_id=new.organization_id and finals_release_id=new.id and state='review_pending' and completed_at is not null)
+   or (select count(*) from public.gallery_release_items where organization_id=new.organization_id and release_id=new.id)<>jsonb_array_length(new.manifest->'items')
+   or exists(select 1 from public.gallery_release_items ri left join public.media_derivatives md on md.organization_id=ri.organization_id and md.id=ri.display_derivative_id
+    left join public.media_derivatives dl on dl.organization_id=ri.organization_id and dl.id=ri.download_derivative_id
+    where ri.organization_id=new.organization_id and ri.release_id=new.id and (md.status is distinct from 'ready' or dl.status is distinct from 'ready'))
+   then raise exception 'finals_release_not_complete' using errcode='23514';end if;
+ end if;return new;
+end $$;
+create trigger finals_ready_guard before update on public.gallery_releases for each row execute function public.photo_finals_ready_guard();
+revoke all on function public.photo_finals_ready_guard() from public,anon,authenticated;
+grant execute on function public.photo_finals_ready_guard() to service_role;
+
+-- All new RPCs are service-only, including helper functions. Forced RLS unchanged.
+do $$ declare f record; begin
+ for f in select p.oid::regprocedure as signature from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in
+ ('photo_finals_checkpoint_guard','photo_finals_package_checkpoint','photo_finals_identifiers','photo_finals_release_job_guard','photo_finals_release_actor','photo_finals_transform_specs','photo_finals_release_manifest','photo_finals_prepare_release','photo_finals_approve_release','photo_finals_package_claim','photo_finals_package_fence','photo_finals_package_heartbeat','photo_finals_package_finish','photo_finals_package_fail','photo_finals_package_due') loop
+ execute format('revoke all on function %s from public,anon,authenticated',f.signature);execute format('grant execute on function %s to service_role',f.signature);
+ -- Server-side row/advisory lock waits end before the client's 10-second RPC deadline.
+ execute format('alter function %s set lock_timeout to %L',f.signature,'5s');
+ end loop;
+end $$;
+
+-- ============================================================================
+-- End supabase/migrations/20260912160000_photo_finals_packages.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260912200000_photo_finals_application.sql
+-- ============================================================================
+
+-- Code-dark application reads. Service-only, current authorization on every call.
+-- No public listing placements or browser grants; downloads require a fresh session.
+create function public.photo_finals_access(p_org uuid,p_actor uuid,p_booking uuid,p_property uuid,p_operator boolean)
+returns void language plpgsql security invoker set search_path='' as $$
+begin
+ if p_operator is null or not exists(select 1 from public.profiles where organization_id=p_org and id=p_actor and archived_at is null)
+ or not exists(select 1 from public.bookings b join public.properties p on p.organization_id=b.organization_id and p.id=b.property_id
+  where b.organization_id=p_org and b.id=p_booking and b.property_id=p_property and b.status<>'cancelled'
+  and (p_operator or (b.owner_id=p_actor and p.owner_id=p_actor))) then
+  raise exception 'finals_access_denied' using errcode='42501';end if;
+ if p_operator then perform public.photo_finals_actor(p_org,p_actor);end if;
+end $$;
+
+create function public.photo_finals_upload_target(p_org uuid,p_actor uuid,p_booking uuid,p_property uuid,p_job uuid)
+returns public.media_ingest_jobs language plpgsql security invoker set search_path='' as $$
+declare j public.media_ingest_jobs;
+begin
+ perform public.photo_finals_access(p_org,p_actor,p_booking,p_property,true);
+ select jobs.* into j from public.media_ingest_jobs jobs join public.media_batches b on b.organization_id=jobs.organization_id and b.id=jobs.batch_id
+ where jobs.organization_id=p_org and jobs.property_id=p_property and b.booking_id=p_booking and jobs.id=p_job
+ and jobs.finals_actor_id=p_actor and jobs.finals_version_id is not null and jobs.completed_at is null and jobs.finals_deadline>clock_timestamp();
+ if not found then raise exception 'finals_upload_denied' using errcode='42501';end if;
+ return j;
+end $$;
+
+-- PRIVATE service envelope: never serialize directly to the browser. Latest release
+-- wins, including withdrawal/pending: no resurrection of an older release.
+create function public.photo_finals_current(p_org uuid,p_actor uuid,p_booking uuid,p_property uuid,p_operator boolean)
+returns jsonb language plpgsql security invoker set search_path='' as $$
+declare b public.media_batches; r public.gallery_releases; complete boolean:=false; versions jsonb:='[]'; items jsonb:='[]'; packages jsonb:='[]';
+begin
+ perform public.photo_finals_access(p_org,p_actor,p_booking,p_property,p_operator);
+ select * into b from public.media_batches where organization_id=p_org and property_id=p_property and booking_id=p_booking and source_provider='manual_finals' order by created_at desc,id desc limit 1;
+ if b.id is null then return jsonb_build_object('batch',null,'release',null,'complete',false,'versions',versions,'items',items,'packages',packages);end if;
+ select * into r from public.gallery_releases where organization_id=p_org and batch_id=b.id and property_id=p_property order by revision_number desc limit 1;
+ if p_operator then
+ select coalesce(jsonb_agg(to_jsonb(v) order by v.created_at,v.id),'[]') into versions from (select * from public.media_versions where organization_id=p_org and batch_id=b.id and property_id=p_property order by created_at,id limit 100) v;
+ end if;
+ complete:=coalesce(r.state in ('ready','published') and r.withdrawn_at is null and r.approved_at is not null and r.manifest->>'kind'='finished_jpeg_release.v2'
+ and (select count(*) from public.media_packages where organization_id=p_org and release_id=r.id and status='ready' and manifest_sha256=r.manifest_sha256)=2
+ and exists(select 1 from public.media_ingest_jobs where organization_id=p_org and finals_release_id=r.id and state='review_pending' and completed_at is not null)
+ and (select count(*) from public.gallery_release_items where organization_id=p_org and release_id=r.id) between 1 and 100
+ and (select count(*) from public.gallery_release_items where organization_id=p_org and release_id=r.id)=jsonb_array_length(r.manifest->'items')
+ and not exists(select 1 from public.gallery_release_items i
+ left join public.media_versions v on v.organization_id=i.organization_id and v.id=i.media_version_id
+ left join public.media_derivatives d on d.organization_id=i.organization_id and d.id=i.display_derivative_id
+ left join public.media_derivatives dl on dl.organization_id=i.organization_id and dl.id=i.download_derivative_id
+ where i.organization_id=p_org and i.release_id=r.id and (i.approval_state<>'approved' or v.ingest_state is distinct from 'accepted' or d.status is distinct from 'ready' or dl.status is distinct from 'ready'
+ or v.rights_effective_at>clock_timestamp() or v.rights_expires_at<=clock_timestamp())),false);
+ if complete then
+ select coalesce(jsonb_agg(jsonb_build_object('id',i.id,'position',i.position,'derivative',to_jsonb(d)) order by i.position),'[]') into items
+ from public.gallery_release_items i join public.media_derivatives d on d.organization_id=i.organization_id and d.id=i.display_derivative_id where i.organization_id=p_org and i.release_id=r.id;
+ select jsonb_agg(to_jsonb(p) order by p.package_type) into packages from public.media_packages p where p.organization_id=p_org and p.release_id=r.id and p.status='ready';
+ end if;
+ return jsonb_build_object('batch',case when p_operator then to_jsonb(b) else null end,'release',case when r.id is not null and (p_operator or complete) then to_jsonb(r) else null end,'complete',complete,'versions',versions,'items',items,'packages',packages);
+end $$;
+revoke all on function public.photo_finals_access(uuid,uuid,uuid,uuid,boolean),public.photo_finals_upload_target(uuid,uuid,uuid,uuid,uuid),public.photo_finals_current(uuid,uuid,uuid,uuid,boolean) from public,anon,authenticated;
+grant execute on function public.photo_finals_access(uuid,uuid,uuid,uuid,boolean),public.photo_finals_upload_target(uuid,uuid,uuid,uuid,uuid),public.photo_finals_current(uuid,uuid,uuid,uuid,boolean) to service_role;
+
+-- ============================================================================
+-- End supabase/migrations/20260912200000_photo_finals_application.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260912210000_photo_finals_download_accounting.sql
+-- ============================================================================
+
+-- Private, login-authorized proxy accounting. No bearer resolution endpoint.
+-- A grant is scoped to one authorized HTTP stream, not continuing access rights.
+create function public.photo_finals_download_begin(p_org uuid,p_actor uuid,p_booking uuid,p_property uuid,p_operator boolean,p_package uuid,p_request uuid)
+returns jsonb language plpgsql security invoker set search_path='' as $$
+declare s jsonb; p public.media_packages; g public.download_grants;
+begin
+ perform public.photo_finals_access(p_org,p_actor,p_booking,p_property,p_operator);
+ -- Serialize against new batches and newer review revisions as well as withdrawal.
+ perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('finals:'||p_org,0));
+ -- Same release lock as withdrawal and canonical grant insertion.
+ select * into p from public.media_packages where organization_id=p_org and id=p_package and property_id=p_property;
+ if p.id is null or p_request is null then raise exception 'finals_download_denied' using errcode='42501';end if;
+ perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('finals-release:'||p_org||':'||p.batch_id,0));
+ perform 1 from public.gallery_releases where organization_id=p_org and id=p.release_id for update;
+ s:=public.photo_finals_current(p_org,p_actor,p_booking,p_property,p_operator);
+ if s->>'complete' is distinct from 'true' or not exists(select 1 from jsonb_array_elements(s->'packages') x where x->>'id'=p_package::text) then
+ raise exception 'finals_download_denied' using errcode='42501';end if;
+ -- Duplicate begin must never authorize a second stream, even after response loss.
+ if exists(select 1 from public.download_events where organization_id=p_org and request_id=p_request) then
+ raise exception 'finals_download_already_started' using errcode='42501';end if;
+ insert into public.download_grants(organization_id,property_id,batch_id,release_id,package_id,grantee_profile_id,token_key_id,token_hash,expires_at,max_resolutions,resolution_count,created_by)
+ values(p_org,p.property_id,p.batch_id,p.release_id,p.id,p_actor,'private-session-v1',pg_catalog.sha256(pg_catalog.convert_to(pg_catalog.gen_random_uuid()::text,'UTF8')),clock_timestamp()+interval '60 seconds',1,1,p_actor) returning * into g;
+ insert into public.download_events(organization_id,property_id,batch_id,release_id,package_id,grant_id,event_type,actor_profile_id,request_id)
+ values(p_org,p.property_id,p.batch_id,p.release_id,p.id,g.id,'grant_resolved',p_actor,p_request);
+ return jsonb_build_object('grantId',g.id,'package',to_jsonb(p));
+end $$;
+
+-- Settlement records what the server actually observed, not client receipt.
+-- Revocation/expiry/access changes deny successful settlement after bytes drain.
+-- Failed settlement remains an unresolved grant_resolved event, never false success.
+create function public.photo_finals_download_finish(p_org uuid,p_actor uuid,p_booking uuid,p_property uuid,p_operator boolean,p_grant uuid,p_request uuid,p_completed boolean)
+returns boolean language plpgsql security invoker set search_path='' as $$
+declare g public.download_grants; s jsonb; completed boolean:=false;
+begin
+ select * into g from public.download_grants where organization_id=p_org and id=p_grant and property_id=p_property and grantee_profile_id=p_actor for update;
+ if g.id is null or p_completed is null or not exists(select 1 from public.download_events where organization_id=p_org and grant_id=g.id and request_id=p_request and event_type='grant_resolved' and actor_profile_id=p_actor)
+ then raise exception 'finals_download_denied' using errcode='42501';end if;
+ if exists(select 1 from public.download_events where organization_id=p_org and grant_id=g.id and request_id=p_request and event_type in ('controlled_proxy_completed','denied')) then return exists(select 1 from public.download_events where organization_id=p_org and grant_id=g.id and request_id=p_request and event_type='controlled_proxy_completed');end if;
+ if p_completed and g.revoked_at is null and g.expires_at>clock_timestamp() then
+  begin
+   s:=public.photo_finals_current(p_org,p_actor,p_booking,p_property,p_operator);
+   completed:=s->>'complete'='true' and s->'release'->>'id'=g.release_id::text;
+  exception when insufficient_privilege then completed:=false;end;
+ end if;
+ insert into public.download_events(organization_id,property_id,batch_id,release_id,package_id,grant_id,event_type,actor_profile_id,request_id)
+ values(p_org,g.property_id,g.batch_id,g.release_id,g.package_id,g.id,case when completed then 'controlled_proxy_completed' else 'denied' end,p_actor,p_request);
+ update public.download_grants set revoked_at=coalesce(revoked_at,clock_timestamp()) where organization_id=p_org and id=g.id;
+ return completed;
+end $$;
+
+create function public.photo_finals_download_revoke(p_org uuid,p_actor uuid,p_booking uuid,p_property uuid,p_grant uuid)
+returns void language plpgsql security invoker set search_path='' as $$
+begin
+ perform public.photo_finals_access(p_org,p_actor,p_booking,p_property,true);
+ update public.download_grants g set revoked_at=coalesce(g.revoked_at,clock_timestamp())
+ where g.organization_id=p_org and g.property_id=p_property and g.id=p_grant
+ and exists(select 1 from public.media_batches b where b.organization_id=p_org and b.id=g.batch_id and b.booking_id=p_booking);
+ if not found then raise exception 'finals_download_denied' using errcode='42501';end if;
+end $$;
+revoke all on function public.photo_finals_download_begin(uuid,uuid,uuid,uuid,boolean,uuid,uuid),public.photo_finals_download_finish(uuid,uuid,uuid,uuid,boolean,uuid,uuid,boolean),public.photo_finals_download_revoke(uuid,uuid,uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.photo_finals_download_begin(uuid,uuid,uuid,uuid,boolean,uuid,uuid),public.photo_finals_download_finish(uuid,uuid,uuid,uuid,boolean,uuid,uuid,boolean),public.photo_finals_download_revoke(uuid,uuid,uuid,uuid,uuid) to service_role;
+
+-- ============================================================================
+-- End supabase/migrations/20260912210000_photo_finals_download_accounting.sql
+-- ============================================================================
+
+-- ============================================================================
+-- Begin supabase/migrations/20260912220000_photo_finals_recovery.sql
+-- ============================================================================
+
+-- Canonical inventory, not browser storage, owns upload identity.
+create function public.photo_finals_recover_intent(p_org uuid,p_actor uuid,p_booking uuid,p_property uuid,p_request uuid,p_intent uuid,p_sha256 text,p_bytes bigint)
+returns public.media_ingest_jobs language plpgsql security invoker set search_path='' as $$
+declare j public.media_ingest_jobs; latest_batch public.media_batches; request_id uuid;
+begin
+ perform public.photo_finals_access(p_org,p_actor,p_booking,p_property,true);
+ if p_request is null or p_intent is null or p_sha256 is null or p_sha256 !~ '^[0-9a-f]{64}$' or p_bytes is null or p_bytes not between 1 and 33554432 then raise exception 'finals_input_invalid' using errcode='22023';end if;
+ perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('finals:'||p_org,0));
+ select jobs.* into j from public.media_ingest_jobs jobs join public.media_batches b on b.organization_id=jobs.organization_id and b.id=jobs.batch_id
+ where jobs.organization_id=p_org and jobs.property_id=p_property and b.booking_id=p_booking and jobs.finals_actor_id=p_actor and jobs.finals_sha256=decode(p_sha256,'hex') and jobs.finals_byte_size=p_bytes;
+ if found then return j;end if;
+ -- Only the newest batch can be extended: never resurrect an older abandoned batch.
+ select b.* into latest_batch from public.media_batches b
+ where b.organization_id=p_org and b.property_id=p_property and b.booking_id=p_booking and b.source_provider='manual_finals'
+ order by b.created_at desc,b.id desc limit 1;
+ if latest_batch.created_by=p_actor and not exists(select 1 from public.gallery_releases r where r.organization_id=p_org and r.batch_id=latest_batch.id and r.approved_at is not null) then request_id:=latest_batch.provider_job_id::uuid;end if;
+ if request_id is null and exists(select 1 from public.media_batches where organization_id=p_org and source_provider='manual_finals' and provider_job_id=p_request::text) then request_id:=pg_catalog.gen_random_uuid();end if;
+ return public.photo_finals_create_intent(p_org,p_actor,p_booking,p_property,coalesce(request_id,p_request),p_intent,p_sha256,p_bytes);
+end $$;
+create function public.photo_finals_inventory(p_org uuid,p_actor uuid,p_booking uuid,p_property uuid)
+returns jsonb language plpgsql security invoker set search_path='' as $$
+declare inventory jsonb;
+begin
+ perform public.photo_finals_access(p_org,p_actor,p_booking,p_property,true);
+ select coalesce(jsonb_agg(to_jsonb(x)),'[]') into inventory from (
+ select j.id as "jobId",b.id as "batchId",j.state,j.finals_deadline as "expiresAt",j.completed_at as "completedAt",j.finals_version_id as "versionId"
+ from public.media_ingest_jobs j join public.media_batches b on b.organization_id=j.organization_id and b.id=j.batch_id
+ where j.organization_id=p_org and j.property_id=p_property and b.booking_id=p_booking and j.finals_actor_id=p_actor and j.finals_version_id is not null
+ order by j.created_at desc,j.id desc limit 101) x;
+ -- Explicit bound, never claim an incomplete inventory is complete.
+ return jsonb_build_object('items',inventory,'hasMore',jsonb_array_length(inventory)>100);
+end $$;
+create function public.photo_finals_reconcile_expired(p_org uuid,p_actor uuid,p_booking uuid,p_property uuid)
+returns integer language plpgsql security invoker set search_path='' as $$
+declare j public.media_ingest_jobs; settled integer:=0;
+begin
+ perform public.photo_finals_access(p_org,p_actor,p_booking,p_property,true);
+ for j in select jobs.* from public.media_ingest_jobs jobs join public.media_batches b on b.organization_id=jobs.organization_id and b.id=jobs.batch_id
+ where jobs.organization_id=p_org and jobs.property_id=p_property and b.booking_id=p_booking and jobs.finals_actor_id=p_actor and jobs.finals_version_id is not null
+ and jobs.completed_at is null and jobs.finals_deadline<=clock_timestamp() and jobs.next_attempt_at<=clock_timestamp()
+ and (jobs.finals_lease_expires_at is null or jobs.finals_lease_expires_at<=clock_timestamp())
+ order by jobs.created_at,jobs.id limit 100 for update of jobs skip locked loop
+  perform public.photo_finals_claim(p_org,p_booking,p_property,j.id,'application-reconciliation');
+  if exists(select 1 from public.media_ingest_jobs where organization_id=p_org and id=j.id and completed_at is not null and state='dead_letter') then settled:=settled+1;end if;
+ end loop;
+ return settled;
+end $$;
+revoke all on function public.photo_finals_reconcile_expired(uuid,uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.photo_finals_reconcile_expired(uuid,uuid,uuid,uuid) to service_role;
+revoke all on function public.photo_finals_recover_intent(uuid,uuid,uuid,uuid,uuid,uuid,text,bigint),public.photo_finals_inventory(uuid,uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.photo_finals_recover_intent(uuid,uuid,uuid,uuid,uuid,uuid,text,bigint),public.photo_finals_inventory(uuid,uuid,uuid,uuid) to service_role;
+
+-- ============================================================================
+-- End supabase/migrations/20260912220000_photo_finals_recovery.sql
+-- ============================================================================

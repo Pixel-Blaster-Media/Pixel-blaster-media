@@ -430,6 +430,11 @@ export default async function BookingDetailPage({
               body="Use the primary source, review the files, and prepare one complete delivery."
             />
             <MediaWorkflow
+              bookingId={booking.id}
+              incumbent={[
+                ...(iguidePhotoDownloads.mls ? [{category:'photos' as const,label:'iGUIDE MLS photos',source:'iguide' as const,slot:'photos_mls' as const,url:'/api/iguide/download?url='+encodeURIComponent(iguidePhotoDownloads.mls)}] : []),
+                ...(iguidePhotoDownloads.highRes ? [{category:'photos' as const,label:'iGUIDE high-res photos',source:'iguide' as const,slot:'photos_full_res' as const,url:'/api/iguide/download?url='+encodeURIComponent(iguidePhotoDownloads.highRes)}] : []),
+              ]}
               autoHDREnabled={autoHDREnabled}
               autoenhanceEnabled={autoenhanceEnabled}
               hasIGuidePhotos={Boolean(

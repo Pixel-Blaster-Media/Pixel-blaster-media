@@ -154,3 +154,89 @@ jobs:
           python3 scripts/verify-admin-lifecycle-postgres.py
           python3 scripts/verify-lifecycle-recovery-postgres.py
           bash lib/integrations/quickbooks/tests/verify-postgres.sh
+
+  photo-finals:
+    name: Photo finals PostgreSQL, browser and resource gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      POSTGRES_BIN: /usr/lib/postgresql/17/bin
+    defaults:
+      run:
+        working-directory: booking
+        shell: bash
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: booking/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Install PostgreSQL 17 tools
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error \
+            --output /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-17
+          echo "$POSTGRES_BIN" >> "$GITHUB_PATH"
+          "$POSTGRES_BIN/postgres" --version
+      - name: Install checksum-pinned PostgREST 16.3
+        run: |
+          mkdir -p "$RUNNER_TEMP/photo-finals-tools" "$RUNNER_TEMP/photo-finals-evidence"
+          archive="$RUNNER_TEMP/photo-finals-tools/postgrest.tar.xz"
+          curl --fail --silent --show-error --location \
+            https://github.com/PostgREST/postgrest/releases/download/v16.3/postgrest-v16.3-linux-static-x86-64.tar.xz \
+            --output "$archive"
+          printf '%s  %s\n' 4eb414eb948c8800863cc8c9896a17b611b2dccf9ff581f4d57f42ec9ccee40d "$archive" | sha256sum --check --strict
+          tar -xJf "$archive" -C "$RUNNER_TEMP/photo-finals-tools" postgrest
+          echo "$RUNNER_TEMP/photo-finals-tools" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/photo-finals-tools/postgrest" --version
+      - name: Install pinned Playwright and its matching Chromium
+        run: |
+          npm install --prefix "$RUNNER_TEMP/photo-finals-browser" --no-save --package-lock=false --ignore-scripts playwright@1.63.0
+          "$RUNNER_TEMP/photo-finals-browser/node_modules/.bin/playwright" install --with-deps chromium
+          echo "PF_PLAYWRIGHT_MODULE=$RUNNER_TEMP/photo-finals-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+          echo "PF_CHROME_PATH=$(node -e 'console.log(require(process.argv[1]).chromium.executablePath())' "$RUNNER_TEMP/photo-finals-browser/node_modules/playwright")" >> "$GITHUB_ENV"
+      # Each runner owns a disposable Unix-socket PG cluster. PostgREST and the
+      # browser fixture choose ephemeral loopback ports: do not start services.
+      # Run serially to bound memory/disk and preserve the 125s long-I/O proof.
+      # Explicit bash keeps pipefail, so tee cannot turn a runner failure green.
+      - name: Finals concurrency
+        run: npm run test:postgres:photo-finals | tee "$RUNNER_TEMP/photo-finals-evidence/concurrency.log"
+      - name: Finals ingest
+        run: npm run test:postgres:finals-ingest | tee "$RUNNER_TEMP/photo-finals-evidence/ingest.log"
+      - name: Finals packages
+        run: npm run test:postgres:finals-packages | tee "$RUNNER_TEMP/photo-finals-evidence/packages.log"
+      - name: Finals HTTP and browser
+        env:
+          PF_EVIDENCE_DIR: ${{ runner.temp }}/photo-finals-evidence/browser-http
+        run: npm run test:postgres:finals-http | tee "$RUNNER_TEMP/photo-finals-evidence/http.log"
+      - name: Finals real PostgREST and browser
+        env:
+          PF_EVIDENCE_DIR: ${{ runner.temp }}/photo-finals-evidence/browser-postgrest
+        run: npm run test:postgres:finals-postgrest | tee "$RUNNER_TEMP/photo-finals-evidence/postgrest.log"
+      - name: Finals maximum synthetic resource fixture
+        run: npm run test:postgres:finals-resource | tee "$RUNNER_TEMP/photo-finals-evidence/resource.log"
+      - name: Finals long I/O
+        run: npm run test:postgres:finals-long-io | tee "$RUNNER_TEMP/photo-finals-evidence/long-io.log"
+      - name: Finals operator built after, PostgreSQL tail and React
+        env:
+          PF_AFTER_LOG: ${{ runner.temp }}/photo-finals-evidence/operator-after-build.log
+        run: npm run test:photo-finals:operator | tee "$RUNNER_TEMP/photo-finals-evidence/operator.log"
+      - name: Retain finals runner and browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: photo-finals-evidence
+          path: ${{ runner.temp }}/photo-finals-evidence
+          retention-days: 14
+          if-no-files-found: warn
