@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { mock } from 'node:test';
 import { execFileSync } from 'node:child_process';
 import { createHash,randomUUID } from 'node:crypto';
 import sharp from 'sharp';
@@ -181,22 +182,52 @@ assert.ok(slowHeartbeats>=3);assert.equal(liveAfterUpload,true);db.rpc=rpcBefore
 const ioRecovery=[];
 for(const mode of ['budget-timeout','stale-owner']){
  const r=await nextDraft([jobs[0].finals_version_id]),j=await call('photo_finals_approve_release',approval(r));
- let injected=false,aborted=false;
+ let injected=false,aborted=false,preparationDelayed=false,uploadStartedLive=false,budgetProof;
+ // Advance the real processor's JS budget timer only once the target upload
+ // is pending. JPEG/psql setup speed must not consume this test's 500ms.
+ // `delay` was captured before mocking, so storage delays remain real; PG's
+ // clock and the stale-owner/long-I/O renewal proofs are never mocked.
+ if(mode==='budget-timeout')mock.timers.enable({apis:['setTimeout']});
  client.send=async(command,options)=>{
+  // Reproduce a slower runner: setup must not decide whether the upload-abort
+  // scenario is exercised. This delay deliberately exceeds its 500ms budget.
+  if(mode==='budget-timeout'&&!preparationDelayed&&command.constructor.name==='GetObjectCommand'){
+   preparationDelayed=true;await delay(600);
+  }
   if(!injected&&command.constructor.name==='UploadPartCommand'&&command.input.Key.includes('/full_res_zip/')){
    injected=true;
    if(mode==='stale-owner')sql(`update media_ingest_jobs set finals_lease_started_at=clock_timestamp()-interval '130 seconds',finals_lease_expires_at=clock_timestamp()-interval '1 second' where id='${j.job_id}'`);
-   try{await delay(1500,undefined,{signal:options?.abortSignal});}catch(e){aborted=options.abortSignal.aborted;throw e;}
+   uploadStartedLive=options?.abortSignal?.aborted===false;
+   try{
+    const pending=delay(1500,undefined,{signal:options?.abortSignal});
+    if(mode==='budget-timeout'){
+     mock.timers.tick(499);const beforeDeadline=options.abortSignal.aborted;
+     mock.timers.tick(1);
+     budgetProof={beforeDeadline,atDeadline:options.abortSignal.aborted,reason:options.abortSignal.reason?.message};
+    }
+    await pending;
+   }catch(e){aborted=options.abortSignal.aborted;throw e;}
   }
   return sendBeforeSlow(command,options);
  };
- await assert.rejects(processFinalRelease({db,storage,env,scope,jobId:j.job_id,workerId:'io-failure',budgets:{totalMs:mode==='budget-timeout'?500:5000,heartbeatMs:20}}));
- assert.equal(injected,true);assert.equal(aborted,true);assert.equal(client.uploads.size,0);
+ try{
+  await assert.rejects(processFinalRelease({db,storage,env,scope,jobId:j.job_id,workerId:'io-failure',budgets:{totalMs:mode==='budget-timeout'?500:5000,heartbeatMs:20}}));
+ }finally{
+  if(mode==='budget-timeout')mock.timers.reset();
+  client.send=sendBeforeSlow;
+ }
+ // Assert outside the storage callback: the processor intentionally catches
+ // storage errors, which must not swallow a regression assertion.
+ if(mode==='budget-timeout'){
+  assert.equal(preparationDelayed,true,'slow preparation regression was exercised');
+  assert.deepEqual(budgetProof,{beforeDeadline:false,atDeadline:true,reason:'finals_package_budget_exhausted'});
+ }
+ assert.equal(uploadStartedLive,true,`${mode}: upload starts with a live signal`);
+ assert.equal(injected,true,`${mode}: target upload was reached`);assert.equal(aborted,true,`${mode}: pending upload was aborted`);assert.equal(client.uploads.size,0);
  assert.equal(sql(`select count(*) from media_packages where release_id='${r.id}' and status='ready'`),'0');
- client.send=sendBeforeSlow;
  sql(`update media_ingest_jobs set next_attempt_at=now() where id='${j.job_id}'`);
  assert.equal((await processFinalRelease({db,storage,env,scope,jobId:j.job_id,workerId:'io-recover'})).status,'ready');
- ioRecovery.push({mode,aborted,multipartResidue:client.uploads.size,recovered:true});
+ ioRecovery.push({mode,aborted,multipartResidue:client.uploads.size,recovered:true,...(mode==='budget-timeout'?{budgetClock:'controlled-js-timers',preparationDelayMs:600,budgetProof}:{budgetClock:'wall-clock'})});
 }
 // Stale head revision and late-child rollback leave no approved residue.
 const oldDraft=await nextDraft();const newer=await nextDraft();
