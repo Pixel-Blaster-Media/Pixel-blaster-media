@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
-import { R2Storage } from '../../lib/media/storage/r2-core.ts';
+import { FinalsR2Storage } from '../../lib/media/finals/storage.ts';
 import { createFinalIntent, processFinalIntent, dispatchFinalIntents } from '../../lib/media/finals/ingest.ts';
 import { LocalS3 } from '../helpers/photo-finals-local-s3.mjs';
 const socket=process.env.PF_TEST_SOCKET;
@@ -20,7 +20,7 @@ const scope={organizationId:'11111111-1111-4111-8111-111111111111',bookingId:'21
 const env={PHOTO_FINALS_ENABLED:'true',PHOTO_FINALS_ENVIRONMENT:'synthetic-local',NODE_ENV:'test',PHOTO_FINALS_SYNTHETIC_ACK:'isolated-no-network',PHOTO_FINALS_ALLOWED_SCOPES:JSON.stringify([scope])};
 const client=new LocalS3();
 const buckets={quarantine:'local-private-quarantine',masters:'local-private-masters',delivery:'local-private-delivery'};
-const storage=new R2Storage({client,organizationId:scope.organizationId,buckets});
+const storage=new FinalsR2Storage({client,organizationId:scope.organizationId,buckets});
 const actorId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
 const requestId=randomUUID();
 const digest=b=>createHash('sha256').update(b).digest('hex');
@@ -47,6 +47,14 @@ assert.deepEqual(storage.location(v.object_key),{bucket:buckets.masters,key:v.ob
 assert.equal(v.width_px,80);assert.equal(v.height_px,60);assert.equal(v.sha256,'\\x'+digest(bytes));
 assert.deepEqual(client.objects.get(buckets.masters+'/'+v.object_key).bytes,bytes);
 assert.equal(client.puts,2);
+// Acceptance is not quarantine cleanup: the exact source remains a replay barrier.
+const source=client.objects.get(buckets.quarantine+'/'+job.finals_quarantine_key);
+assert.deepEqual(source.bytes,bytes);
+await assert.rejects(storage.deleteQuarantine({key:job.finals_quarantine_key,expectedEtag:source.etag}),/finals_quarantine_delete_uncertified/);
+assert.deepEqual(client.objects.get(buckets.quarantine+'/'+job.finals_quarantine_key).bytes,bytes);
+await assert.rejects(storage.putBufferCreateOnly({key:job.finals_quarantine_key,bytes,sha256:digest(bytes),contentType:'image/jpeg'}),/exists/);
+assert.equal((await createFinalIntent(options)).finals_quarantine_key,job.finals_quarantine_key);
+assert.equal(sql(`select state from media_ingest_jobs where id='${job.id}'`),'accepted');
 await assert.rejects(createFinalIntent({...options,intentId:randomUUID()}));
 const invalid=await make(Buffer.from('synthetic invalid JPEG'));
 await assert.rejects(processJob(invalid.job));

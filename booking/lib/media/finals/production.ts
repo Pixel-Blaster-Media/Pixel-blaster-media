@@ -6,7 +6,7 @@ import type { FinalsIdentity, FinalsRuntime } from './http';
 import { loadProductionFinalsConfig } from './production-config';
 import { createProductionFinalsDatabase } from './transport';
 import { createFinalsPresigner } from './presigner';
-import { R2Storage } from '../storage/r2-core';
+import { FinalsR2Storage } from './storage';
 /** Construct only after complete production opt-in; never uses development config.
  * Configuration does not replace the external certification/activation gate. */
 export async function createProductionFinalsRuntime(identity:FinalsIdentity):Promise<FinalsRuntime|null>{
@@ -15,6 +15,6 @@ export async function createProductionFinalsRuntime(identity:FinalsIdentity):Pro
   const client=new S3Client({region:'auto',endpoint:config.endpoint,credentials:{...config.credentials},forcePathStyle:false,maxAttempts:1,
    requestHandler:new NodeHttpHandler({connectionTimeout:5000,requestTimeout:10000,throwOnRequestTimeout:true,socketTimeout:10000}),requestChecksumCalculation:'WHEN_REQUIRED',responseChecksumValidation:'WHEN_REQUIRED'});
   const db=createProductionFinalsDatabase(config);
-  return {env,db,readPackageStatus:createPackageStatusReader(config,identity,db),budgets:{totalMs:240_000},storage:new R2Storage({client,organizationId:identity.scope.organizationId,buckets:{quarantine:config.bucket,masters:config.bucket,delivery:config.bucket}}),issueUpload:createFinalsPresigner(client,db,config.bucket)};
+  return {env,db,readPackageStatus:createPackageStatusReader(config,identity,db),budgets:{totalMs:240_000},storage:new FinalsR2Storage({client,organizationId:identity.scope.organizationId,buckets:{quarantine:config.bucket,masters:config.bucket,delivery:config.bucket}}),issueUpload:createFinalsPresigner(client,db,config.bucket)};
  }catch{return null;}
 }
