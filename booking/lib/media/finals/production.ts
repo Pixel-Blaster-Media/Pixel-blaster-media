@@ -1,4 +1,5 @@
 import 'server-only';
+import {createPackageStatusReader} from './operator-status';
 import { S3Client } from '@aws-sdk/client-s3';
 import { NodeHttpHandler } from '@smithy/node-http-handler';
 import type { FinalsIdentity, FinalsRuntime } from './http';
@@ -14,6 +15,6 @@ export async function createProductionFinalsRuntime(identity:FinalsIdentity):Pro
   const client=new S3Client({region:'auto',endpoint:config.endpoint,credentials:{...config.credentials},forcePathStyle:false,maxAttempts:1,
    requestHandler:new NodeHttpHandler({connectionTimeout:5000,requestTimeout:10000,throwOnRequestTimeout:true,socketTimeout:10000}),requestChecksumCalculation:'WHEN_REQUIRED',responseChecksumValidation:'WHEN_REQUIRED'});
   const db=createProductionFinalsDatabase(config);
-  return {env,db,budgets:{totalMs:240_000},storage:new R2Storage({client,organizationId:identity.scope.organizationId,buckets:{quarantine:config.bucket,masters:config.bucket,delivery:config.bucket}}),issueUpload:createFinalsPresigner(client,db,config.bucket)};
+  return {env,db,readPackageStatus:createPackageStatusReader(config,identity,db),budgets:{totalMs:240_000},storage:new R2Storage({client,organizationId:identity.scope.organizationId,buckets:{quarantine:config.bucket,masters:config.bucket,delivery:config.bucket}}),issueUpload:createFinalsPresigner(client,db,config.bucket)};
  }catch{return null;}
 }

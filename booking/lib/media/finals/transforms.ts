@@ -8,10 +8,14 @@ export const TRANSFORMS = Object.freeze({
  gallery: Object.freeze({id:'web.listing.2048.v1',version:1,operation:'jpeg',encoder:'sharp-0.35.4_libvips-8.18.6_mozjpeg-0826579',progressive:false,mozjpeg:false,fit:'inside',maxSide:2048,quality:82,chroma:'4:2:0',orientation:'auto',colour:'srgb',metadata:'strip',enlarge:false,status:'defined'}),
  mls: Object.freeze({id:'ontario.proptx.provisional.2026-08-11.v1',version:1,operation:'jpeg',encoder:'sharp-0.35.4_libvips-8.18.6_mozjpeg-0826579',progressive:false,mozjpeg:false,fit:'inside',maxSide:2048,quality:90,chroma:'4:2:0',orientation:'auto',colour:'srgb',metadata:'strip',enlarge:false,status:'provisional',label:'Provisional MLS export — verify destination requirements'}),
 });
-export async function transformFinalJpeg(bytes: Buffer, kind:'gallery'|'mls') {
- await verifyFinalJpeg(bytes, (await import('node:crypto')).createHash('sha256').update(bytes).digest('hex'), bytes.length);
+export async function transformFinalJpeg(bytes: Buffer, kind:'gallery'|'mls', execution?:{signal:AbortSignal;check?:(tailMs:number)=>void}) {
+ const hash=(await import('node:crypto')).createHash('sha256').update(bytes).digest('hex');
+ execution?.signal.throwIfAborted();execution?.check?.(30_000);
+ await verifyFinalJpeg(bytes, hash, bytes.length);
  const spec=TRANSFORMS[kind];
  if(`sharp-${sharp.versions.sharp}_libvips-${sharp.versions.vips}_mozjpeg-${sharp.versions.mozjpeg}`!==spec.encoder)throw new Error('finals_encoder_version_unapproved');
+ // Validation and encoding each have a separate bounded native tail.
+ execution?.signal.throwIfAborted();execution?.check?.(30_000);
  const result=await sharp(bytes,{limitInputPixels:100_000_000,failOn:'warning'}).timeout({seconds:30})
   .rotate().resize({width:spec.maxSide,height:spec.maxSide,fit:'inside',withoutEnlargement:true})
   .toColourspace('srgb').jpeg({quality:spec.quality,chromaSubsampling:spec.chroma,progressive:spec.progressive,mozjpeg:spec.mozjpeg})

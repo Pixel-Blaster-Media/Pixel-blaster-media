@@ -12,6 +12,7 @@ import {build} from 'esbuild';
 import postcss from 'postcss';
 import tailwind from 'tailwindcss';
 import sharp from 'sharp';
+import {packageJobStatus} from '../../lib/media/finals/operator-status.ts';
 import {common} from '../../lib/media/finals/application.ts';
 export async function browserProof({db,storage,sql,env,scope,actorId}){
  const {chromium}=await import(process.env.PF_PLAYWRIGHT_MODULE??homedir()+'/.hermes/designs/pixel-precision-preview/node_modules/playwright/index.mjs');
@@ -24,7 +25,7 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
  const sessions=new Map(Object.entries(identities).map(([role,identity])=>[randomUUID(),{role,identity}]));
  const caps=new Map();let origin='',uploadCount=0,httpCount=0,failRead=false,failOnce='',failedRequests=[];
  const identify=req=>sessions.get((req.headers.get('cookie')??'').replace(/^session=/,''))?.identity??null;
- const runtime={db,storage,env,async issueUpload(job,identity){
+ const runtime={db,storage,env,async readPackageStatus(releaseId){assert.match(releaseId,/^[a-f0-9-]{36}$/);return packageJobStatus(JSON.parse(sql(`select to_jsonb(j) from media_ingest_jobs j where finals_release_id='${releaseId}'`)));},async issueUpload(job,identity){
   assert.equal(sql(`select count(*) from media_ingest_jobs where id='${job.id}'`),'1');
   const token=randomUUID(),expires=Math.min(Date.now()+60000,Date.parse(job.finals_deadline));caps.set(token,{job,identity,expires});
   return {url:origin+'/test-only/upload/'+token,headers:{'content-type':'image/jpeg','x-test-sha256':job.finals_sha256.slice(2),'if-none-match':'*'},expiresAt:new Date(expires).toISOString()};
@@ -32,18 +33,23 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
  // Compile the ACTUAL Next route exports. Only authentication/session RLS and
  // production factory are replaced, explicitly test-only; HTTP/application/SQL/
  // decode/storage/package logic stays real. ALS prevents cross-request identity.
- const contextStore=new AsyncLocalStorage();
+ const contextStore=new AsyncLocalStorage(),callbackStore=new AsyncLocalStorage(),callbacksByResponse=new WeakMap();
  const scopes=new Map([[scope.bookingId,scope]]);
  const bridgeKey='__TEST_ONLY_PHOTO_FINALS_ROUTE__';
- globalThis[bridgeKey]={contextStore,runtime,scope};
+ globalThis[bridgeKey]={contextStore,runtime,scope,schedule:fn=>callbackStore.getStore().push(fn)};
  const shim=`const b=globalThis.${bridgeKey};`;
  const routeBuild=await build({entryPoints:['app/api/photo-finals/[bookingId]/route.ts'],bundle:true,write:false,metafile:true,platform:'node',packages:'external',format:'esm',plugins:[{name:'test-only-session-and-runtime',setup(build){
+  // This legacy browser bridge has no Next invocation; the separate built
+  // after/PostgreSQL oracle certifies real after(). Here callbacks are joined
+  // by the loopback request after its response is flushed.
+  build.onResolve({filter:/^next\/server$/},()=>({path:'after',namespace:'test-after'}));
+  build.onLoad({filter:/.*/,namespace:'test-after'},()=>({loader:'js',contents:shim+'export const after=fn=>b.schedule(fn);'}));
   build.onResolve({filter:/^@\/lib\/(auth\/current-user|supabase\/server|media\/finals\/production)$/},args=>({path:args.path,namespace:'test-only'}));
-  build.onLoad({filter:/.*/,namespace:'test-only'},args=>({loader:'js',contents:shim+(args.path.endsWith('current-user')?`export async function getCurrentUserResult(){const i=b.contextStore.getStore();return i?{kind:'active',profile:{userId:i.actorId,organizationId:i.scope.organizationId,archivedAt:null,role:i.operator?'admin':'realtor'}}:{kind:'missing'};}`:args.path.endsWith('production')?`export async function createProductionFinalsRuntime(){return b.runtime;}`:`export async function getServerSupabase(){return {from(){const filters={};const q={select(){return q},eq(k,v){filters[k]=v;return q},async maybeSingle(){const i=b.contextStore.getStore();return {data:i&&filters.id===i.scope.bookingId&&filters.organization_id===i.scope.organizationId?{id:i.scope.bookingId,property_id:i.scope.propertyId,status:'editing'}:null,error:null}}};return q}};}`)}));
+  build.onLoad({filter:/.*/,namespace:'test-only'},args=>({loader:'js',contents:shim+(args.path.endsWith('current-user')?`export async function getCurrentUserResult(){const i=b.contextStore.getStore();return i?{kind:'active',profile:{userId:i.actorId,organizationId:i.scope.organizationId,archivedAt:null,role:i.operator?'admin':'realtor'}}:{kind:'missing'};}`:args.path.endsWith('production')?`export async function createProductionFinalsRuntime(){return b.runtime;}`:`export async function getServerSupabase(){return {from(){const filters={};const q={select(){return q},eq(k,v){filters[k]=v;return q},abortSignal(){return q},async maybeSingle(){const i=b.contextStore.getStore();return {data:i&&filters.id===i.scope.bookingId&&filters.organization_id===i.scope.organizationId?{id:i.scope.bookingId,property_id:i.scope.propertyId,status:'editing'}:null,error:null}}};return q}};}`)}));
  }}]});
  const routeDirectory=resolve('node_modules/.cache/photo-finals-test-'+randomUUID());await mkdir(routeDirectory,{recursive:true});const routePath=resolve(routeDirectory,'route.mjs');await writeFile(routePath,routeBuild.outputFiles[0].contents);
  const actualRoute=await import(pathToFileURL(routePath).href+'?'+randomUUID());
- const handler=(request,bookingId)=>{const identity=identify(request),target=scopes.get(bookingId);const scoped=identity&&target?{...identity,scope:{...target,organizationId:identity.scope.organizationId}}:null;return contextStore.run(scoped,()=>actualRoute[request.method](request,{params:Promise.resolve({bookingId})}));};
+ const handler=(request,bookingId)=>{const identity=identify(request),target=scopes.get(bookingId);const scoped=identity&&target?{...identity,scope:{...target,organizationId:identity.scope.organizationId}}:null;return contextStore.run(scoped,()=>callbackStore.run([],async()=>{const response=await actualRoute[request.method](request,{params:Promise.resolve({bookingId})});callbacksByResponse.set(response,callbackStore.getStore());return response;}));};
  const server=createServer(async(req,res)=>{
   try{
    const url=new URL(req.url,origin);let response;
@@ -64,8 +70,10 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
    else if(req.method==='GET'&&url.pathname==='/fixture.js')response=new Response(bundled.outputFiles[0].contents,{headers:{'content-type':'text/javascript'}});
    else if(req.method==='GET'&&url.pathname==='/fixture.css')response=new Response(css,{headers:{'content-type':'text/css'}});
    else response=new Response(null,{status:404});
+   const callbacks=callbacksByResponse.get(response)??[];
    if(failOnce&&operation===failOnce&&response.ok){failOnce='';response=Response.json({error:'Synthetic response loss after commit'},{status:503});}
    res.writeHead(response.status,Object.fromEntries(response.headers));if(response.body)for await(const chunk of response.body)res.write(chunk);res.end();
+   await Promise.all(callbacks.map(fn=>fn()));
   }catch{res.writeHead(503);res.end('Test operation denied');}
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));origin='http://127.0.0.1:'+server.address().port;
@@ -166,6 +174,6 @@ export async function browserProof({db,storage,sql,env,scope,actorId}){
   assert.equal((await fetch(secondIntent.upload.url,{method:'PUT',headers:{cookie:'session='+opSession,...secondIntent.upload.headers},body:secondBytes})).status,201);assert.equal((await (await secondPost({op:'complete',jobId:secondIntent.jobId})).json()).status,'accepted');
   const {nextRouterProof}=await import('./photo-finals-next-router.mjs');
   const nextRouter=await nextRouterProof({browser,backend:origin,session:opSession,bookingId:scope.bookingId,secondBookingId:second.bookingId,alternateSession:[...sessions].find(([,v])=>v.role==='realtor')[0],out,css});
-  const proof={nextRouter,actualNextRouteExports:true,syntheticAuthAndFactoryOnly:true,widths,uploadCount,httpCount,capabilityWrongUserHeadersSizeExpiryRevocation:true,wrongUserTenantRevokedWithdrawn:true,iguideNotNetworkFallback:true,actualResponseError:true,failedRequests};await writeFile(out+'/proof.json',JSON.stringify(proof,null,2));return proof;
+  const proof={nextRouter,actualNextRouteExports:true,syntheticAuthFactoryAndJoinedScheduler:true,widths,uploadCount,httpCount,capabilityWrongUserHeadersSizeExpiryRevocation:true,wrongUserTenantRevokedWithdrawn:true,iguideNotNetworkFallback:true,actualResponseError:true,failedRequests};await writeFile(out+'/proof.json',JSON.stringify(proof,null,2));return proof;
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));delete globalThis[bridgeKey];await rm(routeDirectory,{recursive:true,force:true});}
 }

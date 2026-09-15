@@ -1,3 +1,4 @@
+import {finalsDeadline,deadlineDatabase} from './operator-deadline.ts';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { FinalsDatabase } from './ingest.ts';
@@ -11,7 +12,7 @@ import { buildDerivativeKey, buildPackageKey, inspectMediaObjectKey, type MediaO
 import type { R2Storage } from '../storage/r2-core.ts';
 
 type Env=Readonly<Record<string,string|undefined>>;
-type Options={db:FinalsDatabase;storage:R2Storage;env:Env;scope:PhotoFinalsScope;jobId:string;workerId:string;budgets?:{totalMs?:number;heartbeatMs?:number}};
+type Options={db:FinalsDatabase;storage:R2Storage;env:Env;scope:PhotoFinalsScope;jobId:string;workerId:string;deadlines?:{work:number;settlement:number};budgets?:{totalMs?:number;heartbeatMs?:number}};
 function gate(env:Env,scope:PhotoFinalsScope){if(!finalsExecutionAllowed(env,scope))throw new Error('finals_packages_disabled');}
 function object(value:unknown):Record<string,unknown>{if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('finals_package_envelope');return value as Record<string,unknown>;}
 function text(value:unknown):string{if(typeof value!=='string')throw new Error('finals_package_envelope');return value;}
@@ -68,6 +69,15 @@ async function putZip(storage:R2Storage,entries:readonly ZipEntry[],org:string,r
  * renewal, bounded RPCs and 15-minute storage abort budget; production unapproved.
  */
 export async function processFinalRelease(o:Options):Promise<{status:'ready'|'not_claimed'}>{
+ if(!o.deadlines)return processFinalReleaseAttempt(o);
+ const work=finalsDeadline(o.deadlines.work),settlement=finalsDeadline(o.deadlines.settlement);
+ try{
+  work.check(30_000);
+  return await processFinalReleaseAttempt({...o,db:deadlineDatabase(o.db,work.signal)},
+   {signal:work.signal,check:work.check,settlementDb:deadlineDatabase(o.db,settlement.signal)});
+ }finally{work.close();settlement.close();}
+}
+async function processFinalReleaseAttempt(o:Options,execution?:{signal:AbortSignal;check:(tailMs?:number)=>void;settlementDb:FinalsDatabase}):Promise<{status:'ready'|'not_claimed'}>{
  gate(o.env,o.scope);
  const common={p_org:o.scope.organizationId,p_job:o.jobId};
  const raw=await rpc(o.db,'photo_finals_package_claim',{...common,p_booking:o.scope.bookingId,p_property:o.scope.propertyId,p_worker:o.workerId});
@@ -75,7 +85,7 @@ export async function processFinalRelease(o:Options):Promise<{status:'ready'|'no
  const claim=object(raw),job=object(claim.job),release=object(claim.release),lease=text(job.finals_lease_token);
  const fenced={...common,p_lease:lease};
  const heartbeat=()=>rpc(o.db,'photo_finals_package_heartbeat',fenced);
- const keepalive=packageLease(heartbeat,o.budgets),signal=keepalive.signal;
+ const keepalive=packageLease(heartbeat,o.budgets),signal=execution?AbortSignal.any([keepalive.signal,execution.signal]):keepalive.signal;
  try{
   if(job.id!==o.jobId||job.organization_id!==o.scope.organizationId||job.property_id!==o.scope.propertyId||job.finals_release_id!==release.id||
    release.organization_id!==o.scope.organizationId||release.property_id!==o.scope.propertyId||job.batch_id!==release.batch_id||claim.booking_id!==o.scope.bookingId||release.state!=='packaging')throw new Error('finals_package_scope');
@@ -107,8 +117,8 @@ export async function processFinalRelease(o:Options):Promise<{status:'ready'|'no
      if(checkpointKey!==buildDerivativeKey(o.scope.organizationId,item.media_version_id,1,text(stored.sha256),'jpg')||o.storage.location(checkpointKey).bucket!==stored.bucket||!Number.isSafeInteger(stored.bytes)||Number(stored.bytes)<1||Number(stored.bytes)>33_554_432)throw new Error('finals_checkpoint_invalid');
      await verifyStored(o.storage,checkpointKey,text(stored.sha256),Number(stored.bytes),signal);
     }else{
-     if(!bytes){bytes=await readOriginal(o.storage,key,item.sha256,item.byte_size,signal);await verifyFinalJpeg(bytes,item.sha256,item.byte_size);}
-     await heartbeat();const transformed=await transformFinalJpeg(bytes,kind);
+     if(!bytes){bytes=await readOriginal(o.storage,key,item.sha256,item.byte_size,signal);execution?.check(30_000);await verifyFinalJpeg(bytes,item.sha256,item.byte_size);}
+     await heartbeat();const transformed=await transformFinalJpeg(bytes,kind,{signal,check:execution?.check});
      const outputKey=buildDerivativeKey(o.scope.organizationId,item.media_version_id,1,hash(transformed.bytes),'jpg');
      await heartbeat();const output=await putJpeg(o.storage,outputKey,transformed.bytes,signal);
      stored={...output,kind,version_id:item.media_version_id,width:transformed.width,height:transformed.height};
@@ -123,12 +133,14 @@ export async function processFinalRelease(o:Options):Promise<{status:'ready'|'no
   return {status:'ready'};
  }catch(error){
   await keepalive.stop();
-  try{await rpc(o.db,'photo_finals_package_fail',fenced);}catch{throw new AggregateError([new Error('finals_package_processing_failed'),new Error('finals_package_settlement_unconfirmed')],'finals_package_recovery_required');}
+  try{await rpc(execution?.settlementDb??o.db,'photo_finals_package_fail',fenced);}catch{throw new AggregateError([new Error('finals_package_processing_failed'),new Error('finals_package_settlement_unconfirmed')],'finals_package_recovery_required');}
   throw error;
  }finally{await keepalive.stop();}
 }
 export async function dispatchFinalReleases(o:Omit<Options,'jobId'>){
- gate(o.env,o.scope);const ids=await rpc(o.db,'photo_finals_package_due',{p_org:o.scope.organizationId,p_booking:o.scope.bookingId,p_property:o.scope.propertyId});
+ gate(o.env,o.scope);
+ const admission=o.deadlines?finalsDeadline(o.deadlines.work):null;
+ let ids:unknown;try{admission?.check(30_000);ids=await rpc(o.db,'photo_finals_package_due',{p_org:o.scope.organizationId,p_booking:o.scope.bookingId,p_property:o.scope.propertyId},admission?.signal);}finally{admission?.close();}
  if(!Array.isArray(ids)||ids.length>1)throw new Error('finals_package_due_invalid');
  const results=[];for(const id of ids)results.push({jobId:text(id),...await processFinalRelease({...o,jobId:text(id)})});return results;
 }

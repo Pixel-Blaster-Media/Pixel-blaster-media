@@ -1,3 +1,4 @@
+import {finalsDeadline,deadlineDatabase} from './operator-deadline.ts';
 import { finalsExecutionAllowed } from './production-config.ts';
 import { type PhotoFinalsScope } from './config.ts';
 import { createFinalIntent, processFinalIntent, type FinalsDatabase } from './ingest.ts';
@@ -9,10 +10,13 @@ import type { R2Storage } from '../storage/r2-core.ts';
 import {inspectMediaObjectKey} from '../storage/keys.ts';
 export type FinalsIdentity = { actorId: string; scope: PhotoFinalsScope; operator: boolean };
 export type UploadCapability={url:string;headers:Record<string,string>;expiresAt:string};
-export type FinalsRuntime={budgets?:{totalMs:number};db:FinalsDatabase;env:Readonly<Record<string,string|undefined>>;storage:R2Storage;issueUpload(job:Record<string,unknown>,identity:FinalsIdentity):Promise<UploadCapability>};
+export type PackageStatus={status:'pending'|'running'|'retryable'|'needs_attention'};
+export type FinalsRuntime={readPackageStatus?(releaseId:string,signal?:AbortSignal):Promise<PackageStatus>;budgets?:{totalMs:number};db:FinalsDatabase;env:Readonly<Record<string,string|undefined>>;storage:R2Storage;issueUpload(job:Record<string,unknown>,identity:FinalsIdentity):Promise<UploadCapability>};
 export type FinalsHttpDependencies = {
- authorize(request: Request, bookingId: string): Promise<FinalsIdentity | null>;
+ authorize(request: Request, bookingId: string, signal?:AbortSignal): Promise<FinalsIdentity | null>;
  runtime(identity: FinalsIdentity): Promise<FinalsRuntime | null>;
+ /** Invocation-lifetime scheduling only; approval SQL owns durable intent. */
+ schedule?(callback:()=>Promise<void>):void;
 };
 export function finalsJson(value: unknown, status=200) {
  return Response.json(value,{status,headers:{'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
@@ -32,25 +36,39 @@ export async function boundedFinalsJson(request:Request):Promise<Record<string,u
  if(!body||typeof body!=='object'||Array.isArray(body))throw new Error('input');return body as Record<string,unknown>;
 }
 export function createFinalsHandler(deps: FinalsHttpDependencies) {
- return async (request: Request, bookingId: string): Promise<Response> => {
+ return async (request: Request, bookingId: string, enteredAt=Date.now()): Promise<Response> => {
+  const admission=request.method==='POST'?finalsDeadline(enteredAt+20_000):null;
+  const control=<T>(fn:()=>Promise<T>)=>admission?admission.wait(fn):fn();
   try {
-   const identity=await deps.authorize(request,bookingId);
+   const identity=await control(()=>deps.authorize(request,bookingId,admission?.signal));
    if(!identity)return finalsJson({error:'Sign in to an authorized workspace.'},401);
    const expectedIdentity=request.headers.get('x-finals-identity');
    if(request.method==='POST'&&expectedIdentity!==null&&expectedIdentity!==[identity.scope.organizationId,identity.actorId,identity.scope.bookingId,identity.scope.propertyId].join(':'))return finalsJson({error:'Session changed. Refresh before making changes.'},409);
-   const configured=await deps.runtime(identity);
+   const configured=await control(()=>deps.runtime(identity));
    if(!configured)return finalsJson({status:'disabled',message:'Private photo finals are unavailable. Storage, schema and runtime verification are required.'},503);
    const runtime={...configured,db:createFinalsApplicationDatabase(configured.db)};
    if(!finalsExecutionAllowed(runtime.env,identity.scope))return finalsJson({status:'disabled'},503);
-   await packageRpc(runtime.db,'photo_finals_access',{...common(identity),p_operator:identity.operator});
+   await packageRpc(runtime.db,'photo_finals_access',{...common(identity),p_operator:identity.operator},admission?.signal);
    if(request.method==='GET'){
     const state=await currentFinals(runtime,identity);
-    return await finalObjectResponse(runtime,identity,state,new URL(request.url).searchParams)??finalsJson(currentFinalsDto(state,identity));
+    const object=await finalObjectResponse(runtime,identity,state,new URL(request.url).searchParams);
+    if(object)return object;
+    let dto=currentFinalsDto(state,identity);
+    let job=identity.operator&&dto.release?.state==='packaging'?await runtime.readPackageStatus?.(dto.release.id):null;
+    if(job?.status==='needs_attention'){
+     // Finish may commit between the release and job reads. Re-read before
+     // stopping the observer so a completed job cannot strand a ready release.
+     const latest=currentFinalsDto(await currentFinals(runtime,identity),identity);
+     if(latest.release?.id!==dto.release?.id||latest.release?.state!=='packaging')job=null;
+     dto=latest;
+    }
+    return finalsJson({...dto,packageJob:job?{status:['pending','running','retryable','needs_attention'].includes(job.status)?job.status:'needs_attention'}:null});
    }
    if(request.method!=='POST')return finalsJson({error:'Unavailable operation.'},405);
    if(!identity.operator)return finalsJson({error:'Operator access required.'},403);
    if(request.headers.get('origin')!==new URL(request.url).origin)return finalsJson({error:'Same-origin request required.'},403);
-   const body=await boundedFinalsJson(request);
+   const body=await control(()=>boundedFinalsJson(request));
+   if(body.op!=='work')admission?.close();
    if(body.op==='reconcile'&&Object.keys(body).length===1){const settled=await packageRpc(runtime.db,'photo_finals_reconcile_expired',common(identity));return finalsJson({settled,...record(await packageRpc(runtime.db,'photo_finals_inventory',common(identity)))});}
    if(body.op==='inventory'&&Object.keys(body).length===1)return finalsJson(await packageRpc(runtime.db,'photo_finals_inventory',common(identity)));
    if(body.op==='revoke'&&Object.keys(body).sort().join(',')==='grantId,op'){await packageRpc(runtime.db,'photo_finals_download_revoke',{...common(identity),p_grant:id(body.grantId)});return finalsJson({status:'revoked'});}
@@ -82,10 +100,31 @@ export function createFinalsHandler(deps: FinalsHttpDependencies) {
     return finalsJson({status:'packaging'});
    }
    if(body.op==='work'&&Object.keys(body).length===1){
-    await dispatchFinalReleases({...runtime,...identity,workerId:'application-local'});
-    return finalsJson(currentFinalsDto(await currentFinals(runtime,identity),identity));
+    const state=await control(()=>currentFinals({...runtime,db:deadlineDatabase(runtime.db,admission!.signal)},identity)),release=state.release?record(state.release):null;
+    if(!release||release.state!=='packaging'||!release.approved_at||!runtime.readPackageStatus||!deps.schedule)return finalsJson({status:'needs_attention'},409);
+    const status=await control(()=>runtime.readPackageStatus!(id(release.id),admission?.signal));
+    if(!['pending','running','retryable'].includes(status.status))return finalsJson({status:'needs_attention'},409);
+    // Capture validated IDs, not the request, storage keys or service client.
+    const principal={actorId:id(identity.actorId),operator:true,scope:{organizationId:id(identity.scope.organizationId),bookingId:id(identity.scope.bookingId),propertyId:id(identity.scope.propertyId)}};
+    admission?.check();
+    deps.schedule(async()=>{
+     const workAt=Math.min(enteredAt+220_000,Date.now()+200_000),work=finalsDeadline(workAt);
+     try{
+      work.check(30_000);
+      const fresh=await work.wait(()=>deps.runtime(principal));
+      if(!fresh||!finalsExecutionAllowed(fresh.env,principal.scope))return;
+      const db=createFinalsApplicationDatabase(fresh.db);
+      await packageRpc(db,'photo_finals_access',{...common(principal),p_operator:true},work.signal);
+      work.check(30_000);
+      await dispatchFinalReleases({...fresh,db,...principal,workerId:'application-local',deadlines:{work:workAt,settlement:enteredAt+280_000}});
+     }catch{
+      // No replay or fabricated readiness: unclaimed intent / expired fenced
+      // lease remains the recovery authority, including ambiguous settlement.
+     }finally{work.close();}
+    });
+    return finalsJson({status:'packaging'},202);
    }
    return finalsJson({error:'Unavailable operation.'},400);
-  }catch{return finalsJson({error:'Photo finals could not be confirmed. Refresh before retrying.'},503);}
+  }catch{return finalsJson({error:'Photo finals could not be confirmed. Refresh before retrying.'},503);}finally{admission?.close();}
  };
 }

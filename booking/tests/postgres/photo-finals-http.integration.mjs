@@ -21,8 +21,9 @@ const env={PHOTO_FINALS_ENABLED:'true',PHOTO_FINALS_ENVIRONMENT:'synthetic-local
 const actorId=randomUUID();
 sql(`insert into profiles values ('${actorId}','${scope.organizationId}','admin','http-operator@example.invalid',null);insert into organization_members values ('${scope.organizationId}','${actorId}','admin')`);
 const storage=new R2Storage({client:new PackageLocalS3(),organizationId:scope.organizationId,buckets:{quarantine:'local-private-quarantine',masters:'local-private-masters',delivery:'local-private-delivery'}});
-let durable=false;
-const handler=createFinalsHandler({authorize:async()=>({actorId,scope,operator:true}),runtime:async()=>({db,env,storage,issueUpload:async job=>{durable=sql(`select count(*) from media_ingest_jobs where id='${job.id}'`)==='1';return {url:'http://localhost/test-only-upload',headers:{},expiresAt:new Date(Date.now()+60000).toISOString()};}})});
+let durable=false;const scheduled=[];
+const {packageJobStatus}=await import('../../lib/media/finals/operator-status.ts');
+const handler=createFinalsHandler({schedule:fn=>scheduled.push(fn),authorize:async()=>({actorId,scope,operator:true}),runtime:async()=>({db,env,storage,readPackageStatus:async releaseId=>{assert.match(releaseId,/^[a-f0-9-]{36}$/);return packageJobStatus(JSON.parse(sql(`select to_jsonb(j) from media_ingest_jobs j where finals_release_id='${releaseId}'`)));},issueUpload:async job=>{durable=sql(`select count(*) from media_ingest_jobs where id='${job.id}'`)==='1';return {url:'http://localhost/test-only-upload',headers:{},expiresAt:new Date(Date.now()+60000).toISOString()};}})});
 const requestId=randomUUID(),bytes=await sharp({create:{width:20,height:20,channels:3,background:'#123'}}).jpeg().toBuffer();
 const invoke=(body)=>handler(new Request('http://localhost/api/photo-finals/'+scope.bookingId,{method:'POST',headers:{origin:'http://localhost','content-type':'application/json'},body:JSON.stringify(body)}),scope.bookingId);
 const intentBody={op:'intent',requestId,intentId:randomUUID(),sha256:createHash('sha256').update(bytes).digest('hex'),byteSize:bytes.length};
@@ -46,7 +47,7 @@ const staleRevision=await invoke({op:'approve',releaseId:priorDraft.id,revision:
 const stale=await invoke({op:'approve',releaseId:draft.id,revision:draft.revision,manifestSha256:'0'.repeat(64)});assert.notEqual(stale.status,200);
 const approved=await invoke({op:'approve',releaseId:draft.id,revision:draft.revision,manifestSha256:draft.manifestSha256});assert.equal(approved.status,200,await approved.clone().text());
 assert.equal((await (await get()).json()).gallery,null,'incomplete release invisible');
-const worked=await invoke({op:'work'});assert.equal(worked.status,200,await worked.clone().text());
+const worked=await invoke({op:'work'});assert.equal(worked.status,202,await worked.clone().text());assert.equal(scheduled.length,1);await scheduled.shift()();
 state=await (await get()).json();assert.equal(state.gallery.items.length,1);assert.equal(state.gallery.downloads.length,2);
 for(const item of state.gallery.downloads){const r=await handler(new Request('http://localhost'+item.url),scope.bookingId);assert.equal(r.status,200,await r.clone().text());assert.equal(Buffer.from(await r.arrayBuffer()).readUInt32LE(0),0x04034b50);}
 assert.ok(!JSON.stringify(state).includes('object_key'));assert.ok(!JSON.stringify(state).includes('quarantine/'));
