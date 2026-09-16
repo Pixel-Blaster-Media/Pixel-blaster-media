@@ -9,16 +9,18 @@ export async function routeBrowserProof({handler,scope,metadata,setSlow}){
  const out=process.env.PF_EVIDENCE_DIR||'/Users/PlatoTheBot/.hermes/audits/pixel-photo-finals/resumable-download-evidence-0915';await mkdir(out,{recursive:true});
  const buildResult=await build({entryPoints:['lib/media/resumable/download.worker.ts'],bundle:true,format:'iife',platform:'browser',outfile:out+'/parent-route-worker.js',metafile:true});
  await writeFile(out+'/parent-route-worker-inputs.json',JSON.stringify(buildResult.metafile.inputs,null,2));
+ const lifecycle=await build({entryPoints:['lib/media/resumable/lifecycle.ts'],bundle:true,write:false,format:'iife',globalName:'Lifecycle',platform:'browser'});
  const ui=await build({stdin:{contents:`import React from 'react';import{createRoot}from'react-dom/client';import Download from './components/media/ResumableDownload';createRoot(document.getElementById('root')).render(<Download endpoint="/resume" identity="local-test-actor" packageId="${metadata.packageId}" packageType="originals" label="Full-resolution ZIP"/>);`,resolveDir:process.cwd(),loader:'tsx'},bundle:true,write:false,format:'esm',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'}});
  const {default:postcss}=await import('postcss'),{default:tailwind}=await import('tailwindcss');
  const css=(await postcss([tailwind({content:['components/media/ResumableDownload.tsx'],theme:{extend:{}}})]).process('@tailwind base;@tailwind components;@tailwind utilities;',{from:undefined})).css;
  let origin;
  const server=createServer(async(req,res)=>{
   try{
+   if(req.url==='/lifecycle.js'){res.setHeader('Content-Type','text/javascript');res.end(lifecycle.outputFiles[0].text);return;}
    if(req.url==='/ui'){res.setHeader('Content-Type','text/html');res.end('<meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style><main style="padding:16px;max-width:600px"><div id="root"></div></main><script type="module" src="/ui.js"></script>');return;}
    if(req.url==='/ui.js'){res.setHeader('Content-Type','text/javascript');res.end(ui.outputFiles[0].text);return;}
    if(req.url==='/worker.js'||req.url.endsWith('/download.worker.ts')){res.setHeader('Content-Type','text/javascript');res.end(await readFile(out+'/parent-route-worker.js'));return;}
-   if(req.url==='/'){res.setHeader('Content-Type','text/html');res.end('<button id="save">Save ZIP</button><script>window.events=[];window.start=m=>{window.done=null;window.w=new Worker("/worker.js");w.onmessage=e=>{events.push(e.data);if(["ready","paused","error","quota","busy","unsupported"].includes(e.data.state))window.done=e.data;};w.postMessage({op:"start",metadata:m,endpoint:"/resume"});};</script>');return;}
+   if(req.url==='/'){res.setHeader('Content-Type','text/html');res.end('<button id="save">Save ZIP</button><script src="/lifecycle.js"></script><script>window.events=[];window.start=async m=>{const epoch=await Lifecycle.captureDownloadEpoch();window.done=null;window.w=new Worker("/worker.js");w.onmessage=e=>{events.push(e.data);if(["ready","paused","error","quota","busy","unsupported","budget-exhausted"].includes(e.data.state))window.done=e.data;};w.postMessage({op:"start",metadata:m,endpoint:"/resume",epoch});};</script>');return;}
    const abort=new AbortController();req.on('aborted',()=>abort.abort());res.on('close',()=>{if(!res.writableEnded)abort.abort();});
    const parts=[];for await(const b of req)parts.push(b);
    const response=await handler(new Request(origin+req.url,{method:req.method,headers:req.headers,body:req.method==='POST'?Buffer.concat(parts):undefined,signal:abort.signal}),scope.bookingId);
@@ -46,7 +48,7 @@ export async function routeBrowserProof({handler,scope,metadata,setSlow}){
   await page.getByRole('status').filter({hasText:'Save initiated'}).waitFor();
   const uiBytes=await readFile(out+'/ui-export.zip');const {createHash}=await import('node:crypto');assert.equal(createHash('sha256').update(uiBytes).digest('hex'),metadata.packageSha256);
   await page.getByRole('button',{name:'Discard local progress',exact:true}).click();await page.getByRole('button',{name:'Prepare ZIP',exact:true}).waitFor();
-  assert.equal(await page.evaluate(async()=>{let n=0;for await(const key of (await navigator.storage.getDirectory()).keys())if(key.startsWith('pixel-resume-'))n++;return n;}),0);
+  assert.equal(await page.evaluate(async()=>{let n=0;for await(const key of (await navigator.storage.getDirectory()).keys())if(/^pixel-resume-[a-f0-9]{64}\.zip$/.test(key))n++;return n;}),0);
   const evidence={passed:true,ui:{actualComponent:true,saveInitiated:true,discardClean:true,geometry},evidenceTier:'loopback actual application handler + PostgreSQL + R2 adapter + production worker/hasher; local auth and S3 doubles; NOT built Next auth, real provider or physical iPhone',elapsed,partial,result,independent,userAgent:await page.evaluate(()=>navigator.userAgent),saveState};
   await writeFile(out+'/parent-route-browser.json',JSON.stringify(evidence,null,2));return evidence;
  }finally{setSlow(false);await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}

@@ -21,12 +21,20 @@ export function boundedFinalsFetch(origin:string,transport:typeof fetch=fetch,ti
     return new Response(null,{status:204});
    }
    reader=response.body?.getReader();
+   const budgetError=response.status===500&&(url.pathname.endsWith('/photo_finals_chunk_begin')||url.pathname.endsWith('/photo_finals_transfer_begin'));
+   const bound=budgetError?4096:2097152;
    const length=response.headers.get('content-length'),encoding=response.headers.get('content-encoding');
-   if(response.status!==200||!/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type')??'')||(encoding!==null&&encoding!=='identity')||(length!==null&&(!/^(0|[1-9][0-9]*)$/.test(length)||Number(length)>2097152)))throw new Error('finals_transport_response');
+   if((response.status!==200&&!budgetError)||!/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type')??'')||(encoding!==null&&encoding!=='identity')||(length!==null&&(!/^(0|[1-9][0-9]*)$/.test(length)||Number(length)>bound)))throw new Error('finals_transport_response');
    const chunks:Uint8Array[]=[];let bytes=0;
    if(!reader)throw new Error('finals_transport_response');
-   for(;;){signal.throwIfAborted();const next=await reader.read();if(next.done)break;bytes+=next.value.length;if(bytes>2097152)throw new Error('finals_transport_response');chunks.push(next.value);}
+   for(;;){signal.throwIfAborted();const next=await reader.read();if(next.done)break;bytes+=next.value.length;if(bytes>bound)throw new Error('finals_transport_response');chunks.push(next.value);}
    signal.throwIfAborted();if(length!==null&&bytes!==Number(length))throw new Error('finals_transport_response');
+   if(budgetError){
+    const value=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    const message=url.pathname.endsWith('/photo_finals_chunk_begin')?'finals_attempt_budget':'finals_transfer_limit';
+    if(value?.code!=='54000'||value.message!==message)throw new Error('finals_transport_response');
+    return Response.json({code:'54000',message},{status:500});
+   }
    return new Response(Buffer.concat(chunks),{status:200,headers:{'content-type':'application/json'}});
   }catch{throw new Error('finals_transport_unconfirmed');}
   finally{controller.abort();clearTimeout(timer);void reader?.cancel().catch(()=>{});}

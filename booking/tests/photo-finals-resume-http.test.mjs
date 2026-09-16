@@ -12,4 +12,14 @@ test('begin requires current session and returns bounded index DTO without priva
 test('progress uses bound session and explicit resume invokes rebind RPC',async()=>{const f=setup();for(const [request,op] of [[new Request(`http://localhost/resume?transferId=${uid(7)}`),'status'],[post({op:'resume',transferId:uid(7)}),'resume']]){const r=await f.h(request,uid(3));assert.equal(r.status,200);assert.equal(f.calls.at(-1).n,'photo_finals_transfer_'+op);assert.equal(f.calls.at(-1).a.p_transfer,uid(7));}});
 test('absolute admission includes ignored-signal auth and request abort',async()=>{for(const abort of [false,true]){let signal;const f=setup({authorize:async(_r,_b,s)=>{signal=s;return new Promise(()=>{});}}),c=new AbortController(),r=new Request('http://localhost/resume',{signal:c.signal});const pending=f.h(r,uid(3),Date.now()-9990);if(abort){await new Promise(resolve=>queueMicrotask(resolve));c.abort();}const response=await Promise.race([pending,new Promise((_,reject)=>setTimeout(()=>reject(Error('hang')),100))]);assert.equal(response.status,503);assert.equal(signal.aborted,true);}});
 import * as mod from '../lib/media/finals/resume-http.ts';
+test('only authenticated exact SQL budget failures yield typed recovery without raw detail',async()=>{
+ for(const [name,message,typed] of [['photo_finals_transfer_begin','finals_transfer_limit',true],['photo_finals_chunk_begin','finals_attempt_budget',true],['photo_finals_transfer_begin','SECRET',false]]){
+  let calls=0;
+  const runtime=async()=>({env,db:{rpc:async()=>{calls++;return {data:null,error:{code:'54000',message,details:'SECRET'}}}},storage:{}});
+  const f=setup({runtime});
+  const req=name==='photo_finals_chunk_begin'?new Request(`http://localhost/resume?transferId=${uid(7)}&index=0`):post({op:'begin',packageId:uid(5)});
+  const r=await f.h(req,uid(3));assert.equal(r.status,typed?429:503);const body=await r.json();assert.equal(body.status,typed?'budget-exhausted':undefined);assert(!JSON.stringify(body).includes('SECRET'));
+  const denied=setup({runtime,authorize:async()=>null});const before=calls;assert.equal((await denied.h(post({op:'begin',packageId:uid(5)}),uid(3))).status,401);assert.equal(calls,before);
+ }
+});
 test('disabled before auth or credential construction',async()=>{assert.equal(typeof mod.createResumeHandler,'function');const h=mod.createResumeHandler({env:{},authorize(){throw Error('auth');},runtime(){throw Error('runtime');}});assert.equal((await h(new Request('http://localhost/resume'),'bad')).status,503);});

@@ -67,7 +67,7 @@ export default function SiteHeaderMobileMenu({
           ),
         )}
         {signOutAction ? (
-          <form action={signOutAction} className="mt-1 border-t border-realtor-primary/10 pt-1">
+          <form action={signOutAction} data-pixel-logout className="mt-1 border-t border-realtor-primary/10 pt-1">
             <button
               type="submit"
               className="w-full rounded-xl px-3 py-2 text-left text-realtor-muted transition hover:bg-realtor-primary/10 hover:text-realtor-primary"

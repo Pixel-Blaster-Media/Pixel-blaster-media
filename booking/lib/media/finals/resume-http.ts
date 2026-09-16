@@ -4,7 +4,7 @@ import {currentFinals} from './application.ts';
 import {randomUUID} from 'node:crypto';
 import type {FinalsIdentity, FinalsRuntime} from './http.ts';
 import {boundedFinalsJson} from './http.ts';
-import {packageRpc} from './package-runtime.ts';
+import {packageRpc,ResumeBudgetExhausted} from './package-runtime.ts';
 import {finalsExecutionAllowed} from './production-config.ts';
 import {verifyChunkIndex,type PackageChunkIndex} from './chunk-index.ts';
 export type ResumeIdentity=FinalsIdentity & {sessionHash:string};
@@ -54,5 +54,5 @@ export function createResumeHandler(deps:ResumeDependencies){return async(reques
   }
   if(body.op!=='begin'||Object.keys(body).sort().join(',')!=='op,packageId')return json({error:'input'},400);
   return json(dto(await rpc('photo_finals_transfer_begin',{...args(identity),p_package:id(body.packageId),p_transfer:randomUUID()}),identity));
- }catch{return json({error:'Transfer could not be confirmed.'},503);}finally{clock.close();}
+ }catch(error){if(error instanceof ResumeBudgetExhausted)return json({status:'budget-exhausted',recovery:'contact-support',error:'This package has reached its transfer safety limit. Retained progress is unchanged. Contact support; retrying or starting a new transfer will not reset the limit.'},429);return json({error:'Transfer could not be confirmed.'},503);}finally{clock.close();}
 };}

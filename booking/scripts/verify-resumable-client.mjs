@@ -12,35 +12,71 @@ await access('lib/media/resumable/download.worker.ts').catch(()=>assert.fail('Pr
 execFileSync('python3',['-c',`import zipfile,hashlib\nwith zipfile.ZipFile('${out}/client-source.zip','w',compression=zipfile.ZIP_STORED) as z:\n with z.open('synthetic.bin','w') as f:\n  for i in range(128):f.write(hashlib.shake_256(str(i).encode()).digest(65536))`]);
 const source=await readFile(out+'/client-source.zip'),sha=b=>createHash('sha256').update(b).digest('hex');
 const m={transferId:'00000000-0000-4000-8000-000000000001',packageId:'00000000-0000-4000-8000-000000000002',packageSha256:sha(source),indexSha256:'a'.repeat(64),byteSize:source.length,chunkSize:131072,chunkCount:Math.ceil(source.length/131072),chunkDigests:[]};for(let i=0;i<m.chunkCount;i++)m.chunkDigests.push(sha(source.subarray(i*131072,Math.min(source.length,(i+1)*131072))));
-await build({entryPoints:['lib/media/resumable/download.worker.ts'],bundle:true,format:'iife',platform:'browser',outfile:out+'/client-worker.js',metafile:true}).then(r=>writeFile(out+'/client-bundle-inputs.json',JSON.stringify(r.metafile.inputs,null,2)));
-if(process.argv.includes('--controller'))await build({entryPoints:['lib/media/resumable/controller.ts'],bundle:true,format:'iife',globalName:'Pixel',platform:'browser',outfile:out+'/client-controller.js'});
+await build({entryPoints:['lib/media/resumable/download.worker.ts'],bundle:true,format:'iife',platform:'browser',outfile:out+'/client-worker.js',metafile:true,plugins:process.argv.includes('--mutate-epoch')?[{name:'test-only-epoch-mutation',setup(b){b.onLoad({filter:/download\.worker\.ts$/},async args=>({contents:(await readFile(args.path,'utf8')).replace('await readDownloadEpoch()!==data.epoch','false'),loader:'ts'}));}}]:[]}).then(r=>writeFile(out+'/client-bundle-inputs.json',JSON.stringify(r.metafile.inputs,null,2)));
+await build({entryPoints:['lib/media/resumable/controller.ts'],bundle:true,format:'iife',globalName:'Pixel',platform:'browser',outfile:out+'/client-controller.js'});
 let slow=false,revoked=false,fault='';const requests=[];
 const server=createServer(async(req,res)=>{
  if(req.url==='/controller.js'){res.setHeader('Content-Type','text/javascript');return res.end(await readFile(out+'/client-controller.js'));}
- if(req.url==='/worker.js'){res.setHeader('Content-Type','text/javascript');return res.end(await readFile(out+'/client-worker.js'));}
- if(req.url==='/'){res.setHeader('Content-Type','text/html');return res.end(`<button id="save">Save ZIP</button>${process.argv.includes('--controller')?'<script src="/controller.js"></script>':''}<script>window.events=[];window.start=m=>{window.done=null;window.w=new Worker('/worker.js');w.onmessage=e=>{events.push(e.data);if(['ready','paused','error','busy','quota','unsupported'].includes(e.data.state))window.done=e.data};w.postMessage({op:'start',metadata:m,endpoint:'/resume',identity:'local-session'});};</script>`);}
+ if(req.url==='/worker.js'){res.setHeader('Content-Type','text/javascript');const injected=process.argv.includes('--runtime-quota')?'QuotaExceededError':process.argv.includes('--private-storage')?'SecurityError':null;return res.end((injected?`navigator.storage.getDirectory=async()=>{throw new DOMException('SECRET storage detail','${injected}')};`:'')+await readFile(out+'/client-worker.js','utf8'));}
+ if(req.url==='/'){res.setHeader('Content-Type','text/html');return res.end(`<button id="save">Save ZIP</button><script src="/controller.js"></script><script>window.events=[];window.start=async m=>{const epoch=await Pixel.captureDownloadEpoch();window.done=null;window.w=new Worker('/worker.js');w.onmessage=e=>{events.push(e.data);if(['ready','paused','error','busy','quota','unsupported','budget-exhausted'].includes(e.data.state))window.done=e.data};w.postMessage({op:'start',metadata:m,endpoint:'/resume',identity:'local-session',epoch});};</script>`);}
  if(req.url.startsWith('/resume')){if(revoked){res.writeHead(403);return res.end();}const u=new URL(req.url,'http://localhost');if(!u.searchParams.has('index'))return res.end(JSON.stringify(m));const i=Number(u.searchParams.get('index'));requests.push(i);const start=i*131072,end=Math.min(source.length,start+131072);if(slow)await new Promise(r=>setTimeout(r,1000));let b=source.subarray(start,end);if(fault==='tamper'){b=Buffer.from(b);b[0]^=1;}res.writeHead(206,{'Content-Length':b.length,'Content-Range':`bytes ${start}-${end-1}/${source.length}`,'ETag':`"${m.packageSha256}"`,'X-Chunk-Sha256':m.chunkDigests[i]});return res.end(b);}
  res.writeHead(404);res.end();
 });await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const browser=await chromium.launch({headless:true}),context=await browser.newContext({acceptDownloads:true}),page=await context.newPage();
 try{
  await page.goto(`http://127.0.0.1:${server.address().port}`);
- if(process.argv.includes('--controller')){
+ if(process.argv.includes('--runtime-quota')||process.argv.includes('--private-storage')){
+  await page.evaluate(m=>start(m),m);await page.waitForFunction(()=>done!==null);
+  const result=await page.evaluate(()=>done);assert.equal(result.state,process.argv.includes('--runtime-quota')?'quota':'unsupported');assert(!JSON.stringify(result).includes('SECRET'));assert.equal(requests.length,0);
+  await writeFile(out+'/runtime-recovery.json',JSON.stringify(result));console.log('actual worker runtime storage recovery passed');
+ }else if(process.argv.includes('--controller')){
   await page.evaluate(()=>{window.c=new Pixel.DownloadController({endpoint:'/resume',identity:'local-session',packageType:'originals',worker:()=>new Worker('/worker.js'),report:p=>{events.push(p);window.done=p;}});document.querySelector('#save').onclick=()=>c.save().catch(()=>{});});
-  if(process.argv.includes('--lifecycle')){
+  if(process.argv.includes('--initial-session')){
+   await page.evaluate(()=>{window.stopWatch=Pixel.watchDownloadSession(async()=>'first-session',20);});
+   await page.waitForFunction(()=>localStorage.getItem('pixel-resume-owner')==='first-session');
+   await page.evaluate(()=>c.start());await page.waitForFunction(()=>['ready','error'].includes(done.state));assert.equal(await page.evaluate(()=>done.state),'ready','empty first session must not invalidate its mounted control');await page.evaluate(()=>{stopWatch();c.dispose();});console.log('initial session remains usable');
+  }else if(process.argv.includes('--cleanup')){
+   assert.equal(await page.evaluate(()=>typeof Pixel.clearRetainedDownloads),'function','global cleanup is not wired');
+   slow=true;await page.evaluate(()=>c.start());await page.waitForFunction(()=>events.some(e=>e.bytes>=131072));
+   const other=await context.newPage();await other.goto(page.url());
+   await page.evaluate(async()=>{window.oldEpoch=await Pixel.captureDownloadEpoch();});
+   await other.evaluate(()=>{window.c=new Pixel.DownloadController({endpoint:'/resume',identity:'local-session',packageType:'originals',worker:()=>new Worker('/worker.js'),report:p=>{events.push(p);window.done=p;}});});
+   await other.evaluate(()=>c.start());await other.waitForFunction(()=>done?.state==='busy');
+   await page.evaluate(async()=>{const r=await navigator.storage.getDirectory();await r.getFileHandle('unrelated.txt',{create:true});await r.getFileHandle('pixel-resume-'+ 'b'.repeat(64)+'.zip',{create:true});localStorage.setItem('pixel-resume:old-session:journal','old');});
+   await other.evaluate(()=>Pixel.clearRetainedDownloads());
+   const retained=await page.evaluate(async()=>({files:await Array.fromAsync((await navigator.storage.getDirectory()).keys()),journals:Object.keys(localStorage).filter(k=>k.startsWith('pixel-resume:'))}));
+   assert.equal(retained.files.filter(k=>/^pixel-resume-[a-f0-9]{64}\.zip$/.test(k)).length,0);assert.deepEqual(retained.journals,[]);assert(retained.files.includes('unrelated.txt'));
+   await page.evaluate(()=>c.start());assert.equal(await page.evaluate(()=>done.state),'session-changed');
+   const beforeStale=requests.length;
+   await page.evaluate(m=>{window.stale=new Worker('/worker.js');window.staleResult=null;stale.onmessage=e=>{window.staleResult=e.data;};stale.postMessage({op:'start',metadata:m,endpoint:'/resume',epoch:oldEpoch});},m);
+   await page.waitForFunction(()=>staleResult!==null);
+   assert.equal(await page.evaluate(()=>staleResult.state),'error','stale queued worker must fail epoch fence before touching disk/network');assert.equal(requests.length,beforeStale);
+   await page.evaluate(()=>stale.terminate());
+   assert.equal(await page.evaluate(()=>typeof Pixel.watchDownloadSession),'function','application session cleanup watcher missing');
+   await other.evaluate(async()=>{window.identity='session-a';window.stopWatch=Pixel.watchDownloadSession(async()=>identity,20);});
+   await other.waitForFunction(()=>localStorage.getItem('pixel-resume-owner')==='session-a');
+   await page.evaluate(async()=>{await(await navigator.storage.getDirectory()).getFileHandle('pixel-resume-'+ 'c'.repeat(64)+'.zip',{create:true});localStorage.setItem('pixel-resume:retained','old');});
+   await other.evaluate(()=>{identity='session-b';});
+   await other.waitForFunction(()=>localStorage.getItem('pixel-resume-owner')==='session-b');
+   assert.equal(await page.evaluate(()=>localStorage.getItem('pixel-resume:retained')),null);
+   await other.evaluate(async()=>{const f=document.createElement('form');f.setAttribute('data-pixel-logout','');document.body.append(f);window.logoutSeen=false;f.addEventListener('submit',e=>{e.preventDefault();window.logoutSeen=true;});navigator.storage.getDirectory=async()=>{throw new DOMException('SECRET','SecurityError');};f.requestSubmit();});
+   await other.waitForFunction(()=>logoutSeen,{}, {timeout:3000});
+   await other.evaluate(()=>stopWatch());
+   await writeFile(out+'/global-cleanup.json',JSON.stringify(retained));console.log('cross-tab active/retained cleanup, session switch and unrelated-file preservation passed');
+  }else if(process.argv.includes('--lifecycle')){
    slow=true;await page.evaluate(()=>c.start());await page.waitForFunction(()=>events.some(e=>e.bytes>=131072));
    await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
    assert.equal(await page.evaluate(()=>done.state),'paused','visibility must pause immediately');
    await page.evaluate(()=>c.changeIdentity('different-session'));await page.waitForFunction(()=>done.state==='idle');
-   assert.equal(await page.evaluate(async()=>Array.fromAsync((await navigator.storage.getDirectory()).keys())).then(a=>a.length),0);console.log('visibility pause and session cleanup passed');
+   assert.equal(await page.evaluate(async()=>Array.fromAsync((await navigator.storage.getDirectory()).keys())).then(a=>a.filter(k=>k.endsWith('.zip')).length),0);console.log('visibility pause and session cleanup passed');
   }else{
   if(process.argv.includes('--unsupported'))await page.evaluate(()=>{Object.defineProperty(navigator,'locks',{value:undefined});});
   if(process.argv.includes('--quota'))await page.evaluate(()=>{navigator.storage.estimate=async()=>({usage:0,quota:0});});
   await page.evaluate(()=>c.start());await page.waitForFunction(()=>['ready','quota','unsupported','error'].includes(done.state));
-  if(process.argv.includes('--unsupported')){assert.equal(await page.evaluate(()=>done.state),'unsupported');assert.equal(requests.length,0);console.log('unsupported capability passed');}else if(process.argv.includes('--quota')){assert.equal(await page.evaluate(()=>done.state),'quota');assert.equal(requests.length,0);console.log('quota preflight passed');}else{
+  if(process.argv.includes('--unsupported')){assert.equal(await page.evaluate(()=>done.state),'unsupported');assert.equal(requests.length,0);console.log('unsupported capability passed');}else if(process.argv.includes('--quota')){assert.equal(await page.evaluate(()=>done.state),'quota');assert.equal(requests.length,0);assert.equal(await page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('pixel-resume:')).length),1,'quota retry must reuse its authorized transfer');console.log('quota preflight passed');}else{
   revoked=true;await page.click('#save');await page.waitForFunction(()=>done.state==='error');assert.equal(await page.evaluate(()=>events.some(e=>e.state==='save-initiated')),false);
   revoked=false;await page.evaluate(()=>c.start());await page.waitForFunction(()=>done.state==='ready');const dp=page.waitForEvent('download');await page.click('#save');await (await dp).saveAs(out+'/client-export.zip');assert.equal(await page.evaluate(()=>done.state),'save-initiated');
-  await page.evaluate(()=>c.discard());assert.equal(await page.evaluate(async()=>{const root=await navigator.storage.getDirectory();return Array.fromAsync(root.keys());}).then(x=>x.filter(x=>x.startsWith('pixel-resume-')).length),0);
+  await page.evaluate(()=>c.discard());assert.equal(await page.evaluate(async()=>{const root=await navigator.storage.getDirectory();return Array.fromAsync(root.keys());}).then(x=>x.filter(x=>/^pixel-resume-[a-f0-9]{64}\.zip$/.test(x)).length),0);
   console.log('controller fresh authority, disk-backed Save, discard passed');
   }
  }

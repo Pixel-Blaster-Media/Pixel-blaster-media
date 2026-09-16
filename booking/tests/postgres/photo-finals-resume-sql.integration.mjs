@@ -32,6 +32,8 @@ await processFinalRelease({db,storage,env,scope,jobId:approved.job_id,workerId:'
 assert.equal(sql('select count(*) from media_package_chunk_indexes'),'2');
 const pkg=JSON.parse(sql('select to_jsonb(p) from media_packages p order by package_type limit 1'));
 const auth={p_org:scope.organizationId,p_actor:actorId,p_booking:scope.bookingId,p_property:scope.propertyId,p_operator:true,p_session:'a'.repeat(64)};
+const {resumeConcurrency}=await import('./photo-finals-resume-concurrency.mjs');
+await resumeConcurrency({auth,pkg,release,actorId});
 const transferId=randomUUID();
 const transfer=call('photo_finals_transfer_begin',{...auth,p_package:pkg.id,p_transfer:transferId});
 assert.equal(transfer.transfer.id,transferId);assert.equal(transfer.index.chunk_size,131072);

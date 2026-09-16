@@ -1,5 +1,7 @@
 import type {FinalsDatabase} from './ingest.ts';
 
+export class ResumeBudgetExhausted extends Error {}
+
 /** Abort PostgREST transport when supported, and bound even non-cancellable local
  * adapters. A timeout is ambiguous, never a claim that SQL rolled back. Exact
  * job leases/checkpoints fence late SQL and make the next claim recoverable.
@@ -15,7 +17,12 @@ export async function packageRpc(db:FinalsDatabase,name:string,args:Record<strin
   const result='abortSignal' in request && typeof request.abortSignal==='function'?request.abortSignal(signal):request;
   const aborted=new Promise<never>((_,reject)=>{onAbort=()=>reject(signal.reason);signal.addEventListener('abort',onAbort,{once:true});if(signal.aborted)onAbort();});
   const r=await Promise.race([Promise.resolve(result),aborted]);
-  if(r.error)throw new Error(`finals_package_rpc_failed:${name}`);return r.data as unknown;
+  if(r.error){
+   const e=r.error as {code?:unknown;message?:unknown};
+   // These SQL branches execute only after locked current authority checks.
+   if(e.code==='54000'&&((name==='photo_finals_transfer_begin'&&e.message==='finals_transfer_limit')||(name==='photo_finals_chunk_begin'&&e.message==='finals_attempt_budget')))throw new ResumeBudgetExhausted();
+   throw new Error(`finals_package_rpc_failed:${name}`);
+  }return r.data as unknown;
  }finally{clearTimeout(timer);signal.removeEventListener('abort',onAbort);}
 }
 

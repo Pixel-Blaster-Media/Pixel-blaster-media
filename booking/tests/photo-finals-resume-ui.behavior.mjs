@@ -12,6 +12,16 @@ test('workspace only replaces indexed Pixel anchors and preserves iGUIDE precede
  }finally{if(view)await act(async()=>view.unmount());}}
  }finally{Object.assign(globalThis,original);}
 });
+test('budget-exhausted control offers support, not another charged retry',async()=>{
+ const {DownloadController}=await import('../lib/media/resumable/controller.ts');const originalStart=DownloadController.prototype.start;
+ const original=globalThis.document;globalThis.document={addEventListener(){},removeEventListener(){}};
+ DownloadController.prototype.start=async function(){this.options.report({state:'budget-exhausted',bytes:0,error:'Contact support. New transfers cannot reset the limit.'});};
+ const m=await import('../components/media/ResumableDownload.tsx');let view;
+ try{await act(async()=>{view=create(React.createElement(m.default,{endpoint:'/resume',identity:'actor',packageId:'x',packageType:'originals',label:'ZIP'}));});await act(async()=>view.root.findAllByType('button')[0].props.onClick());
+ assert.equal(view.root.findAllByType('button').filter(b=>JSON.stringify(b.children).includes('Resume')).length,0);assert.ok(view.root.findAllByType('a').some(a=>a.props.href==='mailto:info@pixelblastermedia.com'));
+ }finally{if(view)await act(async()=>view.unmount());DownloadController.prototype.start=originalStart;globalThis.document=original;}
+});
+
 test('resumable control starts explicitly and labels Save as initiation not receipt',async()=>{
  const m=await import('../components/media/ResumableDownload.tsx').catch(()=>({}));assert.equal(typeof m.default,'function','download control missing');
  const original=globalThis.document;globalThis.document={addEventListener(){},removeEventListener(){}};

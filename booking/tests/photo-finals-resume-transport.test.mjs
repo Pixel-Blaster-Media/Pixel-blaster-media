@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {boundedFinalsFetch} from '../lib/media/finals/transport.ts';
+test('exact budget errors survive production transport without raw details',async()=>{
+ const origin='https://dddddddddddddddddddd.supabase.co';
+ const transport=boundedFinalsFetch(origin,async()=>Response.json({code:'54000',message:'finals_attempt_budget',details:'SECRET'},{status:500}));
+ const response=await transport(origin+'/rest/v1/rpc/photo_finals_chunk_begin',{method:'POST',body:'{}'});
+ assert.equal(response.status,500);assert.deepEqual(await response.json(),{code:'54000',message:'finals_attempt_budget'});
+ await assert.rejects(transport(origin+'/rest/v1/rpc/photo_finals_transfer_begin',{method:'POST',body:'{}'}));
+});
+
 test('index discovery and publication targets traverse the real bounded RPC allowlist',async()=>{
  const origin='https://dddddddddddddddddddd.supabase.co';let calls=0;
  const transport=boundedFinalsFetch(origin,async()=>{calls++;return Response.json(null);});

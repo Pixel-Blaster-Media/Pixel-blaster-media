@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import AuthSessionHandler from "./AuthSessionHandler";
+import DownloadSessionBoundary from "./DownloadSessionBoundary";
 import SiteHeaderMobileMenu, {
   type SiteNavItem,
 } from "./_components/SiteHeaderMobileMenu";
@@ -56,6 +57,7 @@ export default async function RootLayout({
         style={brand ? organizationThemeStyle(brand) : undefined}
       >
         <AuthSessionHandler />
+        <DownloadSessionBoundary enabled={process.env.PHOTO_FINALS_RESUMABLE_ENABLED === '1'} />
         <PwaClient userId={user?.userId ?? null} />
         <header className="site-header relative z-[150] border-b border-white/5">
           <div className="site-header-inner mx-auto flex max-w-6xl items-center justify-between gap-3 px-6 py-4">
@@ -104,7 +106,7 @@ export default async function RootLayout({
                 ),
               )}
               {user ? (
-                <form action={signOut}>
+                <form action={signOut} data-pixel-logout>
                   <button type="submit" className="hover:text-white">
                     Sign out
                   </button>
