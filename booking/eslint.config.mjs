@@ -2,7 +2,10 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 
 export default defineConfig([
-  ...nextVitals,
+  // Next's TypeScript override omits ESM declaration files; retain its parser/rules.
+  ...nextVitals.map((config) => config.name === "next/typescript"
+    ? { ...config, files: [...config.files, "**/*.d.mts"] }
+    : config),
   {
     linterOptions: {
       reportUnusedDisableDirectives: "off",
