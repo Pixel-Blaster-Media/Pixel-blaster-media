@@ -39,9 +39,9 @@
     "verify:auth-provisioning": "tsx scripts/verify-auth-provisioning.ts"
   },
   "dependencies": {
-    "@aws-crypto/sha256-js": "5.2.0",
     "@aws-sdk/client-s3": "^3.1065.0",
     "@aws-sdk/s3-request-presigner": "^3.1065.0",
+    "@noble/hashes": "2.4.0",
     "@smithy/node-http-handler": "^4.12.1",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
@@ -69,7 +69,7 @@
     "typescript": "^5.6.2"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=20.19.0"
   },
   "overrides": {
     "postcss": "^8.5.26"
