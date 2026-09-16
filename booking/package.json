@@ -39,6 +39,7 @@
     "verify:auth-provisioning": "tsx scripts/verify-auth-provisioning.ts"
   },
   "dependencies": {
+    "@aws-crypto/sha256-js": "5.2.0",
     "@aws-sdk/client-s3": "^3.1065.0",
     "@aws-sdk/s3-request-presigner": "^3.1065.0",
     "@smithy/node-http-handler": "^4.12.1",
@@ -60,6 +61,7 @@
     "autoprefixer": "^10.4.20",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.3.3",
+    "playwright": "1.55.0",
     "postcss": "^8.5.26",
     "react-test-renderer": "^19.2.8",
     "tailwindcss": "^3.4.13",

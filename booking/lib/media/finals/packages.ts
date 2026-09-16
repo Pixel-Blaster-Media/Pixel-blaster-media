@@ -1,3 +1,4 @@
+import { ChunkIndexHasher,makeChunkIndex,type ChunkIndexBinding,type PackageChunkIndex } from './chunk-index.ts';
 import {finalsDeadline,deadlineDatabase} from './operator-deadline.ts';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
@@ -38,8 +39,8 @@ async function readOriginal(storage:R2Storage,key:MediaObjectKey,sha:string,size
   if(count!==size)throw new Error('finals_master_short');return Buffer.concat(chunks,count);
  }finally{d.body.destroy();}
 }
-async function verifyStored(storage:R2Storage,key:MediaObjectKey,sha:string,size:number,signal:AbortSignal){
- const d=await storage.getVerified(key,signal);try{if(d.sha256!==sha||d.bytes!==size)throw new Error('finals_output_identity');let count=0;for await(const chunk of d.body){signal.throwIfAborted();count+=chunk.length;}if(count!==size)throw new Error('finals_output_short');}finally{d.body.destroy();}
+async function verifyStored(storage:R2Storage,key:MediaObjectKey,sha:string,size:number,signal:AbortSignal,indexHasher?:ChunkIndexHasher){
+ const d=await storage.getVerified(key,signal);try{if(d.sha256!==sha||d.bytes!==size)throw new Error('finals_output_identity');let count=0;for await(const chunk of d.body){signal.throwIfAborted();count+=chunk.length;indexHasher?.update(chunk);}if(count!==size)throw new Error('finals_output_short');}finally{d.body.destroy();}
 }
 async function putJpeg(storage:R2Storage,key:MediaObjectKey,bytes:Buffer,signal:AbortSignal){
  const sha=hash(bytes);let writeError:unknown;
@@ -48,9 +49,9 @@ async function putJpeg(storage:R2Storage,key:MediaObjectKey,bytes:Buffer,signal:
  return {key,sha256:sha,bytes:bytes.length,bucket:storage.location(key).bucket};
 }
 function zipEntry(storage:R2Storage,name:string,key:MediaObjectKey,sha:string,size:number,signal:AbortSignal):ZipEntry{return {name,load:()=>readOriginal(storage,key,sha,size,signal)};}
-async function putZip(storage:R2Storage,entries:readonly ZipEntry[],org:string,releaseId:string,kind:'full_res_zip'|'mls_zip',signal:AbortSignal){
- let size=0;const h=createHash('sha256');
- for await(const chunk of streamStoredZip(entries,signal)){h.update(chunk);size+=chunk.length;}
+async function putZip(storage:R2Storage,entries:readonly ZipEntry[],org:string,releaseId:string,kind:'full_res_zip'|'mls_zip',signal:AbortSignal,binding?:ChunkIndexBinding){
+ let size=0;const h=createHash('sha256'),indexHasher=binding?new ChunkIndexHasher():undefined;
+ for await(const chunk of streamStoredZip(entries,signal)){h.update(chunk);indexHasher?.update(chunk);size+=chunk.length;}
  if(size<1||size>1_100_000_000)throw new Error('finals_zip_bound');
  const sha=h.digest('hex');
  // Storage's canonical parser binds the suffix to actual object bytes for every
@@ -59,8 +60,11 @@ async function putZip(storage:R2Storage,entries:readonly ZipEntry[],org:string,r
  const parts=()=>streamStoredZip(entries,signal);
  let writeError:unknown;
  try{await storage.putMultipartCreateOnly({key,parts:parts(),sha256:sha,expectedBytes:size,contentType:'application/zip',signal});}catch(e){writeError=e;}
- try{await verifyStored(storage,key,sha,size,signal);}catch{throw new Error(writeError?'finals_zip_write_unverified':'finals_zip_read_unverified');}
- return {kind,key,sha256:sha,bytes:size,bucket:storage.location(key).bucket};
+ const storedHasher=binding?new ChunkIndexHasher():undefined;
+ try{await verifyStored(storage,key,sha,size,signal,storedHasher);}catch{throw new Error(writeError?'finals_zip_write_unverified':'finals_zip_read_unverified');}
+ const emitted=indexHasher?.finish(),stored=storedHasher?.finish();
+ if(emitted&&!isDeepStrictEqual(emitted,stored))throw new Error('finals_index_stored_mismatch');
+ return {kind,key,sha256:sha,bytes:size,bucket:storage.location(key).bucket,index:binding&&emitted?makeChunkIndex(binding,emitted):undefined};
 }
 
 /** Local, operator-invoked sequential processor. Verified per-photo checkpoints
@@ -128,8 +132,16 @@ async function processFinalReleaseAttempt(o:Options,execution?:{signal:AbortSign
     if(kind==='mls')mlsZip.push(zipEntry(o.storage,item.display_filename,inspectMediaObjectKey(text(stored.key),o.scope.organizationId).key,text(stored.sha256),Number(stored.bytes),signal));
    }
   }
-  for(const [kind,entries] of [['full_res_zip',full],['mls_zip',mlsZip]] as const){await heartbeat();evidence.push({...await putZip(o.storage,entries,o.scope.organizationId,text(release.id),kind,signal),entries:validated.manifest.items.length});}
-  await keepalive.stop();signal.throwIfAborted();await heartbeat();await rpc(o.db,'photo_finals_package_finish',{...fenced,p_evidence:evidence},signal);
+  const indexed=o.env.PHOTO_FINALS_RESUMABLE_ENABLED==='1',indexes:PackageChunkIndex[]=[];
+  const targets=indexed?await rpc(o.db,'photo_finals_package_index_targets',fenced,signal):null;
+  if(indexed&&(!Array.isArray(targets)||targets.length!==2))throw new Error('finals_index_targets');
+  for(const [kind,entries] of [['full_res_zip',full],['mls_zip',mlsZip]] as const){
+   await heartbeat();const target=Array.isArray(targets)?object(targets.find(x=>object(x).package_type===kind)):null;
+   const binding=target?{organization_id:o.scope.organizationId,package_id:text(target.id),release_id:text(release.id),manifest_sha256:text(release.manifest_sha256).slice(2)}:undefined;
+   const {index,...output}=await putZip(o.storage,entries,o.scope.organizationId,text(release.id),kind,signal,binding);
+   if(index)indexes.push(index);evidence.push({...output,entries:validated.manifest.items.length});
+  }
+  await keepalive.stop();signal.throwIfAborted();await heartbeat();await rpc(o.db,indexed?'photo_finals_package_finish_indexed':'photo_finals_package_finish',{...fenced,p_evidence:evidence,...(indexed?{p_indexes:indexes}:{})},signal);
   return {status:'ready'};
  }catch(error){
   await keepalive.stop();

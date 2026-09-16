@@ -1,3 +1,4 @@
+import {resumeAvailability} from './resume-availability.ts';
 import {finalsDeadline,deadlineDatabase} from './operator-deadline.ts';
 import { finalsExecutionAllowed } from './production-config.ts';
 import { type PhotoFinalsScope } from './config.ts';
@@ -62,7 +63,8 @@ export function createFinalsHandler(deps: FinalsHttpDependencies) {
      if(latest.release?.id!==dto.release?.id||latest.release?.state!=='packaging')job=null;
      dto=latest;
     }
-    return finalsJson({...dto,packageJob:job?{status:['pending','running','retryable','needs_attention'].includes(job.status)?job.status:'needs_attention'}:null});
+    const resumable=await resumeAvailability(runtime,identity,state);
+    return finalsJson({...dto,...(resumable?{resumable}:{}),packageJob:job?{status:['pending','running','retryable','needs_attention'].includes(job.status)?job.status:'needs_attention'}:null});
    }
    if(request.method!=='POST')return finalsJson({error:'Unavailable operation.'},405);
    if(!identity.operator)return finalsJson({error:'Operator access required.'},403);

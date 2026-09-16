@@ -76,6 +76,14 @@ function assertNotAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw abortReason(signal);
 }
 
+async function abortableStorageWait<T>(pending: Promise<T>, signal?: AbortSignal): Promise<T> {
+  assertNotAborted(signal);
+  if (!signal) return pending;
+  let abort: () => void = () => {};
+  try { return await Promise.race([pending, new Promise<never>((_, reject) => { abort = () => reject(abortReason(signal)); signal.addEventListener('abort', abort, {once:true}); if(signal.aborted) abort(); })]); }
+  finally { signal.removeEventListener('abort', abort); }
+}
+
 export class R2Storage {
   private readonly client: S3CommandClient;
   private readonly organizationId: string;
@@ -319,6 +327,30 @@ export class R2Storage {
       sha256,
       etag: result.ETag ?? null,
     };
+  }
+
+  /** Separate bounded range boundary; never exposes partially verified bytes. */
+  async getVerifiedPackageChunk(input: {key: MediaObjectKey; packageSha256: string; totalBytes: number; chunkIndex: number; chunkSha256: string; signal?: AbortSignal}): Promise<Buffer> {
+    const location = this.resolve(input.key);
+    if (location.objectClass !== 'packages' || location.keySha256 !== safeSha256(input.packageSha256) || !SHA256.test(input.chunkSha256) || !Number.isSafeInteger(input.totalBytes) || input.totalBytes < 1 || input.totalBytes > 1100000000 || !Number.isSafeInteger(input.chunkIndex) || input.chunkIndex < 0 || input.chunkIndex >= Math.ceil(input.totalBytes / 131072)) throw new Error('chunk_identity');
+    assertNotAborted(input.signal);
+    const start = input.chunkIndex * 131072;
+    const length = Math.min(131072, input.totalBytes - start);
+    const send = this.client.send(new GetObjectCommand({Bucket: location.bucket, Key: location.key, Range: `bytes=${start}-${start + length - 1}`}), {abortSignal: input.signal});
+    // An SDK ignoring cancellation must not keep admission alive; late bodies are destroyed.
+    void send.then(r => { if (input.signal?.aborted) (r.Body as unknown as {destroy?(): void})?.destroy?.(); }, () => {});
+    const result = await abortableStorageWait(send, input.signal);
+    const body = result.Body as unknown as AsyncIterable<Buffer> & {destroy(): void};
+    try {
+      if (!body || typeof body.destroy !== 'function' || typeof body[Symbol.asyncIterator] !== 'function') throw new Error('chunk_body');
+      if (result.$metadata.httpStatusCode !== 206 || result.ContentRange !== `bytes ${start}-${start + length - 1}/${input.totalBytes}` || result.ContentLength !== length || result.Metadata?.sha256 !== input.packageSha256) throw new Error('chunk_metadata');
+      const output = Buffer.alloc(length); let offset = 0;
+      const iterator = body[Symbol.asyncIterator]();
+      for (;;) { const next = await abortableStorageWait(iterator.next(), input.signal); if(next.done) break; const part = next.value; if (!Buffer.isBuffer(part) || part.length > length - offset) throw new Error('chunk_length'); output.set(part, offset); offset += part.length; }
+      assertNotAborted(input.signal);
+      if (offset !== length || createHash('sha256').update(output).digest('hex') !== input.chunkSha256) throw new Error('chunk_integrity');
+      return output;
+    } finally { body?.destroy?.(); }
   }
 
   async getVerified(key: MediaObjectKey, signal?: AbortSignal): Promise<{

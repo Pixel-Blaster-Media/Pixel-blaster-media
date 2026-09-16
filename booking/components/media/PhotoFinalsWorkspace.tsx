@@ -3,12 +3,13 @@
 
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {startFinalsPolling} from '@/lib/media/finals/operator-polling';
+import ResumableDownload from './ResumableDownload';
 import FinalsGallery from './FinalsGallery';
 import {useFinalsDirty} from './FinalsNavigationOwner';
 import {rememberUpload} from '@/lib/media/finals/upload-journal';
 import {selectDeliverySources,type DeliverySourceCandidate} from '@/lib/booking/delivery-source-policy';
 
-type State={packageJob?:{status:'pending'|'running'|'retryable'|'needs_attention'}|null;status:'enabled';recoveryKey:string|null;batchId:string|null;revision:number;release:{id:string;state:string;revision:number}|null;versions:{id:string;status:string;previewUrl:string|null;width:number|null;height:number|null}[];gallery:{releaseId:string;items:{id:string;url:string}[];downloads:DeliverySourceCandidate[]}|null};
+type State={resumable?:{identity:string;packageIds:string[]};packageJob?:{status:'pending'|'running'|'retryable'|'needs_attention'}|null;status:'enabled';recoveryKey:string|null;batchId:string|null;revision:number;release:{id:string;state:string;revision:number}|null;versions:{id:string;status:string;previewUrl:string|null;width:number|null;height:number|null}[];gallery:{releaseId:string;items:{id:string;url:string}[];downloads:DeliverySourceCandidate[]}|null};
 type Receipt={id:string;revision:number;manifestSha256:string};
 const button='min-h-11 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 disabled:opacity-50';
 /** Keyed state prevents a booking switch from carrying another booking's draft. */
@@ -98,6 +99,9 @@ function Workspace({bookingId,operator=false,incumbent=[]}:{bookingId:string;ope
    {state.release?.state==='packaging'&&state.packageJob?.status!=='needs_attention'&&<button className={button} disabled={busy} onClick={()=>void run(async()=>{const owner=state.recoveryKey;const result=await post({op:'work'});if(result.status!=='packaging')throw new Error('Scheduling unconfirmed');if(!live.current||identityKey.current!==owner)return;setState(current=>current?{...current,packageJob:{status:'pending'}}:current);setPollGeneration(n=>n+1);setMessage('Preparation requested for the saved approved job. Checking status; this is not confirmation that packages are ready. You may leave without cancelling the job.');})}>Prepare private packages</button>}</div>
   </>}
   {state?.gallery&&<FinalsGallery key={state.gallery.releaseId} items={state.gallery.items}/> }
-  {!!downloads.length&&<div className="flex flex-wrap gap-2">{downloads.map(d=><a key={d.slot??d.url} href={d.url} className={button}>{d.label}</a>)}</div>}
+  {!!downloads.length&&<div className="flex flex-wrap gap-2">{downloads.map(d=>{
+   const packageId=d.url.startsWith(endpoint+'?download=')?d.url.slice((endpoint+'?download=').length):null;
+   return packageId&&d.source==='pixel_release'&&state?.resumable?.packageIds.includes(packageId)?<ResumableDownload key={state.resumable.identity+':'+packageId} endpoint={endpoint+'/resume'} identity={state.resumable.identity} packageId={packageId} packageType={d.slot==='photos_mls'?'web':'originals'} label={d.label}/>:<a key={d.slot??d.url} href={d.url} className={button}>{d.label}</a>;
+  })}</div>}
  </section>;
 }

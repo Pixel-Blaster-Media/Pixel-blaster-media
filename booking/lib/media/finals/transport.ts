@@ -7,7 +7,7 @@ export function boundedFinalsFetch(origin:string,transport:typeof fetch=fetch,ti
  if(!/^https:\/\/[a-z0-9]{20}\.supabase\.co$/.test(origin)||!Number.isInteger(timeoutMs)||timeoutMs<1||timeoutMs>10_000)throw new Error('finals_transport_config');
  return async(input,init)=>{
   const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url);
-  if(url.origin!==origin||url.search||url.hash||url.username||url.password||!url.pathname.startsWith('/rest/v1/rpc/')||!FINALS_OPERATIONS.has(url.pathname.slice('/rest/v1/rpc/'.length))||init?.method!=='POST'||typeof init.body!=='string'||Buffer.byteLength(init.body)>262144)throw new Error('finals_transport_request');
+  if(url.origin!==origin||url.search||url.hash||url.username||url.password||!url.pathname.startsWith('/rest/v1/rpc/')||!FINALS_OPERATIONS.has(url.pathname.slice('/rest/v1/rpc/'.length))||init?.method!=='POST'||typeof init.body!=='string'||Buffer.byteLength(init.body)>(url.pathname==='/rest/v1/rpc/photo_finals_package_finish_indexed'?2097152:262144))throw new Error('finals_transport_request');
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
   const signal=init.signal?AbortSignal.any([init.signal,controller.signal]):controller.signal;
   let reader:ReadableStreamDefaultReader<Uint8Array>|undefined;
@@ -16,7 +16,7 @@ export function boundedFinalsFetch(origin:string,transport:typeof fetch=fetch,ti
    const response=await transport(url,{...init,redirect:'error',cache:'no-store',signal,headers:{...Object.fromEntries(new Headers(init.headers)),Accept:'application/json','Accept-Encoding':'identity'}});
    signal.throwIfAborted();
    if(response.status===204){
-    const voidOps=new Set(['access','stage','fail','download_revoke','package_heartbeat','package_checkpoint','package_finish','package_fail'].map(n=>'photo_finals_'+n));
+    const voidOps=new Set(['access','stage','fail','download_revoke','package_heartbeat','package_checkpoint','package_finish','package_finish_indexed','package_fail'].map(n=>'photo_finals_'+n));
     if(!voidOps.has(url.pathname.slice('/rest/v1/rpc/'.length))||response.body!==null)throw new Error('finals_transport_response');
     return new Response(null,{status:204});
    }

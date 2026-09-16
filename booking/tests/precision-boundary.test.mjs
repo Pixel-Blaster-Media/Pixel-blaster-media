@@ -39,7 +39,7 @@ test('historical skin changes remain exact after bounded finals UI and OTP lifec
   // Finals UI and ConfirmForm's separately tested OTP lifecycle fix are not
   // part of the earlier presentation-only release.
   const presentationFiles = files.map(f => f.replace(/^booking\//, ''))
-    .filter(f => !['app/portal/[propertyId]/page.tsx', 'components/media/PhotoFinalsWorkspace.tsx', 'components/media/FinalsGallery.tsx', 'components/media/FinalsNavigationOwner.tsx', 'app/book/confirm/ConfirmForm.tsx'].includes(f));
+    .filter(f => !['app/portal/[propertyId]/page.tsx', 'components/media/PhotoFinalsWorkspace.tsx', 'components/media/ResumableDownload.tsx', 'components/media/FinalsGallery.tsx', 'components/media/FinalsNavigationOwner.tsx', 'app/book/confirm/ConfirmForm.tsx'].includes(f));
   assert.deepEqual(presentationFiles.sort(), Object.keys(changes).sort());
   for (const [file, replacements] of Object.entries(changes)) {
     let candidate = beforeFinalsUi(file,read(file));
