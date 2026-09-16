@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Local by default. No dotenv loading, session provisioning, retry or reset.
 import {constants} from 'node:fs';
+import {SMOKE_ADMISSION_FIELDS, SMOKE_ADMISSION_HEADER, smokeAdmissionSha256} from '../lib/media/finals/operator-smoke-binding.mjs';
 import {open, lstat, realpath} from 'node:fs/promises';
 import {dirname, resolve, isAbsolute} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -26,7 +27,7 @@ async function protectedText(path) {
 export async function prepareHostedSmoke({authorizationFile,cookieFile}) {
   const ticket=JSON.parse(await protectedText(authorizationFile)), a=ticket.admission;
   check(ticket.authorization==='separately-authorized-one-shot-hosted-smoke-v1' && Object.keys(ticket).length===2 && a);
-  const keys=['version','issuedAt','expiresAt','runId','actorId','organizationId','origin','claimKey','objectKey','resourceSha256'];
+  const keys=SMOKE_ADMISSION_FIELDS;
   check(Object.keys(a).length===keys.length && keys.every(k=>typeof a[k]==='string' && a[k].length<=512));
   check(a.version==='non-certifying-storage-smoke-v1' && a.origin==='https://pixelblastermedia.com');
   const now=Date.now(),issued=Date.parse(a.issuedAt),expires=Date.parse(a.expiresAt);
@@ -35,9 +36,9 @@ export async function prepareHostedSmoke({authorizationFile,cookieFile}) {
   const prefix=`operator-smoke/v1/${a.organizationId}/${a.runId}`;
   check(a.claimKey===prefix+'/claim.json' && a.objectKey===prefix+'/payload.bin');
   const cookie=await protectedText(cookieFile);check(cookie.length<=8192 && /^[\x20-\x7e]+$/.test(cookie) && cookie.includes('='));
-  return {origin:a.origin,registration:a,cookie};
+  return {origin:a.origin,registration:a,admissionSha256:smokeAdmissionSha256(a),cookie};
 }
-function responseOnce(origin, headers) {
+function responseOnce(origin, headers, admissionSha256) {
   return new Promise((yes,no)=>{
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
     const fail=()=>{clearTimeout(timer);no(new Error('operator_smoke_stop_unconfirmed'));};
@@ -55,8 +56,9 @@ function responseOnce(origin, headers) {
         check(res.statusCode===503?['stop','not-admitted'].includes(dto.status):dto.status===statuses[res.statusCode]);
         const result={status:dto.status};
         if(res.statusCode===200){
+          check(typeof admissionSha256==='string' && dto.admissionSha256===admissionSha256);
           check(dto.certified===false&&dto.payloadBytes===65536&&dto.rangeBytes===1024&&dto.operations===5&&Number.isInteger(dto.uploadBytes)&&dto.uploadBytes>131072&&dto.uploadBytes<=132096);
-          Object.assign(result,{certified:false,payloadBytes:65536,rangeBytes:1024,operations:5,uploadBytes:dto.uploadBytes});
+          Object.assign(result,{admissionSha256,certified:false,payloadBytes:65536,rangeBytes:1024,operations:5,uploadBytes:dto.uploadBytes});
         }
         clearTimeout(timer);yes(result);
       }catch{res.destroy();req.destroy();fail();}})();
@@ -72,12 +74,12 @@ export async function runOperatorSmoke({origin='http://127.0.0.1:3000',journal,m
   const file=await journalFile(journal);
   const append=async row=>{await file.write(JSON.stringify(row)+'\n');await file.sync();};
   try {
-    await append({state:'attempt-sealed',mode,origin,at:new Date().toISOString(),retry:false,...(hosted?{registration:hosted.registration}:{})});
+    await append({state:'attempt-sealed',mode,origin,at:new Date().toISOString(),retry:false,...(hosted?{registration:hosted.registration,admissionSha256:hosted.admissionSha256}:{})});
     // Durably retain the new directory entry before any network side effect.
     const directory=await open(dirname(journal),constants.O_RDONLY);try{await directory.sync();}finally{await directory.close();}
     try {
       if(hosted)check(Date.now()<Date.parse(hosted.registration.expiresAt));
-      const result=await responseOnce(origin,hosted?{cookie:hosted.cookie}:{});
+      const result=await responseOnce(origin,hosted?{cookie:hosted.cookie,[SMOKE_ADMISSION_HEADER]:hosted.admissionSha256}:{},hosted?.admissionSha256);
       await append({state:'finished-no-retry',result});return result;
     }catch{await append({state:'STOP-unconfirmed-no-retry'});throw new Error('operator_smoke_stop_unconfirmed');}
   }finally{await file.close();}

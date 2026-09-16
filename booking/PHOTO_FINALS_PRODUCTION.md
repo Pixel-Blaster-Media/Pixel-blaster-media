@@ -86,6 +86,14 @@ A retained atomic create-only claim fences concurrent/replayed payload work acro
 
 Never delete either key in this route. Both exact registered keys must be retained as possible residue even after failure. Disable/remove the smoke enable flag, admission/resource records and separate smoke credentials after the authorized observation; preserve evidence and registered keys for the separately admitted retention/disposition process. Configuration removal does not prove in-flight quiescence or cleanup. Do not expire/remove the claim while its admission can still be used. No successful cleanup or actual lifecycle expiry is claimed.
 
+### Exact ticket / server binding
+
+An armed request must carry `x-photo-finals-smoke-admission-sha256`: exactly 64 lowercase hex characters. It is an equality assertion only, never authority to choose resources. Missing, malformed or unequal assertions return `400 invalid-request` before Auth or storage construction. The disabled route still returns 404 without admission or Auth.
+
+The digest is SHA256 of the UTF-8 `JSON.stringify` encoding of an array containing the domain string `photo-finals-operator-smoke-admission-sha256-v1`, followed by the exact string values of `version`, `issuedAt`, `expiresAt`, `runId`, `actorId`, `organizationId`, `origin`, `claimKey`, `objectKey`, `resourceSha256`, in that order. JSON property order does not matter; values are not normalized. The resource digest still binds the exact raw resource JSON, including endpoint, bucket, privacy, retention and allowance declarations. Credential bytes are not part of this nonsecret identity. Both sides use the same small binding module; all existing server admission validation remains authoritative.
+
+The hosted driver seals `admissionSha256` beside its registered admission before sending its empty POST. A successful route response echoes `admissionSha256`; the driver requires exact equality before accepting or journaling success. Missing or different success identity leaves `STOP-unconfirmed-no-retry`, with no retry. Configuration drift, including the same run with different expiry or resource, requires stopping, not choosing new keys or re-arming. The local disabled-only diagnostic does not supply an admission assertion or accept an armed success. The shared binding module is plain JavaScript; the standalone driver requires no TypeScript loader.
+
 ### One-request protected driver
 
 Default local-only diagnostic (canonical absolute path to a fresh journal inside an existing owner-only 0700 directory):

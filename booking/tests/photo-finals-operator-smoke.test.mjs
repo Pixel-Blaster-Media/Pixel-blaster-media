@@ -6,7 +6,8 @@ import {createHash} from 'node:crypto';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const uid = n => `${n}1111111-1111-4111-8111-111111111111`;
 const origin = 'https://booking.example';
-const request = (overrides={}) => new Request(origin+'/api/photo-finals/operator-smoke', {method:'POST',headers:{origin},...overrides});
+import {SMOKE_ADMISSION_HEADER, smokeAdmissionSha256} from '../lib/media/finals/operator-smoke-binding.mjs';
+const request = (f, overrides={}) => new Request(origin+'/api/photo-finals/operator-smoke', {method:'POST',headers:{origin,[SMOKE_ADMISSION_HEADER]:smokeAdmissionSha256(f.admission)},...overrides});
 function admitted() {
   const now = Date.now();
   const resource = {accountId:'a'.repeat(32), bucket:'private-smoke-existing', endpoint:`https://${'a'.repeat(32)}.r2.cloudflarestorage.com`, privateAccess:'verified-private-no-public-domains', retentionUntil:new Date(now+86400000).toISOString(), allowance:'one-run-3-class-a-2-class-b-132096-upload-bytes'};
@@ -39,7 +40,7 @@ test('one fixed protocol consumes claim and replay cannot repeat payload', async
   const {createOperatorSmokeHandler}=await implementation();
   const f=admitted(), store=new SmokeS3();
   const make=()=>createOperatorSmokeHandler({env:f.env,authorize:async()=>actor,storage:()=>store});
-  const response=await make()(request());
+  const response=await make()(request(f));
   assert.equal(response.status,200);
   const result=await response.json();
   assert.equal(result.status,'verified-storage-smoke');
@@ -59,7 +60,7 @@ test('one fixed protocol consumes claim and replay cannot repeat payload', async
   assert.equal(result.uploadBytes,store.calls.slice(0,3).reduce((n,c)=>n+c.input.Body.length,0));
   assert.ok(result.uploadBytes<=132096);
   assert.equal(store.objects.size,2);
-  assert.equal((await make()(request())).status,409);
+  assert.equal((await make()(request(f))).status,409);
   assert.equal(store.calls.length,6);
   assert.equal(store.puts,2);
   t.diagnostic(JSON.stringify({result,claimBytes:store.calls[0].input.Body.length,retainedBytes:[...store.objects.values()].reduce((n,o)=>n+o.bytes.length,0),payloadSha256:sha(store.calls[1].input.Body)}));
@@ -89,12 +90,13 @@ test('strict admission and wrong request fail before any auth/provider activity'
     f.env.PHOTO_FINALS_SMOKE_RESOURCE=JSON.stringify(f.resource);
     let calls=0;
     const h=createOperatorSmokeHandler({env:f.env,authorize(){calls++;throw Error('auth');},storage(){calls++;throw Error('storage');}});
-    assert.equal((await h(request())).status,503);
+    assert.equal((await h(request(f))).status,503);
     assert.equal(calls,0);
   }
-  for (const req of [request({headers:{origin:'https://foreign.example'}}), request({headers:{}}), request({method:'GET'}), request({body:'{}'}), new Request(origin+'/api/photo-finals/operator-smoke?key=x',{method:'POST',headers:{origin}})]) {
+  const f=admitted();
+  for (const req of [request(f,{headers:{origin:'https://foreign.example'}}), request(f,{headers:{}}), request(f,{method:'GET'}), request(f,{body:'{}'}), new Request(origin+'/api/photo-finals/operator-smoke?key=x',{method:'POST',headers:{origin}})]) {
     let calls=0;
-    const h=createOperatorSmokeHandler({env:admitted().env,authorize(){calls++;throw Error('auth');},storage(){calls++;throw Error('storage');}});
+    const h=createOperatorSmokeHandler({env:f.env,authorize(){calls++;throw Error('auth');},storage(){calls++;throw Error('storage');}});
     assert.equal((await h(req)).status,400);
     assert.equal(calls,0);
   }
@@ -103,9 +105,9 @@ test('strict admission and wrong request fail before any auth/provider activity'
 test('only exact current admin tuple reaches storage admission', async () => {
   const {createOperatorSmokeHandler}=await implementation();
   for (const identity of [null,{...actor,actorId:uid(4)},{...actor,organizationId:uid(4)},{...actor,role:'realtor'},{...actor,archivedAt:'2026-01-01'},{...actor,membershipRole:'member'}]) {
-    let auth=0,storage=0;
-    const h=createOperatorSmokeHandler({env:admitted().env,authorize:async()=>{auth++;return identity;},storage(){storage++;throw Error('wrong actor storage');}});
-    assert.equal((await h(request())).status,403);
+    const f=admitted();let auth=0,storage=0;
+    const h=createOperatorSmokeHandler({env:f.env,authorize:async()=>{auth++;return identity;},storage(){storage++;throw Error('wrong actor storage');}});
+    assert.equal((await h(request(f))).status,403);
     assert.equal(auth,1);
     assert.equal(storage,0);
   }
@@ -162,10 +164,10 @@ test('real route is off before Supabase and verifies current session/profile/mem
     async getUser(token){calls.push('verified-exact-token');assert.ok(token.startsWith('header.'));return {data:{user:{id:uid(2)}},error:null};}
   },from(table){calls.push(table);const q={select(){return q;},eq(k,v){calls.push([table,k,v]);return q;},in(k,v){calls.push([table,k,v]);return q;},abortSignal(s){assert.equal(s.aborted,false);return q;},async maybeSingle(){return {error:null,data:table==='profiles'?{id:uid(2),organization_id:uid(1),role:'admin',archived_at:null}:null};}};return q;}};};
   try {
-    assert.equal((await route.POST(request())).status,404);assert.equal(clients,0);
+    assert.equal((await route.POST(request(f))).status,404);assert.equal(clients,0);
     Object.assign(process.env,f.env);
     // Missing privileged membership denies before constructing any storage client.
-    assert.equal((await route.POST(request())).status,403);
+    assert.equal((await route.POST(request(f))).status,403);
     assert.deepEqual(calls.filter(v=>typeof v==='string'),['session','verified-exact-token','profiles','organization_members']);
     assert.ok(calls.some(v=>JSON.stringify(v)===JSON.stringify(['organization_members','organization_id',uid(1)])));
     assert.ok(calls.some(v=>JSON.stringify(v)===JSON.stringify(['organization_members','profile_id',uid(2)])));
@@ -183,7 +185,7 @@ test('separate Node instances racing the same local storage cannot replay a cons
     const env=JSON.parse(process.argv[1]),port=Number(process.argv[2]);
     const transport=(o,cb)=>httpRequest({...o,hostname:'127.0.0.1',port,protocol:'http:'},cb);
     const h=m.createOperatorSmokeHandler({env,authorize:async()=>(${JSON.stringify(actor)}),storage:(c,e)=>m.createSmokeStorage(c,e,transport)});
-    const r=await h(new Request(${JSON.stringify(origin+'/api/photo-finals/operator-smoke')},{method:'POST',headers:{origin:${JSON.stringify(origin)}}}));
+    const r=await h(new Request(${JSON.stringify(origin+'/api/photo-finals/operator-smoke')},{method:'POST',headers:{origin:${JSON.stringify(origin)},'x-photo-finals-smoke-admission-sha256':${JSON.stringify(smokeAdmissionSha256(f.admission))}}}));
     console.log(r.status);`;
   const run=async()=>Number((await promisify(execFile)(process.execPath,['--input-type=module','-e',source,JSON.stringify(f.env),String(wire.port)],{env:{PATH:process.env.PATH},timeout:10000,maxBuffer:8192})).stdout.trim());
   try {
@@ -201,9 +203,9 @@ test('ambiguous storage outcomes stop at that command and retain the consumed cl
     const f=admitted(), store=new SmokeS3();let count=0;
     const storage={async send(c,o){count++;let result;try{result=await store.send(c,o);}catch(e){if(count===lostAt)throw new Error('SECRET ambiguous');throw e;}if(count===lostAt)throw new Error('SECRET ambiguous');return result;}};
     const h=createOperatorSmokeHandler({env:f.env,authorize:async()=>actor,storage:()=>storage});
-    const r=await h(request());assert.equal(r.status,503);assert.equal(count,lostAt);assert.equal((await r.text()).includes('SECRET'),false);
+    const r=await h(request(f));assert.equal(r.status,503);assert.equal(count,lostAt);assert.equal((await r.text()).includes('SECRET'),false);
     const replay=createOperatorSmokeHandler({env:f.env,authorize:async()=>actor,storage:()=>store});
-    assert.equal((await replay(request())).status,409);
+    assert.equal((await replay(request(f))).status,409);
     assert.ok(store.objects.has(f.resource.bucket+'/'+f.admission.claimKey));
   }
 });
@@ -224,7 +226,7 @@ test('HEAD and Range require exact status, identity, length, hash and bounded ac
   for(const [name,mutate] of mutations){
     const f=admitted(),store=new SmokeS3();let body;
     const h=createOperatorSmokeHandler({env:f.env,authorize:async()=>actor,storage:()=>({async send(c,o){const r=await store.send(c,o);if(c.constructor.name!==name)return r;const changed=mutate(r);if(r.Body&&r.Body!==changed.Body)r.Body.destroy();body=changed.Body;return changed;}})});
-    assert.equal((await h(request())).status,503);
+    assert.equal((await h(request(f))).status,503);
     if(body)assert.equal(body.destroyed,true);
     assert.ok(store.calls.length<=5);
   }
@@ -244,7 +246,7 @@ test('native transport rejects redirects, declared/streamed overflow, header ove
     const wire=await wireFixture(callback),f=admitted();
     try {
       const h=mod.createOperatorSmokeHandler({env:f.env,authorize:async()=>actor,storage:(c,e)=>mod.createSmokeStorage(c,e,wire.transport)});
-      const r=await h(request(),Date.now()-14800);assert.equal(r.status,503);
+      const r=await h(request(f),Date.now()-14800);assert.equal(r.status,503);
       assert.equal(wire.observed.length,1);
     }finally{await wire.close();}
   }
@@ -301,7 +303,7 @@ test('actual Next adapter empty POST stream is admitted without accepting any cl
   const {createOperatorSmokeHandler}=await implementation();
   const f=admitted(),store=new SmokeS3();let auth=0;
   const h=createOperatorSmokeHandler({env:f.env,authorize:async()=>{auth++;return actor;},storage:()=>store});
-  const adapt=body=>NextRequestAdapter.fromNodeNextRequest({method:'POST',body:Readable.from(body),url:origin+'/api/photo-finals/operator-smoke',headers:{origin,'content-length':'0'}},new AbortController().signal);
+  const adapt=body=>NextRequestAdapter.fromNodeNextRequest({method:'POST',body:Readable.from(body),url:origin+'/api/photo-finals/operator-smoke',headers:{origin,'content-length':'0',[SMOKE_ADMISSION_HEADER]:smokeAdmissionSha256(f.admission)}},new AbortController().signal);
   const empty=adapt([]);assert.notEqual(empty.body,null);
   assert.equal((await h(empty)).status,200);assert.equal(auth,1);
   assert.equal((await h(adapt([Buffer.from('x')]))).status,400);assert.equal(auth,1);
@@ -339,10 +341,10 @@ test('native storage boundary refuses wrong key, bucket, size and nonenumerated 
 });
 
 test('expired invocation and already-aborted requests have no auth or storage activity',async()=>{
-  const {createOperatorSmokeHandler}=await implementation();let calls=0;
-  const h=createOperatorSmokeHandler({env:admitted().env,authorize:async()=>{calls++;return actor;},storage:()=>{calls++;return new SmokeS3();}});
-  assert.equal((await h(request(),Date.now()-15001)).status,503);
-  assert.equal((await h(request({signal:AbortSignal.abort()}))).status,503);
+  const {createOperatorSmokeHandler}=await implementation();const f=admitted();let calls=0;
+  const h=createOperatorSmokeHandler({env:f.env,authorize:async()=>{calls++;return actor;},storage:()=>{calls++;return new SmokeS3();}});
+  assert.equal((await h(request(f),Date.now()-15001)).status,503);
+  assert.equal((await h(request(f,{signal:AbortSignal.abort()}))).status,503);
   assert.equal(calls,0);
 });
 
@@ -353,7 +355,7 @@ test('native signed SDK transport runs only the fixed five commands',async()=>{
   try {
     const f=admitted();
     const h=mod.createOperatorSmokeHandler({env:f.env,authorize:async()=>actor,storage:(c,e)=>mod.createSmokeStorage(c,e,wire.transport)});
-    assert.equal((await h(request())).status,200);
+    assert.equal((await h(request(f))).status,200);
     assert.equal(wire.observed.length,5);
     assert.deepEqual(wire.observed.map(r=>r.method),['PUT','PUT','PUT','HEAD','GET']);
     assert.ok(wire.observed.every(r=>r.headers.authorization.startsWith('AWS4-HMAC-SHA256 ')));
@@ -363,9 +365,9 @@ test('native signed SDK transport runs only the fixed five commands',async()=>{
 
 test('deadline covers ignored-signal auth and prevents late claim construction', async()=>{
   const {createOperatorSmokeHandler}=await implementation();
-  let calls=0, authSignal;
-  const h=createOperatorSmokeHandler({env:admitted().env,authorize:async(_r,s)=>{authSignal=s;await new Promise(r=>setTimeout(r,70));return actor;},storage(){calls++;return new SmokeS3();}});
-  const response=await h(request(),Date.now()-14990);
+  const f=admitted();let calls=0, authSignal;
+  const h=createOperatorSmokeHandler({env:f.env,authorize:async(_r,s)=>{authSignal=s;await new Promise(r=>setTimeout(r,70));return actor;},storage(){calls++;return new SmokeS3();}});
+  const response=await h(request(f),Date.now()-14990);
   assert.equal(response.status,503);
   await new Promise(r=>setTimeout(r,85));
   assert.equal(calls,0);

@@ -1,4 +1,5 @@
 import 'server-only';
+import {SMOKE_ADMISSION_FIELDS, SMOKE_ADMISSION_HEADER, smokeAdmissionSha256} from './operator-smoke-binding.mjs';
 import {createHash} from 'node:crypto';
 import {S3Client, PutObjectCommand, HeadObjectCommand, GetObjectCommand} from '@aws-sdk/client-s3';
 import {request as httpsRequest} from 'node:https';
@@ -26,7 +27,7 @@ function record<K extends string>(raw:string|undefined, keys:K[]):Record<K,strin
 }
 function timestamp(value:string) {const n=Date.parse(value);requireValue(Number.isFinite(n)&&new Date(n).toISOString()===value);return n;}
 export function loadSmokeAdmission(env:Env, now=Date.now()) {
-  const a=record(env.PHOTO_FINALS_SMOKE_ADMISSION,['version','issuedAt','expiresAt','runId','actorId','organizationId','origin','claimKey','objectKey','resourceSha256']);
+  const a=record(env.PHOTO_FINALS_SMOKE_ADMISSION,[...SMOKE_ADMISSION_FIELDS]);
   const r=record(env.PHOTO_FINALS_SMOKE_RESOURCE,['accountId','bucket','endpoint','privateAccess','retentionUntil','allowance']);
   requireValue(a.version==='non-certifying-storage-smoke-v1');
   const issued=timestamp(a.issuedAt), expires=timestamp(a.expiresAt), retention=timestamp(r.retentionUntil);
@@ -41,7 +42,7 @@ export function loadSmokeAdmission(env:Env, now=Date.now()) {
   requireValue(r.privateAccess==='verified-private-no-public-domains' && r.allowance==='one-run-3-class-a-2-class-b-132096-upload-bytes');
   requireValue(a.resourceSha256===hash(env.PHOTO_FINALS_SMOKE_RESOURCE!));
   requireValue(/^[a-f0-9]{32}$/.test(env.PHOTO_FINALS_SMOKE_R2_ACCESS_KEY_ID??'') && /^[a-f0-9]{64}$/.test(env.PHOTO_FINALS_SMOKE_R2_SECRET_ACCESS_KEY??''));
-  return Object.freeze({...a,...r,expires});
+  return Object.freeze({...a,...r,expires,admissionSha256:smokeAdmissionSha256(a)});
 }
 /** Fixed signed transport: no redirects, retries, arbitrary endpoints or SDK error-body aggregation.
  * requestImpl is an in-process test seam; the route never accepts or selects it. */
@@ -112,6 +113,8 @@ export function createOperatorSmokeHandler(deps:Dependencies) {
     try {config=loadSmokeAdmission(deps.env);} catch {return reply(503,'not-admitted');}
     const url=new URL(request.url);
     if(request.method!=='POST' || request.headers.get('content-length') && request.headers.get('content-length')!=='0' || url.origin!==config.origin || url.pathname!==PATH || url.search || request.headers.get('origin')!==config.origin || request.headers.get('sec-fetch-site') && request.headers.get('sec-fetch-site')!=='same-origin')return reply(400,'invalid-request');
+    const assertion=request.headers.get(SMOKE_ADMISSION_HEADER);
+    if(!assertion || !/^[a-f0-9]{64}$/.test(assertion) || assertion!==config.admissionSha256)return reply(400,'invalid-request');
     const deadline=Math.min(config.expires,enteredAt+15000);
     const controller=new AbortController();
     const abort=()=>controller.abort(new Error('smoke_stopped'));
@@ -165,7 +168,7 @@ export function createOperatorSmokeHandler(deps:Dependencies) {
           requireValue(size===1024 && hash(Buffer.concat(chunks))===hash(payload.subarray(1024,2048)));
         } finally {signal.removeEventListener('abort',closeBody);range.Body?.destroy();}
         check();
-        return Response.json({status:'verified-storage-smoke',certified:false,payloadBytes:payload.length,rangeBytes:1024,operations,uploadBytes},{headers:{'cache-control':'no-store'}});
+        return Response.json({status:'verified-storage-smoke',admissionSha256:config.admissionSha256,certified:false,payloadBytes:payload.length,rangeBytes:1024,operations,uploadBytes},{headers:{'cache-control':'no-store'}});
       } finally {storage.destroy?.();}
     };
     try {return await Promise.race([run(),stopped]);}
