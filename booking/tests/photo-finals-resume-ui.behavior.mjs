@@ -22,6 +22,15 @@ test('budget-exhausted control offers support, not another charged retry',async(
  }finally{if(view)await act(async()=>view.unmount());DownloadController.prototype.start=originalStart;globalThis.document=original;}
 });
 
+test('disabled global boundary checks orphan OPFS even without a journal',async()=>{
+ const mod=await import('../app/DownloadSessionBoundary.tsx');
+ const old={document:globalThis.document,window:globalThis.window,localStorage:globalThis.localStorage};const nav=Object.getOwnPropertyDescriptor(globalThis,'navigator');let reads=0;
+ globalThis.document=new EventTarget();globalThis.window=new EventTarget();const stored=new Map();globalThis.localStorage={getItem:k=>stored.get(k)??null,setItem:(k,v)=>stored.set(k,v)};
+ Object.defineProperty(globalThis,'navigator',{configurable:true,value:{locks:{request:async(_name,options,callback)=>(callback??options)()},storage:{getDirectory:async()=>{reads++;return {async *keys(){}};}}}});
+ let view;try{await act(async()=>{view=create(React.createElement(mod.default,{enabled:false}));await new Promise(r=>setTimeout(r,0));});assert(reads>0,'missing journals do not prove missing retained files');}
+ finally{if(view)await act(async()=>view.unmount());Object.assign(globalThis,old);Object.defineProperty(globalThis,'navigator',nav);}
+});
+
 test('resumable control starts explicitly and labels Save as initiation not receipt',async()=>{
  const m=await import('../components/media/ResumableDownload.tsx').catch(()=>({}));assert.equal(typeof m.default,'function','download control missing');
  const original=globalThis.document;globalThis.document={addEventListener(){},removeEventListener(){}};

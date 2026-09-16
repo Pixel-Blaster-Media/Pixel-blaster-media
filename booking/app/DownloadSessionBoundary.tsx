@@ -7,7 +7,6 @@ export default function DownloadSessionBoundary({enabled}:{enabled:boolean}){
  const [failed,setFailed]=useState(false);
  useEffect(()=>{
   if(!navigator.locks||!navigator.storage?.getDirectory)return;
-  try{if(!enabled&&!localStorage.getItem('pixel-resume-owner')&&!Object.keys(localStorage).some(k=>k.startsWith('pixel-resume:')))return;}catch{return;}
   return watchDownloadSession(async()=>{
    if(!enabled)return null;
    const r=await fetch('/api/photo-finals/session',{cache:'no-store',credentials:'same-origin',redirect:'error',signal:AbortSignal.timeout(10000)});
