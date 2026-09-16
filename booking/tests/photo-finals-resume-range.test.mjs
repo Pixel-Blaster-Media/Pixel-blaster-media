@@ -1,0 +1,16 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {Readable} from 'node:stream';
+import {createHash} from 'node:crypto';
+import {R2Storage} from '../lib/media/storage/r2-core.ts';
+const organizationId='11111111-1111-4111-8111-111111111111';
+const digest=b=>createHash('sha256').update(b).digest('hex');
+const bytes=Buffer.from('chunk'),sha256=digest(bytes);
+const key=`packages/${organizationId}/22222222-2222-4222-8222-222222222222/full_res_zip/${sha256}.zip`;
+function fixture(overrides={}) {let calls=[];const body=Readable.from([bytes]);const storage=new R2Storage({organizationId,buckets:{quarantine:'local-test',masters:'local-test',delivery:'local-test'},client:{async send(c){calls.push(c.input);return {$metadata:{httpStatusCode:206},ContentRange:'bytes 0-4/5',ContentLength:5,Metadata:{sha256},Body:body,...overrides};}}});return {storage,calls,body};}
+test('range rejects provider identity, framing and corrupt body before returning bytes and destroys upstream',async()=>{for(const overrides of [{$metadata:{httpStatusCode:200}},{ContentRange:'bytes 0-4/6'},{ContentRange:undefined},{ContentLength:6},{Metadata:{sha256:'a'.repeat(64)}},{Body:Readable.from([Buffer.from('chun')])},{Body:Readable.from([Buffer.from('chunks')])},{Body:Readable.from([Buffer.from('wrong')])}]){const f=fixture(overrides);await assert.rejects(f.storage.getVerifiedPackageChunk(input));assert.equal((overrides.Body??f.body).destroyed,true);}});
+test('range rejects invalid geometry and non-package keys without dispatch',async()=>{for(const change of [{chunkIndex:-1},{chunkIndex:1},{chunkIndex:0.5},{totalBytes:0},{totalBytes:1100000001},{packageSha256:'a'.repeat(64)},{chunkSha256:'bad'},{key:key.replace('/11111111-1111-4111-8111-111111111111/','/33333333-3333-4333-8333-333333333333/')}]){const f=fixture();await assert.rejects(f.storage.getVerifiedPackageChunk({...input,...change}));assert.equal(f.calls.length,0);}});
+test('aborted ignored provider send returns promptly and destroys late body',async()=>{const c=new AbortController(),f=fixture();let release;f.storage.client={send:()=>new Promise(r=>release=r)};const pending=f.storage.getVerifiedPackageChunk({...input,signal:c.signal});c.abort();await assert.rejects(Promise.race([pending,new Promise((_,r)=>setTimeout(()=>r(new Error('hang')),100))]),e=>e.message!=='hang');release({Body:f.body});await new Promise(r=>setImmediate(r));assert.equal(f.body.destroyed,true);});
+test('abort interrupts a stalled body even with ignored stream signal',async()=>{const body=new Readable({read(){}}),f=fixture({Body:body}),c=new AbortController();const pending=f.storage.getVerifiedPackageChunk({...input,signal:c.signal});setTimeout(()=>c.abort(),5);await assert.rejects(Promise.race([pending,new Promise((_,r)=>setTimeout(()=>r(new Error('hang')),100))]),e=>e.message!=='hang');assert.equal(body.destroyed,true);});
+const input={key,packageSha256:sha256,totalBytes:5,chunkIndex:0,chunkSha256:sha256};
+test('range fully verifies a bounded server-selected package chunk',async()=>{const f=fixture();assert.equal(typeof f.storage.getVerifiedPackageChunk,'function');assert.deepEqual(await f.storage.getVerifiedPackageChunk(input),bytes);assert.equal(f.calls.length,1);assert.equal(f.calls[0].Range,'bytes=0-4');});

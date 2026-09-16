@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { finalsCronAuthorized, runFinalsDispatch } from '@/lib/media/finals/dispatcher';
+import { createProductionFinalsRuntime } from '@/lib/media/finals/production';
 
 import { runCatalogStreamCleanup } from "@/lib/booking/catalog-stream-cleanup";
 import { runScheduledIntegrationOutbox } from "@/lib/integrations/scheduler";
@@ -10,7 +12,15 @@ import {
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-export async function GET(request: Request) {
+export async function GET(request:Request){
+  if(process.env.PHOTO_FINALS_DISPATCH_ENABLED!=='true'||!finalsCronAuthorized(request,process.env.CRON_SECRET))return runOutbox(request);
+  // Join both bounded tasks before returning; never detach finals work on errors.
+  const [outbox,finals]=await Promise.allSettled([runOutbox(request),runFinalsDispatch(process.env,createProductionFinalsRuntime)]);
+  if(finals.status!=='fulfilled'||!finals.value.ok)return NextResponse.json({ok:false,error:'Photo finals dispatch unconfirmed.'},{status:503});
+  return outbox.status==='fulfilled'?outbox.value:NextResponse.json({ok:false},{status:503});
+}
+
+async function runOutbox(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret) {
     return NextResponse.json(

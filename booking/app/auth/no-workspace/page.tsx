@@ -53,7 +53,7 @@ export default function NoWorkspacePage() {
         >
           Email support
         </a>
-        <form action={signOut}>
+        <form action={signOut} data-pixel-logout>
           <button
             type="submit"
             className="inline-flex min-h-11 items-center justify-center rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-realtor-primary"

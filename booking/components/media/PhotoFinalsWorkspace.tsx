@@ -1,0 +1,107 @@
+'use client';
+/* eslint-disable @next/next/no-img-element -- Private session-bound images must not enter a shared image optimizer/cache. */
+
+import {useCallback,useEffect,useRef,useState} from 'react';
+import {startFinalsPolling} from '@/lib/media/finals/operator-polling';
+import ResumableDownload from './ResumableDownload';
+import FinalsGallery from './FinalsGallery';
+import {useFinalsDirty} from './FinalsNavigationOwner';
+import {rememberUpload} from '@/lib/media/finals/upload-journal';
+import {selectDeliverySources,type DeliverySourceCandidate} from '@/lib/booking/delivery-source-policy';
+
+type State={resumable?:{identity:string;packageIds:string[]};packageJob?:{status:'pending'|'running'|'retryable'|'needs_attention'}|null;status:'enabled';recoveryKey:string|null;batchId:string|null;revision:number;release:{id:string;state:string;revision:number}|null;versions:{id:string;status:string;previewUrl:string|null;width:number|null;height:number|null}[];gallery:{releaseId:string;items:{id:string;url:string}[];downloads:DeliverySourceCandidate[]}|null};
+type Receipt={id:string;revision:number;manifestSha256:string};
+const button='min-h-11 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 disabled:opacity-50';
+/** Keyed state prevents a booking switch from carrying another booking's draft. */
+export default function PhotoFinalsWorkspace(props:{bookingId:string;operator?:boolean;incumbent?:DeliverySourceCandidate[]}){return <Workspace key={props.bookingId} {...props}/>;}
+function Workspace({bookingId,operator=false,incumbent=[]}:{bookingId:string;operator?:boolean;incumbent?:DeliverySourceCandidate[]}){
+ const endpoint='/api/photo-finals/'+bookingId;
+ const [state,setState]=useState<State|null>(null),[selected,setSelected]=useState<string[]>([]),[receipt,setReceipt]=useState<Receipt|null>(null);
+ const [busy,setBusy]=useState(false),[message,setMessage]=useState('Checking private photo availability…'),[disabled,setDisabled]=useState(false);
+ const [pollGeneration,setPollGeneration]=useState(0);
+ const live=useRef(true),identityKey=useRef<string|null>(null),readSequence=useRef(0);
+ const readPending=useRef<Promise<State|undefined>|null>(null);
+ const refresh=useCallback(async(signal?:AbortSignal)=>{
+  // Manual refresh and automatic observation share one serialized read lane.
+  while(readPending.current){await readPending.current.catch(()=>{});if(!live.current||signal?.aborted)return;}
+  if(!live.current||signal?.aborted)return;
+  const read=async()=>{
+  const sequence=++readSequence.current;
+  const response=await fetch(endpoint,{cache:'no-store',signal});const value=await response.json();
+  if(!live.current||signal?.aborted||sequence!==readSequence.current)return;
+  if(!response.ok){setState(null);setReceipt(null);setDisabled(value.status==='disabled');throw new Error(value.message||'Photo availability could not be confirmed.');}
+  if(value.status!=='enabled'||!Array.isArray(value.versions))throw new Error('Photo response could not be confirmed.');
+  if(identityKey.current!==value.recoveryKey){setSelected([]);setReceipt(null);}identityKey.current=value.recoveryKey;
+  setState(value);setDisabled(false);setMessage(value.gallery?'Approved photos are ready.':value.packageJob?.status==='needs_attention'?'Package preparation needs operator attention. No ready release has been confirmed.':value.packageJob?.status==='retryable'?'Package preparation is paused. Use Prepare private packages to retry the saved approved job.':value.release?.state==='packaging'?'The approved job is retained. Checking package status does not prove a worker is running. You may leave; this stops checking, not the saved job.':'Photos remain private until approval and all packages are verified.');
+  return value as State;
+  };
+  const pending=read();readPending.current=pending;
+  try{return await pending;}finally{if(readPending.current===pending)readPending.current=null;}
+ },[endpoint]);
+ useEffect(()=>{live.current=true;const controller=new AbortController();void refresh(controller.signal).catch(e=>{if(live.current&&!controller.signal.aborted)setMessage(e.message);});return()=>{live.current=false;controller.abort();};},[refresh]);
+ const polling=state?.release?.state==='packaging'&&['pending','running'].includes(state.packageJob?.status??'');
+ const pollIdentity=state?.recoveryKey,pollRelease=state?.release?.id;
+ useEffect(()=>{
+  if(!polling)return;
+  return startFinalsPolling({visibility:document,read:async signal=>{
+   const value=await refresh(signal);
+   return !!value&&value.recoveryKey===pollIdentity&&value.release?.id===pollRelease&&value.release?.state==='packaging'&&['pending','running'].includes(value.packageJob?.status??'');
+  },onStop:reason=>{if(live.current&&reason!=='terminal')setMessage('Automatic status checking paused. Refresh to check again. The approved job is retained; leaving this page does not cancel it.');}});
+ },[polling,pollIdentity,pollRelease,pollGeneration,refresh]);
+ useFinalsDirty(selected.length>0||busy);
+ async function post(body:unknown){const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-Finals-Identity':state?.recoveryKey??''},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw new Error(data.error||'Operation could not be confirmed.');return data;}
+ async function run(fn:()=>Promise<unknown>){setBusy(true);setReceipt(null);try{await fn();}catch{if(live.current){setState(null);setMessage('Photo finals could not be confirmed. Refresh, then reselect the same JPEGs to resume their saved upload intents; do not clear browser storage. If retry remains unavailable, operator reconciliation is required.');}}finally{if(live.current)setBusy(false);}}
+ async function upload(files:FileList|null){if(!files?.length)return;
+  const inputs=Array.from(files);if(inputs.length>32||inputs.some(f=>f.type!=='image/jpeg'||f.size<1||f.size>33554432)){setMessage('Choose up to 32 finished JPEGs, no larger than 32 MiB each.');return;}
+  await run(async()=>{if(!state?.recoveryKey)throw new Error('Upload identity unavailable');
+   const locked=async()=>{
+   for(const file of inputs){if(!live.current)return;setMessage('Uploading and verifying '+file.name+'…');const bytes=await file.arrayBuffer();const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+    if(!live.current)return;
+    let saved;
+    try{saved=rememberUpload(localStorage,state.recoveryKey!,{sha256,byteSize:file.size});}
+    catch{saved={requestId:crypto.randomUUID(),intentId:crypto.randomUUID(),sha256,byteSize:file.size};} // Server inventory remains authoritative when storage is unavailable.
+    const intent=await post({op:'intent',...saved});
+    if(intent.status==='accepted')continue;
+    if(!live.current)return;
+    if(intent.status==='uploaded'){const accepted=await post({op:'complete',jobId:intent.jobId});if(accepted.status!=='accepted')throw new Error('Acceptance pending');continue;}
+    const capability=new URL(intent.upload.url,location.origin);
+    // Only an explicit server-issued capability is used; never accept a file URL.
+    if(capability.origin!==location.origin||Date.parse(intent.upload.expiresAt)<=Date.now())throw new Error('Unsupported upload capability');
+    // A failed/lost PUT response may have committed. Only the canonical worker
+    // can attest acceptance; it also rejects missing or mismatched bytes.
+    await fetch(capability,{method:'PUT',headers:intent.upload.headers,body:bytes}).catch(()=>null);
+    if(!live.current)return;
+    const accepted=await post({op:'complete',jobId:intent.jobId});if(accepted.status!=='accepted')throw new Error('Acceptance pending');
+   }};
+   if(!navigator.locks)throw new Error('Cross-tab upload locking unavailable');
+   await navigator.locks.request('pixel-finals:'+state.recoveryKey,locked);
+   await refresh();});
+ }
+ function change(next:string[]){setSelected(next);setReceipt(null);}
+ const downloads=selectDeliverySources([...incumbent,...(state?.gallery?.downloads??[])],{pixelFallbackEnabled:!!state?.gallery,pixelPackageSetComplete:!!state?.gallery});
+ return <section aria-label={operator?'Finished photo finals':'Private photo gallery'} aria-busy={busy} className="min-w-0 space-y-4 rounded-md border border-slate-200 bg-white p-4 text-slate-900">
+  <div><h2 className="text-lg font-semibold">{operator?'Finished photos':'Your approved photos'}</h2><p className="mt-1 text-sm text-slate-600">{operator?'Upload final JPEG exports from any editor. Lightroom is optional.':'Private gallery and downloads for this shoot.'} Valid iGUIDE downloads remain preferred per format.</p></div>
+  <p role="status" className="break-words text-sm text-slate-600">{message}</p>
+  {!disabled&&<button className={button} disabled={busy} onClick={()=>void run(()=>refresh())}>Refresh photo status</button>}
+  {operator&&state&&<>
+   <button className={button} disabled={busy} onClick={()=>void run(async()=>{const inventory=await post({op:'inventory'});if(!Array.isArray(inventory.items)||inventory.hasMore)throw new Error('Inventory requires operator support');const pending=inventory.items.filter((item:{completedAt:string|null})=>!item.completedAt);const expired=pending.filter((item:{expiresAt:string})=>Date.parse(item.expiresAt)<=Date.now());setMessage(`Authorized inventory: ${inventory.items.length} retained uploads, ${pending.length} incomplete, ${expired.length} expired. Reselect the same JPEGs to resume unexpired uploads. Expired intents remain retained; no replacement or deletion was performed.`);})}>Check retained uploads</button>
+   <button className={button} disabled={busy} onClick={()=>{if(window.confirm('Reconcile expired uploads? Original objects and intent identities are retained; nothing is deleted or uploaded.'))void run(async()=>{const result=await post({op:'reconcile'});await refresh();if(live.current)setMessage(`${result.settled} expired intents settled and retained. No objects were deleted or uploaded.`);});}}>Reconcile expired uploads</button>
+   <label className="block text-sm font-medium">Upload finished JPEGs<input aria-label="Upload finished JPEGs" className="mt-2 block min-h-11 w-full min-w-0 max-w-full text-sm" type="file" accept="image/jpeg,.jpg,.jpeg" multiple disabled={busy} onChange={e=>{void upload(e.target.files);e.target.value='';}}/></label>
+   <p className="text-xs text-slate-600">Private originals retain EXIF. Approval confirms permission to share. MLS export is provisional; verify destination requirements.</p>
+   {state.release&&<p className="text-sm">Release {state.release.revision}: <strong>{state.release.state}</strong></p>}
+   <ol className="space-y-2" aria-label="Review uploaded photos">{state.versions.map((v,index)=><li key={v.id} className="flex min-w-0 flex-wrap items-center gap-3 rounded-md border border-slate-200 p-2">
+    {v.previewUrl&&/* eslint-disable-next-line @next/next/no-img-element */<img src={v.previewUrl} alt={'Candidate photo '+(index+1)} className="h-20 w-28 rounded object-cover"/>}
+    <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" aria-label={'Select photo '+(index+1)} checked={selected.includes(v.id)} disabled={busy||v.status!=='accepted'} onChange={()=>change(selected.includes(v.id)?selected.filter(x=>x!==v.id):[...selected,v.id])}/>Photo {index+1} · {v.status}</label>
+    {selected.includes(v.id)&&<div className="flex items-center gap-2"><span className="text-xs">Position {selected.indexOf(v.id)+1}</span><button className={button} aria-label={'Move photo '+(index+1)+' earlier'} disabled={busy||selected.indexOf(v.id)===0} onClick={()=>{const next=[...selected],n=next.indexOf(v.id);[next[n-1],next[n]]=[next[n],next[n-1]];change(next);}}>Earlier</button></div>}
+   </li>)}</ol>
+   <div className="flex flex-wrap gap-2"><button className={button} disabled={busy||!selected.length} onClick={()=>void run(async()=>{const owner=state.recoveryKey;const draft=await post({op:'prepare',batchId:state.batchId,releaseId:crypto.randomUUID(),expectedRevision:state.revision,versionIds:selected});await refresh();if(!live.current||identityKey.current!==owner)return;setReceipt(draft);setMessage('Review snapshot saved. Approve only if these selected photos and their order are final.');})}>Save review order</button>
+   {receipt&&<button className={button+' border-blue-600 text-blue-700'} disabled={busy} onClick={()=>{const approved=receipt;void run(async()=>{const result=await post({op:'approve',releaseId:approved.id,revision:approved.revision,manifestSha256:approved.manifestSha256});if(result.status!=='packaging')throw new Error('Approval unconfirmed');setSelected([]);await refresh();});}}>Approve selected finals</button>}
+   {state.release?.state==='packaging'&&state.packageJob?.status!=='needs_attention'&&<button className={button} disabled={busy} onClick={()=>void run(async()=>{const owner=state.recoveryKey;const result=await post({op:'work'});if(result.status!=='packaging')throw new Error('Scheduling unconfirmed');if(!live.current||identityKey.current!==owner)return;setState(current=>current?{...current,packageJob:{status:'pending'}}:current);setPollGeneration(n=>n+1);setMessage('Preparation requested for the saved approved job. Checking status; this is not confirmation that packages are ready. You may leave without cancelling the job.');})}>Prepare private packages</button>}</div>
+  </>}
+  {state?.gallery&&<FinalsGallery key={state.gallery.releaseId} items={state.gallery.items}/> }
+  {!!downloads.length&&<div className="flex flex-wrap gap-2">{downloads.map(d=>{
+   const packageId=d.url.startsWith(endpoint+'?download=')?d.url.slice((endpoint+'?download=').length):null;
+   return packageId&&d.source==='pixel_release'&&state?.resumable?.packageIds.includes(packageId)?<ResumableDownload key={state.resumable.identity+':'+packageId} endpoint={endpoint+'/resume'} identity={state.resumable.identity} packageId={packageId} packageType={d.slot==='photos_mls'?'web':'originals'} label={d.label}/>:<a key={d.slot??d.url} href={d.url} className={button}>{d.label}</a>;
+  })}</div>}
+ </section>;
+}

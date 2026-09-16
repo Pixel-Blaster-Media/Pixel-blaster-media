@@ -17,6 +17,15 @@
     "test:invoice": "node --import tsx --test lib/integrations/quickbooks/tests/*.test.mjs",
     "test:postgres:invoice": "bash lib/integrations/quickbooks/tests/verify-postgres.sh",
     "test:postgres:atomic": "bash scripts/verify-atomic-booking-postgres.sh",
+    "test:postgres:finals-postgrest": "PF_REAL_POSTGREST=1 python3 scripts/verify-photo-finals-http.py",
+    "test:postgres:finals-http": "python3 scripts/verify-photo-finals-http.py",
+    "test:photo-finals:operator": "node --test tests/photo-finals-operator*.test.mjs && node --import tsx --test tests/photo-finals-operator-client.behavior.mjs && python3 scripts/verify-photo-finals-after-postgres.py",
+    "test:photo-finals": "node --test tests/photo-finals-*.test.mjs",
+    "test:postgres:finals-resource": "PF_PACKAGE_RESOURCE=1 python3 scripts/verify-photo-finals-packages.py",
+    "test:postgres:finals-long-io": "PF_PACKAGE_LONG_IO=1 python3 scripts/verify-photo-finals-packages.py",
+    "test:postgres:finals-packages": "python3 scripts/verify-photo-finals-packages.py",
+    "test:postgres:finals-ingest": "python3 scripts/verify-photo-finals-ingest.py",
+    "test:postgres:photo-finals": "python3 scripts/verify-photo-finals-concurrency.py",
     "test:postgres:media": "bash scripts/verify-canonical-media-postgres.sh",
     "test:postgres:credentials": "bash scripts/verify-integration-credentials-postgres.sh",
     "verify:postgres:private-notes": "bash scripts/verify-private-booking-notes-postgres.sh",
@@ -31,12 +40,16 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1065.0",
+    "@aws-sdk/s3-request-presigner": "^3.1065.0",
+    "@noble/hashes": "2.4.0",
+    "@smithy/node-http-handler": "^4.12.1",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "lucide-react": "1.24.0",
     "next": "^16.3.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "sharp": "^0.35.4",
     "web-push": "3.6.7"
   },
   "devDependencies": {
@@ -48,6 +61,7 @@
     "autoprefixer": "^10.4.20",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.3.3",
+    "playwright": "1.55.0",
     "postcss": "^8.5.26",
     "react-test-renderer": "^19.2.8",
     "tailwindcss": "^3.4.13",
@@ -55,7 +69,7 @@
     "typescript": "^5.6.2"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=20.19.0"
   },
   "overrides": {
     "postcss": "^8.5.26"

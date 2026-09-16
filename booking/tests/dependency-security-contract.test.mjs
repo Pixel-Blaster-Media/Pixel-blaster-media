@@ -22,7 +22,11 @@ function versionAtLeast(actual, minimum) {
 }
 
 test("the Next 16 security baseline declares its required runtime and lint entrypoint", () => {
-  assert.equal(packageJson.engines.node, ">=20.9.0");
+  // The incremental browser hasher has a stricter Node floor than Next 16.
+  assert.equal(packageJson.engines.node, ">=20.19.0");
+  assert.equal(packageJson.dependencies["@noble/hashes"], "2.4.0");
+  assert.equal(resolvedVersion("@noble/hashes"), "2.4.0");
+  assert.equal(packageLock.packages[""].engines.node, packageJson.engines.node);
   assert.equal(packageJson.scripts.lint, "eslint .");
   assert.equal(packageJson.dependencies.next, "^16.3.3");
   assert.equal(packageJson.dependencies.react, "^19.2.8");
