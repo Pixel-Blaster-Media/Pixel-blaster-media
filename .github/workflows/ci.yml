@@ -234,7 +234,7 @@ jobs:
         run: npm run test:photo-finals:operator | tee "$RUNNER_TEMP/photo-finals-evidence/operator.log"
       - name: Retain finals runner and browser evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: photo-finals-evidence
           path: ${{ runner.temp }}/photo-finals-evidence
