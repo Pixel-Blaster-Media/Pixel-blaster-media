@@ -1,4 +1,5 @@
 "use server";
+import { BOOKING_QUOTE_POLICY_VERSION, BOOKING_QUOTE_CHANGED_MESSAGE } from "@/lib/booking/quote";
 
 import { revalidatePath } from "next/cache";
 
@@ -152,6 +153,10 @@ export async function createAdminShoot(
 ): Promise<ActionResult> {
   const admin = await requireAdmin();
 
+  if (str(formData, "quote_policy_version") !== BOOKING_QUOTE_POLICY_VERSION) {
+    return { ok: false, error: BOOKING_QUOTE_CHANGED_MESSAGE };
+  }
+
   const scheduledRaw = str(formData, "scheduled_at");
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str(formData, "admin_request_id"))) {
     return { ok: false, error: "Refresh the booking form before submitting." };
@@ -252,6 +257,7 @@ export async function createAdminShoot(
     p_booking_id: null,
     p_expected_version: null,
     p_input: {
+      quote_policy_version: str(formData, "quote_policy_version"),
       owner_id: userId, street_address: streetAddress, city, province,
       app_url: process.env.NEXT_PUBLIC_APP_URL ?? "",
       admin_notification_email: process.env.ADMIN_NOTIFICATION_EMAIL ?? null,
@@ -279,6 +285,7 @@ export async function createAdminShoot(
         return { ok: false, error: cleanupReference(rollback.reference) };
       }
     }
+    if (bookingError?.code === "PB005") return { ok: false, error: BOOKING_QUOTE_CHANGED_MESSAGE };
     if (bookingError?.code === "23P01") {
       return {
         ok: false,

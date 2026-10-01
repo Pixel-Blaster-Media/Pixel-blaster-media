@@ -1,4 +1,5 @@
 "use server";
+import { BOOKING_QUOTE_POLICY_VERSION } from "@/lib/booking/quote";
 
 import { revalidatePath } from "next/cache";
 
@@ -103,6 +104,7 @@ type AssistantExecutionResult = AdminAssistantResult & {
 
 interface AdminAssistantBookingDraft {
   requestId: string;
+  quotePolicyVersion: string;
   sourceBookingId: string;
   scheduledLocal: string;
   contactName: string;
@@ -1495,6 +1497,7 @@ function buildCreateBookingAction(
     .join(", ");
   const payload: AdminAssistantBookingDraft = {
     requestId: crypto.randomUUID(),
+    quotePolicyVersion: BOOKING_QUOTE_POLICY_VERSION,
     sourceBookingId: sourceBooking?.id ?? "",
     scheduledLocal,
     contactName,
@@ -2371,6 +2374,7 @@ async function createBookingFromAssistant(
 
   const formData = new FormData();
   formData.set("admin_request_id", draft.requestId);
+  formData.set("quote_policy_version", draft.quotePolicyVersion ?? "");
   formData.set("scheduled_at", draft.scheduledLocal);
   formData.set("contact_name", draft.contactName);
   formData.set("contact_email", draft.contactEmail);

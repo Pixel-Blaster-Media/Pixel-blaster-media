@@ -1,4 +1,6 @@
 /** Shared, client-safe calculations for new booking quotes. Stored bookings use snapshots. */
+export const BOOKING_QUOTE_POLICY_VERSION = "2026-09-30-v1";
+export const BOOKING_QUOTE_CHANGED_MESSAGE = "Booking prices and timing changed. Refresh and review your quote before confirming.";
 export interface CatalogPricingItem {
   price_cents: number;
   sqft_pricing_enabled: boolean;

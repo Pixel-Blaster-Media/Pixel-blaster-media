@@ -100,7 +100,7 @@ test("refresh/back/forward, changed selections and a saved edit retain the brows
   assert.equal(back.shootNotes, "Updated access instruction");
 });
 
-test("separate tabs stay separate; cookie count is bounded and completion clears only its draft", async () => {
+test("separate tabs stay separate; cookie count is bounded and explicit discard clears only its draft", async () => {
   const h = harness();
   const save = async (notes) => h.actions.saveBookingWizardDraft({ query: "services=photos", property: { ...property, shootNotes: notes } });
   const first = await save("First"); const second = await save("Second");
@@ -115,6 +115,33 @@ test("separate tabs stay separate; cookie count is bounded and completion clears
   const before = new Map(h.jar);
   const failed = await h.actions.saveBookingWizardDraft({ query: second.query, property: { ...property, shootNotes: "x".repeat(1700) } });
   assert.equal(failed.ok, false); assert.deepEqual(h.jar, before);
+});
+
+test("committed completion replaces private fields with a scoped receipt before action rerender; replay and reload stay completed", async () => {
+  const h = harness();
+  const first = await h.actions.saveBookingWizardDraft({ query: "services=photos", property });
+  const other = await h.actions.saveBookingWizardDraft({ query: "services=photos", property: { ...property, shootNotes: "Other flow" } });
+  const draftId = new URLSearchParams(first.query).get("draft");
+  const otherId = new URLSearchParams(other.query).get("draft");
+  const otherValue = h.jar.get(prefix + otherId);
+  const completed = { redirectTo: "/portal/property-1?booked=1", receipt: {
+    address: "123 Private Street", when: "Thursday at 9am", services: ["Photos"], organizationName: "Studio",
+  } };
+  await h.draft.completePrivateWizardDraft(draftId, "org-b", completed);
+  assert.ok(codec.openWizardDraft(h.jar.get(prefix + draftId), secret, `org-a:${draftId}`));
+  await h.draft.completePrivateWizardDraft(draftId, "org-a", completed);
+  assert.equal(codec.openWizardDraft(h.jar.get(prefix + draftId), secret, `org-a:${draftId}`), null);
+  assert.deepEqual(JSON.parse(JSON.stringify(await h.draft.loadCompletedWizardReceipt(draftId, "org-a"))), completed);
+  assert.equal(await h.draft.loadCompletedWizardReceipt(draftId, "org-b"), null);
+  assert.equal(h.jar.get(prefix + otherId), otherValue);
+  await assert.rejects(() => h.draft.loadPrivateWizardState(stateHelpers.parseWizardState(Object.fromEntries(new URLSearchParams(first.query))), "org-a"), error => error.url.startsWith("/book/confirm?"));
+  await h.draft.completePrivateWizardDraft(draftId, "org-a", completed);
+  assert.deepEqual(JSON.parse(JSON.stringify(await h.draft.loadCompletedWizardReceipt(draftId, "org-a"))), completed);
+  const receiptCookie = h.jar.get(prefix + draftId);
+  assert.equal(codec.openWizardReceipt(receiptCookie, secret, `org-a:${draftId}`, Date.now() + codec.DRAFT_TTL_SECONDS * 1000), null);
+  assert.throws(() => codec.sealWizardReceipt({ ...completed, redirectTo: "//attacker.invalid" }, secret, "binding"));
+  assert.equal(h.writes.at(-1).options.httpOnly, true);
+  assert.equal(h.writes.at(-1).options.secure, true);
 });
 
 test("legacy URLs redirect without forwarding private data; unknown company cannot write a draft", async () => {

@@ -91,6 +91,10 @@ jobs:
         env:
           VERCEL_ENV: production
         run: npm run build
+      - name: Install matching Chromium for booking confirmation regression
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Probe real booking POST, receipt reload and duplicate replay
+        run: npm run test:http-booking-confirmation
       - name: Probe request-scoped authenticated rendering
         run: npm run test:http-auth-dedup
       - name: Probe built security boundaries

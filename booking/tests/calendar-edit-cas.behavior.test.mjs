@@ -70,6 +70,7 @@ function fullView(action) {
     'next/navigation': { useRouter: () => ({ refresh() {} }) },
     '@/app/_components/AddressAutocomplete': () => null,
     './actions': { updateBookingDetails: action },
+    '@/lib/booking/quote': loadSource('lib/booking/quote.ts'),
   }).default;
 }
 function editForm() {

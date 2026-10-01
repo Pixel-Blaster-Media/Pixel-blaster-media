@@ -1,6 +1,14 @@
 {
   "app/admin/bookings/[id]/EditBookingForm.tsx": [
     [
+      "\"use client\";\nimport { BOOKING_QUOTE_POLICY_VERSION } from \"@/lib/booking/quote\";\n\nimport { useRef, useState, useTransition, type ReactNode } from \"react\";\nimport { useRouter } from \"next/navigation\";\n",
+      "\"use client\";\n\nimport { useRef, useState, useTransition, type ReactNode } from \"react\";\nimport { useRouter } from \"next/navigation\";\n"
+    ],
+    [
+      "    startTransition(async () => {\n      requestRef.current ??= crypto.randomUUID();\n      formData.set(\"admin_request_id\", requestRef.current);\n      formData.set(\"quote_policy_version\", BOOKING_QUOTE_POLICY_VERSION);\n      formData.set(\"lifecycle_version\", String(versionRef.current));\n      const result = await updateBookingDetails(bookingId, formData);\n      if (!result.ok) {\n",
+      "    startTransition(async () => {\n      requestRef.current ??= crypto.randomUUID();\n      formData.set(\"admin_request_id\", requestRef.current);\n      formData.set(\"lifecycle_version\", String(versionRef.current));\n      const result = await updateBookingDetails(bookingId, formData);\n      if (!result.ok) {\n"
+    ],
+    [
       "                {!item.active ? \" (inactive — retained from booking)\" : \"\"}\n              </span>\n              <span className=\"block text-xs text-realtor-muted\">\n                {formatDuration(item.durationMinutes)} · Base {formatPrice(item.priceCents)}\n              </span>\n            </span>\n          </label>\n",
       "                {!item.active ? \" (inactive — retained from booking)\" : \"\"}\n              </span>\n              <span className=\"block text-xs text-realtor-muted\">\n                {formatDuration(item.durationMinutes)} · {formatPrice(item.priceCents)}\n              </span>\n            </span>\n          </label>\n"
     ]
@@ -17,7 +25,7 @@
   ],
   "app/admin/calendar/CalendarWeekView.tsx": [
     [
-      "\"use client\";\n\nimport { getCatalogItemPrice } from \"@/lib/booking/quote\";\n\nimport {\n  ChevronLeft,\n",
+      "\"use client\";\nimport { BOOKING_QUOTE_POLICY_VERSION } from \"@/lib/booking/quote\";\n\nimport { getCatalogItemPrice } from \"@/lib/booking/quote\";\n\nimport {\n  ChevronLeft,\n",
       "\"use client\";\n\nimport {\n  ChevronLeft,\n"
     ],
     [
@@ -27,6 +35,10 @@
     [
       "  includedSqft: number | null;\n  overageIncrementSqft: number | null;\n  overagePriceCents: number | null;\n  videoOverageThresholdSqft: number | null;\n  videoOveragePriceCents: number;\n}\n\ninterface DragTarget {\n",
       "  includedSqft: number | null;\n  overageIncrementSqft: number | null;\n  overagePriceCents: number | null;\n}\n\ninterface DragTarget {\n"
+    ],
+    [
+      "                startTransition(async () => {\n                  createRequestRef.current ??= crypto.randomUUID();\n                  formData.set(\"admin_request_id\", createRequestRef.current);\n                  formData.set(\"quote_policy_version\", BOOKING_QUOTE_POLICY_VERSION);\n                  const result = await createAdminShoot(formData);\n                  if (!result.ok || !result.bookingId) {\n                    setError(result.error ?? \"Could not add shoot.\");\n",
+      "                startTransition(async () => {\n                  createRequestRef.current ??= crypto.randomUUID();\n                  formData.set(\"admin_request_id\", createRequestRef.current);\n                  const result = await createAdminShoot(formData);\n                  if (!result.ok || !result.bookingId) {\n                    setError(result.error ?? \"Could not add shoot.\");\n"
     ],
     [
       "                title=\"Package\"\n                detail=\"Pick what they booked first. Add-ons can stay empty.\"\n              >\n                <CatalogPicker items={catalogItems.filter((item) => item.active)} squareFootage={Number(property.square_footage) || null} />\n              </FormSection>\n\n              <FormSection\n",
@@ -47,6 +59,10 @@
     [
       "    .reduce(\n      (total, catalogItem) =>\n        total +\n        (retainedLines.has(catalogItem.id) ? retainedLines.get(catalogItem.id)!.unit_price_cents * retainedLines.get(catalogItem.id)!.quantity : catalogItemPriceForSquareFootage(catalogItem, details?.squareFootage)),\n      0,\n    );\n  const proposedEnd = new Date(\n",
       "    .reduce(\n      (total, catalogItem) =>\n        total +\n        catalogItemPriceForSquareFootage(catalogItem, details?.squareFootage),\n      0,\n    );\n  const proposedEnd = new Date(\n"
+    ],
+    [
+      "        const formData = new FormData();\n        servicesRequestRef.current ??= crypto.randomUUID();\n        formData.set(\"admin_request_id\", servicesRequestRef.current);\n        formData.set(\"quote_policy_version\", BOOKING_QUOTE_POLICY_VERSION);\n        formData.set(\"lifecycle_version\", String(servicesVersionRef.current));\n        for (const catalogItemId of selectedCatalogItemIds) {\n          formData.append(\"catalog_item_id\", catalogItemId);\n",
+      "        const formData = new FormData();\n        servicesRequestRef.current ??= crypto.randomUUID();\n        formData.set(\"admin_request_id\", servicesRequestRef.current);\n        formData.set(\"lifecycle_version\", String(servicesVersionRef.current));\n        for (const catalogItemId of selectedCatalogItemIds) {\n          formData.append(\"catalog_item_id\", catalogItemId);\n"
     ],
     [
       "  item: CatalogItemOption,\n  squareFootage: number | null | undefined,\n): number {\n  return getCatalogItemPrice({\n    price_cents: item.priceCents, sqft_pricing_enabled: item.sqftPricingEnabled,\n    included_sqft: item.includedSqft, overage_increment_sqft: item.overageIncrementSqft,\n    overage_price_cents: item.overagePriceCents,\n    video_overage_threshold_sqft: item.videoOverageThresholdSqft,\n    video_overage_price_cents: item.videoOveragePriceCents,\n  }, squareFootage).totalPriceCents;\n}\n\nfunction calendarAddonEligible(\n",
@@ -243,7 +259,15 @@
   ],
   "app/book/confirm/ConfirmForm.tsx": [
     [
-      "        ) : null}\n        {/* Carry wizard state into the action */}\n        <input type=\"hidden\" name=\"public_request_id\" value={draftRequestId} />\n        <input type=\"hidden\" name=\"wizard_draft\" value={state.draftId ?? \"\"} />\n        {state.organizationSlug ? (\n          <input type=\"hidden\" name=\"org\" value={state.organizationSlug} />\n        ) : null}\n",
+      "import { useFormStatus } from \"react-dom\";\n\nimport { createPublicBooking, type BookResult } from \"../actions\";\nimport { BOOKING_QUOTE_POLICY_VERSION } from \"@/lib/booking/quote\";\nimport {\n  serializeWizardState,\n  type WizardState,\n",
+      "import { useFormStatus } from \"react-dom\";\n\nimport { createPublicBooking, type BookResult } from \"../actions\";\nimport {\n  serializeWizardState,\n  type WizardState,\n"
+    ],
+    [
+      "  profile,\n  items,\n  children,\n  completedResult,\n}: {\n  requestId: string;\n  state: WizardState;\n  profile: ProfileLite | null;\n  items: BookingTotalItem[];\n  children?: React.ReactNode;\n  completedResult?: Pick<BookResult, \"redirectTo\" | \"receipt\">;\n}) {\n  const [formState, formAction] = useActionState(createPublicBooking, completedResult ? { ok: true, ...completedResult } : initial);\n  // Server Action re-renders can supply a fresh page UUID. Keep the challenge\n  // scope for this mounted draft, just like its contact details and password.\n  const [draftRequestId] = useState(requestId);\n",
+      "  profile,\n  items,\n  children,\n}: {\n  requestId: string;\n  state: WizardState;\n  profile: ProfileLite | null;\n  items: BookingTotalItem[];\n  children?: React.ReactNode;\n}) {\n  const [formState, formAction] = useActionState(createPublicBooking, initial);\n  // Server Action re-renders can supply a fresh page UUID. Keep the challenge\n  // scope for this mounted draft, just like its contact details and password.\n  const [draftRequestId] = useState(requestId);\n"
+    ],
+    [
+      "        ) : null}\n        {/* Carry wizard state into the action */}\n        <input type=\"hidden\" name=\"public_request_id\" value={draftRequestId} />\n        <input type=\"hidden\" name=\"quote_policy_version\" value={BOOKING_QUOTE_POLICY_VERSION} />\n        <input type=\"hidden\" name=\"wizard_draft\" value={state.draftId ?? \"\"} />\n        {state.organizationSlug ? (\n          <input type=\"hidden\" name=\"org\" value={state.organizationSlug} />\n        ) : null}\n",
       "        ) : null}\n        {/* Carry wizard state into the action */}\n        <input type=\"hidden\" name=\"public_request_id\" value={draftRequestId} />\n        {state.organizationSlug ? (\n          <input type=\"hidden\" name=\"org\" value={state.organizationSlug} />\n        ) : null}\n"
     ],
     [
@@ -283,7 +307,7 @@
   ],
   "app/book/confirm/page.tsx": [
     [
-      "import { bookingDurationMinutes } from \"@/lib/booking/quote\";\nimport { readPublicWizardState, loadPrivateWizardState } from \"@/lib/booking/wizard-draft\";\nimport { randomUUID } from \"node:crypto\";\nimport type { Metadata } from \"next\";\nimport { notFound, redirect } from \"next/navigation\";\n",
+      "import { bookingDurationMinutes } from \"@/lib/booking/quote\";\nimport { readPublicWizardState, loadPrivateWizardState, loadCompletedWizardReceipt } from \"@/lib/booking/wizard-draft\";\nimport { randomUUID } from \"node:crypto\";\nimport type { Metadata } from \"next\";\nimport { notFound, redirect } from \"next/navigation\";\n",
       "import { randomUUID } from \"node:crypto\";\nimport type { Metadata } from \"next\";\nimport { notFound, redirect } from \"next/navigation\";\n"
     ],
     [
@@ -291,7 +315,7 @@
       "  searchParams: Promise<Record<string, string | string[] | undefined>>;\n}) {\n  const rawSearchParams = await searchParams;\n  const state = parseWizardState(rawSearchParams);\n  const selectionNotice =\n    rawSearchParams.selection_notice === \"addon_changed\"\n      ? \"An add-on was removed because it is not available with the selected services.\"\n"
     ],
     [
-      "    state.organizationSlug,\n  );\n  if (!organization) notFound();\n  let scopedState = await loadPrivateWizardState({ ...state, organizationSlug: organization.slug }, organization.id);\n  const c = stepCompleteness(scopedState);\n  if (!c.step1) redirect(`/book?${serializeForRedirect(scopedState)}`);\n  if (!c.step2) redirect(`/book/property?${serializeForRedirect(scopedState)}`);\n",
+      "    state.organizationSlug,\n  );\n  if (!organization) notFound();\n  const completed = await loadCompletedWizardReceipt(state.draftId, organization.id);\n  if (completed) {\n    return <BookingBrandFrame organization={organization}>\n      <ConfirmForm requestId=\"\" state={state} profile={null} items={[]} completedResult={completed} />\n    </BookingBrandFrame>;\n  }\n  let scopedState = await loadPrivateWizardState({ ...state, organizationSlug: organization.slug }, organization.id);\n  const c = stepCompleteness(scopedState);\n  if (!c.step1) redirect(`/book?${serializeForRedirect(scopedState)}`);\n  if (!c.step2) redirect(`/book/property?${serializeForRedirect(scopedState)}`);\n",
       "    state.organizationSlug,\n  );\n  if (!organization) notFound();\n  let scopedState = { ...state, organizationSlug: organization.slug };\n  const c = stepCompleteness(scopedState);\n  if (!c.step1) redirect(`/book?${serializeForRedirect(scopedState)}`);\n  if (!c.step2) redirect(`/book/property?${serializeForRedirect(scopedState)}`);\n"
     ],
     [
@@ -425,6 +449,34 @@
     [
       "        Sorry — that did not work.\n      </h1>\n      <p className=\"mt-3 text-sm leading-6 text-realtor-muted\">\n        Try again to reload your saved selections. If this keeps happening, email{\" \"}\n        <a\n          className=\"font-semibold text-realtor-primary\"\n          href=\"mailto:info@pixelblastermedia.com\"\n",
       "        Sorry — that did not work.\n      </h1>\n      <p className=\"mt-3 text-sm leading-6 text-realtor-muted\">\n        Your selections are saved in this page&apos;s link, so trying again\n        will not lose them. If it keeps happening, email{\" \"}\n        <a\n          className=\"font-semibold text-realtor-primary\"\n          href=\"mailto:info@pixelblastermedia.com\"\n"
+    ]
+  ],
+  "app/portal/[propertyId]/page.tsx": [
+    [
+      "\nimport CopyLinkButton from \"./CopyLinkButton\";\nimport ListingWebsiteEditor from \"./ListingWebsiteEditor\";\nimport RebookForm from \"../book/RebookForm\";\n\nexport const dynamic = \"force-dynamic\";\n\n",
+      "\nimport CopyLinkButton from \"./CopyLinkButton\";\nimport ListingWebsiteEditor from \"./ListingWebsiteEditor\";\n\nexport const dynamic = \"force-dynamic\";\n\n"
+    ],
+    [
+      "      .filter((url): url is string => Boolean(url)),\n  );\n  const defaultHeroImage = heroImageOptions[0] ?? \"\";\n\n  return (\n    <div className=\"realtor-theme space-y-8\">\n",
+      "      .filter((url): url is string => Boolean(url)),\n  );\n  const defaultHeroImage = heroImageOptions[0] ?? \"\";\n  const bookSimilarHref = buildSimilarBookingHref(property, latestBooking);\n\n  return (\n    <div className=\"realtor-theme space-y-8\">\n"
+    ],
+    [
+      "            </div>\n          </div>\n          <div className=\"flex lg:justify-end\">\n            <RebookForm propertyId={property.id} bookingId={latestBooking?.id} />\n          </div>\n        </div>\n        <PortalTabs propertyId={property.id} activeTab={activeTab} />\n",
+      "            </div>\n          </div>\n          <div className=\"flex lg:justify-end\">\n            <Link\n              href={bookSimilarHref}\n              className=\"rounded-xl border border-realtor-primary/15 bg-realtor-surface px-4 py-2 text-sm font-semibold text-realtor-text transition hover:border-realtor-primary/35 hover:bg-realtor-surface-muted\"\n            >\n              Book similar shoot\n            </Link>\n          </div>\n        </div>\n        <PortalTabs propertyId={property.id} activeTab={activeTab} />\n"
+    ],
+    [
+      "    .replace(/^-+|-+$/g, \"\")\n    .slice(0, 80);\n}\n",
+      "    .replace(/^-+|-+$/g, \"\")\n    .slice(0, 80);\n}\n\nfunction buildSimilarBookingHref(\n  property: PropertyRow,\n  booking: PropertyRow[\"bookings\"][number] | null,\n): string {\n  const params = new URLSearchParams();\n  params.set(\"repeat\", \"1\");\n  params.set(\"from_property\", property.id);\n  if (booking?.services.length) params.set(\"services\", booking.services.join(\",\"));\n  if (booking?.add_ons.length) params.set(\"add_ons\", booking.add_ons.join(\",\"));\n  params.set(\"street_address\", property.street_address);\n  if (property.city) params.set(\"city\", property.city);\n  if (property.postal_code) params.set(\"postal_code\", property.postal_code);\n  if (booking?.square_footage) {\n    params.set(\"square_footage\", String(booking.square_footage));\n  }\n  const qs = params.toString();\n  return qs ? `/portal/book?${qs}` : \"/portal/book\";\n}\n"
+    ]
+  ],
+  "app/portal/book/page.tsx": [
+    [
+      "\nimport { requireUser } from \"@/lib/auth/require-user\";\nimport { getServiceSupabase } from \"@/lib/supabase/server\";\nimport RebookForm from \"./RebookForm\";\n\nexport const metadata: Metadata = { title: \"Book a shoot\" };\nexport const dynamic = \"force-dynamic\";\n",
+      "\nimport { requireUser } from \"@/lib/auth/require-user\";\nimport { getServiceSupabase } from \"@/lib/supabase/server\";\n\nexport const metadata: Metadata = { title: \"Book a shoot\" };\nexport const dynamic = \"force-dynamic\";\n"
+    ],
+    [
+      "  const params = await searchParams;\n  const user = await requireUser(\"/portal/book\");\n  const organizationSlug = await getOrganizationSlug(user.organizationId);\n  const propertyId = firstParam(params.from_property);\n  const bookingId = firstParam(params.from_booking);\n  if (propertyId) {\n    // Legacy bookmarks may contain private fields. Strip them before displaying\n    // the explicit POST handoff; the action reloads owned data from the database.\n    if (Object.keys(params).some((key) => ![\"from_property\", \"from_booking\"].includes(key))) {\n      const clean = new URLSearchParams({ from_property: propertyId });\n      if (bookingId) clean.set(\"from_booking\", bookingId);\n      redirect(`/portal/book?${clean.toString()}`);\n    }\n    return <main className=\"space-y-4\"><h1 className=\"text-xl font-semibold\">Book another shoot</h1>\n      <p>Review the property details and choose a new time.</p>\n      <RebookForm propertyId={propertyId} bookingId={bookingId || undefined} />\n    </main>;\n  }\n\n  const next = new URLSearchParams();\n  if (organizationSlug) next.set(\"org\", organizationSlug);\n  copyParam(params, next, \"services\", \"services\");\n  copyParam(params, next, \"add_ons\", \"add_ons\");\n\n  const hasServices = Boolean(next.get(\"services\"));\n  const step = hasServices ? \"/book/property\" : \"/book\";\n  const qs = next.toString();\n\n  redirect(qs ? `${step}?${qs}` : step);\n}\n\nfunction firstParam(value: string | string[] | undefined): string {\n  return (Array.isArray(value) ? value[0] : value)?.trim() ?? \"\";\n}\n\nasync function getOrganizationSlug(organizationId: string): Promise<string | null> {\n",
+      "  const params = await searchParams;\n  const user = await requireUser(\"/portal/book\");\n  const organizationSlug = await getOrganizationSlug(user.organizationId);\n\n  const next = new URLSearchParams();\n  if (organizationSlug) next.set(\"org\", organizationSlug);\n  copyParam(params, next, \"services\", \"services\");\n  copyParam(params, next, \"add_ons\", \"add_ons\");\n  copyParam(params, next, \"slot\", \"slot\");\n  copyParam(params, next, \"street_address\", \"address\");\n  copyParam(params, next, \"unit_number\", \"unit\");\n  copyParam(params, next, \"city\", \"city\");\n  copyParam(params, next, \"postal_code\", \"postal\");\n  copyParam(params, next, \"square_footage\", \"sqft\");\n  copyParam(params, next, \"is_vacant\", \"vacant\");\n  copyParam(params, next, \"include_basement\", \"basement\");\n  copyParam(params, next, \"shoot_notes\", \"shoot_notes\");\n\n  const hasServices = Boolean(next.get(\"services\"));\n  const hasProperty = Boolean(next.get(\"address\") && next.get(\"city\"));\n  const hasSlot = Boolean(next.get(\"slot\"));\n  const step = hasServices\n    ? hasProperty\n      ? hasSlot\n        ? \"/book/confirm\"\n        : \"/book/schedule\"\n      : \"/book/property\"\n    : \"/book\";\n  const qs = next.toString();\n\n  redirect(qs ? `${step}?${qs}` : step);\n}\n\nasync function getOrganizationSlug(organizationId: string): Promise<string | null> {\n"
     ]
   ]
 }

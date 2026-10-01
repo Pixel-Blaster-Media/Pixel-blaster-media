@@ -1,4 +1,5 @@
 "use client";
+import { BOOKING_QUOTE_POLICY_VERSION } from "@/lib/booking/quote";
 
 import { getCatalogItemPrice } from "@/lib/booking/quote";
 
@@ -1609,6 +1610,7 @@ export default function CalendarWeekView({
                 startTransition(async () => {
                   createRequestRef.current ??= crypto.randomUUID();
                   formData.set("admin_request_id", createRequestRef.current);
+                  formData.set("quote_policy_version", BOOKING_QUOTE_POLICY_VERSION);
                   const result = await createAdminShoot(formData);
                   if (!result.ok || !result.bookingId) {
                     setError(result.error ?? "Could not add shoot.");
@@ -2318,6 +2320,7 @@ function CalendarQuickView({
         const formData = new FormData();
         servicesRequestRef.current ??= crypto.randomUUID();
         formData.set("admin_request_id", servicesRequestRef.current);
+        formData.set("quote_policy_version", BOOKING_QUOTE_POLICY_VERSION);
         formData.set("lifecycle_version", String(servicesVersionRef.current));
         for (const catalogItemId of selectedCatalogItemIds) {
           formData.append("catalog_item_id", catalogItemId);

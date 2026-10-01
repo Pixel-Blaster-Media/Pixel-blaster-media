@@ -1,5 +1,7 @@
 "use server";
 
+import { BOOKING_QUOTE_CHANGED_MESSAGE } from "@/lib/booking/quote";
+
 import { revalidatePath } from "next/cache";
 
 import {
@@ -475,6 +477,7 @@ export async function updateBookingDetails(
     p_booking_id: booking.id,
     p_expected_version: Number(versionToken),
     p_input: {
+      quote_policy_version: str(formData, "quote_policy_version"),
       owner_id: booking.owner_id, street_address: streetAddress, city, province,
       contact_name: contactName, contact_phone: contactPhone, brokerage,
       postal_code: postalCode, unit_number: unitNumber, client_notes: clientNotes,
@@ -483,6 +486,7 @@ export async function updateBookingDetails(
       catalog_item_ids: selectedItems.map(item => item.id),
     },
   });
+  if (updateError?.code === "PB005") return { ok: false, error: BOOKING_QUOTE_CHANGED_MESSAGE };
   if (updateError || !saved) return { ok: false, error: "Booking changed or could not be saved. Reload and try again." };
   if (saved.replayed) return { ok: true, lifecycleVersion: saved.lifecycle_version };
   const lineItemWarning: string | undefined = undefined;
@@ -723,6 +727,7 @@ export async function updateBookingServicesFromCalendar(
     p_booking_id: booking.id,
     p_expected_version: Number(versionToken),
     p_input: {
+      quote_policy_version: str(formData, "quote_policy_version"),
       owner_id: booking.owner_id, street_address: booking.properties.street_address,
       city: booking.properties.city, province: booking.properties.province,
       postal_code: booking.properties.postal_code, unit_number: booking.unit_number,
@@ -730,6 +735,7 @@ export async function updateBookingServicesFromCalendar(
       square_footage: booking.square_footage, catalog_item_ids: selectedCatalogIds,
     },
   });
+  if (updateError?.code === "PB005") return { ok: false, error: BOOKING_QUOTE_CHANGED_MESSAGE };
   if (updateError || !saved) return { ok: false, error: "Booking changed or could not be saved. Reload and try again." };
   if (saved.replayed) return { ok: true };
   const lineItemWarning: string | undefined = undefined;

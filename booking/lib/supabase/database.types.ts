@@ -1679,6 +1679,11 @@ export interface Database {
         };
         Returns: Json;
       };
+      create_public_booking_with_jobs_v2: {
+        Args: Database["public"]["Functions"]["create_public_booking_with_jobs"]["Args"] & { p_quote_policy_version: string };
+        Returns: Json;
+      };
+      current_booking_quote_policy: { Args: Record<string, never>; Returns: string };
       claim_integration_job: {
         Args: {
           p_organization_id: string;

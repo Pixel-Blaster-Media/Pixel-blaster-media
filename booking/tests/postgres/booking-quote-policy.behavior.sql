@@ -55,7 +55,7 @@ begin
   (7,2501,false,array[video_id],'{}'::uuid[],37500,60)
  ) v(day_offset,sqft,basement,services,addons,price,minutes) loop
   request_id := gen_random_uuid();
-  result := public.create_public_booking_with_jobs(request_id,org_id,owner_id,'10 Quote Street','Toronto','M1M1M1','',
+  result := public.create_public_booking_with_jobs_v2('2026-09-30-v1',request_id,org_id,owner_id,'10 Quote Street','Toronto','M1M1M1','',
    base_slot+make_interval(days=>row_case.day_offset),row_case.sqft,'vacant',row_case.basement,'',row_case.services,row_case.addons);
   quote_booking_id := (result->>'booking_id')::uuid;
   if (select sum(l.unit_price_cents*l.quantity) from public.booking_line_items l where l.booking_id=quote_booking_id) <> row_case.price
@@ -98,7 +98,7 @@ begin
  end loop;
  -- A new admin booking snapshots the same fee and once-only basement duration.
  result := public.save_admin_booking_aggregate(org_id,actor_id,gen_random_uuid(),null,null,
-  jsonb_build_object('owner_id',owner_id,'street_address','20 Quote Street','city','Toronto','postal_code','M1M1M1',
+  jsonb_build_object('quote_policy_version','2026-09-30-v1','owner_id',owner_id,'street_address','20 Quote Street','city','Toronto','postal_code','M1M1M1',
    'scheduled_at',base_slot+interval '40 days','square_footage',2501,'include_basement',true,'catalog_item_ids',jsonb_build_array(ultimate_id,video_id)));
  quote_booking_id := (result->>'booking_id')::uuid;
  if (select sum(unit_price_cents*quantity) from public.booking_line_items l where l.booking_id=quote_booking_id) <> 141500

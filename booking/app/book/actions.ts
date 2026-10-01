@@ -1,7 +1,7 @@
 "use server";
 
-import { bookingDurationMinutes } from "@/lib/booking/quote";
-import { clearPrivateWizardDraft } from "@/lib/booking/wizard-draft";
+import { bookingDurationMinutes, BOOKING_QUOTE_POLICY_VERSION, BOOKING_QUOTE_CHANGED_MESSAGE } from "@/lib/booking/quote";
+import { completePrivateWizardDraft } from "@/lib/booking/wizard-draft";
 
 import { randomUUID } from "node:crypto";
 
@@ -211,6 +211,12 @@ export async function createPublicBooking(
   let validServices: BookingCatalogItem[] = [];
   let validAddons: BookingCatalogItem[] = [];
 
+  // A stale browser must explicitly review the new policy. Never manufacture
+  // consent by inserting the server's current version into old form data.
+  if (!existingRequest && str(formData, "quote_policy_version") !== BOOKING_QUOTE_POLICY_VERSION) {
+    return { ok: false, errors: { _form: BOOKING_QUOTE_CHANGED_MESSAGE } };
+  }
+
   if (existingRequest) {
     const { data: snapshotData, error: snapshotError } = await supabase
       .from("booking_line_items")
@@ -354,8 +360,9 @@ export async function createPublicBooking(
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
   const { data: atomicData, error: bookErr } = await supabase.rpc(
-    "create_public_booking_with_jobs",
+    "create_public_booking_with_jobs_v2",
     {
+      p_quote_policy_version: str(formData, "quote_policy_version"),
       p_request_id: publicRequestId,
       p_organization_id: organizationId,
       p_owner_id: userId,
@@ -387,6 +394,9 @@ export async function createPublicBooking(
       if (rollback.status !== "deleted") {
         return cleanupNeedsSupport(rollback.reference);
       }
+    }
+    if (bookErr?.code === "PB005") {
+      return { ok: false, errors: { _form: BOOKING_QUOTE_CHANGED_MESSAGE } };
     }
     if (bookErr?.code === "23P01") {
       return {
@@ -482,15 +492,17 @@ export async function createPublicBooking(
       org: organization.name,
       ...(manageToken ? { manage: manageToken } : {}),
     });
-    await clearPrivateWizardDraft(String(formData.get("wizard_draft") ?? ""));
-    return { ok: true, redirectTo: `/book/success?${params.toString()}`, receipt };
+    const redirectTo = `/book/success?${params.toString()}`;
+    await completePrivateWizardDraft(String(formData.get("wizard_draft") ?? ""), organizationId, { redirectTo, receipt });
+    return { ok: true, redirectTo, receipt };
   }
 
   // Do not let Next inline an authenticated redirect's RSC response here.
   // Its internal cross-host fetch can lose cookies at the canonical proxy
   // redirect even though this action successfully installed browser cookies.
-  await clearPrivateWizardDraft(String(formData.get("wizard_draft") ?? ""));
-  return { ok: true, redirectTo: `/portal/${propertyId}?booked=1`, receipt };
+  const redirectTo = `/portal/${propertyId}?booked=1`;
+  await completePrivateWizardDraft(String(formData.get("wizard_draft") ?? ""), organizationId, { redirectTo, receipt });
+  return { ok: true, redirectTo, receipt };
 }
 
 // -------- Helpers --------

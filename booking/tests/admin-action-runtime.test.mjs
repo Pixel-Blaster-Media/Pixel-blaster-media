@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import {BOOKING_QUOTE_POLICY_VERSION, BOOKING_QUOTE_CHANGED_MESSAGE} from '../lib/booking/quote.ts';
 const source=fs.readFileSync(new URL('../app/admin/calendar/actions.ts',import.meta.url),'utf8');
 const ast=ts.createSourceFile('actions.ts',source,ts.ScriptTarget.Latest,true);
 const fn=ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='createAdminShoot');
@@ -10,7 +11,7 @@ const code=ts.transpileModule(fn.getText(ast),{compilerOptions:{module:ts.Module
 function harness(result){
  const calls=[];
  const query={select(){return this},eq(){return this},async maybeSingle(){return {data:{full_name:'Realtor',phone:'',brokerage:''}}}};
- const context={exports:{},process:{env:{}},console,crypto:globalThis.crypto,
+ const context={BOOKING_QUOTE_POLICY_VERSION,BOOKING_QUOTE_CHANGED_MESSAGE,exports:{},process:{env:{}},console,crypto:globalThis.crypto,
   requireAdmin:async()=>({organizationId:'tenant',userId:'actor'}),
   str:(f,k)=>String(f.get(k)??'').trim(),businessDateTimeLocalToUtc:()=>new Date('2030-01-01T15:00Z'),parseOptionalInt:()=>3000,
   getActiveCatalog:async()=>({bundles:[],aLaCarte:[],addons:[]}),findOrCreateRealtor:async()=>({userId:'owner',newlyCreated:false}),
@@ -35,7 +36,7 @@ test('actual package action forwards submitted CAS and stops on stale conflict',
  assert.equal((await ctx.exports.updateBookingServicesFromCalendar('booking',f)).ok,false);
  assert.equal(calls.length,1);assert.equal(calls[0].p_expected_version,7);assert.equal(calls[0].p_request_id,f.get('admin_request_id'));
 });
-function form(){const f=new FormData();for(const [k,v] of Object.entries({admin_request_id:'00000000-0000-4000-8000-000000000001',scheduled_at:'2030-01-01T10:00',contact_email:'r@example.test',contact_name:'Realtor',street_address:'Test',catalog_item_id:'catalog'}))f.set(k,v);return f;}
+function form(){const f=new FormData();for(const [k,v] of Object.entries({quote_policy_version:BOOKING_QUOTE_POLICY_VERSION,admin_request_id:'00000000-0000-4000-8000-000000000001',scheduled_at:'2030-01-01T10:00',contact_email:'r@example.test',contact_name:'Realtor',street_address:'Test',catalog_item_id:'catalog'}))f.set(k,v);return f;}
 test('actual create action passes stable request identity and replay has no effects',async()=>{
  const h=harness({data:{booking_id:'booking',replayed:true}});const f=form();
  for(let i=0;i<2;i++)assert.equal((await h.action(f)).bookingId,'booking');
@@ -43,3 +44,10 @@ test('actual create action passes stable request identity and replay has no effe
  assert.equal(h.calls[0].input.p_request_id,f.get('admin_request_id'));assert.equal(h.calls[0].input.p_expected_version,null);
 });
 test('actual create action rejects missing request identity before RPC',async()=>{const h=harness({});const f=form();f.delete('admin_request_id');assert.equal((await h.action(f)).ok,false);assert.equal(h.calls.length,0)});
+
+test('actual admin create action requires the browser quote version before provisioning or RPC',async()=>{
+ for(const version of [null,'','legacy']) {
+  const h=harness({});const f=form();if(version===null)f.delete('quote_policy_version');else f.set('quote_policy_version',version);
+  const result=await h.action(f);assert.equal(result.ok,false);assert.equal(result.error,BOOKING_QUOTE_CHANGED_MESSAGE);assert.equal(h.calls.length,0);
+ }
+});

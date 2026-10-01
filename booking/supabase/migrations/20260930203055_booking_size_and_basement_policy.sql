@@ -162,6 +162,13 @@ begin
     );
   end if;
 
+  -- An old wrapper already in flight must not enter this new-price core.
+  -- Completed request replays returned above and retain their original terms.
+  if pg_catalog.current_setting('pixel_booking.quote_policy', true) is distinct from '2026-09-30-v1'
+     or public.current_booking_quote_policy() is distinct from '2026-09-30-v1' then
+    raise exception 'Booking quote changed; refresh and review before confirming' using errcode = 'PB005';
+  end if;
+
   if nullif(pg_catalog.btrim(p_street_address), '') is null
      or p_scheduled_at is null
      or p_scheduled_at <= pg_catalog.now()
@@ -541,6 +548,10 @@ begin
   end if;
   if nullif(btrim(p_input->>'street_address'),'') is null or (p_booking_id is null and v_start is null) or v_sqft<0 then raise exception 'Invalid input' using errcode='PB002'; end if;
   if not v_retained then
+  if p_input->>'quote_policy_version' is distinct from '2026-09-30-v1'
+    or public.current_booking_quote_policy() is distinct from '2026-09-30-v1' then
+    raise exception 'Booking quote changed; refresh and review before saving' using errcode='PB005';
+  end if;
   if coalesce(cardinality(v_ids),0)=0 or cardinality(v_ids)<>(select count(distinct x) from unnest(v_ids) x)
     or exists(select 1 from unnest(v_ids) x left join public.catalog_items c on c.id=x and c.organization_id=p_organization_id and (c.active or exists(select 1 from public.booking_line_items l where l.booking_id=p_booking_id and l.catalog_item_id=x)) where c.id is null)
     or not exists(select 1 from public.catalog_items c where c.id=any(v_ids) and c.kind in ('bundle','a_la_carte'))
@@ -608,3 +619,10 @@ begin
 end $$;
 revoke all on function public.save_admin_booking_aggregate(uuid,uuid,uuid,uuid,bigint,jsonb) from public,anon,authenticated;
 grant execute on function public.save_admin_booking_aggregate(uuid,uuid,uuid,uuid,bigint,jsonb) to service_role;
+
+-- Activate only after all quote/snapshot functions and columns are installed.
+-- Legacy public writers remain replay-only; versioned forms must reconfirm.
+create or replace function public.current_booking_quote_policy()
+returns text language sql stable security invoker set search_path = '' as $$ select '2026-09-30-v1'::text $$;
+revoke all on function public.current_booking_quote_policy() from public,anon,authenticated;
+grant execute on function public.current_booking_quote_policy() to service_role;

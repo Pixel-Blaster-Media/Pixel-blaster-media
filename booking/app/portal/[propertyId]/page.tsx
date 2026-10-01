@@ -39,6 +39,7 @@ import type {
 
 import CopyLinkButton from "./CopyLinkButton";
 import ListingWebsiteEditor from "./ListingWebsiteEditor";
+import RebookForm from "../book/RebookForm";
 
 export const dynamic = "force-dynamic";
 
@@ -175,7 +176,6 @@ export default async function PropertyDetailPage({
       .filter((url): url is string => Boolean(url)),
   );
   const defaultHeroImage = heroImageOptions[0] ?? "";
-  const bookSimilarHref = buildSimilarBookingHref(property, latestBooking);
 
   return (
     <div className="realtor-theme space-y-8">
@@ -230,12 +230,7 @@ export default async function PropertyDetailPage({
             </div>
           </div>
           <div className="flex lg:justify-end">
-            <Link
-              href={bookSimilarHref}
-              className="rounded-xl border border-realtor-primary/15 bg-realtor-surface px-4 py-2 text-sm font-semibold text-realtor-text transition hover:border-realtor-primary/35 hover:bg-realtor-surface-muted"
-            >
-              Book similar shoot
-            </Link>
+            <RebookForm propertyId={property.id} bookingId={latestBooking?.id} />
           </div>
         </div>
         <PortalTabs propertyId={property.id} activeTab={activeTab} />
@@ -980,23 +975,4 @@ function buildListingSlug(address: string, city: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
-}
-
-function buildSimilarBookingHref(
-  property: PropertyRow,
-  booking: PropertyRow["bookings"][number] | null,
-): string {
-  const params = new URLSearchParams();
-  params.set("repeat", "1");
-  params.set("from_property", property.id);
-  if (booking?.services.length) params.set("services", booking.services.join(","));
-  if (booking?.add_ons.length) params.set("add_ons", booking.add_ons.join(","));
-  params.set("street_address", property.street_address);
-  if (property.city) params.set("city", property.city);
-  if (property.postal_code) params.set("postal_code", property.postal_code);
-  if (booking?.square_footage) {
-    params.set("square_footage", String(booking.square_footage));
-  }
-  const qs = params.toString();
-  return qs ? `/portal/book?${qs}` : "/portal/book";
 }

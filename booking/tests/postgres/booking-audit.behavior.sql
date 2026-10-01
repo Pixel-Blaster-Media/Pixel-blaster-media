@@ -50,7 +50,7 @@ declare
  variant record; job public.booking_lifecycle_notices%rowtype; first_job uuid;
  notices jsonb := '[{"recipient":"realtor","payload":{"to":"realtor@audit.invalid","from":"studio@audit.invalid","replyTo":null,"subject":"Changed","html":"<p>Fixture</p>"}},{"recipient":"admin","payload":{"to":"admin@audit.invalid","from":"studio@audit.invalid","replyTo":null,"subject":"Changed","html":"<p>Fixture</p>"}}]';
 begin
- first_result := public.create_public_booking_with_jobs(request_id,org_a,owner_a,
+ first_result := public.create_public_booking_with_jobs_v2('2026-09-30-v1',request_id,org_a,owner_a,
   '10 Shared Street','Toronto','M1M 1M1','1',base_slot,1800,'vacant',false,'Fixture',array[catalog_a],'{}'::uuid[]);
  target_property_id := (first_result->>'property_id')::uuid;
  target_booking_id := (first_result->>'booking_id')::uuid;
@@ -71,17 +71,17 @@ begin
  for variant in select * from (values
   (1,' toronto ','m1m1m1',true), (2,'Ottawa','M1M 1M1',false),
   (3,'Toronto','M2M 2M2',false), (4,'Toronto',null::text,false)) v(day_offset,city,postal,reuse) loop
-  result := public.create_public_booking_with_jobs(gen_random_uuid(),org_a,owner_a,
+  result := public.create_public_booking_with_jobs_v2('2026-09-30-v1',gen_random_uuid(),org_a,owner_a,
    ' 10 shared street ',variant.city,variant.postal,'2',base_slot+make_interval(days=>variant.day_offset),1800,'vacant',false,'',array[catalog_a],'{}'::uuid[]);
   if ((result->>'property_id')::uuid=target_property_id) is distinct from variant.reuse then
    raise exception 'Incorrect property identity for city/postal variant %',variant.day_offset;
   end if;
   if variant.day_offset=1 then second_booking := (result->>'booking_id')::uuid; end if;
  end loop;
- result := public.create_public_booking_with_jobs(gen_random_uuid(),org_a,'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+ result := public.create_public_booking_with_jobs_v2('2026-09-30-v1',gen_random_uuid(),org_a,'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
   '10 Shared Street','Toronto','M1M 1M1','',base_slot+interval '5 days',1800,'vacant',false,'',array[catalog_a],'{}'::uuid[]);
  if (result->>'property_id')::uuid=target_property_id then raise exception 'Different owner reused property'; end if;
- result := public.create_public_booking_with_jobs(gen_random_uuid(),org_b,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+ result := public.create_public_booking_with_jobs_v2('2026-09-30-v1',gen_random_uuid(),org_b,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   '10 Shared Street','Toronto','M1M 1M1','',base_slot,1800,'vacant',false,'',array['20000000-0000-4000-8000-000000000001']::uuid[],'{}'::uuid[]);
  if (result->>'property_id')::uuid=target_property_id then raise exception 'Different tenant reused property'; end if;
  if (select city from public.properties p where p.id=target_property_id) <> 'Toronto'

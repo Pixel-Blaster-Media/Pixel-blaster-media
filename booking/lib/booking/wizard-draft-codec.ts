@@ -3,6 +3,10 @@ import type { WizardState } from "./wizard-state";
 
 export type PrivateWizardProperty = Pick<WizardState, "streetAddress" | "unitNumber" | "city" | "postalCode" | "squareFootage" | "isVacant" | "includeBasement" | "shotRequests" | "shootNotes">;
 export const DRAFT_TTL_SECONDS = 2 * 60 * 60;
+export interface CompletedWizardReceipt {
+  redirectTo: string;
+  receipt: { address: string; when: string; services: string[]; organizationName: string };
+}
 // AES-GCM/base64 expansion keeps each cookie below 3.2 KB, including its name.
 const MAX_PLAINTEXT_BYTES = 2300;
 
@@ -34,7 +38,15 @@ function key(secret: string): Buffer {
 }
 
 export function sealWizardDraft(property: PrivateWizardProperty, secret: string, binding: string, now = Date.now()): string {
-  const plaintext = Buffer.from(JSON.stringify({ property, expires: now + DRAFT_TTL_SECONDS * 1000 }));
+  return sealPayload({ property }, secret, binding, now);
+}
+
+export function sealWizardReceipt(completed: CompletedWizardReceipt, secret: string, binding: string, now = Date.now()): string {
+  return sealPayload({ completed: normalizeReceipt(completed) }, secret, binding, now);
+}
+
+function sealPayload(payload: object, secret: string, binding: string, now: number): string {
+  const plaintext = Buffer.from(JSON.stringify({ ...payload, expires: now + DRAFT_TTL_SECONDS * 1000 }));
   if (plaintext.length > MAX_PLAINTEXT_BYTES) throw new Error("Property details are too long to save. Please shorten the notes and try again.");
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key(secret), iv);
@@ -44,6 +56,30 @@ export function sealWizardDraft(property: PrivateWizardProperty, secret: string,
 }
 
 export function openWizardDraft(value: string, secret: string, binding: string, now = Date.now()): PrivateWizardProperty | null {
+  try { return normalizePrivateProperty(openPayload(value, secret, binding, now)?.property); }
+  catch { return null; }
+}
+
+export function openWizardReceipt(value: string, secret: string, binding: string, now = Date.now()): CompletedWizardReceipt | null {
+  try { return normalizeReceipt(openPayload(value, secret, binding, now)?.completed); }
+  catch { return null; }
+}
+
+function normalizeReceipt(value: unknown): CompletedWizardReceipt {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid receipt");
+  const completed = value as Record<string, unknown>;
+  const receipt = completed.receipt as Record<string, unknown> | undefined;
+  if (typeof completed.redirectTo !== "string" ||
+      !/^\/(?:portal\/[^/?#]+\?booked=1|book\/success\?[^\r\n\\]*)$/.test(completed.redirectTo) ||
+      !receipt || typeof receipt.address !== "string" || typeof receipt.when !== "string" ||
+      typeof receipt.organizationName !== "string" || !Array.isArray(receipt.services) ||
+      !receipt.services.every((service) => typeof service === "string")) throw new Error("Invalid receipt");
+  // Copy only receipt fields. Never retain access notes, occupancy or other draft data.
+  return { redirectTo: completed.redirectTo, receipt: { address: receipt.address,
+    when: receipt.when, organizationName: receipt.organizationName, services: [...receipt.services] } };
+}
+
+function openPayload(value: string, secret: string, binding: string, now: number): Record<string, unknown> | null {
   try {
     if (!/^[A-Za-z0-9_-]{40,3200}$/.test(value)) return null;
     const bytes = Buffer.from(value, "base64url");
@@ -52,6 +88,6 @@ export function openWizardDraft(value: string, secret: string, binding: string, 
     decipher.setAuthTag(bytes.subarray(12, 28));
     const decoded = JSON.parse(Buffer.concat([decipher.update(bytes.subarray(28)), decipher.final()]).toString("utf8"));
     if (!Number.isFinite(decoded.expires) || decoded.expires <= now || decoded.expires > now + DRAFT_TTL_SECONDS * 1000) return null;
-    return normalizePrivateProperty(decoded.property);
+    return decoded;
   } catch { return null; }
 }

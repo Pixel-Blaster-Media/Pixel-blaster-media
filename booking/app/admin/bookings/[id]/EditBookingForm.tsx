@@ -1,4 +1,5 @@
 "use client";
+import { BOOKING_QUOTE_POLICY_VERSION } from "@/lib/booking/quote";
 
 import { useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -76,6 +77,7 @@ export default function EditBookingForm({
     startTransition(async () => {
       requestRef.current ??= crypto.randomUUID();
       formData.set("admin_request_id", requestRef.current);
+      formData.set("quote_policy_version", BOOKING_QUOTE_POLICY_VERSION);
       formData.set("lifecycle_version", String(versionRef.current));
       const result = await updateBookingDetails(bookingId, formData);
       if (!result.ok) {

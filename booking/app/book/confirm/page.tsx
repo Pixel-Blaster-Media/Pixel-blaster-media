@@ -1,5 +1,5 @@
 import { bookingDurationMinutes } from "@/lib/booking/quote";
-import { readPublicWizardState, loadPrivateWizardState } from "@/lib/booking/wizard-draft";
+import { readPublicWizardState, loadPrivateWizardState, loadCompletedWizardReceipt } from "@/lib/booking/wizard-draft";
 import { randomUUID } from "node:crypto";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
@@ -55,6 +55,12 @@ export default async function BookStep4Page({
     state.organizationSlug,
   );
   if (!organization) notFound();
+  const completed = await loadCompletedWizardReceipt(state.draftId, organization.id);
+  if (completed) {
+    return <BookingBrandFrame organization={organization}>
+      <ConfirmForm requestId="" state={state} profile={null} items={[]} completedResult={completed} />
+    </BookingBrandFrame>;
+  }
   let scopedState = await loadPrivateWizardState({ ...state, organizationSlug: organization.slug }, organization.id);
   const c = stepCompleteness(scopedState);
   if (!c.step1) redirect(`/book?${serializeForRedirect(scopedState)}`);
