@@ -1,18 +1,24 @@
-"use server";
+import "server-only";
 
-import { notFound, redirect } from "next/navigation";
-import { requireUser } from "@/lib/auth/require-user";
+import { notFound } from "next/navigation";
+import { getCurrentUserResult } from "@/lib/auth/current-user";
 import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
 import { saveBookingWizardDraft } from "@/app/book/draft-actions";
 
-export type RebookResult = { error: string } | null;
+export type RebookResult = { href: string } | { error: string };
 type RebookProperty = { street_address: string; city: string | null; postal_code: string | null };
 type RebookBooking = { id: string; services: string[]; add_ons: string[]; square_footage: number | null; unit_number: string | null };
 
 /** A POST creates the private draft only after resolving the current owner and
  * company. Neither the link nor hidden inputs carry property/access details. */
-export async function startSimilarBooking(_previous: RebookResult, formData: FormData): Promise<RebookResult> {
-  const user = await requireUser("/portal/book");
+export async function startSimilarBooking(formData: FormData): Promise<RebookResult> {
+  const current = await getCurrentUserResult();
+  if (current.kind !== "active") {
+    const destinations = { missing: "/auth/sign-in?audience=realtor&next=%2Fportal%2Fbook", invalid: "/auth/session-invalid?audience=realtor&next=%2Fportal%2Fbook", unavailable: "/auth/access-unavailable", no_workspace: "/auth/no-workspace" };
+    return { href: destinations[current.kind] };
+  }
+  const user = current.profile;
+  if (user.archivedAt) return { href: "/auth/no-workspace" };
   const propertyId = String(formData.get("property_id") ?? "");
   const bookingId = String(formData.get("booking_id") ?? "");
   if (user.role !== "realtor" || !/^[0-9a-f-]{36}$/.test(propertyId) ||
@@ -40,5 +46,5 @@ export async function startSimilarBooking(_previous: RebookResult, formData: For
     isVacant: null, includeBasement: null, shotRequests: [], shootNotes: "",
   } });
   if (!saved.ok) return { error: saved.error };
-  redirect(`${booking?.services.length ? "/book/property" : "/book"}?${saved.query}`);
+  return { href: `${booking?.services.length ? "/book/property" : "/book"}?${saved.query}` };
 }

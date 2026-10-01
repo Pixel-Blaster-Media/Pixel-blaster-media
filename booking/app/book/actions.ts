@@ -1,7 +1,7 @@
 "use server";
 
 import { bookingDurationMinutes, BOOKING_QUOTE_POLICY_VERSION, BOOKING_QUOTE_CHANGED_MESSAGE } from "@/lib/booking/quote";
-import { completePrivateWizardDraft } from "@/lib/booking/wizard-draft";
+import { completePrivateWizardDraft, hasActivePrivateWizardDraft } from "@/lib/booking/wizard-draft";
 
 import { randomUUID } from "node:crypto";
 
@@ -215,6 +215,12 @@ export async function createPublicBooking(
   // consent by inserting the server's current version into old form data.
   if (!existingRequest && str(formData, "quote_policy_version") !== BOOKING_QUOTE_POLICY_VERSION) {
     return { ok: false, errors: { _form: BOOKING_QUOTE_CHANGED_MESSAGE } };
+  }
+
+  // An expired browser draft must stop before authentication changes or writes.
+  // Committed replays still authenticate and validate their immutable payload.
+  if (!existingRequest && !await hasActivePrivateWizardDraft(str(formData, "wizard_draft"), organization.id)) {
+    return { ok: false, errors: { _form: "Your private booking draft expired. Return to Property and review your details before confirming." } };
   }
 
   if (existingRequest) {

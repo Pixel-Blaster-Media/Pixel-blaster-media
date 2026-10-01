@@ -1,3 +1,9 @@
+select pg_temp.assert_admin_cutover_replay(true);
+select pg_temp.assert_admin_new_writes_blocked(false);
+do $$ begin
+ if exists(select 1 from public.bookings where basement_duration_minutes<>0) then raise exception 'Historical basement duration changed'; end if;
+ if pg_temp.cutover_state() is distinct from (select state from cutover_state_snapshot) then raise exception 'Admin retries/rejections changed persistent state'; end if;
+end $$;
 do $$ declare response jsonb; new_booking_id uuid; v text; begin
  if public.current_booking_quote_policy()<>'2026-09-30-v1' then raise exception 'Final policy not activated'; end if;
  begin

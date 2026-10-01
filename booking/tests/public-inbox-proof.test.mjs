@@ -60,7 +60,7 @@ function fixture() {
     '@/lib/booking/manage-token': { createManageToken: () => 'fake-manage' },
     // Private cookie storage has separate real-module behavior coverage. Keep
     // inbox proof tests isolated from Next's request-bound cookie adapter.
-    '@/lib/booking/wizard-draft': { completePrivateWizardDraft: async () => {} },
+    '@/lib/booking/wizard-draft': { completePrivateWizardDraft: async () => {}, hasActivePrivateWizardDraft: async () => true },
     '@/lib/email/settings': { getAdminNotificationEmail: async () => null },
     '@/lib/email/resend': { sendEmail: async (message) => { inbox.push(message); return { ok: true, id: 'fake-email' }; } },
     '@/lib/integrations/dispatcher': { dispatchBookingIntegrationJobs: async () => { effects.push('dispatch'); } },
@@ -184,5 +184,16 @@ for (const version of [null, '', 'legacy', '2026-09-30-v0']) test(`stale quote p
   const result = await f.action(null, f.form);
   assert.equal(result.ok, false);
   assert.match(result.errors._form, /Refresh and review your quote/);
+  assert.deepEqual(f.effects, []); assert.deepEqual(f.inbox, []);
+});
+
+
+test('expired anonymous draft fails before password sign-in, session, email or booking effects', async () => {
+  const f = fixture();
+  f.mocks['@/lib/booking/wizard-draft'].hasActivePrivateWizardDraft = async () => false;
+  f.mocks['@/lib/auth/email-lookup'].emailHasAccount = async () => true;
+  const result = await f.action(null, f.form);
+  assert.equal(result.ok, false);
+  assert.match(result.errors._form, /private booking draft expired/);
   assert.deepEqual(f.effects, []); assert.deepEqual(f.inbox, []);
 });

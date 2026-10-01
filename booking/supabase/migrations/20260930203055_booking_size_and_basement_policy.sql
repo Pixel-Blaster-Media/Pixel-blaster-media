@@ -533,11 +533,13 @@ begin
   end if;
   if p_request_id is null then raise exception 'Request key required' using errcode='PB002'; end if;
   select array_agg(value::uuid order by value::uuid) into v_ids from jsonb_array_elements_text(p_input->'catalog_item_ids');
-  v_fingerprint := jsonb_build_object('booking',p_booking_id,'version',p_expected_version,'input',p_input || jsonb_build_object('catalog_item_ids',to_jsonb(v_ids)));
+  -- Consent version gates new quotes below; it must not invalidate an already
+  -- committed business request. Normalize both sides without rewriting history.
+  v_fingerprint := jsonb_build_object('booking',p_booking_id,'version',p_expected_version,'input',(p_input - 'quote_policy_version') || jsonb_build_object('catalog_item_ids',to_jsonb(v_ids)));
   perform pg_advisory_xact_lock(hashtextextended(p_organization_id::text||':'||p_request_id::text,2));
   select * into v_request from public.admin_booking_requests where organization_id=p_organization_id and request_id=p_request_id;
   if found then
-    if v_request.actor_id<>p_actor_id or v_request.input is distinct from v_fingerprint then raise exception 'Changed request' using errcode='PB003'; end if;
+    if v_request.actor_id<>p_actor_id or (v_request.input #- '{input,quote_policy_version}') is distinct from v_fingerprint then raise exception 'Changed request' using errcode='PB003'; end if;
     return v_request.result || '{"replayed":true}'::jsonb;
   end if;
   if p_booking_id is not null then

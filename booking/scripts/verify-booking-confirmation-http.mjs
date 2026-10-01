@@ -31,7 +31,7 @@ const b64 = object => Buffer.from(JSON.stringify(object)).toString('base64url');
 const expires = Math.floor(Date.now()/1000)+3600;
 const session = { access_token: `${b64({alg:'HS256',typ:'JWT'})}.${b64({sub:actor,email:profile.email,aud:'authenticated',role:'authenticated',exp:expires,iat:expires-3600})}.synthetic-signature`, refresh_token: 'synthetic-refresh', token_type: 'bearer', expires_in: 3600, expires_at: expires, user };
 const committed = new Map();
-let atomicCalls = 0, durableEffects = 0;
+let atomicCalls = 0, durableEffects = 0, passwordCalls = 0;
 const unexpected = [], pageErrors = [];
 const json = (response,status,data) => { response.writeHead(status, {'content-type':'application/json'}); response.end(JSON.stringify(data)); };
 const transport = http.createServer(async (request,response) => {
@@ -39,6 +39,7 @@ const transport = http.createServer(async (request,response) => {
     const url = new URL(request.url,'http://127.0.0.1:54329');
     if(process.env.BOOKING_PROBE_DEBUG==='1')console.log('fixture',request.method,url.pathname);
     const table = url.pathname.split('/').pop();
+    if (request.method === 'POST' && url.pathname === '/auth/v1/token') { passwordCalls++; return json(response,200,session); }
     if (request.method === 'GET' && url.pathname === '/auth/v1/user') return json(response,200,user);
     if (request.method === 'GET' && table === 'organizations') return json(response,200,organization);
     if (request.method === 'GET' && table === 'profiles') return json(response,200,profile);
@@ -124,6 +125,21 @@ try {
   assert.equal(await page.locator('input[name="address"]').inputValue(),'456 Private Rebook Street');
   assert.equal(committed.size,0,'a rebooking draft must not reserve an appointment');
   if(evidenceDir)await page.screenshot({path:resolve(evidenceDir,'private-portal-rebook.png'),fullPage:true});
+  for (let index=0; index<5; index++) {
+    await page.goBack();
+    await page.waitForURL(/\/portal\/book/);
+    await page.getByRole('button',{name:'Book similar shoot',exact:true}).click();
+    await page.waitForURL(/\/book\/property/);
+    const drafts=(await context.cookies()).filter(cookie=>cookie.name.startsWith('pb_booking_draft_'));
+    if (process.env.EXPECT_REBOOK_GROWTH!=='1') assert.ok(drafts.length<=2,`rebook cookies must stay bounded; got ${drafts.length}`);
+  }
+  if (process.env.EXPECT_REBOOK_GROWTH==='1') {
+    const count=(await context.cookies()).filter(cookie=>cookie.name.startsWith('pb_booking_draft_')).length;
+    assert.ok(count>2); console.log(JSON.stringify({reproduced:true,repeatedRebookCookieCount:count}));
+  }
+  // Exercise an anonymous existing-account customer, including the session
+  // cookie installation that causes Next to rerender after the commit.
+  await context.clearCookies({name:'sb-127-auth-token'});
   await page.goto(`${origin}/book/property?org=pixelblastermedia&services=video_tour`);
   await page.locator('input[name="address"]').fill('123 Synthetic Receipt Street');
   await page.locator('input[name="city"]').fill('Hamilton');
@@ -138,7 +154,14 @@ try {
   await page.getByRole('button',{name:/ at .*\(America\/Toronto\)/}).first().click();
   await page.waitForURL(/\/book\/confirm/);
   await page.getByRole('heading',{name:'Review + confirm'}).waitFor();
-  if(process.env.EXPECT_RECEIPT_LOSS!=='1') {
+  const fillContact = async () => {
+    await page.locator('input[name="contact_name"]').fill(profile.full_name);
+    await page.locator('input[name="contact_phone"]').fill(profile.phone);
+    await page.locator('input[name="contact_email"]').fill(profile.email);
+    await page.locator('input[name="password"]').fill('synthetic-password');
+  };
+  await fillContact();
+  if(process.env.EXPECT_RECEIPT_LOSS!=='1' && process.env.EXPECT_EXPIRED_RECEIPT_LOSS!=='1') {
     await page.locator('input[name="quote_policy_version"]').evaluate(input=>input.remove());
     await page.getByRole('button',{name:'Confirm booking',exact:true}).click();
     await page.getByText('Booking prices and timing changed. Refresh and review your quote before confirming.',{exact:true}).waitFor();
@@ -147,15 +170,27 @@ try {
     await page.reload();
     await page.getByRole('heading',{name:'Review + confirm'}).waitFor();
     assert.equal(await page.locator('input[name="quote_policy_version"]').inputValue(),'2026-09-30-v1');
+    await fillContact();
+  }
+  const activeDraft=(await context.cookies()).find(cookie=>cookie.name===`pb_booking_draft_${draftId}`);
+  await context.clearCookies({name:`pb_booking_draft_${draftId}`});
+  if(process.env.EXPECT_EXPIRED_RECEIPT_LOSS!=='1') {
+    await page.getByRole('button',{name:'Confirm booking',exact:true}).click();
+    await page.getByText('Your private booking draft expired. Return to Property and review your details before confirming.',{exact:true}).waitFor();
+    assert.equal(atomicCalls,0);assert.equal(committed.size,0);assert.equal(passwordCalls,0);
+    assert.equal(new URL(page.url()).pathname,'/book/confirm');
+    // Restore only the synthetic fixture's still-valid cookie to test success
+    // without changing the browser's retained request ID or password input.
+    await context.addCookies([activeDraft]);
   }
   const responsePromise=page.waitForResponse(response=>response.request().method()==='POST'&&new URL(response.url()).pathname==='/book/confirm');
   await page.getByRole('button',{name:'Confirm booking',exact:true}).click();
   const response=await responsePromise;
   assert.match(response.headers()['content-type'],/text\/x-component/,'real Server Action/RSC response');
-  if(process.env.EXPECT_RECEIPT_LOSS==='1') {
+  if(process.env.EXPECT_RECEIPT_LOSS==='1' || process.env.EXPECT_EXPIRED_RECEIPT_LOSS==='1') {
     await page.waitForURL(/\/book\/property/);
     assert.equal(committed.size,1);assert.equal(await page.getByRole('heading',{name:'Booking confirmed'}).count(),0);
-    console.log(JSON.stringify({reproduced:true,committedBookings:committed.size,destination:new URL(page.url()).pathname,receiptLost:true}));
+    console.log(JSON.stringify({reproduced:true,committedBookings:committed.size,destination:new URL(page.url()).pathname,receiptLost:true,anonymous:true,passwordCalls}));
   } else {
     await page.getByRole('heading',{name:'Booking confirmed',exact:true}).waitFor();
     assert.equal(new URL(page.url()).pathname,'/book/confirm');
@@ -172,6 +207,7 @@ try {
     await page.reload();await page.getByRole('heading',{name:'Booking confirmed',exact:true}).waitFor();
     assert.equal(await page.getByRole('button',{name:'Confirm booking',exact:true}).count(),0);
     assert.ok(submitted?.body);
+    await context.clearCookies({name:`pb_booking_draft_${draftId}`});
     const replay=await context.request.post(submitted.url,{headers:{'next-action':submitted.headers['next-action'],'next-router-state-tree':submitted.headers['next-router-state-tree'],'content-type':submitted.headers['content-type'],origin},data:submitted.body});
     assert.equal(replay.status(),200);
     const replayResult=(await replay.text()).split('\n').flatMap(line=>{
@@ -183,7 +219,7 @@ try {
     assert.equal(atomicCalls,2);assert.equal(committed.size,1);assert.equal(durableEffects,1);
     assert.deepEqual(pageErrors,[]);assert.deepEqual(unexpected,[]);
     if(evidenceDir)await page.screenshot({path:resolve(evidenceDir,'confirmed-after-reload.png'),fullPage:true});
-    console.log(JSON.stringify({passed:true,privatePortalRebooking:true,staleQuoteRejectedBeforeEffects:true,realPostRsc:true,confirmationSurvivesReload:true,privateDraftRemoved:true,replayAtomicCalls:atomicCalls,committedBookings:committed.size,durableEffects,pageErrors,unexpected}));
+    console.log(JSON.stringify({passed:true,privatePortalRebooking:true,boundedRepeatedRebookCookies:true,expiredAnonymousRejectedBeforeEffects:true,anonymousSessionReceipt:true,expiredCommittedReplay:true,staleQuoteRejectedBeforeEffects:true,realPostRsc:true,confirmationSurvivesReload:true,privateDraftRemoved:true,replayAtomicCalls:atomicCalls,committedBookings:committed.size,durableEffects,pageErrors,unexpected}));
   }
 } catch(error) { if(evidenceDir)writeFileSync(resolve(evidenceDir,'server.log'),serverLog);throw error; }
 finally {

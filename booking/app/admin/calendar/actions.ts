@@ -12,12 +12,6 @@ import {
 } from "@/lib/booking/availability";
 import { syncStoredBookingGoogleCalendarEvent } from "@/lib/booking/calendar-event-service";
 import { syncRealtorCalendarEventsBestEffort } from "@/lib/booking/realtor-calendar-fanout";
-import {
-  computeCartTotals,
-  getActiveCatalog,
-  validateCart,
-  type CatalogItemRow,
-} from "@/lib/booking/catalog";
 import { ccRecipientsFor } from "@/lib/email/recipients";
 import { sendEmail } from "@/lib/email/resend";
 import { getOrganizationEmailSettings } from "@/lib/email/settings";
@@ -153,10 +147,6 @@ export async function createAdminShoot(
 ): Promise<ActionResult> {
   const admin = await requireAdmin();
 
-  if (str(formData, "quote_policy_version") !== BOOKING_QUOTE_POLICY_VERSION) {
-    return { ok: false, error: BOOKING_QUOTE_CHANGED_MESSAGE };
-  }
-
   const scheduledRaw = str(formData, "scheduled_at");
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str(formData, "admin_request_id"))) {
     return { ok: false, error: "Refresh the booking form before submitting." };
@@ -187,29 +177,26 @@ export async function createAdminShoot(
   if (!contactName) return { ok: false, error: "Enter the realtor's name." };
   if (!streetAddress) return { ok: false, error: "Enter the property address." };
 
-  const catalog = await getActiveCatalog({ organizationId: admin.organizationId });
-  const byId = new Map<string, CatalogItemRow>();
-  for (const item of catalog.bundles) byId.set(item.id, item);
-  for (const item of catalog.aLaCarte) byId.set(item.id, item);
-  for (const item of catalog.addons) byId.set(item.id, item);
-
-  const cart = selectedCatalogIds
-    .map((catalogItemId) => ({ catalogItemId, quantity: 1 }));
-  // Canonical validation and pricing run inside the RPC after replay lookup.
-  // Admin-created shoots intentionally bypass availability checks so the
-  // photographer can double-book or override blocked/external calendar time.
-  // Realtor-facing booking flows still call isSlotAvailable before insert.
-
-  const selectedItems = cart
-    .map((line) => byId.get(line.catalogItemId))
-    .filter((item): item is CatalogItemRow => Boolean(item));
-
-
   const supabase = getServiceSupabase();
+  // Resolve only this tenant's authenticated request before the new-quote gate.
+  // SQL still checks actor and every business input before returning its receipt.
+  const { data: committedRequest, error: requestError } = await supabase
+    .from("admin_booking_requests").select("actor_id")
+    .eq("organization_id", admin.organizationId)
+    .eq("request_id", str(formData, "admin_request_id"))
+    .maybeSingle<{ actor_id: string }>();
+  if (requestError || (committedRequest && committedRequest.actor_id !== admin.userId)) {
+    return { ok: false, error: "Could not verify this booking request. Reload and try again." };
+  }
+  if (!committedRequest && str(formData, "quote_policy_version") !== BOOKING_QUOTE_POLICY_VERSION) {
+    return { ok: false, error: BOOKING_QUOTE_CHANGED_MESSAGE };
+  }
+  // Replays may resolve an existing realtor, but must never provision an account.
   const realtor = await findOrCreateRealtor({
     organizationId: admin.organizationId,
     email: contactEmail,
     fullName: contactName,
+    allowCreate: !committedRequest,
   });
   if (!realtor) {
     return {
@@ -628,6 +615,7 @@ function cleanupReference(reference: string | null): string {
 }
 
 async function findOrCreateRealtor(args: {
+  allowCreate?: boolean;
   organizationId: string;
   email: string;
   fullName: string;
@@ -666,6 +654,7 @@ async function findOrCreateRealtor(args: {
     return { userId: profile.id, newlyCreated: false, provisioningId: null };
   }
 
+  if (args.allowCreate === false) return null;
   const provisioned = await provisionRealtorAuthUser({
     service: supabase,
     email: args.email,

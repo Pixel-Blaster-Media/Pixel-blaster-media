@@ -21,13 +21,14 @@ export default async function PortalBookRedirectPage({
   if (propertyId) {
     // Legacy bookmarks may contain private fields. Strip them before displaying
     // the explicit POST handoff; the action reloads owned data from the database.
-    if (Object.keys(params).some((key) => !["from_property", "from_booking"].includes(key))) {
+    if (Object.keys(params).some((key) => !["from_property", "from_booking", "rebook_error"].includes(key))) {
       const clean = new URLSearchParams({ from_property: propertyId });
       if (bookingId) clean.set("from_booking", bookingId);
       redirect(`/portal/book?${clean.toString()}`);
     }
     return <main className="space-y-4"><h1 className="text-xl font-semibold">Book another shoot</h1>
       <p>Review the property details and choose a new time.</p>
+      {firstParam(params.rebook_error) === "draft_unavailable" ? <p role="alert">Your booking draft could not be opened. Please try again.</p> : null}
       <RebookForm propertyId={propertyId} bookingId={bookingId || undefined} />
     </main>;
   }

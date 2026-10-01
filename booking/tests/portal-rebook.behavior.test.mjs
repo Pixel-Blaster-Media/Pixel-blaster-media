@@ -9,9 +9,9 @@ const propertyId = '33333333-3333-4333-8333-333333333333';
 const bookingId = '44444444-4444-4444-8444-444444444444';
 const draftId = '55555555-5555-4555-8555-555555555555';
 const clone = value => JSON.parse(JSON.stringify(value));
-function fixture({ role='realtor', propertyOverrides={}, bookingOverrides={}, hasBooking=true, savedError=null }={}) {
+function fixture({ role='realtor', currentKind='active', archivedAt=null, propertyOverrides={}, bookingOverrides={}, hasBooking=true, savedError=null }={}) {
   const queries=[],saved=[];
-  const user={userId:owner,organizationId:org,role};
+  const user={userId:owner,organizationId:org,role,archivedAt};
   const property={id:propertyId,organization_id:org,owner_id:owner,street_address:'123 Private Rebook Street',city:'Hamilton',postal_code:'L8P 4S8',...propertyOverrides};
   const booking={id:bookingId,property_id:propertyId,organization_id:org,owner_id:owner,services:['video_tour','residential_photography'],add_ons:['aerial_add_on'],square_footage:2501,unit_number:'4B',client_notes:'OLD ACCESS CODE',...bookingOverrides};
   function client(scope) { return { from(table) {
@@ -25,10 +25,11 @@ function fixture({ role='realtor', propertyOverrides={}, bookingOverrides={}, ha
   const dependencies={
     'next/navigation':{notFound(){throw new Error('NOT_FOUND');},redirect(url){throw Object.assign(new Error('REDIRECT'),{url});}},
     '@/lib/auth/require-user':{requireUser:async()=>user},
+    '@/lib/auth/current-user':{getCurrentUserResult:async()=>({kind:currentKind,profile:user})},
     '@/lib/supabase/server':{getServerSupabase:async()=>client('session'),getServiceSupabase:()=>client('service')},
     '@/app/book/draft-actions':{saveBookingWizardDraft:async input=>{saved.push(clone(input));return savedError?{ok:false,error:savedError}:{ok:true,query:input.query+'&draft='+draftId};}},
   };
-  const action=loadSource('app/portal/book/actions.ts',dependencies).startSimilarBooking;
+  const action=loadSource('lib/booking/rebook.ts',dependencies).startSimilarBooking;
   const page=loadSource('app/portal/book/page.tsx',{...dependencies,'react/jsx-runtime':jsxRuntime,'./RebookForm':{default:()=>null}}).default;
   const form=new FormData();form.set('property_id',propertyId);form.set('booking_id',bookingId);
   return {action,page,form,queries,saved};
@@ -36,13 +37,14 @@ function fixture({ role='realtor', propertyOverrides={}, bookingOverrides={}, ha
 
 test('owned rebooking resolves private prefill on the server and redirects with IDs/selections only',async()=>{
   const f=fixture();f.form.set('street_address','ATTACKER PROPERTY');f.form.set('shoot_notes','ATTACKER SECRET');
-  await assert.rejects(()=>f.action(null,f.form),error=>{
-    const url=new URL(error.url,'https://example.invalid');
+  const result=await f.action(f.form);
+  {
+    const url=new URL(result.href,'https://example.invalid');
     assert.equal(url.pathname,'/book/property');
     assert.deepEqual([...url.searchParams.keys()].sort(),['add_ons','draft','org','services']);
     assert.equal(url.searchParams.get('draft'),draftId);
-    assert.doesNotMatch(url.href,/Private|ACCESS|ATTACKER/);return true;
-  });
+    assert.doesNotMatch(url.href,/Private|ACCESS|ATTACKER/);
+  }
   assert.deepEqual(f.saved,[{query:'org=company&services=video_tour%2Cresidential_photography&add_ons=aerial_add_on',property:{streetAddress:'123 Private Rebook Street',city:'Hamilton',postalCode:'L8P 4S8',unitNumber:'4B',squareFootage:2501,isVacant:null,includeBasement:null,shotRequests:[],shootNotes:''}}]);
   for(const table of ['properties','bookings']) {
     const query=f.queries.find(q=>q.table===table);
@@ -63,17 +65,17 @@ for(const [name,options] of [
   ['missing selected booking',{hasBooking:false}],
   ['non-realtor account',{role:'admin'}],
 ]) test(`rebooking rejects ${name} before writing a draft`,async()=>{
-  const f=fixture(options);await assert.rejects(()=>f.action(null,f.form),/NOT_FOUND/);assert.deepEqual(f.saved,[]);
+  const f=fixture(options);await assert.rejects(()=>f.action(f.form),/NOT_FOUND/);assert.deepEqual(f.saved,[]);
 });
 
 test('property with no prior booking can start a fresh private flow',async()=>{
   const f=fixture({hasBooking:false});f.form.delete('booking_id');
-  await assert.rejects(()=>f.action(null,f.form),error=>error.url===`/book?org=company&draft=${draftId}`);
+  assert.equal((await f.action(f.form)).href,`/book?org=company&draft=${draftId}`);
   assert.equal(f.saved[0].property.squareFootage,null);
 });
 
 test('private draft write failure stays recoverable on the portal',async()=>{
-  const f=fixture({savedError:'Please try again.'});assert.deepEqual(clone(await f.action(null,f.form)),{error:'Please try again.'});
+  const f=fixture({savedError:'Please try again.'});assert.deepEqual(clone(await f.action(f.form)),{error:'Please try again.'});
 });
 
 test('legacy rebook URLs strip private fields before explicit POST and never write on GET',async()=>{
@@ -87,4 +89,14 @@ test('legacy rebook URLs strip private fields before explicit POST and never wri
 test('ordinary portal booking forwards selections, never private data or an old time',async()=>{
   const f=fixture();await assert.rejects(()=>f.page({searchParams:Promise.resolve({services:'video_tour',address:'private',shoot_notes:'SECRET',slot:'old',org:'other'})}),error=>error.url==='/book/property?org=company&services=video_tour');
   assert.deepEqual(f.saved,[]);
+});
+
+for(const [kind,path] of [['missing','/auth/sign-in'],['invalid','/auth/session-invalid'],['unavailable','/auth/access-unavailable'],['no_workspace','/auth/no-workspace']]) test(`rebooking ${kind} identity returns safe auth navigation before data lookup`,async()=>{
+ const f=fixture({currentKind:kind});const result=await f.action(f.form);
+ assert.equal(new URL(result.href,'https://example.invalid').pathname,path);
+ assert.deepEqual(f.queries,[]);assert.deepEqual(f.saved,[]);
+});
+test('archived rebooking identity cannot read properties or create drafts',async()=>{
+ const f=fixture({archivedAt:'2026-01-01'});assert.equal((await f.action(f.form)).href,'/auth/no-workspace');
+ assert.deepEqual(f.queries,[]);assert.deepEqual(f.saved,[]);
 });

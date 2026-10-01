@@ -127,8 +127,8 @@ test("committed completion replaces private fields with a scoped receipt before 
   const completed = { redirectTo: "/portal/property-1?booked=1", receipt: {
     address: "123 Private Street", when: "Thursday at 9am", services: ["Photos"], organizationName: "Studio",
   } };
-  await h.draft.completePrivateWizardDraft(draftId, "org-b", completed);
-  assert.ok(codec.openWizardDraft(h.jar.get(prefix + draftId), secret, `org-a:${draftId}`));
+  assert.equal(await h.draft.hasActivePrivateWizardDraft(draftId, "org-b"), false);
+  assert.equal(await h.draft.hasActivePrivateWizardDraft(draftId, "org-a"), true);
   await h.draft.completePrivateWizardDraft(draftId, "org-a", completed);
   assert.equal(codec.openWizardDraft(h.jar.get(prefix + draftId), secret, `org-a:${draftId}`), null);
   assert.deepEqual(JSON.parse(JSON.stringify(await h.draft.loadCompletedWizardReceipt(draftId, "org-a"))), completed);
@@ -169,4 +169,23 @@ test("rendered mobile step links have distinct accessible names and never expose
   assert.match(html, /aria-current="step"/);
   assert.match(html, /aria-hidden="true"/);
   assert.doesNotMatch(html, /hidden md:inline|SECRET-123|Private Street|occupied/);
+});
+
+
+test("authorized completion restores only a minimal receipt after expiry or eviction, keeping cookies bounded", async () => {
+  const h = harness();
+  const expiredId = crypto.randomUUID();
+  h.jar.set(prefix + expiredId, codec.sealWizardDraft(property, secret, `org-a:${expiredId}`, Date.now() - codec.DRAFT_TTL_SECONDS * 1000));
+  assert.equal(await h.draft.hasActivePrivateWizardDraft(expiredId, "org-a"), false);
+  const completed = { redirectTo: "/portal/property-1?booked=1", receipt: { address: "123 Private Street", when: "Tomorrow", services: ["Photos"], organizationName: "Studio" } };
+  await h.draft.completePrivateWizardDraft(expiredId, "org-a", completed);
+  assert.deepEqual(JSON.parse(JSON.stringify(await h.draft.loadCompletedWizardReceipt(expiredId, "org-a"))), completed);
+  assert.equal(await h.draft.hasActivePrivateWizardDraft(expiredId, "org-a"), false);
+  h.jar.delete(prefix + expiredId);
+  for(let index=0;index<2;index++) await h.actions.saveBookingWizardDraft({query:"services=photos",property});
+  await h.draft.completePrivateWizardDraft(expiredId, "org-a", completed);
+  assert.equal(h.jar.size, 2);
+  assert.deepEqual(JSON.parse(JSON.stringify(await h.draft.loadCompletedWizardReceipt(expiredId, "org-a"))), completed);
+  assert.equal(await h.draft.loadCompletedWizardReceipt(expiredId, "org-b"), null);
+  assert.equal(await h.draft.hasActivePrivateWizardDraft("invalid", "org-a"), false);
 });

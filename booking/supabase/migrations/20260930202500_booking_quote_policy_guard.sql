@@ -157,9 +157,18 @@ alter function public.save_admin_booking_aggregate(uuid,uuid,uuid,uuid,bigint,js
   rename to save_admin_booking_aggregate_pre_policy;
 create function public.save_admin_booking_aggregate(p_organization_id uuid,p_actor_id uuid,p_request_id uuid,p_booking_id uuid,p_expected_version bigint,p_input jsonb)
 returns jsonb language plpgsql security invoker set search_path = '' as $$
+declare stored_input jsonb;
 begin
-  if not exists (select 1 from public.admin_booking_requests where organization_id=p_organization_id and request_id=p_request_id) then
+  select input->'input' into stored_input from public.admin_booking_requests
+    where organization_id=p_organization_id and request_id=p_request_id;
+  if not found then
     raise exception 'Booking quotes are updating; refresh and review before saving' using errcode='PB005';
+  end if;
+  -- Quote consent metadata is not business identity. Match the historical
+  -- representation for the old core without changing its stored fingerprint.
+  p_input := p_input - 'quote_policy_version';
+  if stored_input ? 'quote_policy_version' then
+    p_input := p_input || jsonb_build_object('quote_policy_version',stored_input->'quote_policy_version');
   end if;
   return public.save_admin_booking_aggregate_pre_policy(p_organization_id,p_actor_id,p_request_id,p_booking_id,p_expected_version,p_input);
 end;

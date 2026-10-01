@@ -38,20 +38,29 @@ export async function loadCompletedWizardReceipt(draftId: string | null | undefi
   return value ? openWizardReceipt(value, wizardDraftSecret(), `${organizationId}:${draftId}`) : null;
 }
 
+export async function hasActivePrivateWizardDraft(draftId: string, organizationId: string): Promise<boolean> {
+  if (!/^[0-9a-f-]{36}$/.test(draftId)) return false;
+  const value = (await cookies()).get(WIZARD_DRAFT_COOKIE_PREFIX + draftId)?.value;
+  return Boolean(value && openWizardDraft(value, wizardDraftSecret(), `${organizationId}:${draftId}`));
+}
+
 /** Replace the committed draft with a minimal receipt, never delete the state
  * required by Next's cookie-triggered Server Action render. Reload/back also
- * show completion instead of inviting the customer to book a second time. */
+ * show completion instead of inviting the customer to book a second time.
+ * Call ONLY after the booking RPC has authorized and committed/replayed it.
+ * That authorization, not a possibly expired draft, permits this receipt. */
 export async function completePrivateWizardDraft(draftId: string, organizationId: string, completed: CompletedWizardReceipt): Promise<void> {
   if (!/^[0-9a-f-]{36}$/.test(draftId)) return;
   try {
     const store = await cookies();
     const name = WIZARD_DRAFT_COOKIE_PREFIX + draftId;
-    const previous = store.get(name)?.value;
     const secret = wizardDraftSecret();
     const binding = `${organizationId}:${draftId}`;
-    if (!previous || !(openWizardDraft(previous, secret, binding) || openWizardReceipt(previous, secret, binding))) return;
     const value = sealWizardReceipt(completed, secret, binding);
-    store.set(name, value, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/book", maxAge: DRAFT_TTL_SECONDS });
+    const options = { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax" as const, path: "/book", maxAge: DRAFT_TTL_SECONDS };
+    const others = store.getAll().filter(cookie => cookie.name.startsWith(WIZARD_DRAFT_COOKIE_PREFIX) && cookie.name !== name);
+    for (const cookie of others.slice(0, -1)) store.set(cookie.name, "", { ...options, maxAge: 0 });
+    store.set(name, value, options);
   } catch { /* Preserve the draft/inline receipt if completion storage is unavailable. */ }
 }
 

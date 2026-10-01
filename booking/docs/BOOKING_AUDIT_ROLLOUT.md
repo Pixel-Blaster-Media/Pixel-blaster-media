@@ -29,6 +29,10 @@ already-running old wrapper cannot silently enter new calculations. Context is
 restored on success and exception; it does not replace tenant authorization.
 Admin creations and package replacements likewise require the reviewed version.
 Edits retaining the same historical items retain their booked price/duration.
+Committed admin create/edit retries compare business inputs independently of
+quote-version metadata, including during the pause. Stored historical request
+fingerprints remain unchanged; actor, tenant and changed-input checks still run.
+Admin create retries cannot provision another account.
 
 Until compatible application code is deployed, old instances can still show old
 quotes but cannot create a new booking at the changed terms. Coordinate this
@@ -51,7 +55,8 @@ old/missing/stale versions, an old wrapper in flight, current quotes, historical
 replay and side-effect counts. It separately executes the entire generated fresh
 setup, grant/tenant checks, quote boundaries and lifecycle behavior. The built
 browser gate tests real Server Action/RSC POST, private owner-checked rebooking,
-stale confirmation rejection, receipt reload and exact POST replay against a
+repeated rebooking cookie bounds, stale/expired anonymous confirmation rejection,
+session-cookie receipt rerender, receipt reload and expired-cookie POST replay against a
 synthetic Supabase transport. These do not prove live provider delivery.
 
 Deploy only through the repository's guarded release process. Read back Ready
