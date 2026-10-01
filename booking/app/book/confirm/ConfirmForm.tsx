@@ -201,6 +201,7 @@ export default function ConfirmForm({
         ) : null}
         {/* Carry wizard state into the action */}
         <input type="hidden" name="public_request_id" value={draftRequestId} />
+        <input type="hidden" name="wizard_draft" value={state.draftId ?? ""} />
         {state.organizationSlug ? (
           <input type="hidden" name="org" value={state.organizationSlug} />
         ) : null}
@@ -379,6 +380,7 @@ export default function ConfirmForm({
           selectedSlugs={state.services}
           selectedAddOnSlugs={state.addOns}
           squareFootage={state.squareFootage}
+          includeBasement={state.includeBasement}
         />
         {/* Keep confirmation first in DOM order so Enter verifies, not resends. */}
         {formState?.verificationRequired ? <ResendCodeButton /> : null}
@@ -407,11 +409,13 @@ function SubmitTotalBar({
   selectedSlugs,
   selectedAddOnSlugs,
   squareFootage,
+  includeBasement,
 }: {
   items: BookingTotalItem[];
   selectedSlugs: string[];
   selectedAddOnSlugs: string[];
   squareFootage: number | null;
+  includeBasement: boolean | null;
 }) {
   const { pending } = useFormStatus();
   return (
@@ -420,6 +424,7 @@ function SubmitTotalBar({
       selectedSlugs={selectedSlugs}
       selectedAddOnSlugs={selectedAddOnSlugs}
       squareFootage={squareFootage}
+      includeBasement={includeBasement}
       submit
       disabled={pending}
       ctaLabel={pending ? "Booking..." : "Confirm booking"}

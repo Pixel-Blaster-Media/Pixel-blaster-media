@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { exchangeCodeForTokens } from "@/lib/integrations/quickbooks/oauth";
 import { quickBooksOAuthStateMatchesAdmin } from "@/lib/integrations/quickbooks/oauth-state";
+import { getQuickBooksConnectConfiguration } from "@/lib/integrations/quickbooks/connect-config";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (errorParam) {
-    settingsUrl.searchParams.set("qbo_error", errorParam.slice(0, 80));
+    settingsUrl.searchParams.set("qbo_error", errorParam === "access_denied" ? "access_denied" : "authorization_failed");
     return NextResponse.redirect(settingsUrl);
   }
 
@@ -73,33 +74,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(settingsUrl);
   }
 
-  const clientId = process.env.QUICKBOOKS_CLIENT_ID;
-  const clientSecret = process.env.QUICKBOOKS_CLIENT_SECRET;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  const environment = (process.env.QUICKBOOKS_ENVIRONMENT ?? "sandbox") as
-    | "sandbox"
-    | "production";
-
-  if (!clientId || !clientSecret || !appUrl) {
-    settingsUrl.searchParams.set("qbo_error", "not_configured");
+  const config = getQuickBooksConnectConfiguration(process.env);
+  if (!config.ok) {
+    settingsUrl.searchParams.set("qbo_error", config.code);
     return NextResponse.redirect(settingsUrl);
   }
-
-  const redirectUri = new URL(
-    "/api/integrations/quickbooks/callback",
-    appUrl,
-  ).toString();
 
   let tokens;
   try {
     tokens = await exchangeCodeForTokens({
       code,
-      redirectUri,
-      clientId,
-      clientSecret,
+      redirectUri: config.redirectUri,
+      clientId: config.clientId,
+      clientSecret: config.clientSecret,
     });
-  } catch (err) {
-    console.error("[qbo.callback] token exchange failed", err);
+  } catch {
+    console.error("[qbo.callback] token exchange failed");
     settingsUrl.searchParams.set("qbo_error", "token_exchange_failed");
     return NextResponse.redirect(settingsUrl);
   }
@@ -112,7 +102,7 @@ export async function GET(request: NextRequest) {
   const { error } = await supabase.from("quickbooks_connection").upsert(
     {
       organization_id: admin.organizationId,
-      environment,
+      environment: config.environment,
       realm_id: realmId,
       refresh_token: tokens.refresh_token,
       access_token: tokens.access_token,
@@ -123,7 +113,7 @@ export async function GET(request: NextRequest) {
   );
 
   if (error) {
-    console.error("[qbo.callback] persist failed", error);
+    console.error("[qbo.callback] persist failed");
     settingsUrl.searchParams.set("qbo_error", "persist_failed");
     return NextResponse.redirect(settingsUrl);
   }

@@ -7,9 +7,11 @@ import { isCancellable } from "@/lib/booking/booking-status";
 import { syncStoredBookingGoogleCalendarEvent } from "@/lib/booking/calendar-event-service";
 import { cancelBooking } from "@/lib/booking/cancel";
 import { verifyManageToken } from "@/lib/booking/manage-token";
-import { sendEmail } from "@/lib/email/resend";
 import {
-  getAdminNotificationEmail,
+  changeBookingWithNotices, deliverChangedBookingNotices, lifecycleNotice,
+  type LifecycleNoticeDraft,
+} from "@/lib/booking/lifecycle-notices";
+import {
   getOrganizationEmailSettings,
 } from "@/lib/email/settings";
 
@@ -31,7 +33,7 @@ export interface ManageActionResult {
   warning?: string;
   /** New time label (BUSINESS_TZ) after a successful reschedule. */
   whenLabel?: string;
-  /** Whether this action attempted a realtor-facing confirmation email. */
+  /** Whether the provider accepted and the outbox recorded the realtor email. */
   realtorNotified?: boolean;
 }
 
@@ -149,8 +151,6 @@ export async function rescheduleManagedBooking(
     : DEFAULT_DURATION_MINUTES;
   const newEnd = new Date(newStart.getTime() + durationMinutes * 60_000);
 
-  const service = getServiceSupabase();
-
   // Full availability check — same engine as the public booking flow, so
   // this also enforces business hours, calendar blocks, and Google-busy
   // windows (the slot list shown client-side is only a convenience; the
@@ -168,100 +168,53 @@ export async function rescheduleManagedBooking(
     };
   }
 
-  const { data: updatedBooking, error: updateError } = await service
-    .from("bookings")
-    .update({
-      scheduled_at: newStart.toISOString(),
-      scheduled_ends_at: newEnd.toISOString(),
-      allow_schedule_overlap: false,
-    })
-    .eq("id", booking.id)
-    .eq("organization_id", booking.organization_id)
-    .eq("status", booking.status)
-    .eq("lifecycle_version", booking.lifecycle_version)
-    .select("id")
-    .maybeSingle();
-
-  if (updateError || !updatedBooking) {
-    if (updateError?.code === "23P01") {
-      return {
-        ok: false,
-        error: "That time was just taken. Please pick another slot.",
-      };
-    }
-    return { ok: false, error: "Could not reschedule booking." };
-  }
-
-  const calendarSynced = await syncManagedBookingGoogleEvent(booking);
-
   const oldWhenLabel = formatWhen(currentStart);
   const newWhenLabel = formatWhen(newStart);
   const addressLine = bookingAddressLine(booking);
-  const realtorName =
-    booking.profiles?.full_name ?? booking.profiles?.email ?? "realtor";
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-
-  // Emails are best-effort — the reschedule already succeeded.
-  const emailSettings = await getOrganizationEmailSettings(
-    booking.organization_id,
-  );
-  const adminTo = await getAdminNotificationEmail(booking.organization_id);
-  const [realtorEmailResult] = await Promise.all([
-    !booking.suppress_realtor_notifications && booking.profiles?.email
-      ? sendEmail({
-          to: booking.profiles.email,
-          subject: `Booking rescheduled — ${addressLine}`,
-          organizationId: booking.organization_id,
-          html: `
-            <p>Hi ${escapeHtml(realtorName)},</p>
-            <p>
-              Your shoot at <strong>${escapeHtml(addressLine)}</strong> has
-              been moved.
-            </p>
-            <p>
-              <strong>New time:</strong> ${escapeHtml(newWhenLabel)}<br>
-              <strong>Previous time:</strong> ${escapeHtml(oldWhenLabel)}
-            </p>
-            <p>— ${escapeHtml(emailSettings.organizationName)}</p>
-          `,
-        })
-      : Promise.resolve(null),
-    adminTo
-      ? sendEmail({
-          to: adminTo,
-          subject: `Booking rescheduled by realtor — ${addressLine}`,
-          organizationId: booking.organization_id,
-          html: `
-            <p>
-              <strong>${escapeHtml(realtorName)}</strong>${
-                booking.profiles?.email
-                  ? ` (${escapeHtml(booking.profiles.email)})`
-                  : ""
-              }
-              just rescheduled their shoot.
-            </p>
-            <p>
-              <strong>Address:</strong> ${escapeHtml(addressLine)}<br>
-              <strong>New time:</strong> ${escapeHtml(newWhenLabel)}<br>
-              <strong>Previous time:</strong> ${escapeHtml(oldWhenLabel)}
-            </p>
-            ${
-              calendarSynced
-                ? ""
-                : `<p><strong>Calendar sync needs attention:</strong> the booking moved in the app, but Google Calendar could not be updated automatically.</p>`
-            }
-            <p>Open in admin: ${appUrl}/admin/bookings/${booking.id}</p>
-          `,
-          replyTo: booking.profiles?.email ?? undefined,
-        })
-      : Promise.resolve(null),
-    sendPushBestEffort(booking.organization_id, {
-      title: "Booking rescheduled by realtor",
-      body: `${addressLine} · ${newWhenLabel}`,
-      url: `/admin/bookings/${booking.id}`,
-      tag: `booking-rescheduled-${booking.id}`,
-    }),
-  ]);
+  const realtorName = booking.profiles?.full_name ?? booking.profiles?.email ?? "realtor";
+  const emailSettings = await getOrganizationEmailSettings(booking.organization_id);
+  const notices: LifecycleNoticeDraft[] = [];
+  if (!booking.suppress_realtor_notifications) {
+    notices.push(lifecycleNotice("realtor", emailSettings, {
+      to: booking.profiles?.email,
+      subject: `Booking rescheduled — ${addressLine}`,
+      html: `<p>Hi ${escapeHtml(realtorName)},</p>
+        <p>Your shoot at <strong>${escapeHtml(addressLine)}</strong> has been moved.</p>
+        <p><strong>New time:</strong> ${escapeHtml(newWhenLabel)}<br>
+        <strong>Previous time:</strong> ${escapeHtml(oldWhenLabel)}</p>
+        <p>— ${escapeHtml(emailSettings.organizationName)}</p>`,
+    }));
+  }
+  notices.push(lifecycleNotice("admin", emailSettings, {
+    to: emailSettings.adminNotificationEmail,
+    subject: `Booking rescheduled by realtor — ${addressLine}`,
+    html: `<p><strong>${escapeHtml(realtorName)}</strong> rescheduled their shoot.</p>
+      <p><strong>Address:</strong> ${escapeHtml(addressLine)}<br>
+      <strong>New time:</strong> ${escapeHtml(newWhenLabel)}<br>
+      <strong>Previous time:</strong> ${escapeHtml(oldWhenLabel)}</p>
+      <p>Check the booking for Calendar sync status:
+      ${escapeHtml(process.env.NEXT_PUBLIC_APP_URL ?? "")}/admin/bookings/${escapeHtml(booking.id)}</p>`,
+    replyTo: booking.profiles?.email ?? emailSettings.replyToEmail,
+  }));
+  const changed = await changeBookingWithNotices({
+    organizationId: booking.organization_id, bookingId: booking.id,
+    expectedVersion: booking.lifecycle_version,
+    event: "rescheduled", initiator: "realtor", notices,
+    scheduledAt: newStart.toISOString(), scheduledEndsAt: newEnd.toISOString(),
+  });
+  if (!changed.ok) {
+    return { ok: false, error: changed.code === "23P01"
+      ? "That time was just taken. Please pick another slot."
+      : "Could not reschedule booking. Refresh and try again." };
+  }
+  const calendarSynced = await syncManagedBookingGoogleEvent(booking);
+  const delivery = await deliverChangedBookingNotices({
+    organizationId: booking.organization_id, bookingId: booking.id, noticeIds: changed.noticeIds,
+  });
+  await sendPushBestEffort(booking.organization_id, {
+    title: "Booking rescheduled by realtor", body: `${addressLine} · ${newWhenLabel}`,
+    url: `/admin/bookings/${booking.id}`, tag: `booking-rescheduled-${booking.id}`,
+  });
 
   revalidatePath("/admin/calendar");
   revalidatePath("/admin/bookings");
@@ -269,12 +222,11 @@ export async function rescheduleManagedBooking(
   return {
     ok: true,
     whenLabel: newWhenLabel,
-    warning: calendarSynced
-      ? undefined
-      : "Your booking moved, but Google Calendar did not sync. Please contact the studio if you need confirmation before the appointment.",
-    realtorNotified: Boolean(
-      realtorEmailResult?.ok && !realtorEmailResult.skipped,
-    ),
+    warning: [
+      !calendarSynced ? "Your booking moved, but Google Calendar did not sync. Please contact the studio if you need confirmation before the appointment." : undefined,
+      delivery.warning,
+    ].filter(Boolean).join(" ") || undefined,
+    realtorNotified: delivery.realtorNotified,
   };
 }
 
@@ -308,51 +260,17 @@ export async function cancelManagedBooking(
   // emails the admin (initiator "realtor" → notification goes to admin).
   const result = await cancelBooking(booking.id, "realtor", {
     organizationId: booking.organization_id,
+    confirmRealtor: true,
   });
   if (!result.ok) return { ok: false, error: result.error };
-
-  // Also confirm to the realtor (best-effort) — the shared helper only
-  // notifies the side that didn't press the button.
-  let realtorNotified = false;
-  if (!booking.suppress_realtor_notifications && booking.profiles?.email) {
-    const emailSettings = await getOrganizationEmailSettings(
-      booking.organization_id,
-    );
-    const realtorName =
-      booking.profiles.full_name ?? booking.profiles.email;
-    const emailResult = await sendEmail({
-      to: booking.profiles.email,
-      subject: `Booking cancelled — ${result.addressLine ?? bookingAddressLine(booking)}`,
-      organizationId: booking.organization_id,
-      html: `
-        <p>Hi ${escapeHtml(realtorName)},</p>
-        <p>
-          Your shoot at
-          <strong>${escapeHtml(result.addressLine ?? bookingAddressLine(booking))}</strong>
-          on <strong>${escapeHtml(result.whenLabel ?? "")}</strong>
-          has been cancelled as requested.
-        </p>
-        <p>
-          Changed your mind? Book a new time anytime at
-          <a href="${process.env.NEXT_PUBLIC_APP_URL ?? ""}/book">${
-            process.env.NEXT_PUBLIC_APP_URL || "our booking page"
-          }</a>.
-        </p>
-        <p>— ${escapeHtml(emailSettings.organizationName)}</p>
-      `,
-    });
-    realtorNotified = emailResult.ok && !emailResult.skipped;
-  }
 
   revalidatePath("/admin/calendar");
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${booking.id}`);
   return {
     ok: true,
-    warning: result.warning
-      ? "Your booking was cancelled, but Google Calendar cleanup needs attention. Please contact the studio if you need confirmation."
-      : undefined,
-    realtorNotified,
+    warning: result.warning,
+    realtorNotified: result.realtorNotified,
   };
 }
 

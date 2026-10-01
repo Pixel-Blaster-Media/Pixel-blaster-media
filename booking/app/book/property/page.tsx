@@ -1,9 +1,9 @@
+import { readPublicWizardState, loadPrivateWizardState } from "@/lib/booking/wizard-draft";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import { getActiveCatalog } from "@/lib/booking/catalog";
 import {
-  parseWizardState,
   serializeWizardState,
   stepCompleteness,
 } from "@/lib/booking/wizard-state";
@@ -25,12 +25,13 @@ export default async function BookStep2Page({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const state = parseWizardState(await searchParams);
+  const query = await searchParams;
+  const state = readPublicWizardState(query, "/book/property");
   const organization = await resolvePublicBookingOrganization(
     state.organizationSlug,
   );
   if (!organization) notFound();
-  const scopedState = { ...state, organizationSlug: organization.slug };
+  const scopedState = await loadPrivateWizardState({ ...state, organizationSlug: organization.slug }, organization.id);
   const catalog = await getActiveCatalog({ organizationId: organization.id });
 
   // Guard — can't be here without step 1 done.
@@ -57,6 +58,11 @@ export default async function BookStep2Page({
         </p>
       </section>
 
+      {query.draft_notice === "private_details_required" ? (
+        <p role="status" className="text-sm text-amber-800">For your privacy, property details from older booking links must be entered again.</p>
+      ) : scopedState.draftId && !scopedState.streetAddress ? (
+        <p role="status" className="text-sm text-amber-800">Your private draft expired or is unavailable in this browser. Please enter the property details again.</p>
+      ) : null}
       <PropertyForm
         items={[...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(
           (item) => ({
@@ -68,6 +74,8 @@ export default async function BookStep2Page({
             included_sqft: item.included_sqft,
             overage_increment_sqft: item.overage_increment_sqft,
             overage_price_cents: item.overage_price_cents,
+            video_overage_threshold_sqft: item.video_overage_threshold_sqft,
+            video_overage_price_cents: item.video_overage_price_cents,
           }),
         )}
         selectedSlugs={scopedState.services}

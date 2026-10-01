@@ -745,7 +745,7 @@ async function executeConfirmedAssistantAction(
     ok: true,
     kind: "answer",
     message: result.warning
-      ? `The booking is cancelled, but Calendar cleanup needs attention: ${result.warning}`
+      ? `The booking is cancelled, but follow-up needs attention: ${result.warning}`
       : "Done. I cancelled the booking. Configured notifications were attempted and Google Calendar cleanup completed.",
     actions: [
       {

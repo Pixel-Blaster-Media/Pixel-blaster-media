@@ -1,9 +1,10 @@
 /**
  * Shared URL-state helpers for the /book wizard.
  *
- * The wizard keeps all state in query params so:
+ * Query params contain service/time selections and an opaque draft id only.
+ * Private property details live in a short-lived encrypted HttpOnly cookie, so:
  *   - Back button works naturally between steps
- *   - Pages can be shared / bookmarked at any step
+ *   - Bookmarks only recover private details in the same browser before expiry
  *   - Server components can read state without client hydration
  *
  * Every step page reads the same query params, validates prior-step
@@ -14,6 +15,8 @@
 export type VacancyState = "vacant" | "occupied" | "partial";
 
 export interface WizardState {
+  /** Opaque reference; the URL alone never contains or unlocks private details. */
+  draftId?: string | null;
   /** Booking company handle. Omitted means the default Pixel Blaster tenant. */
   organizationSlug: string | null;
   /** Step 1 — bundle + a-la-carte slugs (separate from add_ons for video gating). */
@@ -41,6 +44,7 @@ export function parseWizardState(
   raw: Record<string, string | string[] | undefined>,
 ): WizardState {
   return {
+    draftId: /^[0-9a-f-]{36}$/.test(str(raw.draft)) ? str(raw.draft) : null,
     organizationSlug: organizationSlug(raw.org),
     services: parseCsv(raw.services),
     addOns: parseCsv(raw.add_ons),
@@ -63,19 +67,16 @@ export function serializeWizardState(s: Partial<WizardState>): URLSearchParams {
   if (s.organizationSlug) out.set("org", s.organizationSlug);
   if (s.services?.length) out.set("services", s.services.join(","));
   if (s.addOns?.length) out.set("add_ons", s.addOns.join(","));
-  if (s.streetAddress) out.set("address", s.streetAddress);
-  if (s.unitNumber) out.set("unit", s.unitNumber);
-  if (s.city) out.set("city", s.city);
-  if (s.postalCode) out.set("postal", s.postalCode);
-  if (s.squareFootage != null) out.set("sqft", String(s.squareFootage));
-  if (s.isVacant) out.set("vacant", s.isVacant);
-  if (s.includeBasement != null) {
-    out.set("basement", s.includeBasement ? "1" : "0");
-  }
-  if (s.shotRequests?.length) out.set("shots", s.shotRequests.join(","));
-  if (s.shootNotes) out.set("shoot_notes", s.shootNotes);
+  if (s.draftId) out.set("draft", s.draftId);
   if (s.slot) out.set("slot", s.slot);
   return out;
+}
+
+export const PRIVATE_WIZARD_QUERY_KEYS = ["address", "unit", "city", "postal", "sqft", "vacant", "basement", "shots", "shoot_notes"] as const;
+
+/** Drop legacy/private and unknown params before ANY client navigation. */
+export function publicWizardQuery(params: URLSearchParams): URLSearchParams {
+  return serializeWizardState(parseWizardState(Object.fromEntries(params)));
 }
 
 export interface StepCompleteness {

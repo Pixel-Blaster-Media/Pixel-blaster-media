@@ -1,6 +1,7 @@
 "use client";
 
-export interface BookingTotalItem {
+import { bookingDurationMinutes, getCatalogItemPrice, type CatalogPricingItem } from "@/lib/booking/quote";
+export interface BookingTotalItem extends CatalogPricingItem {
   slug: string;
   name: string;
   price_cents: number;
@@ -16,6 +17,7 @@ export default function BookingTotalBar({
   selectedSlugs,
   selectedAddOnSlugs,
   squareFootage,
+  includeBasement = false,
   href,
   submit = false,
   ctaLabel = "Continue",
@@ -27,6 +29,7 @@ export default function BookingTotalBar({
   selectedSlugs: string[];
   selectedAddOnSlugs: string[];
   squareFootage: number | null;
+  includeBasement?: boolean | null;
   href?: string;
   submit?: boolean;
   ctaLabel?: string;
@@ -34,7 +37,7 @@ export default function BookingTotalBar({
   note?: string;
   sticky?: boolean;
 }) {
-  const selected = [...selectedSlugs, ...selectedAddOnSlugs]
+  const selected = [...new Set([...selectedSlugs, ...selectedAddOnSlugs])]
     .map((slug) => items.find((item) => item.slug === slug))
     .filter((item): item is BookingTotalItem => Boolean(item));
 
@@ -42,12 +45,12 @@ export default function BookingTotalBar({
 
   const rows = selected.map((item) => ({
     item,
-    price: getPrice(item, squareFootage),
+    price: getCatalogItemPrice(item, squareFootage),
   }));
-  const totalCents = rows.reduce((sum, row) => sum + row.price.totalCents, 0);
-  const totalMinutes = Math.max(
+  const totalCents = rows.reduce((sum, row) => sum + row.price.totalPriceCents, 0);
+  const totalMinutes = bookingDurationMinutes(
     selected.reduce((sum, item) => sum + item.duration_minutes, 0),
-    60,
+    includeBasement,
   );
   const overageRows = rows.filter((row) => row.price.overageCents > 0);
 
@@ -71,6 +74,7 @@ export default function BookingTotalBar({
               ~{formatMinutes(totalMinutes)} on-site
             </span>
           </div>
+          {includeBasement ? <p className="mt-1 text-[11px] text-realtor-muted">Includes 15 minutes for the finished basement.</p> : null}
           {overageRows.length > 0 ? (
             <p className="mt-1 text-[11px] leading-relaxed text-realtor-primary">
               {squareFootage?.toLocaleString()} sqft home:{" "}
@@ -121,23 +125,6 @@ export default function BookingTotalBar({
       </div>
     </div>
   );
-}
-
-function getPrice(item: BookingTotalItem, squareFootage: number | null) {
-  if (
-    !item.sqft_pricing_enabled ||
-    !item.included_sqft ||
-    !item.overage_increment_sqft ||
-    !item.overage_price_cents ||
-    !squareFootage ||
-    squareFootage <= item.included_sqft
-  ) {
-    return { totalCents: item.price_cents, overageCents: 0 };
-  }
-  const overageSqft = squareFootage - item.included_sqft;
-  const overageUnits = Math.ceil(overageSqft / item.overage_increment_sqft);
-  const overageCents = overageUnits * item.overage_price_cents;
-  return { totalCents: item.price_cents + overageCents, overageCents };
 }
 
 function formatMinutes(minutes: number): string {

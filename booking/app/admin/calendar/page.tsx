@@ -47,6 +47,8 @@ interface BookingRow {
   unit_number: string | null;
   is_vacant: "vacant" | "occupied" | "partial" | null;
   include_basement: boolean | null;
+  basement_duration_minutes: number;
+  booking_line_items: { catalog_item_id: string; unit_price_cents: number; unit_duration_minutes: number; quantity: number }[];
   client_notes: string | null;
   properties: {
     street_address: string;
@@ -108,6 +110,8 @@ interface CalendarItem {
     squareFootage: number | null;
     occupancy: string | null;
     includeBasement: boolean | null;
+    basementDurationMinutes: number;
+    lineSnapshots: { catalog_item_id: string; unit_price_cents: number; unit_duration_minutes: number; quantity: number }[];
     selectedCatalogItemIds: string[];
     hasInvoice: boolean;
     realtorNotificationsSuppressed: boolean;
@@ -143,6 +147,8 @@ interface CatalogItemOption {
   includedSqft: number | null;
   overageIncrementSqft: number | null;
   overagePriceCents: number | null;
+  videoOverageThresholdSqft: number | null;
+  videoOveragePriceCents: number;
 }
 
 export default async function AdminCalendarPage({
@@ -168,7 +174,7 @@ export default async function AdminCalendarPage({
     supabase
       .from("bookings")
       .select(
-        "id, lifecycle_version, status, scheduled_at, scheduled_ends_at, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, properties(street_address, city, province, postal_code, notes), profiles(full_name, email, phone, brokerage, internal_notes)",
+        "id, lifecycle_version, status, scheduled_at, scheduled_ends_at, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, services, add_ons, square_footage, unit_number, is_vacant, include_basement, basement_duration_minutes, booking_line_items(catalog_item_id,unit_price_cents,unit_duration_minutes,quantity), client_notes, properties(street_address, city, province, postal_code, notes), profiles(full_name, email, phone, brokerage, internal_notes)",
       )
       .eq("organization_id", admin.organizationId)
       .not("scheduled_at", "is", null)
@@ -338,6 +344,8 @@ export default async function AdminCalendarPage({
         squareFootage: booking.square_footage,
         occupancy,
         includeBasement: booking.include_basement,
+        basementDurationMinutes: booking.basement_duration_minutes,
+        lineSnapshots: booking.booking_line_items ?? [],
         selectedCatalogItemIds: [...booking.services, ...booking.add_ons]
           .map((slug) => catalogItemIdsBySlug.get(slug))
           .filter((id): id is string => Boolean(id)),
@@ -738,6 +746,8 @@ function catalogToOptions(
       includedSqft: item.included_sqft,
       overageIncrementSqft: item.overage_increment_sqft,
       overagePriceCents: item.overage_price_cents,
+      videoOverageThresholdSqft: item.video_overage_threshold_sqft,
+      videoOveragePriceCents: item.video_overage_price_cents,
     }),
   );
 }

@@ -328,7 +328,7 @@ function CatalogGroup({
                 {!item.active ? " (inactive — retained from booking)" : ""}
               </span>
               <span className="block text-xs text-realtor-muted">
-                {formatDuration(item.durationMinutes)} · {formatPrice(item.priceCents)}
+                {formatDuration(item.durationMinutes)} · Base {formatPrice(item.priceCents)}
               </span>
             </span>
           </label>

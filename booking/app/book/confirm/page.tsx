@@ -1,3 +1,5 @@
+import { bookingDurationMinutes } from "@/lib/booking/quote";
+import { readPublicWizardState, loadPrivateWizardState } from "@/lib/booking/wizard-draft";
 import { randomUUID } from "node:crypto";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
@@ -44,7 +46,7 @@ export default async function BookStep4Page({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const rawSearchParams = await searchParams;
-  const state = parseWizardState(rawSearchParams);
+  const state = readPublicWizardState(rawSearchParams, "/book/confirm");
   const selectionNotice =
     rawSearchParams.selection_notice === "addon_changed"
       ? "An add-on was removed because it is not available with the selected services."
@@ -53,7 +55,7 @@ export default async function BookStep4Page({
     state.organizationSlug,
   );
   if (!organization) notFound();
-  let scopedState = { ...state, organizationSlug: organization.slug };
+  let scopedState = await loadPrivateWizardState({ ...state, organizationSlug: organization.slug }, organization.id);
   const c = stepCompleteness(scopedState);
   if (!c.step1) redirect(`/book?${serializeForRedirect(scopedState)}`);
   if (!c.step2) redirect(`/book/property?${serializeForRedirect(scopedState)}`);
@@ -111,10 +113,10 @@ export default async function BookStep4Page({
     (n, row) => n + row.price.totalPriceCents,
     0,
   );
-  const duration = Math.max(
+  const duration = bookingDurationMinutes(
     selectedItems.reduce((n, i) => n + i.duration_minutes, 0) +
       selectedAddons.reduce((n, a) => n + a.duration_minutes, 0),
-    60,
+    scopedState.includeBasement,
   );
 
   const whenLabel = scopedState.slot
@@ -145,6 +147,8 @@ export default async function BookStep4Page({
             included_sqft: item.included_sqft,
             overage_increment_sqft: item.overage_increment_sqft,
             overage_price_cents: item.overage_price_cents,
+            video_overage_threshold_sqft: item.video_overage_threshold_sqft,
+            video_overage_price_cents: item.video_overage_price_cents,
           }),
         )}
       >
@@ -295,6 +299,12 @@ export default async function BookStep4Page({
               name: item.name,
               kind: item.kind,
               price_cents: item.price_cents,
+              sqft_pricing_enabled: item.sqft_pricing_enabled,
+              included_sqft: item.included_sqft,
+              overage_increment_sqft: item.overage_increment_sqft,
+              overage_price_cents: item.overage_price_cents,
+              video_overage_threshold_sqft: item.video_overage_threshold_sqft,
+              video_overage_price_cents: item.video_overage_price_cents,
               duration_minutes: item.duration_minutes,
               is_photo: item.is_photo,
               is_video: item.is_video,

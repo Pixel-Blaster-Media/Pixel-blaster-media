@@ -259,6 +259,7 @@ export async function createAdminShoot(
       postal_code: postalCode, scheduled_at: scheduledAt.toISOString(),
       square_footage: squareFootage, unit_number: unitNumber, client_notes: notes,
       suppress_realtor_notifications: suppressRealtorNotifications,
+      ...(formData.get("include_basement") === "on" ? { include_basement: true } : {}),
       catalog_item_ids: selectedCatalogIds,
     },
   });

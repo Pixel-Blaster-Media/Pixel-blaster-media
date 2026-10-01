@@ -3,6 +3,7 @@ import { finalsCronAuthorized, runFinalsDispatch } from '@/lib/media/finals/disp
 import { createProductionFinalsRuntime } from '@/lib/media/finals/production';
 
 import { runCatalogStreamCleanup } from "@/lib/booking/catalog-stream-cleanup";
+import { dispatchLifecycleNotices } from "@/lib/booking/lifecycle-notices";
 import { runScheduledIntegrationOutbox } from "@/lib/integrations/scheduler";
 import {
   integrationOutboxDispatchEnabled,
@@ -60,7 +61,7 @@ async function runOutbox(request: Request) {
     );
   }
   try {
-    const [result, streamCleanup] = await Promise.all([
+    const [result, streamCleanup, lifecycleNotices] = await Promise.all([
       runScheduledIntegrationOutbox({ dispatchNotBefore }),
       runCatalogStreamCleanup().catch(() => ({
         ok: false,
@@ -70,8 +71,9 @@ async function runOutbox(request: Request) {
         retryable: 0,
         providerUnknown: 0,
       })),
+      dispatchLifecycleNotices({ dispatchNotBefore }),
     ]);
-    return NextResponse.json({ ...result, enabled: true, streamCleanup });
+    return NextResponse.json({ ...result, ok: result.ok && lifecycleNotices.ok, enabled: true, streamCleanup, lifecycleNotices });
   } catch {
     console.error("[integration-outbox-cron] scheduler failed", {
       kind: "scheduler_failure",

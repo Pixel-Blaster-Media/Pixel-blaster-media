@@ -50,6 +50,7 @@ export default function Stepper({
             }
           >
             <span
+              aria-hidden="true"
               className={
                 "flex h-5 w-5 items-center justify-center rounded-full text-[10px] " +
                 (isDone
@@ -61,7 +62,7 @@ export default function Stepper({
             >
               {isDone ? "✓" : step.id}
             </span>
-            <span className="hidden md:inline">{step.label}</span>
+            <span className="sr-only md:not-sr-only">{step.label}</span>
           </div>
         );
 

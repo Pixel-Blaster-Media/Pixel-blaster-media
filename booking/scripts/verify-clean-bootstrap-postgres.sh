@@ -31,3 +31,5 @@ bash "$TMP/source/scripts/generate-supabase-setup.sh"
 "${PSQL[@]}" -f "$ROOT/tests/postgres/supabase-platform.sql" >/dev/null
 "${PSQL[@]}" --single-transaction -f "$TMP/source/supabase/setup.sql" >"$TMP/setup.log" 2>&1 || { cat "$TMP/setup.log"; exit 1; }
 "${PSQL[@]}" -f "$ROOT/tests/postgres/clean-bootstrap.behavior.sql"
+"${PSQL[@]}" -f "$ROOT/tests/postgres/booking-audit.behavior.sql"
+"${PSQL[@]}" -f "$ROOT/tests/postgres/booking-quote-policy.behavior.sql"

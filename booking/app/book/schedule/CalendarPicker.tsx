@@ -1,5 +1,7 @@
 "use client";
 
+import { publicWizardQuery } from "@/lib/booking/wizard-state";
+
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -96,7 +98,7 @@ export default function CalendarPicker({ daysOfSlots, selectedSlot }: Props) {
   const canGoNext = cursor < lastAvailableMonth;
 
   function pickSlot(iso: string) {
-    const next = new URLSearchParams(params.toString());
+    const next = publicWizardQuery(new URLSearchParams(params.toString()));
     next.set("slot", iso);
     router.push(`/book/confirm?${next.toString()}`);
   }

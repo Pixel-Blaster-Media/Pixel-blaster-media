@@ -58,6 +58,9 @@ function fixture() {
     '@/lib/booking/catalog': { getActiveCatalog: async () => ({ bundles: [{ id: 'catalog-1', slug: 'blue-print', name: 'Blue Print', kind: 'bundle', duration_minutes: 60 }], addons: [], aLaCarte: [] }) },
     '@/lib/booking/catalog-rules': { isAddonEligible: () => true },
     '@/lib/booking/manage-token': { createManageToken: () => 'fake-manage' },
+    // Private cookie storage has separate real-module behavior coverage. Keep
+    // inbox proof tests isolated from Next's request-bound cookie adapter.
+    '@/lib/booking/wizard-draft': { clearPrivateWizardDraft: async () => {} },
     '@/lib/email/settings': { getAdminNotificationEmail: async () => null },
     '@/lib/email/resend': { sendEmail: async (message) => { inbox.push(message); return { ok: true, id: 'fake-email' }; } },
     '@/lib/integrations/dispatcher': { dispatchBookingIntegrationJobs: async () => { effects.push('dispatch'); } },
@@ -161,3 +164,16 @@ test('a fresh server-render request ID invalidates a still-live code and cannot 
   assert.deepEqual(f.effects, []);
 });
 export { fixture, load, root };
+
+for (const [basement, expected] of [['1',75],['0',60],['',60]]) {
+  test(`server availability reserves the approved basement time (${basement || 'unset'})`, async () => {
+    const f = fixture(); const durations = [];
+    f.form.set('include_basement', basement);
+    f.mocks['@/lib/booking/availability'].isSlotAvailable = async (_start, duration) => { durations.push(duration); return false; };
+    const result = await f.action(null, f.form);
+    assert.equal(result.ok, false);
+    assert.deepEqual(durations, [expected]);
+    assert.deepEqual(f.effects, []);
+    assert.equal(f.inbox.length, 0);
+  });
+}

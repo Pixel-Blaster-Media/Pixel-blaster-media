@@ -5,8 +5,8 @@ import { useEffect } from "react";
 /**
  * Booking-flow error boundary — realtor-facing, so it uses the light
  * realtor theme (the segment layout still wraps this) and keeps the
- * realtor's wizard state: "Try again" re-renders with the same URL
- * params, so their package/property selections survive.
+ * realtor's wizard state: "Try again" re-renders the service selections
+ * and reloads property details from the unexpired private browser draft.
  */
 export default function BookError({
   error,
@@ -28,8 +28,7 @@ export default function BookError({
         Sorry — that did not work.
       </h1>
       <p className="mt-3 text-sm leading-6 text-realtor-muted">
-        Your selections are saved in this page&apos;s link, so trying again
-        will not lose them. If it keeps happening, email{" "}
+        Try again to reload your saved selections. If this keeps happening, email{" "}
         <a
           className="font-semibold text-realtor-primary"
           href="mailto:info@pixelblastermedia.com"

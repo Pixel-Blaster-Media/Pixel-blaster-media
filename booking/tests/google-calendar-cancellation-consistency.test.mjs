@@ -27,17 +27,18 @@ test("cancellation retains event linkage until strict Calendar cleanup succeeds"
   assert.doesNotMatch(cancelSource, /updateErr\?\.message/);
   const cancellationBody = cancelSource.slice(
     cancelSource.indexOf("export async function cancelBooking"),
-    cancelSource.indexOf("async function sendCancellationEmail"),
+    cancelSource.indexOf("async function buildCancellationNotices"),
   );
-  assert.match(cancellationBody, /\.update\(\{\s*status:\s*"cancelled"\s*}\)/);
+  assert.match(cancellationBody, /changeBookingWithNotices\([\s\S]*event: "cancelled"/);
+  assert.ok(cancellationBody.indexOf("if (!changed.ok)") < cancellationBody.indexOf("syncStoredBookingGoogleCalendarEvent("));
   assert.doesNotMatch(
     cancellationBody.slice(0, cancellationBody.indexOf("syncStoredBookingGoogleCalendarEvent")),
     /google_calendar_event_id:\s*null/,
   );
   assert.match(cancellationBody, /syncStoredBookingGoogleCalendarEvent\(/);
-  assert.match(cancellationBody, /warning:\s*calendarSynced/);
-  assert.match(cancelSource, /calendarWarning:\s*!calendarSynced/);
-  assert.match(cancelSource, /Calendar cleanup needs attention:/);
+  assert.match(cancellationBody, /warning:\s*\[[\s\S]*!calendarSynced[\s\S]*delivery.warning/);
+  assert.match(cancelSource, /Google Calendar cleanup did not finish/);
+  assert.match(cancelSource, /Check the booking for Calendar sync status/);
 
   assert.match(
     serviceSource,
@@ -84,7 +85,7 @@ test("admin cancellation surfaces Calendar cleanup warnings", () => {
   assert.doesNotMatch(bookingActions, /cancelBookingAsAdmin|function cancel\(/);
   assert.match(
     assistantActions,
-    /cancelBooking\([\s\S]*result\.warning[\s\S]*Calendar cleanup/,
+    /cancelBooking\([\s\S]*result\.warning[\s\S]*follow-up needs attention/,
   );
   assert.doesNotMatch(
     assistantActions,

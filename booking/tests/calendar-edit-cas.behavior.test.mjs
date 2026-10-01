@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
 import ts from 'typescript';
+import {loadSource} from './helpers/source-module.mjs';
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 const require = createRequire(import.meta.url);
@@ -60,6 +61,7 @@ function quickView(action) {
     '@/app/_components/AddressAutocomplete': () => null,
     '@/app/admin/bookings/[id]/actions': { updateBookingServicesFromCalendar: action },
     '@/lib/booking/catalog-rules': { isAddonEligible: () => true },
+    '@/lib/booking/quote': loadSource('lib/booking/quote.ts'),
     '@/app/admin/settings/availability/actions': {}, './actions': {},
   }, { window: { addEventListener() {}, removeEventListener() {} } }).CalendarQuickView;
 }

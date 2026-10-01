@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 import {beforeFinalsUi} from './helpers/photo-finals-ui-boundary.mjs';
+import {beforeBookingAuditUi,bookingAuditUiPaths} from './helpers/booking-audit-ui-boundary.mjs';
 const base = '3039dbc357f78b3c9a97d5dbe1d5c0c54785f85f';
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const changes = {
@@ -43,17 +44,23 @@ test('historical skin changes remain exact after bounded finals UI and OTP lifec
   // Finals UI and ConfirmForm's separately tested OTP lifecycle fix are not
   // part of the earlier presentation-only release.
   const presentationFiles = files.map(f => f.replace(/^booking\//, ''))
-    .filter(f=>!['app/DownloadSessionBoundary.tsx','app/_components/SiteHeaderMobileMenu.tsx','app/auth/no-workspace/page.tsx'].includes(f))
+    .filter(f=>!bookingAuditUiPaths.includes(f) || Object.hasOwn(changes,f))
+    .filter(f=>!['app/DownloadSessionBoundary.tsx','app/_components/SiteHeaderMobileMenu.tsx','app/auth/no-workspace/page.tsx','app/admin/bookings/[id]/LifecycleNotices.tsx'].includes(f))
     .filter(f => !['app/portal/[propertyId]/page.tsx', 'components/media/PhotoFinalsWorkspace.tsx', 'components/media/ResumableDownload.tsx', 'components/media/FinalsGallery.tsx', 'components/media/FinalsNavigationOwner.tsx', 'app/book/confirm/ConfirmForm.tsx'].includes(f));
   assert.deepEqual(presentationFiles.sort(), Object.keys(changes).sort());
   for (const [file, replacements] of Object.entries(changes)) {
-    let candidate = beforeFinalsUi(file,read(file));
+    let candidate = beforeFinalsUi(file,beforeBookingAuditUi(file,read(file)));
     for (const [addition, removal] of replacements) {
       assert.ok(candidate.includes(addition), `Exact allowed addition missing: ${file}: ${addition}`);
       candidate = candidate.replaceAll(addition, removal);
     }
     assert.equal(candidate, execFileSync('git', ['show', `${base}:booking/${file}`], { cwd, encoding: 'utf8' }), file);
   }
+});
+test('functional booking audit UI slice preserves every other byte at the canonical source snapshot',()=>{
+ for(const file of bookingAuditUiPaths) assert.equal(
+  beforeBookingAuditUi(file,read(file)),
+  execFileSync('git',['show',`6346036961d38b4e9a0792f4fbc18519a4df4981:booking/${file}`],{cwd:new URL('..',import.meta.url),encoding:'utf8'}),file);
 });
 test('portal changes are limited to the explicit private finals handoff',()=>{
  const file='app/portal/[propertyId]/page.tsx';

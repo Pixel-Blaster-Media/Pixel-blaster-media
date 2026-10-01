@@ -12,6 +12,7 @@ import { getCredentialSource } from "@/lib/integrations/credentials";
 import { isPhotoEditingProviderEnabled } from "@/lib/integrations/provider-enablement";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getQBClient, QBOError } from "@/lib/integrations/quickbooks/client";
+import { getQuickBooksConnectConfiguration, quickBooksConnectErrorMessage } from "@/lib/integrations/quickbooks/connect-config";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -185,9 +186,8 @@ export default async function IntegrationsPage({
   const autoenhanceConfigured = autoenhanceApiKeyStatus.source !== "none";
   const autoenhanceReady =
     autoenhanceConfigured && autoenhanceWebhookStatus.source !== "none";
-  const quickBooksConfigured = Boolean(
-    process.env.QUICKBOOKS_CLIENT_ID && process.env.QUICKBOOKS_CLIENT_SECRET,
-  );
+  const quickBooksConnectConfig = getQuickBooksConnectConfiguration(process.env);
+  const quickBooksConfigured = quickBooksConnectConfig.ok;
   const quickBooksDefaultItemAvailable = Boolean(
     connection?.default_item_id &&
       items?.some((item) => item.Id === connection?.default_item_id),
@@ -362,10 +362,7 @@ export default async function IntegrationsPage({
           role="alert"
           className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
         >
-          QuickBooks connection failed ({flashError}). Double-check your
-          Intuit app's redirect URI matches{" "}
-          <code className="break-all">{process.env.NEXT_PUBLIC_APP_URL}/api/integrations/quickbooks/callback</code>
-          .
+          {quickBooksConnectErrorMessage(flashError)}
         </p>
       ) : null}
       {flashOk ? (
@@ -1186,7 +1183,7 @@ export default async function IntegrationsPage({
 
         <details
           id="quickbooks-configuration"
-          open={Boolean(connection && !quickBooksReady)}
+          open={Boolean((connection && !quickBooksReady) || !quickBooksConfigured || flashError)}
           className="mt-5 rounded-xl border border-realtor-primary/12 bg-white/55"
         >
           <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary">
@@ -1249,7 +1246,7 @@ export default async function IntegrationsPage({
               <li>
                 Set the redirect URI to{" "}
                 <code className="break-all text-xs">
-                  {process.env.NEXT_PUBLIC_APP_URL}/api/integrations/quickbooks/callback
+                  {quickBooksConnectConfig.ok ? quickBooksConnectConfig.redirectUri : "Configure NEXT_PUBLIC_APP_URL first"}
                 </code>
                 .
               </li>
@@ -1264,7 +1261,7 @@ export default async function IntegrationsPage({
               </li>
               <li>Click Connect below to grant access.</li>
             </ol>
-            <ConnectButton />
+            <ConnectButton configurationError={quickBooksConnectConfig.ok ? undefined : quickBooksConnectConfig.message} />
           </div>
         )}
           </div>

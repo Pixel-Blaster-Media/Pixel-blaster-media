@@ -94,7 +94,7 @@ test("admin booking persists quiet mode and every automatic path honors it", () 
   );
   assert.match(
     manageActions,
-    /!booking\.suppress_realtor_notifications\s*&&\s*booking\.profiles\?\.email/,
+    /if \(!booking\.suppress_realtor_notifications\)[\s\S]*lifecycleNotice\("realtor"/,
   );
   assert.match(manageActions, /syncStoredBookingGoogleCalendarEvent/);
   assert.match(editActions, /syncStoredBookingGoogleCalendarEvent/);
@@ -143,11 +143,11 @@ test("admin booking persists quiet mode and every automatic path honors it", () 
   );
   assert.match(
     manageActions,
-    /realtorNotified:\s*Boolean\([\s\S]*realtorEmailResult\?\.ok\s*&&\s*!realtorEmailResult\.skipped/,
+    /realtorNotified:\s*delivery.realtorNotified/,
   );
   assert.match(
-    manageActions,
-    /realtorNotified\s*=\s*emailResult\.ok\s*&&\s*!emailResult\.skipped/,
+    read("lib/booking/lifecycle-notices.ts"),
+    /realtorNotified:[\s\S]*notice.recipient === "realtor" && notice.status === "completed"/,
   );
   assert.match(
     manageClient,

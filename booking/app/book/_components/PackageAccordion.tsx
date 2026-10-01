@@ -1,5 +1,8 @@
 "use client";
 
+import { getCatalogItemPrice } from "@/lib/booking/quote";
+import { publicWizardQuery } from "@/lib/booking/wizard-state";
+
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -39,6 +42,7 @@ export default function PackageAccordion({
   selectedSlugs,
   selectedAddOnSlugs,
   squareFootage,
+  includeBasement,
 }: {
   bundles: CatalogItemDTO[];
   aLaCarte: CatalogItemDTO[];
@@ -46,6 +50,7 @@ export default function PackageAccordion({
   selectedSlugs: string[];
   selectedAddOnSlugs: string[];
   squareFootage: number | null;
+  includeBasement?: boolean | null;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -85,7 +90,7 @@ export default function PackageAccordion({
   );
 
   function updateUrl(nextServices: string[], nextAddons: string[]) {
-    const next = new URLSearchParams(params.toString());
+    const next = publicWizardQuery(new URLSearchParams(params.toString()));
     // Prune addons that no longer qualify after the service change.
     const nextSelectedServices = nextServices
       .map((slug) => bySlug.get(slug))
@@ -98,6 +103,9 @@ export default function PackageAccordion({
     else next.delete("services");
     if (cleanedAddons.length) next.set("add_ons", cleanedAddons.join(","));
     else next.delete("add_ons");
+    // A changed selection can require a longer slot; keep the private draft
+    // while making the customer choose availability for the new duration.
+    next.delete("slot");
     router.replace(`?${next.toString()}`, { scroll: false });
   }
 
@@ -128,7 +136,7 @@ export default function PackageAccordion({
     updateUrl(selectedSlugs, next);
   }
 
-  const continueQuery = params.toString();
+  const continueQuery = publicWizardQuery(new URLSearchParams(params.toString())).toString();
   const continueHref = continueQuery
     ? `/book/property?${continueQuery}`
     : "/book/property";
@@ -341,7 +349,7 @@ export default function PackageAccordion({
                   </div>
                   <div className="shrink-0 rounded-2xl bg-white px-3 py-2 text-right ring-1 ring-realtor-primary/20">
                     <p className="text-sm font-semibold text-realtor-text">
-                      ${(a.price_cents / 100).toFixed(0)}
+                      ${(priceForSqft(a, squareFootage) / 100).toFixed(0)}
                     </p>
                     <p className="text-[10px] uppercase tracking-wider text-realtor-muted">
                       {formatMinutes(a.duration_minutes)}
@@ -401,7 +409,7 @@ export default function PackageAccordion({
                           {a.name}
                         </span>
                         <span className="font-semibold text-realtor-primary">
-                          +${(a.price_cents / 100).toFixed(0)}
+                          +${(priceForSqft(a, squareFootage) / 100).toFixed(0)}
                         </span>
                       </div>
                       {a.description ? (
@@ -438,6 +446,7 @@ export default function PackageAccordion({
         selectedSlugs={selectedSlugs}
         selectedAddOnSlugs={selectedAddOnSlugs}
         squareFootage={squareFootage}
+        includeBasement={includeBasement}
         href={continueHref}
         ctaLabel="Continue"
         note={
@@ -833,37 +842,11 @@ function formatMinutes(minutes: number): string {
   return `${Math.floor(hours)}h ${minutes % 60}min`;
 }
 
-/**
- * Same overage math as BookingTotalBar/getPrice: once we know the
- * property's square footage (returning from step 2), package cards show
- * the price the realtor will actually pay instead of the base price.
- */
+/** Price the whole catalog package once, including its configured video fee. */
 function priceForSqft(item: CatalogItemDTO, squareFootage: number | null): number {
-  if (
-    !item.sqft_pricing_enabled ||
-    !item.included_sqft ||
-    !item.overage_increment_sqft ||
-    !item.overage_price_cents ||
-    !squareFootage ||
-    squareFootage <= item.included_sqft
-  ) {
-    return item.price_cents;
-  }
-  const overageSqft = squareFootage - item.included_sqft;
-  const overageUnits = Math.ceil(overageSqft / item.overage_increment_sqft);
-  return item.price_cents + overageUnits * item.overage_price_cents;
+  return getCatalogItemPrice(item, squareFootage).totalPriceCents;
 }
 
 function sqftRuleText(item: CatalogItemDTO): string | null {
-  if (
-    !item.sqft_pricing_enabled ||
-    !item.included_sqft ||
-    !item.overage_increment_sqft ||
-    !item.overage_price_cents
-  ) {
-    return null;
-  }
-  return `Includes ${item.included_sqft.toLocaleString()} sqft; +$${(
-    item.overage_price_cents / 100
-  ).toFixed(0)} per ${item.overage_increment_sqft.toLocaleString()} sqft after.`;
+  return getCatalogItemPrice(item, null).ruleLabel;
 }

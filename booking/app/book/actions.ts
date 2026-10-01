@@ -1,5 +1,8 @@
 "use server";
 
+import { bookingDurationMinutes } from "@/lib/booking/quote";
+import { clearPrivateWizardDraft } from "@/lib/booking/wizard-draft";
+
 import { randomUUID } from "node:crypto";
 
 import { emailHasAccount } from "@/lib/auth/email-lookup";
@@ -290,10 +293,10 @@ export async function createPublicBooking(
     }
   }
 
-  const duration = Math.max(
+  const duration = bookingDurationMinutes(
     validServices.reduce((total, item) => total + item.duration_minutes, 0) +
       validAddons.reduce((total, item) => total + item.duration_minutes, 0),
-    60,
+    includeBasement,
   );
 
   if (!existingRequest) {
@@ -479,12 +482,14 @@ export async function createPublicBooking(
       org: organization.name,
       ...(manageToken ? { manage: manageToken } : {}),
     });
+    await clearPrivateWizardDraft(String(formData.get("wizard_draft") ?? ""));
     return { ok: true, redirectTo: `/book/success?${params.toString()}`, receipt };
   }
 
   // Do not let Next inline an authenticated redirect's RSC response here.
   // Its internal cross-host fetch can lose cookies at the canonical proxy
   // redirect even though this action successfully installed browser cookies.
+  await clearPrivateWizardDraft(String(formData.get("wizard_draft") ?? ""));
   return { ok: true, redirectTo: `/portal/${propertyId}?booked=1`, receipt };
 }
 
