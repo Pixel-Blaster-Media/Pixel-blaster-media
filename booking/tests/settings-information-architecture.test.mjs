@@ -90,20 +90,22 @@ test("integration readiness includes required workflow configuration", () => {
   assert.match(integrationsPage, /const quickBooksReady =/);
   assert.match(
     integrationsPage,
-    /open={Boolean\(connection && !quickBooksReady\)}/,
+    /open={Boolean\(\(connection && !quickBooksReady\) \|\| !quickBooksConfigured \|\| flashError\)}/,
   );
   assert.match(integrationsPage, /connection\?\.default_item_id/);
 });
 
 test("QuickBooks readiness requires credentials and a usable active item mapping", () => {
-  assert.match(integrationsPage, /process\.env\.QUICKBOOKS_CLIENT_ID/);
-  assert.match(integrationsPage, /process\.env\.QUICKBOOKS_CLIENT_SECRET/);
+  assert.match(integrationsPage, /getQuickBooksConnectConfiguration\(process.env\)/);
+  const config = readFileSync(new URL("../lib/integrations/quickbooks/connect-config.ts", import.meta.url), "utf8");
+  assert.match(config, /QUICKBOOKS_CLIENT_ID/);
+  assert.match(config, /QUICKBOOKS_CLIENT_SECRET/);
   assert.match(integrationsPage, /!itemError/);
   assert.match(integrationsPage, /items\?\.some/);
   assert.match(integrationsPage, /item\.Id === connection\?\.default_item_id/);
   assert.match(
     integrationsPage,
-    /open={Boolean\(connection && !quickBooksReady\)}/,
+    /open={Boolean\(\(connection && !quickBooksReady\) \|\| !quickBooksConfigured \|\| flashError\)}/,
   );
 });
 
@@ -119,7 +121,7 @@ test("settings readiness and preference copy describe their true scope", () => {
 test("OAuth error callback URLs wrap on narrow screens", () => {
   assert.match(
     integrationsPage,
-    /<code className="break-all">\{process\.env\.NEXT_PUBLIC_APP_URL\}/,
+    /<code className="break-all text-xs">\s*\{quickBooksConnectConfig.ok \? quickBooksConnectConfig.redirectUri/,
   );
   assert.match(
     integrationsPage,
@@ -142,7 +144,7 @@ test("connected Calendar and QuickBooks details stay quiet until needed", () => 
   assert.match(integrationsPage, /open={!googleReady}/);
   assert.match(
     integrationsPage,
-    /open={Boolean\(connection && !quickBooksReady\)}/,
+    /open={Boolean\(\(connection && !quickBooksReady\) \|\| !quickBooksConfigured \|\| flashError\)}/,
   );
 });
 
@@ -180,7 +182,7 @@ test("connections make core tools prominent and keep untouched optional setup cl
   assert.match(integrationsPage, /open={iguideStarted && !iguideReady}/);
   assert.match(
     integrationsPage,
-    /open={Boolean\(connection && !quickBooksReady\)}/,
+    /open={Boolean\(\(connection && !quickBooksReady\) \|\| !quickBooksConfigured \|\| flashError\)}/,
   );
   assert.match(
     integrationsPage,

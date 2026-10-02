@@ -29,5 +29,17 @@ cp -R "$ROOT/supabase" "$TMP/source/"
 cp "$ROOT/scripts/generate-supabase-setup.sh" "$TMP/source/scripts/"
 bash "$TMP/source/scripts/generate-supabase-setup.sh"
 "${PSQL[@]}" -f "$ROOT/tests/postgres/supabase-platform.sql" >/dev/null
+# Independently prove old app -> paused expansion -> versioned activation.
+# Roll back this fixture before the required complete single-transaction setup.
+awk '/^-- Begin supabase\/migrations\/20260930202500_booking_quote_policy_guard.sql/{exit} {print}' "$TMP/source/supabase/setup.sql" > "$TMP/pre-policy.sql"
+"${PSQL[@]}" -c BEGIN -f "$TMP/pre-policy.sql" \
+  -f "$ROOT/tests/postgres/booking-quote-cutover-before.sql" \
+  -f "$ROOT/supabase/migrations/20260930202500_booking_quote_policy_guard.sql" \
+  -f "$ROOT/tests/postgres/booking-quote-cutover-paused.sql" \
+  -f "$ROOT/supabase/migrations/20260930203055_booking_size_and_basement_policy.sql" \
+  -f "$ROOT/tests/postgres/booking-quote-cutover-active.sql" -c ROLLBACK > "$TMP/cutover.log" 2>&1 || { cat "$TMP/cutover.log"; exit 1; }
+tail -n 2 "$TMP/cutover.log"
 "${PSQL[@]}" --single-transaction -f "$TMP/source/supabase/setup.sql" >"$TMP/setup.log" 2>&1 || { cat "$TMP/setup.log"; exit 1; }
 "${PSQL[@]}" -f "$ROOT/tests/postgres/clean-bootstrap.behavior.sql"
+"${PSQL[@]}" -f "$ROOT/tests/postgres/booking-audit.behavior.sql"
+"${PSQL[@]}" -f "$ROOT/tests/postgres/booking-quote-policy.behavior.sql"

@@ -1,5 +1,8 @@
 "use client";
 
+import { getCatalogItemPrice, type CatalogPricingItem } from "@/lib/booking/quote";
+import { publicWizardQuery } from "@/lib/booking/wizard-state";
+
 import { useRouter, useSearchParams } from "next/navigation";
 
 import type { WizardState } from "@/lib/booking/wizard-state";
@@ -8,7 +11,7 @@ import {
   isCatalogAddonEligible,
 } from "@/lib/booking/catalog-eligibility";
 
-interface CatalogLite {
+interface CatalogLite extends CatalogPricingItem {
   slug: string;
   name: string;
   kind: "bundle" | "a_la_carte" | "addon";
@@ -147,7 +150,7 @@ export default function ConfirmUpsellPanel({
   if (visible.length === 0) return null;
 
   function addUpgrade(slug: string, kind: "service" | "addon" = "service") {
-    const next = new URLSearchParams(params.toString());
+    const next = publicWizardQuery(new URLSearchParams(params.toString()));
     if (kind === "addon") {
       const addOns = [...state.addOns, slug].filter(unique);
       next.set("add_ons", addOns.join(","));
@@ -155,7 +158,8 @@ export default function ConfirmUpsellPanel({
       const services = [...state.services, slug].filter(unique);
       next.set("services", services.join(","));
     }
-    router.replace(`/book/confirm?${next.toString()}`, { scroll: false });
+    next.delete("slot");
+    router.replace(`/book/schedule?${next.toString()}`, { scroll: false });
   }
 
   return (
@@ -196,7 +200,7 @@ export default function ConfirmUpsellPanel({
               <span className="mt-1 flex items-start justify-between gap-3">
                 <span className="font-semibold text-realtor-text">{upgrade.title}</span>
                 <span className="shrink-0 rounded-full bg-realtor-surface-muted/80 px-2 py-0.5 font-semibold text-realtor-primary ring-1 ring-realtor-primary/10">
-                  +${(item.price_cents / 100).toFixed(0)}
+                  +${(getCatalogItemPrice(item, state.squareFootage).totalPriceCents / 100).toFixed(0)}
                 </span>
               </span>
               <span className="mt-1 block text-[11px] leading-relaxed text-realtor-muted">

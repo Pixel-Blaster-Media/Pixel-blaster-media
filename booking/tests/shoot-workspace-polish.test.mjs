@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import {beforeFinalsUi} from "./helpers/photo-finals-ui-boundary.mjs";
+import {beforeBookingAuditUi} from "./helpers/booking-audit-ui-boundary.mjs";
 
 // Frozen fresh origin/main af534fb: this polish may add presentation markers
 // and clarify the navigation label, but must not change a workflow expression.
@@ -20,7 +21,7 @@ const markers = {
 for (const [file, hash] of Object.entries(baseline)) {
   test(`shoot polish preserves exact ${file} workflow bytes`, () => {
     let source = readFileSync(new URL(`../app/admin/bookings/[id]/${file}`, import.meta.url), "utf8");
-    source=beforeFinalsUi(`app/admin/bookings/[id]/${file}`,source);
+    source=beforeFinalsUi(`app/admin/bookings/[id]/${file}`,beforeBookingAuditUi(`app/admin/bookings/[id]/${file}`,source));
     for (const marker of markers[file]) {
       const token = `precision-shoot-${marker} `;
       assert.equal(source.split(token).length - 1, 1, `one ${token} marker`);

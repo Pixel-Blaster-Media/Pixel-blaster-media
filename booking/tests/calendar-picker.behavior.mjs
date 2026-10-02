@@ -13,7 +13,7 @@ const daysOfSlots = [
 ];
 async function mount(selectedSlot=null) {
  const pushed=[]; let renderer;
- await act(async()=> {renderer=TestRenderer.create(React.createElement(AppRouterContext.Provider,{value:{push:url=>pushed.push(url)}},React.createElement(SearchParamsContext.Provider,{value:new URLSearchParams('service=photo')},React.createElement(CalendarPicker,{daysOfSlots,selectedSlot}))));});
+ await act(async()=> {renderer=TestRenderer.create(React.createElement(AppRouterContext.Provider,{value:{push:url=>pushed.push(url)}},React.createElement(SearchParamsContext.Provider,{value:new URLSearchParams('services=photo&draft=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa&shoot_notes=private-legacy-note')},React.createElement(CalendarPicker,{daysOfSlots,selectedSlot}))));});
  return {renderer,pushed};
 }
 function button(r,label) { const b=r.root.findAllByType('button').find(b=>b.props['aria-label']===label);assert.ok(b,`missing accessible button: ${label}`);return b; }
@@ -39,6 +39,8 @@ test('revisited selected slot exposes full date, time, timezone and pressed stat
  const slot=button(r,'Wednesday, September 30, 2026 at 9:00 AM (America/Toronto)');
  assert.equal(slot.props['aria-pressed'],true);
  await act(async()=>slot.props.onClick());
- const url=new URL(pushed[0],'https://fixture.invalid');assert.equal(url.pathname,'/book/confirm');assert.equal(url.searchParams.get('service'),'photo');assert.equal(url.searchParams.get('slot'),'2026-09-30T13:00:00Z');
+ const url=new URL(pushed[0],'https://fixture.invalid');assert.equal(url.pathname,'/book/confirm');assert.equal(url.searchParams.get('services'),'photo');assert.equal(url.searchParams.get('slot'),'2026-09-30T13:00:00Z');
+ assert.equal(url.searchParams.get('draft'),'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+ assert.equal(url.searchParams.has('shoot_notes'),false);
  } finally {await act(async()=>r.unmount());}
 });

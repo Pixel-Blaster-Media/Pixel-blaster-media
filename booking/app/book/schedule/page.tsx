@@ -1,3 +1,5 @@
+import { bookingDurationMinutes } from "@/lib/booking/quote";
+import { readPublicWizardState, loadPrivateWizardState } from "@/lib/booking/wizard-draft";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
@@ -27,12 +29,12 @@ export default async function BookStep3Page({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const state = parseWizardState(await searchParams);
+  const state = readPublicWizardState(await searchParams, "/book/schedule");
   const organization = await resolvePublicBookingOrganization(
     state.organizationSlug,
   );
   if (!organization) notFound();
-  const scopedState = { ...state, organizationSlug: organization.slug };
+  const scopedState = await loadPrivateWizardState({ ...state, organizationSlug: organization.slug }, organization.id);
   const c = stepCompleteness(scopedState);
   if (!c.step1) redirect(`/book?${serializeForRedirect(scopedState)}`);
   if (!c.step2) redirect(`/book/property?${serializeForRedirect(scopedState)}`);
@@ -45,7 +47,7 @@ export default async function BookStep3Page({
   for (const r of catalog.aLaCarte) bySlug.set(r.slug, r);
   for (const r of catalog.addons) bySlug.set(r.slug, r);
 
-  const duration = Math.max(
+  const duration = bookingDurationMinutes(
     scopedState.services.reduce(
       (n, s) => n + (bySlug.get(s)?.duration_minutes ?? 0),
       0,
@@ -54,7 +56,7 @@ export default async function BookStep3Page({
         (n, s) => n + (bySlug.get(s)?.duration_minutes ?? 0),
         0,
       ),
-    60,
+    scopedState.includeBasement,
   );
 
   const daysOfSlots = await loadSlotsForNextDays(duration, 28, {
@@ -92,11 +94,14 @@ export default async function BookStep3Page({
             included_sqft: item.included_sqft,
             overage_increment_sqft: item.overage_increment_sqft,
             overage_price_cents: item.overage_price_cents,
+            video_overage_threshold_sqft: item.video_overage_threshold_sqft,
+            video_overage_price_cents: item.video_overage_price_cents,
           }),
         )}
         selectedSlugs={scopedState.services}
         selectedAddOnSlugs={scopedState.addOns}
         squareFootage={scopedState.squareFootage}
+        includeBasement={scopedState.includeBasement}
         href={
           scopedState.slot
             ? `/book/confirm?${serializeForRedirect(scopedState)}`

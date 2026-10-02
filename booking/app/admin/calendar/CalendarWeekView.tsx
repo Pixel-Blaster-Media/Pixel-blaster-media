@@ -1,4 +1,7 @@
 "use client";
+import { BOOKING_QUOTE_POLICY_VERSION } from "@/lib/booking/quote";
+
+import { getCatalogItemPrice } from "@/lib/booking/quote";
 
 import {
   ChevronLeft,
@@ -74,6 +77,8 @@ interface CalendarItem {
     squareFootage: number | null;
     occupancy: string | null;
     includeBasement: boolean | null;
+    basementDurationMinutes: number;
+    lineSnapshots: { catalog_item_id: string; unit_price_cents: number; unit_duration_minutes: number; quantity: number }[];
     selectedCatalogItemIds: string[];
     hasInvoice: boolean;
     realtorNotificationsSuppressed: boolean;
@@ -121,6 +126,8 @@ interface CatalogItemOption {
   includedSqft: number | null;
   overageIncrementSqft: number | null;
   overagePriceCents: number | null;
+  videoOverageThresholdSqft: number | null;
+  videoOveragePriceCents: number;
 }
 
 interface DragTarget {
@@ -1603,6 +1610,7 @@ export default function CalendarWeekView({
                 startTransition(async () => {
                   createRequestRef.current ??= crypto.randomUUID();
                   formData.set("admin_request_id", createRequestRef.current);
+                  formData.set("quote_policy_version", BOOKING_QUOTE_POLICY_VERSION);
                   const result = await createAdminShoot(formData);
                   if (!result.ok || !result.bookingId) {
                     setError(result.error ?? "Could not add shoot.");
@@ -1630,7 +1638,7 @@ export default function CalendarWeekView({
                 title="Package"
                 detail="Pick what they booked first. Add-ons can stay empty."
               >
-                <CatalogPicker items={catalogItems.filter((item) => item.active)} />
+                <CatalogPicker items={catalogItems.filter((item) => item.active)} squareFootage={Number(property.square_footage) || null} />
               </FormSection>
 
               <FormSection
@@ -1860,6 +1868,10 @@ export default function CalendarWeekView({
                 </span>
               </label>
 
+              <label className="flex items-center gap-2 text-sm text-realtor-text">
+                <input type="checkbox" name="include_basement" className="h-4 w-4 accent-realtor-primary" />
+                Include finished basement (+15 minutes once per booking)
+              </label>
               <label className="block">
                 <span className="text-xs text-realtor-muted">Notes</span>
                 <textarea
@@ -2167,9 +2179,13 @@ function CalendarQuickView({
   const selectedServices = selectedCatalogItems.filter(
     (catalogItem) => catalogItem.kind !== "addon",
   );
-  const proposedDurationMinutes = Math.max(
+  const retainedLines = new Map((details?.lineSnapshots ?? []).map((line) => [line.catalog_item_id, line]));
+  const proposedDurationMinutes = (details?.basementDurationMinutes ?? 0) + Math.max(
     selectedCatalogItems.reduce(
-      (total, catalogItem) => total + catalogItem.durationMinutes,
+      (total, catalogItem) => {
+        const line = retainedLines.get(catalogItem.id);
+        return total + (line ? line.unit_duration_minutes * line.quantity : catalogItem.durationMinutes);
+      },
       0,
     ),
     60,
@@ -2187,7 +2203,7 @@ function CalendarQuickView({
     [...currentCatalogItemIds].sort().join(",");
   const proposedPriceCents = selectedCatalogItems.reduce(
     (total, catalogItem) =>
-      total + catalogItemPriceForSquareFootage(catalogItem, details?.squareFootage),
+      total + (retainedLines.has(catalogItem.id) ? retainedLines.get(catalogItem.id)!.unit_price_cents * retainedLines.get(catalogItem.id)!.quantity : catalogItemPriceForSquareFootage(catalogItem, details?.squareFootage)),
     0,
   );
   const currentPriceCents = catalogItems
@@ -2195,7 +2211,7 @@ function CalendarQuickView({
     .reduce(
       (total, catalogItem) =>
         total +
-        catalogItemPriceForSquareFootage(catalogItem, details?.squareFootage),
+        (retainedLines.has(catalogItem.id) ? retainedLines.get(catalogItem.id)!.unit_price_cents * retainedLines.get(catalogItem.id)!.quantity : catalogItemPriceForSquareFootage(catalogItem, details?.squareFootage)),
       0,
     );
   const proposedEnd = new Date(
@@ -2304,6 +2320,7 @@ function CalendarQuickView({
         const formData = new FormData();
         servicesRequestRef.current ??= crypto.randomUUID();
         formData.set("admin_request_id", servicesRequestRef.current);
+        formData.set("quote_policy_version", BOOKING_QUOTE_POLICY_VERSION);
         formData.set("lifecycle_version", String(servicesVersionRef.current));
         for (const catalogItemId of selectedCatalogItemIds) {
           formData.append("catalog_item_id", catalogItemId);
@@ -2908,20 +2925,13 @@ function catalogItemPriceForSquareFootage(
   item: CatalogItemOption,
   squareFootage: number | null | undefined,
 ): number {
-  if (
-    !item.sqftPricingEnabled ||
-    !item.includedSqft ||
-    !item.overageIncrementSqft ||
-    !item.overagePriceCents ||
-    !squareFootage ||
-    squareFootage <= item.includedSqft
-  ) {
-    return item.priceCents;
-  }
-  const increments = Math.ceil(
-    (squareFootage - item.includedSqft) / item.overageIncrementSqft,
-  );
-  return item.priceCents + increments * item.overagePriceCents;
+  return getCatalogItemPrice({
+    price_cents: item.priceCents, sqft_pricing_enabled: item.sqftPricingEnabled,
+    included_sqft: item.includedSqft, overage_increment_sqft: item.overageIncrementSqft,
+    overage_price_cents: item.overagePriceCents,
+    video_overage_threshold_sqft: item.videoOverageThresholdSqft,
+    video_overage_price_cents: item.videoOveragePriceCents,
+  }, squareFootage).totalPriceCents;
 }
 
 function calendarAddonEligible(
@@ -3055,7 +3065,7 @@ function FormSection({
   );
 }
 
-function CatalogPicker({ items }: { items: CatalogItemOption[] }) {
+function CatalogPicker({ items, squareFootage }: { items: CatalogItemOption[]; squareFootage: number | null }) {
   const groups: { title: string; kinds: CatalogItemOption["kind"][] }[] = [
     { title: "Packages", kinds: ["bundle"] },
     { title: "A-la-carte", kinds: ["a_la_carte"] },
@@ -3098,7 +3108,7 @@ function CatalogPicker({ items }: { items: CatalogItemOption[] }) {
                           ) : null}
                         </span>
                         <span className="mt-1 block text-xs text-realtor-muted">
-                          {formatPrice(item.priceCents)} ·{" "}
+                          {formatPrice(catalogItemPriceForSquareFootage(item, squareFootage))} ·{" "}
                           {formatDuration(item.durationMinutes)}
                           {item.requireHasVideo ? " · needs video" : ""}
                         </span>

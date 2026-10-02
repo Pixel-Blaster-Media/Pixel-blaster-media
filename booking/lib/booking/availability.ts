@@ -105,11 +105,25 @@ export async function listAvailableSlots({
     .eq("organization_id", orgId)
     .in("status", ["requested", "confirmed", "shot", "editing", "delivered"])
     .not("scheduled_at", "is", null)
-    .gte("scheduled_at", addMinutes(from, -6 * 60).toISOString())
+    // Fetch intervals that can overlap, including long/overnight bookings.
+    // Legacy rows without an end still use the duration fallback below.
+    .or(`scheduled_ends_at.gt.${from.toISOString()},scheduled_ends_at.is.null`)
     .lt("scheduled_at", to.toISOString());
   if (excludeBookingId) {
     bookingsQuery = bookingsQuery.neq("id", excludeBookingId);
   }
+  bookingsQuery = bookingsQuery.order("id");
+  const bookingIntervals = (async () => {
+    const rows: BookingRow[] = [];
+    // Never silently truncate a busy calendar at the API's default row limit.
+    for (let page = 0; page < 20; page += 1) {
+      const result = await bookingsQuery.range(page * 500, page * 500 + 499).returns<BookingRow[]>();
+      if (result.error || !result.data) return result;
+      rows.push(...result.data);
+      if (result.data.length < 500) return { data: rows, error: null };
+    }
+    throw new Error("Availability is temporarily unavailable. Please try again.");
+  })();
 
   // Pull the three inputs in parallel. These are all small datasets so we
   // can afford to fetch the full rows; the filtering happens in memory.
@@ -126,7 +140,7 @@ export async function listAvailableSlots({
       .lte("starts_at", to.toISOString())
       .gte("ends_at", from.toISOString())
       .returns<CalendarBlockRow[]>(),
-    bookingsQuery.returns<BookingRow[]>(),
+    bookingIntervals,
     // Optional Google Calendar free/busy union. If no calendar is
     // connected, returns [] so slot computation is unaffected.
     fetchGoogleBusy(from, to, {
@@ -164,7 +178,7 @@ export async function listAvailableSlots({
   const slots: Slot[] = [];
 
   // Iterate one business-tz day at a time.
-  const day = startOfLocalDay(from);
+  let day = startOfLocalDay(from);
   const cutoff = to.getTime();
   while (day.getTime() < cutoff) {
     const dow = localDayOfWeek(day);
@@ -191,8 +205,9 @@ export async function listAvailableSlots({
         cursor = addMinutes(cursor, SLOT_STEP_MINUTES);
       }
     }
-    // advance one local day
-    day.setUTCDate(day.getUTCDate() + 1);
+    // A civil day can be 23 or 25 hours. Advancing 24 UTC hours repeats
+    // the Sunday at the fall-back transition.
+    day = nextLocalDay(day);
   }
 
   return slots;
@@ -305,6 +320,12 @@ function startOfLocalDay(d: Date): Date {
   const parts = tzParts(d);
   const iso = `${parts.year}-${parts.month}-${parts.day}T00:00:00`;
   return localToUtc(iso);
+}
+
+function nextLocalDay(d: Date): Date {
+  const { year, month, day } = tzParts(d);
+  const nextDate = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day) + 1));
+  return localToUtc(`${nextDate.toISOString().slice(0, 10)}T00:00:00`);
 }
 
 function localDayOfWeek(localMidnightUtc: Date): number {

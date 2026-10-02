@@ -1,4 +1,5 @@
 import Link from "next/link";
+import LifecycleNotices from "./LifecycleNotices";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
@@ -419,6 +420,7 @@ export default async function BookingDetailPage({
         </div>
       </header>
 
+      <LifecycleNotices bookingId={booking.id} />
       <BookingWorkspaceTabs
         activeTabId={activeTabId}
         baseHref={`/admin/bookings/${booking.id}`}

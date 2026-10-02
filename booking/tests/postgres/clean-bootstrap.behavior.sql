@@ -5,7 +5,7 @@ begin;
 do $$
 declare f record; required_name text;
 begin
- foreach required_name in array array['create_public_booking_with_jobs', 'claim_integration_job'] loop
+ foreach required_name in array array['create_public_booking_with_jobs', 'create_public_booking_with_jobs_v2', 'current_booking_quote_policy', 'require_current_booking_quote_write', 'claim_integration_job'] loop
   if not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname=required_name) then
    raise exception 'Missing runtime RPC: %', required_name;
   end if;

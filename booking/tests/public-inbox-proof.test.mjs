@@ -44,7 +44,7 @@ function fixture() {
         if (valid) effects.push('proof');
         return { data: !!valid, error: null };
       }
-      assert.equal(name, 'create_public_booking_with_jobs'); effects.push('booking');
+      assert.equal(name, 'create_public_booking_with_jobs_v2'); assert.equal(args.p_quote_policy_version, '2026-09-30-v1'); effects.push('booking');
       return { data: { booking_id: 'booking-1', property_id: 'property-1', scheduled_ends_at: '2027-01-10T17:00:00Z' }, error: null };
     },
   };
@@ -58,6 +58,9 @@ function fixture() {
     '@/lib/booking/catalog': { getActiveCatalog: async () => ({ bundles: [{ id: 'catalog-1', slug: 'blue-print', name: 'Blue Print', kind: 'bundle', duration_minutes: 60 }], addons: [], aLaCarte: [] }) },
     '@/lib/booking/catalog-rules': { isAddonEligible: () => true },
     '@/lib/booking/manage-token': { createManageToken: () => 'fake-manage' },
+    // Private cookie storage has separate real-module behavior coverage. Keep
+    // inbox proof tests isolated from Next's request-bound cookie adapter.
+    '@/lib/booking/wizard-draft': { completePrivateWizardDraft: async () => {}, hasActivePrivateWizardDraft: async () => true },
     '@/lib/email/settings': { getAdminNotificationEmail: async () => null },
     '@/lib/email/resend': { sendEmail: async (message) => { inbox.push(message); return { ok: true, id: 'fake-email' }; } },
     '@/lib/integrations/dispatcher': { dispatchBookingIntegrationJobs: async () => { effects.push('dispatch'); } },
@@ -67,7 +70,7 @@ function fixture() {
   };
   const action = load(resolve(root, 'app/book/actions.ts'), mocks).createPublicBooking;
   const form = new FormData();
-  for (const [key, value] of Object.entries({ public_request_id: requestId, services: 'blue-print', slot: '2027-01-10T16:00:00Z', street_address: '1 Fictional Street', contact_name: 'Controlled Test', contact_email: profile.email, contact_phone: '555-0100', password: 'controlled-password' })) form.set(key, value);
+  for (const [key, value] of Object.entries({ quote_policy_version: '2026-09-30-v1', public_request_id: requestId, services: 'blue-print', slot: '2027-01-10T16:00:00Z', street_address: '1 Fictional Street', contact_name: 'Controlled Test', contact_email: profile.email, contact_phone: '555-0100', password: 'controlled-password' })) form.set(key, value);
   return { action, form, effects, inbox, mocks, advanceTime(ms) { now += ms; } };
 }
 test('unused email must prove its inbox before identity, session, or booking effects', async () => {
@@ -161,3 +164,36 @@ test('a fresh server-render request ID invalidates a still-live code and cannot 
   assert.deepEqual(f.effects, []);
 });
 export { fixture, load, root };
+
+for (const [basement, expected] of [['1',75],['0',60],['',60]]) {
+  test(`server availability reserves the approved basement time (${basement || 'unset'})`, async () => {
+    const f = fixture(); const durations = [];
+    f.form.set('include_basement', basement);
+    f.mocks['@/lib/booking/availability'].isSlotAvailable = async (_start, duration) => { durations.push(duration); return false; };
+    const result = await f.action(null, f.form);
+    assert.equal(result.ok, false);
+    assert.deepEqual(durations, [expected]);
+    assert.deepEqual(f.effects, []);
+    assert.equal(f.inbox.length, 0);
+  });
+}
+
+for (const version of [null, '', 'legacy', '2026-09-30-v0']) test(`stale quote policy fails before identity, email, or booking effects: ${version}`, async () => {
+  const f = fixture();
+  if (version === null) f.form.delete('quote_policy_version'); else f.form.set('quote_policy_version', version);
+  const result = await f.action(null, f.form);
+  assert.equal(result.ok, false);
+  assert.match(result.errors._form, /Refresh and review your quote/);
+  assert.deepEqual(f.effects, []); assert.deepEqual(f.inbox, []);
+});
+
+
+test('expired anonymous draft fails before password sign-in, session, email or booking effects', async () => {
+  const f = fixture();
+  f.mocks['@/lib/booking/wizard-draft'].hasActivePrivateWizardDraft = async () => false;
+  f.mocks['@/lib/auth/email-lookup'].emailHasAccount = async () => true;
+  const result = await f.action(null, f.form);
+  assert.equal(result.ok, false);
+  assert.match(result.errors._form, /private booking draft expired/);
+  assert.deepEqual(f.effects, []); assert.deepEqual(f.inbox, []);
+});

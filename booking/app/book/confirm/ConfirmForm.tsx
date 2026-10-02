@@ -5,6 +5,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { createPublicBooking, type BookResult } from "../actions";
+import { BOOKING_QUOTE_POLICY_VERSION } from "@/lib/booking/quote";
 import {
   serializeWizardState,
   type WizardState,
@@ -34,14 +35,16 @@ export default function ConfirmForm({
   profile,
   items,
   children,
+  completedResult,
 }: {
   requestId: string;
   state: WizardState;
   profile: ProfileLite | null;
   items: BookingTotalItem[];
   children?: React.ReactNode;
+  completedResult?: Pick<BookResult, "redirectTo" | "receipt">;
 }) {
-  const [formState, formAction] = useActionState(createPublicBooking, initial);
+  const [formState, formAction] = useActionState(createPublicBooking, completedResult ? { ok: true, ...completedResult } : initial);
   // Server Action re-renders can supply a fresh page UUID. Keep the challenge
   // scope for this mounted draft, just like its contact details and password.
   const [draftRequestId] = useState(requestId);
@@ -201,6 +204,8 @@ export default function ConfirmForm({
         ) : null}
         {/* Carry wizard state into the action */}
         <input type="hidden" name="public_request_id" value={draftRequestId} />
+        <input type="hidden" name="quote_policy_version" value={BOOKING_QUOTE_POLICY_VERSION} />
+        <input type="hidden" name="wizard_draft" value={state.draftId ?? ""} />
         {state.organizationSlug ? (
           <input type="hidden" name="org" value={state.organizationSlug} />
         ) : null}
@@ -379,6 +384,7 @@ export default function ConfirmForm({
           selectedSlugs={state.services}
           selectedAddOnSlugs={state.addOns}
           squareFootage={state.squareFootage}
+          includeBasement={state.includeBasement}
         />
         {/* Keep confirmation first in DOM order so Enter verifies, not resends. */}
         {formState?.verificationRequired ? <ResendCodeButton /> : null}
@@ -407,11 +413,13 @@ function SubmitTotalBar({
   selectedSlugs,
   selectedAddOnSlugs,
   squareFootage,
+  includeBasement,
 }: {
   items: BookingTotalItem[];
   selectedSlugs: string[];
   selectedAddOnSlugs: string[];
   squareFootage: number | null;
+  includeBasement: boolean | null;
 }) {
   const { pending } = useFormStatus();
   return (
@@ -420,6 +428,7 @@ function SubmitTotalBar({
       selectedSlugs={selectedSlugs}
       selectedAddOnSlugs={selectedAddOnSlugs}
       squareFootage={squareFootage}
+      includeBasement={includeBasement}
       submit
       disabled={pending}
       ctaLabel={pending ? "Booking..." : "Confirm booking"}

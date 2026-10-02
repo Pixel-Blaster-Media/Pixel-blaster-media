@@ -144,7 +144,7 @@ test("public booking aggregate is committed through one service-role-only RPC", 
     /grant execute on function public\.create_public_booking_with_jobs[\s\S]*to service_role/i,
   );
 
-  assert.match(bookingActionSource, /\.rpc\(\s*"create_public_booking_with_jobs"/);
+  assert.match(bookingActionSource, /\.rpc\(\s*"create_public_booking_with_jobs_v2"/);
   assert.match(
     bookingActionSource,
     /\.eq\("public_request_id", publicRequestId\)[\s\S]*if \(!existingRequest\)[\s\S]*isSlotAvailable/,

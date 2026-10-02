@@ -86,7 +86,7 @@ test("calendar create, drag, and inbox acceptance preserve warnings across redir
 test("customer-managed rescheduling displays a distinct Calendar warning", () => {
   assert.match(
     manageActions,
-    /warning:\s*calendarSynced[\s\S]*Google Calendar did not sync/,
+    /warning:\s*\[[\s\S]*!calendarSynced[\s\S]*Google Calendar did not sync[\s\S]*delivery.warning/,
   );
   assert.match(manageClient, /kind:\s*result\.warning \? "warning" : "ok"/);
   assert.match(manageClient, /result\.warning \? `\s*\$\{result\.warning\}`/);
@@ -101,7 +101,7 @@ test("assistant creation and cancellation preserve Calendar warnings without fal
   );
   assert.match(
     assistantActions,
-    /cancelBooking\([\s\S]*result\.warning[\s\S]*Calendar cleanup/,
+    /cancelBooking\([\s\S]*result\.warning[\s\S]*follow-up needs attention/,
   );
   assert.doesNotMatch(
     assistantActions,

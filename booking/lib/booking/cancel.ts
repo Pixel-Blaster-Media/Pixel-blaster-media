@@ -3,9 +3,11 @@ import "server-only";
 import { BUSINESS_TZ } from "@/lib/booking/availability";
 import { isCancellable } from "@/lib/booking/booking-status";
 import { syncStoredBookingGoogleCalendarEvent } from "@/lib/booking/calendar-event-service";
-import { sendEmail } from "@/lib/email/resend";
 import {
-  getAdminNotificationEmail,
+  changeBookingWithNotices, deliverChangedBookingNotices, lifecycleNotice,
+  type LifecycleNoticeDraft,
+} from "@/lib/booking/lifecycle-notices";
+import {
   getOrganizationEmailSettings,
 } from "@/lib/email/settings";
 
@@ -20,9 +22,12 @@ export interface CancelResult {
   /** The booking row after the status flip, for callers that want to render a flash. */
   addressLine?: string;
   whenLabel?: string;
+  realtorNotified?: boolean;
 }
 
 interface BookingRow {
+  lifecycle_version: number;
+  unit_number: string | null;
   id: string;
   organization_id: string;
   owner_id: string;
@@ -66,14 +71,14 @@ interface BookingRow {
 export async function cancelBooking(
   bookingId: string,
   initiator: "admin" | "realtor",
-  scope: { organizationId: string },
+  scope: { organizationId: string; confirmRealtor?: boolean },
 ): Promise<CancelResult> {
   const supabase = getServiceSupabase();
 
   let bookingQuery = supabase
     .from("bookings")
     .select(
-      "id, organization_id, owner_id, status, scheduled_at, services, add_ons, property_id, google_calendar_event_id, suppress_realtor_notifications, properties(street_address, city, postal_code), profiles(email, full_name)",
+      "id, organization_id, lifecycle_version, unit_number, owner_id, status, scheduled_at, services, add_ons, property_id, google_calendar_event_id, suppress_realtor_notifications, properties(street_address, city, postal_code), profiles(email, full_name)",
     )
     .eq("id", bookingId);
 
@@ -93,43 +98,10 @@ export async function cancelBooking(
     };
   }
 
-  // 1) Flip the status but retain Calendar linkage until strict cleanup proves
-  // the remote event is deleted or already gone.
-  const { data: cancelled, error: updateErr } = await supabase
-    .from("bookings")
-    .update({ status: "cancelled" })
-    .eq("id", bookingId)
-    .eq("organization_id", scope.organizationId)
-    .eq("status", booking.status)
-    .select("id")
-    .maybeSingle<{ id: string }>();
-
-  if (updateErr || !cancelled) {
-    return {
-      ok: false,
-      error: updateErr
-        ? "Could not cancel booking."
-        : "Booking changed before it could be cancelled.",
-    };
-  }
-
-  // 2) Strictly delete and then clear linkage through the canonical service.
-  let calendarSynced = true;
-  try {
-    const result = await syncStoredBookingGoogleCalendarEvent({
-      organizationId: booking.organization_id,
-      bookingId: booking.id,
-    });
-    calendarSynced = result.ok;
-  } catch {
-    calendarSynced = false;
-    console.warn("[cancel] google calendar cleanup failed");
-  }
-
-  // 3) Notify.
+  // Freeze the notice contents before the atomic status change.
   const addressLine = booking.properties
     ? [
-        booking.properties.street_address,
+        booking.unit_number ? `${booking.properties.street_address}, Unit ${booking.unit_number}` : booking.properties.street_address,
         booking.properties.city,
         booking.properties.postal_code,
       ]
@@ -147,16 +119,38 @@ export async function cancelBooking(
     booking.profiles?.full_name ?? booking.profiles?.email ?? "realtor";
   const realtorEmail = booking.profiles?.email;
 
-  await sendCancellationEmail({
-    initiator,
-    bookingId,
-    realtorEmail,
-    realtorName,
-    addressLine,
-    whenLabel,
+  const notices = await buildCancellationNotices({
+    initiator, bookingId, realtorEmail, realtorName, addressLine, whenLabel,
     organizationId: booking.organization_id,
     suppressRealtorNotifications: booking.suppress_realtor_notifications,
-    calendarWarning: !calendarSynced,
+    confirmRealtor: scope.confirmRealtor ?? false,
+  });
+  const changed = await changeBookingWithNotices({
+    organizationId: scope.organizationId, bookingId,
+    expectedVersion: booking.lifecycle_version,
+    event: "cancelled", initiator, notices,
+  });
+  if (!changed.ok) {
+    return { ok: false, error: changed.code === "PB004"
+      ? "Booking changed before it could be cancelled. Refresh and try again."
+      : "Could not cancel booking. Please try again." };
+  }
+
+  // 2) Strictly delete and then clear linkage through the canonical service.
+  let calendarSynced = true;
+  try {
+    const result = await syncStoredBookingGoogleCalendarEvent({
+      organizationId: booking.organization_id,
+      bookingId: booking.id,
+    });
+    calendarSynced = result.ok;
+  } catch {
+    calendarSynced = false;
+    console.warn("[cancel] google calendar cleanup failed");
+  }
+
+  const delivery = await deliverChangedBookingNotices({
+    organizationId: booking.organization_id, bookingId, noticeIds: changed.noticeIds,
   });
   await sendPushBestEffort(booking.organization_id, {
     title:
@@ -172,13 +166,15 @@ export async function cancelBooking(
     ok: true,
     addressLine,
     whenLabel,
-    warning: calendarSynced
-      ? undefined
-      : "Booking cancelled, but Google Calendar cleanup did not finish. Check the linked event before the cancelled time.",
+    realtorNotified: delivery.realtorNotified,
+    warning: [
+      !calendarSynced ? "Booking cancelled, but Google Calendar cleanup did not finish. Check the linked event before the cancelled time." : undefined,
+      delivery.warning,
+    ].filter(Boolean).join(" ") || undefined,
   };
 }
 
-async function sendCancellationEmail(args: {
+async function buildCancellationNotices(args: {
   initiator: "admin" | "realtor";
   bookingId: string;
   realtorEmail?: string | null;
@@ -187,69 +183,36 @@ async function sendCancellationEmail(args: {
   whenLabel: string;
   organizationId: string;
   suppressRealtorNotifications: boolean;
-  calendarWarning: boolean;
-}): Promise<void> {
+  confirmRealtor: boolean;
+}): Promise<LifecycleNoticeDraft[]> {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-  const emailSettings = await getOrganizationEmailSettings(args.organizationId);
-
-  if (args.initiator === "admin") {
-    if (args.suppressRealtorNotifications) return;
-    if (!args.realtorEmail) return;
-    await sendEmail({
+  const settings = await getOrganizationEmailSettings(args.organizationId);
+  const notices: LifecycleNoticeDraft[] = [];
+  if ((args.initiator === "admin" || args.confirmRealtor) && !args.suppressRealtorNotifications) {
+    notices.push(lifecycleNotice("realtor", settings, {
       to: args.realtorEmail,
       subject: `Booking cancelled — ${args.addressLine}`,
-      organizationId: args.organizationId,
-      html: `
-        <p>Hi ${escapeHtml(args.realtorName)},</p>
-        <p>
-          Your shoot at <strong>${escapeHtml(args.addressLine)}</strong>
-          on <strong>${escapeHtml(args.whenLabel)}</strong> has been cancelled.
-        </p>
-        <p>
-          If this was unexpected, reply to this email or reach out at
-          ${
-            emailSettings.replyToEmail
-              ? `<a href="mailto:${escapeHtml(emailSettings.replyToEmail)}">${escapeHtml(emailSettings.replyToEmail)}</a>`
-              : "the studio"
-          }.
-          To book a different time, head to
-          <a href="${appUrl}/book">${appUrl || "our booking page"}</a>.
-        </p>
-        <p>— ${escapeHtml(emailSettings.organizationName)}</p>
-      `,
-    });
-    return;
+      html: `<p>Hi ${escapeHtml(args.realtorName)},</p>
+        <p>Your shoot at <strong>${escapeHtml(args.addressLine)}</strong>
+        on <strong>${escapeHtml(args.whenLabel)}</strong> has been cancelled.</p>
+        <p>If this was unexpected, contact the studio. To book a different time,
+        visit <a href="${escapeHtml(appUrl)}/book">our booking page</a>.</p>
+        <p>— ${escapeHtml(settings.organizationName)}</p>`,
+    }));
   }
-
-  // Realtor-initiated → notify admin.
-  const adminTo = await getAdminNotificationEmail(args.organizationId);
-  if (!adminTo) return;
-  await sendEmail({
-    to: adminTo,
-    subject: `Booking cancelled by realtor — ${args.addressLine}`,
-    organizationId: args.organizationId,
-    html: `
-      <p>
-        <strong>${escapeHtml(args.realtorName)}</strong>${
-          args.realtorEmail
-            ? ` (${escapeHtml(args.realtorEmail)})`
-            : ""
-        }
-        just cancelled their shoot.
-      </p>
-      <p>
-        <strong>Address:</strong> ${escapeHtml(args.addressLine)}<br>
-        <strong>When:</strong> ${escapeHtml(args.whenLabel)}
-      </p>
-      ${
-        args.calendarWarning
-          ? "<p><strong>Calendar cleanup needs attention:</strong> the booking is cancelled, but the linked Google Calendar event could not be confirmed deleted automatically.</p>"
-          : ""
-      }
-      <p>Open in admin: ${appUrl}/admin/bookings/${args.bookingId}</p>
-    `,
-    replyTo: args.realtorEmail ?? undefined,
-  });
+  if (args.initiator === "realtor") {
+    notices.push(lifecycleNotice("admin", settings, {
+      to: settings.adminNotificationEmail,
+      subject: `Booking cancelled by realtor — ${args.addressLine}`,
+      html: `<p><strong>${escapeHtml(args.realtorName)}</strong> cancelled their shoot.</p>
+        <p><strong>Address:</strong> ${escapeHtml(args.addressLine)}<br>
+        <strong>When:</strong> ${escapeHtml(args.whenLabel)}</p>
+        <p>Check the booking for Calendar sync status:
+        ${escapeHtml(appUrl)}/admin/bookings/${escapeHtml(args.bookingId)}</p>`,
+      replyTo: args.realtorEmail ?? settings.replyToEmail,
+    }));
+  }
+  return notices;
 }
 
 function escapeHtml(s: string): string {

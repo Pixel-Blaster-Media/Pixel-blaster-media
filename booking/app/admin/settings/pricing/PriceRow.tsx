@@ -1,5 +1,6 @@
 "use client";
 
+import { getCatalogItemPrice } from "@/lib/booking/quote";
 import { useState, useTransition, type ReactNode } from "react";
 
 import type { CatalogItemRow } from "@/lib/booking/catalog";
@@ -466,16 +467,5 @@ function formatMinutes(minutes: number): string {
 }
 
 function sqftSummary(item: CatalogItemRow): string | null {
-  if (
-    !item.sqft_pricing_enabled ||
-    !item.included_sqft ||
-    !item.overage_increment_sqft ||
-    !item.overage_price_cents
-  ) {
-    return null;
-  }
-
-  return `Includes ${item.included_sqft.toLocaleString()} sqft, then +${formatMoney(
-    item.overage_price_cents,
-  )}/${item.overage_increment_sqft.toLocaleString()} sqft`;
+  return getCatalogItemPrice(item, null).ruleLabel;
 }

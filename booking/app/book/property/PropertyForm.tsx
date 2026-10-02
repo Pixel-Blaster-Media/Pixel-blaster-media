@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useRef, useState, type FormEvent } from "react";
+import { useRef, useState, useTransition, type FormEvent } from "react";
 
 import AddressAutocomplete, {
   type PlaceParts,
 } from "@/app/_components/AddressAutocomplete";
-import type { VacancyState } from "@/lib/booking/wizard-state";
+import { publicWizardQuery, type VacancyState } from "@/lib/booking/wizard-state";
+import { saveBookingWizardDraft } from "../draft-actions";
 import BookingTotalBar, {
   type BookingTotalItem,
 } from "../_components/BookingTotalBar";
@@ -23,7 +24,7 @@ const SHOT_REQUEST_OPTIONS = [
 /**
  * Step 2 — property details.
  *
- * Pre-fills all fields from URL state on revisit so the user doesn't
+ * Pre-fills all fields from a private browser draft on revisit so the user doesn't
  * lose their input when they go back to edit services.
  *
  * When the user picks a Google Places suggestion in the address field,
@@ -64,6 +65,7 @@ export default function PropertyForm({
   const [basement, setBasement] = useState<"1" | "0" | "">(initial.basement);
   const [shotRequests, setShotRequests] = useState<string[]>(initial.shotRequests);
   const [shootNotes, setShootNotes] = useState(initial.shootNotes);
+  const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const formRef = useRef<HTMLFormElement>(null);
   const firstInvalidField = useRef<HTMLElement | null>(null);
@@ -98,6 +100,7 @@ export default function PropertyForm({
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (pending) return;
     const next: Record<string, string> = {};
     if (!address.trim()) next.address = "Required — autocomplete or type it in.";
     if (!city.trim()) next.city = "Required — can't book without a city.";
@@ -124,29 +127,23 @@ export default function PropertyForm({
     }
     setErrors({});
 
-    // Carry forward all prior params (services, add_ons) + our new ones.
-    const out = new URLSearchParams(params.toString());
-    out.set("address", address.trim());
-    if (unit.trim()) out.set("unit", unit.trim());
-    else out.delete("unit");
-    out.set("city", city.trim());
-    if (postal.trim()) out.set("postal", postal.trim());
-    else out.delete("postal");
-    if (sqft.trim()) out.set("sqft", sqft.trim());
-    else out.delete("sqft");
-    if (vacant) out.set("vacant", vacant);
-    else out.delete("vacant");
-    if (basement) out.set("basement", basement);
-    else out.delete("basement");
-    if (shotRequests.length) out.set("shots", shotRequests.join(","));
-    else out.delete("shots");
-    if (shootNotes.trim()) out.set("shoot_notes", shootNotes.trim());
-    else out.delete("shoot_notes");
-    // Dropping an old slot — if they edit property details, the time
-    // may no longer make sense for the new service duration anyway.
-    out.delete("slot");
-
-    router.push(`/book/schedule?${out.toString()}`);
+    startTransition(async () => {
+      try {
+        const saved = await saveBookingWizardDraft({
+          query: publicWizardQuery(new URLSearchParams(params.toString())).toString(),
+          property: {
+            streetAddress: address, unitNumber: unit, city, postalCode: postal,
+            squareFootage: sqft.trim() ? Math.trunc(Number(sqft)) : null,
+            isVacant: vacant || null, includeBasement: basement === "" ? null : basement === "1",
+            shotRequests, shootNotes,
+          },
+        });
+        if (!saved.ok) { setErrors({ _form: saved.error }); return; }
+        router.push(`/book/schedule?${saved.query}`);
+      } catch {
+        setErrors({ _form: "Property details could not be saved. Please try again." });
+      }
+    });
   }
 
   return (
@@ -158,7 +155,7 @@ export default function PropertyForm({
         >
           <p className="font-semibold">Please fix the highlighted fields.</p>
           <p className="mt-1 text-xs">
-            We moved you to the first field that needs attention.
+            {errors._form ?? "We moved you to the first field that needs attention."}
           </p>
         </div>
       ) : null}
@@ -268,7 +265,7 @@ export default function PropertyForm({
             name="basement"
             value="1"
             label="Yes, shoot the basement"
-            helper="Finished basements add ~15 min."
+            helper="Adds 15 minutes once per booking for the finished basement."
             current={basement}
             onSelect={(v) => setBasement(v as "1" | "0")}
           />
@@ -382,8 +379,10 @@ export default function PropertyForm({
         selectedSlugs={selectedSlugs}
         selectedAddOnSlugs={selectedAddOnSlugs}
         squareFootage={liveSquareFootage}
+        includeBasement={basement === "1"}
         submit
-        ctaLabel="Continue"
+        ctaLabel={pending ? "Saving…" : "Continue"}
+        disabled={pending}
         note="This updates as square footage changes."
       />
     </form>

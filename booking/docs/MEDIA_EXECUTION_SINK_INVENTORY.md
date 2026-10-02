@@ -139,6 +139,13 @@ Canonical listing media should use separate private quarantine, master, delivery
 
 The repository also uses fixed endpoints for Resend, Google Calendar/OAuth, QuickBooks, OpenAI, Open-Meteo, geocoding, Supabase Auth, and health diagnostics. They require their own timeout, secret, tenant, response-size, and disclosure controls, but they do not currently load listing media bytes and are outside this Release 0 canonical-media migration.
 
+`app/book/rebook/route.ts` is also outside listing-byte ingestion. The conservative
+streamed-response discovery pattern matches its request-body reader near an
+error response. Review confirms it reads at most 1,024 bytes of URL-encoded
+property/booking IDs, validates same-origin POST, and resolves tenant ownership.
+It returns only fixed errors or safe 303 redirects; it never streams media or
+forwards a request body to another provider. The discovery gate remains enabled.
+
 ---
 
 ## 9. Migration order

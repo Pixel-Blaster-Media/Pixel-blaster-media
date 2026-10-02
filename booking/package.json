@@ -36,7 +36,8 @@
     "db:setup": "bash scripts/generate-supabase-setup.sh",
     "db:types": "supabase gen types typescript --local > lib/supabase/database.types.ts",
     "bootstrap:first-company": "tsx scripts/bootstrap-first-company.ts",
-    "verify:auth-provisioning": "tsx scripts/verify-auth-provisioning.ts"
+    "verify:auth-provisioning": "tsx scripts/verify-auth-provisioning.ts",
+    "test:http-booking-confirmation": "node scripts/verify-booking-confirmation-http.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1065.0",
@@ -46,7 +47,7 @@
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "lucide-react": "1.24.0",
-    "next": "^16.3.3",
+    "next": "16.3.6",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "sharp": "^0.35.4",
@@ -60,7 +61,7 @@
     "@types/web-push": "3.6.4",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.39.4",
-    "eslint-config-next": "^16.3.3",
+    "eslint-config-next": "16.3.6",
     "playwright": "1.55.0",
     "postcss": "^8.5.26",
     "react-test-renderer": "^19.2.8",

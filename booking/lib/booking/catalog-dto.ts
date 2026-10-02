@@ -22,6 +22,8 @@ export interface CatalogItemDTO {
   included_sqft: number | null;
   overage_increment_sqft: number | null;
   overage_price_cents: number | null;
+  video_overage_threshold_sqft: number | null;
+  video_overage_price_cents: number;
   kind: "bundle" | "a_la_carte" | "addon";
   is_photo: boolean;
   is_video: boolean;

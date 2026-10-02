@@ -3,6 +3,8 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { publicWizardQuery, type WizardState } from "@/lib/booking/wizard-state";
+import { saveBookingWizardDraft } from "../draft-actions";
 import type { CatalogItemDTO } from "@/lib/booking/catalog-dto";
 import {
   recommendBookingPackage,
@@ -15,6 +17,7 @@ interface Props {
   aLaCarte: CatalogItemDTO[];
   addons: CatalogItemDTO[];
   organizationSlug: string;
+  initialState: WizardState;
 }
 
 export default function AIPackageRecommender({
@@ -22,6 +25,7 @@ export default function AIPackageRecommender({
   aLaCarte,
   addons,
   organizationSlug,
+  initialState,
 }: Props) {
   const router = useRouter();
   const params = useSearchParams();
@@ -39,8 +43,8 @@ export default function AIPackageRecommender({
     return m;
   }, [bundles, aLaCarte, addons]);
   const currentContext = useMemo(
-    () => readContextFromParams(new URLSearchParams(paramsString)),
-    [paramsString],
+    () => readContextFromParams(new URLSearchParams(paramsString), initialState),
+    [paramsString, initialState],
   );
   const knownDetails = useMemo(
     () => contextSummary(currentContext, bySlug),
@@ -72,66 +76,39 @@ export default function AIPackageRecommender({
     });
   }
 
-  function applyRecommendation(next = recommendation) {
-    if (!next) return;
-    const out = new URLSearchParams(params.toString());
-    out.set("services", next.services.join(","));
-    if (next.addOns.length) out.set("add_ons", next.addOns.join(","));
-    else out.delete("add_ons");
-    if (next.property.streetAddress) out.set("address", next.property.streetAddress);
-    if (next.property.city) out.set("city", next.property.city);
-    if (next.property.postalCode) out.set("postal", next.property.postalCode);
-    if (next.property.squareFootage) {
-      out.set("sqft", String(next.property.squareFootage));
-    }
-    if (next.property.isVacant) out.set("vacant", next.property.isVacant);
-    if (next.property.includeBasement != null) {
-      out.set("basement", next.property.includeBasement ? "1" : "0");
-    }
-    if (next.property.shootNotes) {
-      out.set("shoot_notes", next.property.shootNotes);
-    }
-    if (next.property.shotRequests.length) {
-      out.set("shots", next.property.shotRequests.join(","));
-    }
-    // If they already had a later-step choice, service changes can change duration.
-    out.delete("slot");
-    router.replace(`?${out.toString()}`, { scroll: false });
+  function applyRecommendation(next = recommendation, continueToProperty = false) {
+    if (!next || pending) return;
+    startTransition(async () => {
+      setError(null);
+      try {
+        const out = publicWizardQuery(new URLSearchParams(params.toString()));
+        out.set("services", next.services.join(","));
+        if (next.addOns.length) out.set("add_ons", next.addOns.join(","));
+        else out.delete("add_ons");
+        out.set("org", organizationSlug);
+        const saved = await saveBookingWizardDraft({
+          query: out.toString(),
+          property: {
+            streetAddress: next.property.streetAddress || initialState.streetAddress,
+            unitNumber: initialState.unitNumber,
+            city: next.property.city || initialState.city,
+            postalCode: next.property.postalCode || initialState.postalCode,
+            squareFootage: next.property.squareFootage ?? initialState.squareFootage,
+            isVacant: next.property.isVacant ?? initialState.isVacant,
+            includeBasement: next.property.includeBasement ?? initialState.includeBasement,
+            shootNotes: next.property.shootNotes || initialState.shootNotes,
+            shotRequests: next.property.shotRequests.length ? next.property.shotRequests : initialState.shotRequests,
+          },
+        });
+        if (!saved.ok) { setError(saved.error); return; }
+        if (continueToProperty) router.push(`/book/property?${saved.query}`);
+        else router.replace(`?${saved.query}`, { scroll: false });
+      } catch { setError("Property details could not be saved. Please try again."); }
+    });
   }
 
   function applyAndContinue() {
-    if (!recommendation) return;
-    const out = new URLSearchParams(params.toString());
-    out.set("services", recommendation.services.join(","));
-    if (recommendation.addOns.length) {
-      out.set("add_ons", recommendation.addOns.join(","));
-    } else {
-      out.delete("add_ons");
-    }
-    if (recommendation.property.streetAddress) {
-      out.set("address", recommendation.property.streetAddress);
-    }
-    if (recommendation.property.city) out.set("city", recommendation.property.city);
-    if (recommendation.property.postalCode) {
-      out.set("postal", recommendation.property.postalCode);
-    }
-    if (recommendation.property.squareFootage) {
-      out.set("sqft", String(recommendation.property.squareFootage));
-    }
-    if (recommendation.property.isVacant) {
-      out.set("vacant", recommendation.property.isVacant);
-    }
-    if (recommendation.property.includeBasement != null) {
-      out.set("basement", recommendation.property.includeBasement ? "1" : "0");
-    }
-    if (recommendation.property.shootNotes) {
-      out.set("shoot_notes", recommendation.property.shootNotes);
-    }
-    if (recommendation.property.shotRequests.length) {
-      out.set("shots", recommendation.property.shotRequests.join(","));
-    }
-    out.delete("slot");
-    router.push(`/book/property?${out.toString()}`);
+    applyRecommendation(recommendation, true);
   }
 
   const selectedNames = recommendation
@@ -400,18 +377,13 @@ function InfoList({
   );
 }
 
-function readContextFromParams(params: URLSearchParams): BookingRecommendationContext {
+function readContextFromParams(params: URLSearchParams, state: WizardState): BookingRecommendationContext {
   return {
-    selectedServices: csv(params.get("services")),
-    selectedAddOns: csv(params.get("add_ons")),
-    streetAddress: clean(params.get("address")),
-    city: clean(params.get("city")),
-    postalCode: clean(params.get("postal")),
-    squareFootage: intOrNull(params.get("sqft")),
-    isVacant: vacancy(params.get("vacant")),
-    includeBasement: boolOrNull(params.get("basement")),
-    shootNotes: clean(params.get("shoot_notes")),
-    shotRequests: csv(params.get("shots")),
+    selectedServices: csv(params.get("services")), selectedAddOns: csv(params.get("add_ons")),
+    streetAddress: state.streetAddress || null, city: state.city || null,
+    postalCode: state.postalCode || null, squareFootage: state.squareFootage,
+    isVacant: state.isVacant, includeBasement: state.includeBasement,
+    shootNotes: state.shootNotes || null, shotRequests: state.shotRequests,
   };
 }
 
@@ -458,29 +430,6 @@ function csv(value: string | null): string[] {
     .split(",")
     .map((part) => part.trim())
     .filter(Boolean);
-}
-
-function clean(value: string | null): string | null {
-  const trimmed = value?.trim();
-  return trimmed || null;
-}
-
-function intOrNull(value: string | null): number | null {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
-}
-
-function boolOrNull(value: string | null): boolean | null {
-  if (value === "1" || value === "true") return true;
-  if (value === "0" || value === "false") return false;
-  return null;
-}
-
-function vacancy(value: string | null): "vacant" | "occupied" | "partial" | null {
-  if (value === "vacant" || value === "occupied" || value === "partial") {
-    return value;
-  }
-  return null;
 }
 
 function formatVacancy(value: "vacant" | "occupied" | "partial") {

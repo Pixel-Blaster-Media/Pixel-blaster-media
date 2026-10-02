@@ -38,6 +38,7 @@ import {
 } from "@/lib/integrations/google-calendar/client";
 import { buildAuthorizeUrl } from "@/lib/integrations/quickbooks/oauth";
 import { buildQuickBooksOAuthState } from "@/lib/integrations/quickbooks/oauth-state";
+import { getQuickBooksConnectConfiguration } from "@/lib/integrations/quickbooks/connect-config";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
 const STATE_COOKIE = "qbo_oauth_state";
@@ -67,13 +68,9 @@ type MutableCookieStore = {
 export async function startQuickBooksConnect(): Promise<void> {
   const admin = await requireAdmin();
 
-  const clientId = process.env.QUICKBOOKS_CLIENT_ID;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-
-  if (!clientId || !appUrl) {
-    throw new Error(
-      "QUICKBOOKS_CLIENT_ID and NEXT_PUBLIC_APP_URL must be set before connecting.",
-    );
+  const config = getQuickBooksConnectConfiguration(process.env);
+  if (!config.ok) {
+    redirect(`/admin/settings/integrations?qbo_error=${config.code}#quickbooks`);
   }
 
   const state = buildQuickBooksOAuthState(
@@ -89,12 +86,11 @@ export async function startQuickBooksConnect(): Promise<void> {
     maxAge: 10 * 60, // 10 min — long enough to complete consent, short enough to be safe
   });
 
-  const redirectUri = new URL(
-    "/api/integrations/quickbooks/callback",
-    appUrl,
-  ).toString();
-
-  const authUrl = buildAuthorizeUrl({ clientId, redirectUri, state });
+  const authUrl = buildAuthorizeUrl({
+    clientId: config.clientId,
+    redirectUri: config.redirectUri,
+    state,
+  });
   redirect(authUrl);
 }
 

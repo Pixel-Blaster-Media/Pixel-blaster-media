@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 import {beforeFinalsUi} from './helpers/photo-finals-ui-boundary.mjs';
+import {beforeBookingAuditUi,bookingAuditUiPaths} from './helpers/booking-audit-ui-boundary.mjs';
 const base = '3039dbc357f78b3c9a97d5dbe1d5c0c54785f85f';
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const changes = {
@@ -43,11 +44,12 @@ test('historical skin changes remain exact after bounded finals UI and OTP lifec
   // Finals UI and ConfirmForm's separately tested OTP lifecycle fix are not
   // part of the earlier presentation-only release.
   const presentationFiles = files.map(f => f.replace(/^booking\//, ''))
-    .filter(f=>!['app/DownloadSessionBoundary.tsx','app/_components/SiteHeaderMobileMenu.tsx','app/auth/no-workspace/page.tsx'].includes(f))
+    .filter(f=>!bookingAuditUiPaths.includes(f) || Object.hasOwn(changes,f))
+    .filter(f=>!['app/DownloadSessionBoundary.tsx','app/_components/SiteHeaderMobileMenu.tsx','app/auth/no-workspace/page.tsx','app/admin/bookings/[id]/LifecycleNotices.tsx','app/portal/book/RebookForm.tsx'].includes(f))
     .filter(f => !['app/portal/[propertyId]/page.tsx', 'components/media/PhotoFinalsWorkspace.tsx', 'components/media/ResumableDownload.tsx', 'components/media/FinalsGallery.tsx', 'components/media/FinalsNavigationOwner.tsx', 'app/book/confirm/ConfirmForm.tsx'].includes(f));
   assert.deepEqual(presentationFiles.sort(), Object.keys(changes).sort());
   for (const [file, replacements] of Object.entries(changes)) {
-    let candidate = beforeFinalsUi(file,read(file));
+    let candidate = beforeFinalsUi(file,beforeBookingAuditUi(file,read(file)));
     for (const [addition, removal] of replacements) {
       assert.ok(candidate.includes(addition), `Exact allowed addition missing: ${file}: ${addition}`);
       candidate = candidate.replaceAll(addition, removal);
@@ -55,9 +57,14 @@ test('historical skin changes remain exact after bounded finals UI and OTP lifec
     assert.equal(candidate, execFileSync('git', ['show', `${base}:booking/${file}`], { cwd, encoding: 'utf8' }), file);
   }
 });
-test('portal changes are limited to the explicit private finals handoff',()=>{
+test('functional booking audit UI slice preserves every other byte at the canonical source snapshot',()=>{
+ for(const file of bookingAuditUiPaths) assert.equal(
+  beforeBookingAuditUi(file,read(file)),
+  execFileSync('git',['show',`6346036961d38b4e9a0792f4fbc18519a4df4981:booking/${file}`],{cwd:new URL('..',import.meta.url),encoding:'utf8'}),file);
+});
+test('portal changes preserve the earlier finals handoff after the bounded private rebooking fix',()=>{
  const file='app/portal/[propertyId]/page.tsx';
- assert.equal(beforeFinalsUi(file,read(file)),execFileSync('git',['show',`87caa61815dd9ca8db5f84c41d8615b4b8a7a210:booking/${file}`],{cwd:new URL('..',import.meta.url),encoding:'utf8'}));
+ assert.equal(beforeFinalsUi(file,beforeBookingAuditUi(file,read(file))),execFileSync('git',['show',`87caa61815dd9ca8db5f84c41d8615b4b8a7a210:booking/${file}`],{cwd:new URL('..',import.meta.url),encoding:'utf8'}));
 });
 test('default palette identity never falls back from failed brand loading', () => {
   for (const file of ['app/layout.tsx', 'app/admin/layout.tsx', 'app/portal/layout.tsx', 'app/book/_components/BookingBrandHeader.tsx']) {

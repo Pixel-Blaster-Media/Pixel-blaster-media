@@ -1,0 +1,482 @@
+{
+  "app/admin/bookings/[id]/EditBookingForm.tsx": [
+    [
+      "\"use client\";\nimport { BOOKING_QUOTE_POLICY_VERSION } from \"@/lib/booking/quote\";\n\nimport { useRef, useState, useTransition, type ReactNode } from \"react\";\nimport { useRouter } from \"next/navigation\";\n",
+      "\"use client\";\n\nimport { useRef, useState, useTransition, type ReactNode } from \"react\";\nimport { useRouter } from \"next/navigation\";\n"
+    ],
+    [
+      "    startTransition(async () => {\n      requestRef.current ??= crypto.randomUUID();\n      formData.set(\"admin_request_id\", requestRef.current);\n      formData.set(\"quote_policy_version\", BOOKING_QUOTE_POLICY_VERSION);\n      formData.set(\"lifecycle_version\", String(versionRef.current));\n      const result = await updateBookingDetails(bookingId, formData);\n      if (!result.ok) {\n",
+      "    startTransition(async () => {\n      requestRef.current ??= crypto.randomUUID();\n      formData.set(\"admin_request_id\", requestRef.current);\n      formData.set(\"lifecycle_version\", String(versionRef.current));\n      const result = await updateBookingDetails(bookingId, formData);\n      if (!result.ok) {\n"
+    ],
+    [
+      "                {!item.active ? \" (inactive — retained from booking)\" : \"\"}\n              </span>\n              <span className=\"block text-xs text-realtor-muted\">\n                {formatDuration(item.durationMinutes)} · Base {formatPrice(item.priceCents)}\n              </span>\n            </span>\n          </label>\n",
+      "                {!item.active ? \" (inactive — retained from booking)\" : \"\"}\n              </span>\n              <span className=\"block text-xs text-realtor-muted\">\n                {formatDuration(item.durationMinutes)} · {formatPrice(item.priceCents)}\n              </span>\n            </span>\n          </label>\n"
+    ]
+  ],
+  "app/admin/bookings/[id]/page.tsx": [
+    [
+      "import Link from \"next/link\";\nimport LifecycleNotices from \"./LifecycleNotices\";\nimport { notFound } from \"next/navigation\";\nimport type { ReactNode } from \"react\";\n\n",
+      "import Link from \"next/link\";\nimport { notFound } from \"next/navigation\";\nimport type { ReactNode } from \"react\";\n\n"
+    ],
+    [
+      "        </div>\n      </header>\n\n      <LifecycleNotices bookingId={booking.id} />\n      <BookingWorkspaceTabs\n        activeTabId={activeTabId}\n        baseHref={`/admin/bookings/${booking.id}`}\n",
+      "        </div>\n      </header>\n\n      <BookingWorkspaceTabs\n        activeTabId={activeTabId}\n        baseHref={`/admin/bookings/${booking.id}`}\n"
+    ]
+  ],
+  "app/admin/calendar/CalendarWeekView.tsx": [
+    [
+      "\"use client\";\nimport { BOOKING_QUOTE_POLICY_VERSION } from \"@/lib/booking/quote\";\n\nimport { getCatalogItemPrice } from \"@/lib/booking/quote\";\n\nimport {\n  ChevronLeft,\n",
+      "\"use client\";\n\nimport {\n  ChevronLeft,\n"
+    ],
+    [
+      "    squareFootage: number | null;\n    occupancy: string | null;\n    includeBasement: boolean | null;\n    basementDurationMinutes: number;\n    lineSnapshots: { catalog_item_id: string; unit_price_cents: number; unit_duration_minutes: number; quantity: number }[];\n    selectedCatalogItemIds: string[];\n    hasInvoice: boolean;\n    realtorNotificationsSuppressed: boolean;\n",
+      "    squareFootage: number | null;\n    occupancy: string | null;\n    includeBasement: boolean | null;\n    selectedCatalogItemIds: string[];\n    hasInvoice: boolean;\n    realtorNotificationsSuppressed: boolean;\n"
+    ],
+    [
+      "  includedSqft: number | null;\n  overageIncrementSqft: number | null;\n  overagePriceCents: number | null;\n  videoOverageThresholdSqft: number | null;\n  videoOveragePriceCents: number;\n}\n\ninterface DragTarget {\n",
+      "  includedSqft: number | null;\n  overageIncrementSqft: number | null;\n  overagePriceCents: number | null;\n}\n\ninterface DragTarget {\n"
+    ],
+    [
+      "                startTransition(async () => {\n                  createRequestRef.current ??= crypto.randomUUID();\n                  formData.set(\"admin_request_id\", createRequestRef.current);\n                  formData.set(\"quote_policy_version\", BOOKING_QUOTE_POLICY_VERSION);\n                  const result = await createAdminShoot(formData);\n                  if (!result.ok || !result.bookingId) {\n                    setError(result.error ?? \"Could not add shoot.\");\n",
+      "                startTransition(async () => {\n                  createRequestRef.current ??= crypto.randomUUID();\n                  formData.set(\"admin_request_id\", createRequestRef.current);\n                  const result = await createAdminShoot(formData);\n                  if (!result.ok || !result.bookingId) {\n                    setError(result.error ?? \"Could not add shoot.\");\n"
+    ],
+    [
+      "                title=\"Package\"\n                detail=\"Pick what they booked first. Add-ons can stay empty.\"\n              >\n                <CatalogPicker items={catalogItems.filter((item) => item.active)} squareFootage={Number(property.square_footage) || null} />\n              </FormSection>\n\n              <FormSection\n",
+      "                title=\"Package\"\n                detail=\"Pick what they booked first. Add-ons can stay empty.\"\n              >\n                <CatalogPicker items={catalogItems.filter((item) => item.active)} />\n              </FormSection>\n\n              <FormSection\n"
+    ],
+    [
+      "                </span>\n              </label>\n\n              <label className=\"flex items-center gap-2 text-sm text-realtor-text\">\n                <input type=\"checkbox\" name=\"include_basement\" className=\"h-4 w-4 accent-realtor-primary\" />\n                Include finished basement (+15 minutes once per booking)\n              </label>\n              <label className=\"block\">\n                <span className=\"text-xs text-realtor-muted\">Notes</span>\n                <textarea\n",
+      "                </span>\n              </label>\n\n              <label className=\"block\">\n                <span className=\"text-xs text-realtor-muted\">Notes</span>\n                <textarea\n"
+    ],
+    [
+      "  const selectedServices = selectedCatalogItems.filter(\n    (catalogItem) => catalogItem.kind !== \"addon\",\n  );\n  const retainedLines = new Map((details?.lineSnapshots ?? []).map((line) => [line.catalog_item_id, line]));\n  const proposedDurationMinutes = (details?.basementDurationMinutes ?? 0) + Math.max(\n    selectedCatalogItems.reduce(\n      (total, catalogItem) => {\n        const line = retainedLines.get(catalogItem.id);\n        return total + (line ? line.unit_duration_minutes * line.quantity : catalogItem.durationMinutes);\n      },\n      0,\n    ),\n    60,\n",
+      "  const selectedServices = selectedCatalogItems.filter(\n    (catalogItem) => catalogItem.kind !== \"addon\",\n  );\n  const proposedDurationMinutes = Math.max(\n    selectedCatalogItems.reduce(\n      (total, catalogItem) => total + catalogItem.durationMinutes,\n      0,\n    ),\n    60,\n"
+    ],
+    [
+      "    [...currentCatalogItemIds].sort().join(\",\");\n  const proposedPriceCents = selectedCatalogItems.reduce(\n    (total, catalogItem) =>\n      total + (retainedLines.has(catalogItem.id) ? retainedLines.get(catalogItem.id)!.unit_price_cents * retainedLines.get(catalogItem.id)!.quantity : catalogItemPriceForSquareFootage(catalogItem, details?.squareFootage)),\n    0,\n  );\n  const currentPriceCents = catalogItems\n",
+      "    [...currentCatalogItemIds].sort().join(\",\");\n  const proposedPriceCents = selectedCatalogItems.reduce(\n    (total, catalogItem) =>\n      total + catalogItemPriceForSquareFootage(catalogItem, details?.squareFootage),\n    0,\n  );\n  const currentPriceCents = catalogItems\n"
+    ],
+    [
+      "    .reduce(\n      (total, catalogItem) =>\n        total +\n        (retainedLines.has(catalogItem.id) ? retainedLines.get(catalogItem.id)!.unit_price_cents * retainedLines.get(catalogItem.id)!.quantity : catalogItemPriceForSquareFootage(catalogItem, details?.squareFootage)),\n      0,\n    );\n  const proposedEnd = new Date(\n",
+      "    .reduce(\n      (total, catalogItem) =>\n        total +\n        catalogItemPriceForSquareFootage(catalogItem, details?.squareFootage),\n      0,\n    );\n  const proposedEnd = new Date(\n"
+    ],
+    [
+      "        const formData = new FormData();\n        servicesRequestRef.current ??= crypto.randomUUID();\n        formData.set(\"admin_request_id\", servicesRequestRef.current);\n        formData.set(\"quote_policy_version\", BOOKING_QUOTE_POLICY_VERSION);\n        formData.set(\"lifecycle_version\", String(servicesVersionRef.current));\n        for (const catalogItemId of selectedCatalogItemIds) {\n          formData.append(\"catalog_item_id\", catalogItemId);\n",
+      "        const formData = new FormData();\n        servicesRequestRef.current ??= crypto.randomUUID();\n        formData.set(\"admin_request_id\", servicesRequestRef.current);\n        formData.set(\"lifecycle_version\", String(servicesVersionRef.current));\n        for (const catalogItemId of selectedCatalogItemIds) {\n          formData.append(\"catalog_item_id\", catalogItemId);\n"
+    ],
+    [
+      "  item: CatalogItemOption,\n  squareFootage: number | null | undefined,\n): number {\n  return getCatalogItemPrice({\n    price_cents: item.priceCents, sqft_pricing_enabled: item.sqftPricingEnabled,\n    included_sqft: item.includedSqft, overage_increment_sqft: item.overageIncrementSqft,\n    overage_price_cents: item.overagePriceCents,\n    video_overage_threshold_sqft: item.videoOverageThresholdSqft,\n    video_overage_price_cents: item.videoOveragePriceCents,\n  }, squareFootage).totalPriceCents;\n}\n\nfunction calendarAddonEligible(\n",
+      "  item: CatalogItemOption,\n  squareFootage: number | null | undefined,\n): number {\n  if (\n    !item.sqftPricingEnabled ||\n    !item.includedSqft ||\n    !item.overageIncrementSqft ||\n    !item.overagePriceCents ||\n    !squareFootage ||\n    squareFootage <= item.includedSqft\n  ) {\n    return item.priceCents;\n  }\n  const increments = Math.ceil(\n    (squareFootage - item.includedSqft) / item.overageIncrementSqft,\n  );\n  return item.priceCents + increments * item.overagePriceCents;\n}\n\nfunction calendarAddonEligible(\n"
+    ],
+    [
+      "  );\n}\n\nfunction CatalogPicker({ items, squareFootage }: { items: CatalogItemOption[]; squareFootage: number | null }) {\n  const groups: { title: string; kinds: CatalogItemOption[\"kind\"][] }[] = [\n    { title: \"Packages\", kinds: [\"bundle\"] },\n    { title: \"A-la-carte\", kinds: [\"a_la_carte\"] },\n",
+      "  );\n}\n\nfunction CatalogPicker({ items }: { items: CatalogItemOption[] }) {\n  const groups: { title: string; kinds: CatalogItemOption[\"kind\"][] }[] = [\n    { title: \"Packages\", kinds: [\"bundle\"] },\n    { title: \"A-la-carte\", kinds: [\"a_la_carte\"] },\n"
+    ],
+    [
+      "                          ) : null}\n                        </span>\n                        <span className=\"mt-1 block text-xs text-realtor-muted\">\n                          {formatPrice(catalogItemPriceForSquareFootage(item, squareFootage))} ·{\" \"}\n                          {formatDuration(item.durationMinutes)}\n                          {item.requireHasVideo ? \" · needs video\" : \"\"}\n                        </span>\n",
+      "                          ) : null}\n                        </span>\n                        <span className=\"mt-1 block text-xs text-realtor-muted\">\n                          {formatPrice(item.priceCents)} ·{\" \"}\n                          {formatDuration(item.durationMinutes)}\n                          {item.requireHasVideo ? \" · needs video\" : \"\"}\n                        </span>\n"
+    ]
+  ],
+  "app/admin/calendar/page.tsx": [
+    [
+      "  unit_number: string | null;\n  is_vacant: \"vacant\" | \"occupied\" | \"partial\" | null;\n  include_basement: boolean | null;\n  basement_duration_minutes: number;\n  booking_line_items: { catalog_item_id: string; unit_price_cents: number; unit_duration_minutes: number; quantity: number }[];\n  client_notes: string | null;\n  properties: {\n    street_address: string;\n",
+      "  unit_number: string | null;\n  is_vacant: \"vacant\" | \"occupied\" | \"partial\" | null;\n  include_basement: boolean | null;\n  client_notes: string | null;\n  properties: {\n    street_address: string;\n"
+    ],
+    [
+      "    squareFootage: number | null;\n    occupancy: string | null;\n    includeBasement: boolean | null;\n    basementDurationMinutes: number;\n    lineSnapshots: { catalog_item_id: string; unit_price_cents: number; unit_duration_minutes: number; quantity: number }[];\n    selectedCatalogItemIds: string[];\n    hasInvoice: boolean;\n    realtorNotificationsSuppressed: boolean;\n",
+      "    squareFootage: number | null;\n    occupancy: string | null;\n    includeBasement: boolean | null;\n    selectedCatalogItemIds: string[];\n    hasInvoice: boolean;\n    realtorNotificationsSuppressed: boolean;\n"
+    ],
+    [
+      "  includedSqft: number | null;\n  overageIncrementSqft: number | null;\n  overagePriceCents: number | null;\n  videoOverageThresholdSqft: number | null;\n  videoOveragePriceCents: number;\n}\n\nexport default async function AdminCalendarPage({\n",
+      "  includedSqft: number | null;\n  overageIncrementSqft: number | null;\n  overagePriceCents: number | null;\n}\n\nexport default async function AdminCalendarPage({\n"
+    ],
+    [
+      "    supabase\n      .from(\"bookings\")\n      .select(\n        \"id, lifecycle_version, status, scheduled_at, scheduled_ends_at, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, services, add_ons, square_footage, unit_number, is_vacant, include_basement, basement_duration_minutes, booking_line_items(catalog_item_id,unit_price_cents,unit_duration_minutes,quantity), client_notes, properties(street_address, city, province, postal_code, notes), profiles(full_name, email, phone, brokerage, internal_notes)\",\n      )\n      .eq(\"organization_id\", admin.organizationId)\n      .not(\"scheduled_at\", \"is\", null)\n",
+      "    supabase\n      .from(\"bookings\")\n      .select(\n        \"id, lifecycle_version, status, scheduled_at, scheduled_ends_at, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, properties(street_address, city, province, postal_code, notes), profiles(full_name, email, phone, brokerage, internal_notes)\",\n      )\n      .eq(\"organization_id\", admin.organizationId)\n      .not(\"scheduled_at\", \"is\", null)\n"
+    ],
+    [
+      "        squareFootage: booking.square_footage,\n        occupancy,\n        includeBasement: booking.include_basement,\n        basementDurationMinutes: booking.basement_duration_minutes,\n        lineSnapshots: booking.booking_line_items ?? [],\n        selectedCatalogItemIds: [...booking.services, ...booking.add_ons]\n          .map((slug) => catalogItemIdsBySlug.get(slug))\n          .filter((id): id is string => Boolean(id)),\n",
+      "        squareFootage: booking.square_footage,\n        occupancy,\n        includeBasement: booking.include_basement,\n        selectedCatalogItemIds: [...booking.services, ...booking.add_ons]\n          .map((slug) => catalogItemIdsBySlug.get(slug))\n          .filter((id): id is string => Boolean(id)),\n"
+    ],
+    [
+      "      includedSqft: item.included_sqft,\n      overageIncrementSqft: item.overage_increment_sqft,\n      overagePriceCents: item.overage_price_cents,\n      videoOverageThresholdSqft: item.video_overage_threshold_sqft,\n      videoOveragePriceCents: item.video_overage_price_cents,\n    }),\n  );\n}\n",
+      "      includedSqft: item.included_sqft,\n      overageIncrementSqft: item.overage_increment_sqft,\n      overagePriceCents: item.overage_price_cents,\n    }),\n  );\n}\n"
+    ]
+  ],
+  "app/admin/settings/integrations/ConnectButton.tsx": [
+    [
+      "\nimport { startQuickBooksConnect } from \"./actions\";\n\nexport default function ConnectButton({ configurationError }: { configurationError?: string }) {\n  const [pending, startPending] = useTransition();\n  return (\n    <div className=\"space-y-2\">\n      {configurationError ? (\n        <p id=\"quickbooks-configuration-error\" role=\"alert\" className=\"text-sm text-amber-800\">\n          {configurationError}\n        </p>\n      ) : null}\n      <button\n      type=\"button\"\n      disabled={pending || Boolean(configurationError)}\n      aria-describedby={configurationError ? \"quickbooks-configuration-error\" : undefined}\n      onClick={() => startPending(() => startQuickBooksConnect())}\n      className=\"rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-60\"\n    >\n      {pending ? \"Redirecting…\" : \"Connect QuickBooks\"}\n      </button>\n    </div>\n  );\n}\n",
+      "\nimport { startQuickBooksConnect } from \"./actions\";\n\nexport default function ConnectButton() {\n  const [pending, startPending] = useTransition();\n  return (\n    <button\n      type=\"button\"\n      disabled={pending}\n      onClick={() => startPending(() => startQuickBooksConnect())}\n      className=\"rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white hover:bg-realtor-primary/90 disabled:opacity-60\"\n    >\n      {pending ? \"Redirecting…\" : \"Connect QuickBooks\"}\n    </button>\n  );\n}\n"
+    ]
+  ],
+  "app/admin/settings/integrations/page.tsx": [
+    [
+      "import { isPhotoEditingProviderEnabled } from \"@/lib/integrations/provider-enablement\";\nimport { DEFAULT_ORGANIZATION_ID } from \"@/lib/organizations/default\";\nimport { getQBClient, QBOError } from \"@/lib/integrations/quickbooks/client\";\nimport { getQuickBooksConnectConfiguration, quickBooksConnectErrorMessage } from \"@/lib/integrations/quickbooks/connect-config\";\nimport { getServiceSupabase } from \"@/lib/supabase/server\";\nimport type { Database } from \"@/lib/supabase/database.types\";\n\n",
+      "import { isPhotoEditingProviderEnabled } from \"@/lib/integrations/provider-enablement\";\nimport { DEFAULT_ORGANIZATION_ID } from \"@/lib/organizations/default\";\nimport { getQBClient, QBOError } from \"@/lib/integrations/quickbooks/client\";\nimport { getServiceSupabase } from \"@/lib/supabase/server\";\nimport type { Database } from \"@/lib/supabase/database.types\";\n\n"
+    ],
+    [
+      "  const autoenhanceConfigured = autoenhanceApiKeyStatus.source !== \"none\";\n  const autoenhanceReady =\n    autoenhanceConfigured && autoenhanceWebhookStatus.source !== \"none\";\n  const quickBooksConnectConfig = getQuickBooksConnectConfiguration(process.env);\n  const quickBooksConfigured = quickBooksConnectConfig.ok;\n  const quickBooksDefaultItemAvailable = Boolean(\n    connection?.default_item_id &&\n      items?.some((item) => item.Id === connection?.default_item_id),\n",
+      "  const autoenhanceConfigured = autoenhanceApiKeyStatus.source !== \"none\";\n  const autoenhanceReady =\n    autoenhanceConfigured && autoenhanceWebhookStatus.source !== \"none\";\n  const quickBooksConfigured = Boolean(\n    process.env.QUICKBOOKS_CLIENT_ID && process.env.QUICKBOOKS_CLIENT_SECRET,\n  );\n  const quickBooksDefaultItemAvailable = Boolean(\n    connection?.default_item_id &&\n      items?.some((item) => item.Id === connection?.default_item_id),\n"
+    ],
+    [
+      "          role=\"alert\"\n          className=\"rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800\"\n        >\n          {quickBooksConnectErrorMessage(flashError)}\n        </p>\n      ) : null}\n      {flashOk ? (\n",
+      "          role=\"alert\"\n          className=\"rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800\"\n        >\n          QuickBooks connection failed ({flashError}). Double-check your\n          Intuit app's redirect URI matches{\" \"}\n          <code className=\"break-all\">{process.env.NEXT_PUBLIC_APP_URL}/api/integrations/quickbooks/callback</code>\n          .\n        </p>\n      ) : null}\n      {flashOk ? (\n"
+    ],
+    [
+      "\n        <details\n          id=\"quickbooks-configuration\"\n          open={Boolean((connection && !quickBooksReady) || !quickBooksConfigured || flashError)}\n          className=\"mt-5 rounded-xl border border-realtor-primary/12 bg-white/55\"\n        >\n          <summary className=\"cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary\">\n",
+      "\n        <details\n          id=\"quickbooks-configuration\"\n          open={Boolean(connection && !quickBooksReady)}\n          className=\"mt-5 rounded-xl border border-realtor-primary/12 bg-white/55\"\n        >\n          <summary className=\"cursor-pointer px-4 py-3 text-sm font-semibold text-realtor-primary\">\n"
+    ],
+    [
+      "              <li>\n                Set the redirect URI to{\" \"}\n                <code className=\"break-all text-xs\">\n                  {quickBooksConnectConfig.ok ? quickBooksConnectConfig.redirectUri : \"Configure NEXT_PUBLIC_APP_URL first\"}\n                </code>\n                .\n              </li>\n",
+      "              <li>\n                Set the redirect URI to{\" \"}\n                <code className=\"break-all text-xs\">\n                  {process.env.NEXT_PUBLIC_APP_URL}/api/integrations/quickbooks/callback\n                </code>\n                .\n              </li>\n"
+    ],
+    [
+      "              </li>\n              <li>Click Connect below to grant access.</li>\n            </ol>\n            <ConnectButton configurationError={quickBooksConnectConfig.ok ? undefined : quickBooksConnectConfig.message} />\n          </div>\n        )}\n          </div>\n",
+      "              </li>\n              <li>Click Connect below to grant access.</li>\n            </ol>\n            <ConnectButton />\n          </div>\n        )}\n          </div>\n"
+    ]
+  ],
+  "app/admin/settings/pricing/PriceRow.tsx": [
+    [
+      "\"use client\";\n\nimport { getCatalogItemPrice } from \"@/lib/booking/quote\";\nimport { useState, useTransition, type ReactNode } from \"react\";\n\nimport type { CatalogItemRow } from \"@/lib/booking/catalog\";\n",
+      "\"use client\";\n\nimport { useState, useTransition, type ReactNode } from \"react\";\n\nimport type { CatalogItemRow } from \"@/lib/booking/catalog\";\n"
+    ],
+    [
+      "}\n\nfunction sqftSummary(item: CatalogItemRow): string | null {\n  return getCatalogItemPrice(item, null).ruleLabel;\n}\n",
+      "}\n\nfunction sqftSummary(item: CatalogItemRow): string | null {\n  if (\n    !item.sqft_pricing_enabled ||\n    !item.included_sqft ||\n    !item.overage_increment_sqft ||\n    !item.overage_price_cents\n  ) {\n    return null;\n  }\n\n  return `Includes ${item.included_sqft.toLocaleString()} sqft, then +${formatMoney(\n    item.overage_price_cents,\n  )}/${item.overage_increment_sqft.toLocaleString()} sqft`;\n}\n"
+    ]
+  ],
+  "app/book/_components/AIPackageRecommender.tsx": [
+    [
+      "import { useMemo, useState, useTransition } from \"react\";\nimport { useRouter, useSearchParams } from \"next/navigation\";\n\nimport { publicWizardQuery, type WizardState } from \"@/lib/booking/wizard-state\";\nimport { saveBookingWizardDraft } from \"../draft-actions\";\nimport type { CatalogItemDTO } from \"@/lib/booking/catalog-dto\";\nimport {\n  recommendBookingPackage,\n",
+      "import { useMemo, useState, useTransition } from \"react\";\nimport { useRouter, useSearchParams } from \"next/navigation\";\n\nimport type { CatalogItemDTO } from \"@/lib/booking/catalog-dto\";\nimport {\n  recommendBookingPackage,\n"
+    ],
+    [
+      "  aLaCarte: CatalogItemDTO[];\n  addons: CatalogItemDTO[];\n  organizationSlug: string;\n  initialState: WizardState;\n}\n\nexport default function AIPackageRecommender({\n",
+      "  aLaCarte: CatalogItemDTO[];\n  addons: CatalogItemDTO[];\n  organizationSlug: string;\n}\n\nexport default function AIPackageRecommender({\n"
+    ],
+    [
+      "  aLaCarte,\n  addons,\n  organizationSlug,\n  initialState,\n}: Props) {\n  const router = useRouter();\n  const params = useSearchParams();\n",
+      "  aLaCarte,\n  addons,\n  organizationSlug,\n}: Props) {\n  const router = useRouter();\n  const params = useSearchParams();\n"
+    ],
+    [
+      "    return m;\n  }, [bundles, aLaCarte, addons]);\n  const currentContext = useMemo(\n    () => readContextFromParams(new URLSearchParams(paramsString), initialState),\n    [paramsString, initialState],\n  );\n  const knownDetails = useMemo(\n    () => contextSummary(currentContext, bySlug),\n",
+      "    return m;\n  }, [bundles, aLaCarte, addons]);\n  const currentContext = useMemo(\n    () => readContextFromParams(new URLSearchParams(paramsString)),\n    [paramsString],\n  );\n  const knownDetails = useMemo(\n    () => contextSummary(currentContext, bySlug),\n"
+    ],
+    [
+      "    });\n  }\n\n  function applyRecommendation(next = recommendation, continueToProperty = false) {\n    if (!next || pending) return;\n    startTransition(async () => {\n      setError(null);\n      try {\n        const out = publicWizardQuery(new URLSearchParams(params.toString()));\n        out.set(\"services\", next.services.join(\",\"));\n        if (next.addOns.length) out.set(\"add_ons\", next.addOns.join(\",\"));\n        else out.delete(\"add_ons\");\n        out.set(\"org\", organizationSlug);\n        const saved = await saveBookingWizardDraft({\n          query: out.toString(),\n          property: {\n            streetAddress: next.property.streetAddress || initialState.streetAddress,\n            unitNumber: initialState.unitNumber,\n            city: next.property.city || initialState.city,\n            postalCode: next.property.postalCode || initialState.postalCode,\n            squareFootage: next.property.squareFootage ?? initialState.squareFootage,\n            isVacant: next.property.isVacant ?? initialState.isVacant,\n            includeBasement: next.property.includeBasement ?? initialState.includeBasement,\n            shootNotes: next.property.shootNotes || initialState.shootNotes,\n            shotRequests: next.property.shotRequests.length ? next.property.shotRequests : initialState.shotRequests,\n          },\n        });\n        if (!saved.ok) { setError(saved.error); return; }\n        if (continueToProperty) router.push(`/book/property?${saved.query}`);\n        else router.replace(`?${saved.query}`, { scroll: false });\n      } catch { setError(\"Property details could not be saved. Please try again.\"); }\n    });\n  }\n\n  function applyAndContinue() {\n    applyRecommendation(recommendation, true);\n  }\n\n  const selectedNames = recommendation\n",
+      "    });\n  }\n\n  function applyRecommendation(next = recommendation) {\n    if (!next) return;\n    const out = new URLSearchParams(params.toString());\n    out.set(\"services\", next.services.join(\",\"));\n    if (next.addOns.length) out.set(\"add_ons\", next.addOns.join(\",\"));\n    else out.delete(\"add_ons\");\n    if (next.property.streetAddress) out.set(\"address\", next.property.streetAddress);\n    if (next.property.city) out.set(\"city\", next.property.city);\n    if (next.property.postalCode) out.set(\"postal\", next.property.postalCode);\n    if (next.property.squareFootage) {\n      out.set(\"sqft\", String(next.property.squareFootage));\n    }\n    if (next.property.isVacant) out.set(\"vacant\", next.property.isVacant);\n    if (next.property.includeBasement != null) {\n      out.set(\"basement\", next.property.includeBasement ? \"1\" : \"0\");\n    }\n    if (next.property.shootNotes) {\n      out.set(\"shoot_notes\", next.property.shootNotes);\n    }\n    if (next.property.shotRequests.length) {\n      out.set(\"shots\", next.property.shotRequests.join(\",\"));\n    }\n    // If they already had a later-step choice, service changes can change duration.\n    out.delete(\"slot\");\n    router.replace(`?${out.toString()}`, { scroll: false });\n  }\n\n  function applyAndContinue() {\n    if (!recommendation) return;\n    const out = new URLSearchParams(params.toString());\n    out.set(\"services\", recommendation.services.join(\",\"));\n    if (recommendation.addOns.length) {\n      out.set(\"add_ons\", recommendation.addOns.join(\",\"));\n    } else {\n      out.delete(\"add_ons\");\n    }\n    if (recommendation.property.streetAddress) {\n      out.set(\"address\", recommendation.property.streetAddress);\n    }\n    if (recommendation.property.city) out.set(\"city\", recommendation.property.city);\n    if (recommendation.property.postalCode) {\n      out.set(\"postal\", recommendation.property.postalCode);\n    }\n    if (recommendation.property.squareFootage) {\n      out.set(\"sqft\", String(recommendation.property.squareFootage));\n    }\n    if (recommendation.property.isVacant) {\n      out.set(\"vacant\", recommendation.property.isVacant);\n    }\n    if (recommendation.property.includeBasement != null) {\n      out.set(\"basement\", recommendation.property.includeBasement ? \"1\" : \"0\");\n    }\n    if (recommendation.property.shootNotes) {\n      out.set(\"shoot_notes\", recommendation.property.shootNotes);\n    }\n    if (recommendation.property.shotRequests.length) {\n      out.set(\"shots\", recommendation.property.shotRequests.join(\",\"));\n    }\n    out.delete(\"slot\");\n    router.push(`/book/property?${out.toString()}`);\n  }\n\n  const selectedNames = recommendation\n"
+    ],
+    [
+      "  );\n}\n\nfunction readContextFromParams(params: URLSearchParams, state: WizardState): BookingRecommendationContext {\n  return {\n    selectedServices: csv(params.get(\"services\")), selectedAddOns: csv(params.get(\"add_ons\")),\n    streetAddress: state.streetAddress || null, city: state.city || null,\n    postalCode: state.postalCode || null, squareFootage: state.squareFootage,\n    isVacant: state.isVacant, includeBasement: state.includeBasement,\n    shootNotes: state.shootNotes || null, shotRequests: state.shotRequests,\n  };\n}\n\n",
+      "  );\n}\n\nfunction readContextFromParams(params: URLSearchParams): BookingRecommendationContext {\n  return {\n    selectedServices: csv(params.get(\"services\")),\n    selectedAddOns: csv(params.get(\"add_ons\")),\n    streetAddress: clean(params.get(\"address\")),\n    city: clean(params.get(\"city\")),\n    postalCode: clean(params.get(\"postal\")),\n    squareFootage: intOrNull(params.get(\"sqft\")),\n    isVacant: vacancy(params.get(\"vacant\")),\n    includeBasement: boolOrNull(params.get(\"basement\")),\n    shootNotes: clean(params.get(\"shoot_notes\")),\n    shotRequests: csv(params.get(\"shots\")),\n  };\n}\n\n"
+    ],
+    [
+      "    .filter(Boolean);\n}\n\nfunction formatVacancy(value: \"vacant\" | \"occupied\" | \"partial\") {\n  if (value === \"vacant\") return \"vacant\";\n  if (value === \"partial\") return \"partially occupied\";\n",
+      "    .filter(Boolean);\n}\n\nfunction clean(value: string | null): string | null {\n  const trimmed = value?.trim();\n  return trimmed || null;\n}\n\nfunction intOrNull(value: string | null): number | null {\n  const n = Number(value);\n  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;\n}\n\nfunction boolOrNull(value: string | null): boolean | null {\n  if (value === \"1\" || value === \"true\") return true;\n  if (value === \"0\" || value === \"false\") return false;\n  return null;\n}\n\nfunction vacancy(value: string | null): \"vacant\" | \"occupied\" | \"partial\" | null {\n  if (value === \"vacant\" || value === \"occupied\" || value === \"partial\") {\n    return value;\n  }\n  return null;\n}\n\nfunction formatVacancy(value: \"vacant\" | \"occupied\" | \"partial\") {\n  if (value === \"vacant\") return \"vacant\";\n  if (value === \"partial\") return \"partially occupied\";\n"
+    ]
+  ],
+  "app/book/_components/BookingTotalBar.tsx": [
+    [
+      "\"use client\";\n\nimport { bookingDurationMinutes, getCatalogItemPrice, type CatalogPricingItem } from \"@/lib/booking/quote\";\nexport interface BookingTotalItem extends CatalogPricingItem {\n  slug: string;\n  name: string;\n  price_cents: number;\n",
+      "\"use client\";\n\nexport interface BookingTotalItem {\n  slug: string;\n  name: string;\n  price_cents: number;\n"
+    ],
+    [
+      "  selectedSlugs,\n  selectedAddOnSlugs,\n  squareFootage,\n  includeBasement = false,\n  href,\n  submit = false,\n  ctaLabel = \"Continue\",\n",
+      "  selectedSlugs,\n  selectedAddOnSlugs,\n  squareFootage,\n  href,\n  submit = false,\n  ctaLabel = \"Continue\",\n"
+    ],
+    [
+      "  selectedSlugs: string[];\n  selectedAddOnSlugs: string[];\n  squareFootage: number | null;\n  includeBasement?: boolean | null;\n  href?: string;\n  submit?: boolean;\n  ctaLabel?: string;\n",
+      "  selectedSlugs: string[];\n  selectedAddOnSlugs: string[];\n  squareFootage: number | null;\n  href?: string;\n  submit?: boolean;\n  ctaLabel?: string;\n"
+    ],
+    [
+      "  note?: string;\n  sticky?: boolean;\n}) {\n  const selected = [...new Set([...selectedSlugs, ...selectedAddOnSlugs])]\n    .map((slug) => items.find((item) => item.slug === slug))\n    .filter((item): item is BookingTotalItem => Boolean(item));\n\n",
+      "  note?: string;\n  sticky?: boolean;\n}) {\n  const selected = [...selectedSlugs, ...selectedAddOnSlugs]\n    .map((slug) => items.find((item) => item.slug === slug))\n    .filter((item): item is BookingTotalItem => Boolean(item));\n\n"
+    ],
+    [
+      "\n  const rows = selected.map((item) => ({\n    item,\n    price: getCatalogItemPrice(item, squareFootage),\n  }));\n  const totalCents = rows.reduce((sum, row) => sum + row.price.totalPriceCents, 0);\n  const totalMinutes = bookingDurationMinutes(\n    selected.reduce((sum, item) => sum + item.duration_minutes, 0),\n    includeBasement,\n  );\n  const overageRows = rows.filter((row) => row.price.overageCents > 0);\n\n",
+      "\n  const rows = selected.map((item) => ({\n    item,\n    price: getPrice(item, squareFootage),\n  }));\n  const totalCents = rows.reduce((sum, row) => sum + row.price.totalCents, 0);\n  const totalMinutes = Math.max(\n    selected.reduce((sum, item) => sum + item.duration_minutes, 0),\n    60,\n  );\n  const overageRows = rows.filter((row) => row.price.overageCents > 0);\n\n"
+    ],
+    [
+      "              ~{formatMinutes(totalMinutes)} on-site\n            </span>\n          </div>\n          {includeBasement ? <p className=\"mt-1 text-[11px] text-realtor-muted\">Includes 15 minutes for the finished basement.</p> : null}\n          {overageRows.length > 0 ? (\n            <p className=\"mt-1 text-[11px] leading-relaxed text-realtor-primary\">\n              {squareFootage?.toLocaleString()} sqft home:{\" \"}\n",
+      "              ~{formatMinutes(totalMinutes)} on-site\n            </span>\n          </div>\n          {overageRows.length > 0 ? (\n            <p className=\"mt-1 text-[11px] leading-relaxed text-realtor-primary\">\n              {squareFootage?.toLocaleString()} sqft home:{\" \"}\n"
+    ],
+    [
+      "  );\n}\n\nfunction formatMinutes(minutes: number): string {\n  if (minutes < 60) return `${minutes} min`;\n  const hours = Math.floor(minutes / 60);\n",
+      "  );\n}\n\nfunction getPrice(item: BookingTotalItem, squareFootage: number | null) {\n  if (\n    !item.sqft_pricing_enabled ||\n    !item.included_sqft ||\n    !item.overage_increment_sqft ||\n    !item.overage_price_cents ||\n    !squareFootage ||\n    squareFootage <= item.included_sqft\n  ) {\n    return { totalCents: item.price_cents, overageCents: 0 };\n  }\n  const overageSqft = squareFootage - item.included_sqft;\n  const overageUnits = Math.ceil(overageSqft / item.overage_increment_sqft);\n  const overageCents = overageUnits * item.overage_price_cents;\n  return { totalCents: item.price_cents + overageCents, overageCents };\n}\n\nfunction formatMinutes(minutes: number): string {\n  if (minutes < 60) return `${minutes} min`;\n  const hours = Math.floor(minutes / 60);\n"
+    ]
+  ],
+  "app/book/_components/PackageAccordion.tsx": [
+    [
+      "\"use client\";\n\nimport { getCatalogItemPrice } from \"@/lib/booking/quote\";\nimport { publicWizardQuery } from \"@/lib/booking/wizard-state\";\n\nimport { useRouter, useSearchParams } from \"next/navigation\";\nimport { useEffect, useMemo, useRef, useState } from \"react\";\n",
+      "\"use client\";\n\nimport { useRouter, useSearchParams } from \"next/navigation\";\nimport { useEffect, useMemo, useRef, useState } from \"react\";\n"
+    ],
+    [
+      "  selectedSlugs,\n  selectedAddOnSlugs,\n  squareFootage,\n  includeBasement,\n}: {\n  bundles: CatalogItemDTO[];\n  aLaCarte: CatalogItemDTO[];\n",
+      "  selectedSlugs,\n  selectedAddOnSlugs,\n  squareFootage,\n}: {\n  bundles: CatalogItemDTO[];\n  aLaCarte: CatalogItemDTO[];\n"
+    ],
+    [
+      "  selectedSlugs: string[];\n  selectedAddOnSlugs: string[];\n  squareFootage: number | null;\n  includeBasement?: boolean | null;\n}) {\n  const router = useRouter();\n  const params = useSearchParams();\n",
+      "  selectedSlugs: string[];\n  selectedAddOnSlugs: string[];\n  squareFootage: number | null;\n}) {\n  const router = useRouter();\n  const params = useSearchParams();\n"
+    ],
+    [
+      "  );\n\n  function updateUrl(nextServices: string[], nextAddons: string[]) {\n    const next = publicWizardQuery(new URLSearchParams(params.toString()));\n    // Prune addons that no longer qualify after the service change.\n    const nextSelectedServices = nextServices\n      .map((slug) => bySlug.get(slug))\n",
+      "  );\n\n  function updateUrl(nextServices: string[], nextAddons: string[]) {\n    const next = new URLSearchParams(params.toString());\n    // Prune addons that no longer qualify after the service change.\n    const nextSelectedServices = nextServices\n      .map((slug) => bySlug.get(slug))\n"
+    ],
+    [
+      "    else next.delete(\"services\");\n    if (cleanedAddons.length) next.set(\"add_ons\", cleanedAddons.join(\",\"));\n    else next.delete(\"add_ons\");\n    // A changed selection can require a longer slot; keep the private draft\n    // while making the customer choose availability for the new duration.\n    next.delete(\"slot\");\n    router.replace(`?${next.toString()}`, { scroll: false });\n  }\n\n",
+      "    else next.delete(\"services\");\n    if (cleanedAddons.length) next.set(\"add_ons\", cleanedAddons.join(\",\"));\n    else next.delete(\"add_ons\");\n    router.replace(`?${next.toString()}`, { scroll: false });\n  }\n\n"
+    ],
+    [
+      "    updateUrl(selectedSlugs, next);\n  }\n\n  const continueQuery = publicWizardQuery(new URLSearchParams(params.toString())).toString();\n  const continueHref = continueQuery\n    ? `/book/property?${continueQuery}`\n    : \"/book/property\";\n",
+      "    updateUrl(selectedSlugs, next);\n  }\n\n  const continueQuery = params.toString();\n  const continueHref = continueQuery\n    ? `/book/property?${continueQuery}`\n    : \"/book/property\";\n"
+    ],
+    [
+      "                  </div>\n                  <div className=\"shrink-0 rounded-2xl bg-white px-3 py-2 text-right ring-1 ring-realtor-primary/20\">\n                    <p className=\"text-sm font-semibold text-realtor-text\">\n                      ${(priceForSqft(a, squareFootage) / 100).toFixed(0)}\n                    </p>\n                    <p className=\"text-[10px] uppercase tracking-wider text-realtor-muted\">\n                      {formatMinutes(a.duration_minutes)}\n",
+      "                  </div>\n                  <div className=\"shrink-0 rounded-2xl bg-white px-3 py-2 text-right ring-1 ring-realtor-primary/20\">\n                    <p className=\"text-sm font-semibold text-realtor-text\">\n                      ${(a.price_cents / 100).toFixed(0)}\n                    </p>\n                    <p className=\"text-[10px] uppercase tracking-wider text-realtor-muted\">\n                      {formatMinutes(a.duration_minutes)}\n"
+    ],
+    [
+      "                          {a.name}\n                        </span>\n                        <span className=\"font-semibold text-realtor-primary\">\n                          +${(priceForSqft(a, squareFootage) / 100).toFixed(0)}\n                        </span>\n                      </div>\n                      {a.description ? (\n",
+      "                          {a.name}\n                        </span>\n                        <span className=\"font-semibold text-realtor-primary\">\n                          +${(a.price_cents / 100).toFixed(0)}\n                        </span>\n                      </div>\n                      {a.description ? (\n"
+    ],
+    [
+      "        selectedSlugs={selectedSlugs}\n        selectedAddOnSlugs={selectedAddOnSlugs}\n        squareFootage={squareFootage}\n        includeBasement={includeBasement}\n        href={continueHref}\n        ctaLabel=\"Continue\"\n        note={\n",
+      "        selectedSlugs={selectedSlugs}\n        selectedAddOnSlugs={selectedAddOnSlugs}\n        squareFootage={squareFootage}\n        href={continueHref}\n        ctaLabel=\"Continue\"\n        note={\n"
+    ],
+    [
+      "  return `${Math.floor(hours)}h ${minutes % 60}min`;\n}\n\n/** Price the whole catalog package once, including its configured video fee. */\nfunction priceForSqft(item: CatalogItemDTO, squareFootage: number | null): number {\n  return getCatalogItemPrice(item, squareFootage).totalPriceCents;\n}\n\nfunction sqftRuleText(item: CatalogItemDTO): string | null {\n  return getCatalogItemPrice(item, null).ruleLabel;\n}\n",
+      "  return `${Math.floor(hours)}h ${minutes % 60}min`;\n}\n\n/**\n * Same overage math as BookingTotalBar/getPrice: once we know the\n * property's square footage (returning from step 2), package cards show\n * the price the realtor will actually pay instead of the base price.\n */\nfunction priceForSqft(item: CatalogItemDTO, squareFootage: number | null): number {\n  if (\n    !item.sqft_pricing_enabled ||\n    !item.included_sqft ||\n    !item.overage_increment_sqft ||\n    !item.overage_price_cents ||\n    !squareFootage ||\n    squareFootage <= item.included_sqft\n  ) {\n    return item.price_cents;\n  }\n  const overageSqft = squareFootage - item.included_sqft;\n  const overageUnits = Math.ceil(overageSqft / item.overage_increment_sqft);\n  return item.price_cents + overageUnits * item.overage_price_cents;\n}\n\nfunction sqftRuleText(item: CatalogItemDTO): string | null {\n  if (\n    !item.sqft_pricing_enabled ||\n    !item.included_sqft ||\n    !item.overage_increment_sqft ||\n    !item.overage_price_cents\n  ) {\n    return null;\n  }\n  return `Includes ${item.included_sqft.toLocaleString()} sqft; +$${(\n    item.overage_price_cents / 100\n  ).toFixed(0)} per ${item.overage_increment_sqft.toLocaleString()} sqft after.`;\n}\n"
+    ]
+  ],
+  "app/book/_components/Stepper.tsx": [
+    [
+      "            }\n          >\n            <span\n              aria-hidden=\"true\"\n              className={\n                \"flex h-5 w-5 items-center justify-center rounded-full text-[10px] \" +\n                (isDone\n",
+      "            }\n          >\n            <span\n              className={\n                \"flex h-5 w-5 items-center justify-center rounded-full text-[10px] \" +\n                (isDone\n"
+    ],
+    [
+      "            >\n              {isDone ? \"✓\" : step.id}\n            </span>\n            <span className=\"sr-only md:not-sr-only\">{step.label}</span>\n          </div>\n        );\n\n",
+      "            >\n              {isDone ? \"✓\" : step.id}\n            </span>\n            <span className=\"hidden md:inline\">{step.label}</span>\n          </div>\n        );\n\n"
+    ]
+  ],
+  "app/book/confirm/ConfirmForm.tsx": [
+    [
+      "import { useFormStatus } from \"react-dom\";\n\nimport { createPublicBooking, type BookResult } from \"../actions\";\nimport { BOOKING_QUOTE_POLICY_VERSION } from \"@/lib/booking/quote\";\nimport {\n  serializeWizardState,\n  type WizardState,\n",
+      "import { useFormStatus } from \"react-dom\";\n\nimport { createPublicBooking, type BookResult } from \"../actions\";\nimport {\n  serializeWizardState,\n  type WizardState,\n"
+    ],
+    [
+      "  profile,\n  items,\n  children,\n  completedResult,\n}: {\n  requestId: string;\n  state: WizardState;\n  profile: ProfileLite | null;\n  items: BookingTotalItem[];\n  children?: React.ReactNode;\n  completedResult?: Pick<BookResult, \"redirectTo\" | \"receipt\">;\n}) {\n  const [formState, formAction] = useActionState(createPublicBooking, completedResult ? { ok: true, ...completedResult } : initial);\n  // Server Action re-renders can supply a fresh page UUID. Keep the challenge\n  // scope for this mounted draft, just like its contact details and password.\n  const [draftRequestId] = useState(requestId);\n",
+      "  profile,\n  items,\n  children,\n}: {\n  requestId: string;\n  state: WizardState;\n  profile: ProfileLite | null;\n  items: BookingTotalItem[];\n  children?: React.ReactNode;\n}) {\n  const [formState, formAction] = useActionState(createPublicBooking, initial);\n  // Server Action re-renders can supply a fresh page UUID. Keep the challenge\n  // scope for this mounted draft, just like its contact details and password.\n  const [draftRequestId] = useState(requestId);\n"
+    ],
+    [
+      "        ) : null}\n        {/* Carry wizard state into the action */}\n        <input type=\"hidden\" name=\"public_request_id\" value={draftRequestId} />\n        <input type=\"hidden\" name=\"quote_policy_version\" value={BOOKING_QUOTE_POLICY_VERSION} />\n        <input type=\"hidden\" name=\"wizard_draft\" value={state.draftId ?? \"\"} />\n        {state.organizationSlug ? (\n          <input type=\"hidden\" name=\"org\" value={state.organizationSlug} />\n        ) : null}\n",
+      "        ) : null}\n        {/* Carry wizard state into the action */}\n        <input type=\"hidden\" name=\"public_request_id\" value={draftRequestId} />\n        {state.organizationSlug ? (\n          <input type=\"hidden\" name=\"org\" value={state.organizationSlug} />\n        ) : null}\n"
+    ],
+    [
+      "          selectedSlugs={state.services}\n          selectedAddOnSlugs={state.addOns}\n          squareFootage={state.squareFootage}\n          includeBasement={state.includeBasement}\n        />\n        {/* Keep confirmation first in DOM order so Enter verifies, not resends. */}\n        {formState?.verificationRequired ? <ResendCodeButton /> : null}\n",
+      "          selectedSlugs={state.services}\n          selectedAddOnSlugs={state.addOns}\n          squareFootage={state.squareFootage}\n        />\n        {/* Keep confirmation first in DOM order so Enter verifies, not resends. */}\n        {formState?.verificationRequired ? <ResendCodeButton /> : null}\n"
+    ],
+    [
+      "  selectedSlugs,\n  selectedAddOnSlugs,\n  squareFootage,\n  includeBasement,\n}: {\n  items: BookingTotalItem[];\n  selectedSlugs: string[];\n  selectedAddOnSlugs: string[];\n  squareFootage: number | null;\n  includeBasement: boolean | null;\n}) {\n  const { pending } = useFormStatus();\n  return (\n",
+      "  selectedSlugs,\n  selectedAddOnSlugs,\n  squareFootage,\n}: {\n  items: BookingTotalItem[];\n  selectedSlugs: string[];\n  selectedAddOnSlugs: string[];\n  squareFootage: number | null;\n}) {\n  const { pending } = useFormStatus();\n  return (\n"
+    ],
+    [
+      "      selectedSlugs={selectedSlugs}\n      selectedAddOnSlugs={selectedAddOnSlugs}\n      squareFootage={squareFootage}\n      includeBasement={includeBasement}\n      submit\n      disabled={pending}\n      ctaLabel={pending ? \"Booking...\" : \"Confirm booking\"}\n",
+      "      selectedSlugs={selectedSlugs}\n      selectedAddOnSlugs={selectedAddOnSlugs}\n      squareFootage={squareFootage}\n      submit\n      disabled={pending}\n      ctaLabel={pending ? \"Booking...\" : \"Confirm booking\"}\n"
+    ]
+  ],
+  "app/book/confirm/ConfirmUpsellPanel.tsx": [
+    [
+      "\"use client\";\n\nimport { getCatalogItemPrice, type CatalogPricingItem } from \"@/lib/booking/quote\";\nimport { publicWizardQuery } from \"@/lib/booking/wizard-state\";\n\nimport { useRouter, useSearchParams } from \"next/navigation\";\n\n",
+      "\"use client\";\n\nimport { useRouter, useSearchParams } from \"next/navigation\";\n\n"
+    ],
+    [
+      "  isCatalogAddonEligible,\n} from \"@/lib/booking/catalog-eligibility\";\n\ninterface CatalogLite extends CatalogPricingItem {\n  slug: string;\n  name: string;\n  kind: \"bundle\" | \"a_la_carte\" | \"addon\";\n",
+      "  isCatalogAddonEligible,\n} from \"@/lib/booking/catalog-eligibility\";\n\ninterface CatalogLite {\n  slug: string;\n  name: string;\n  kind: \"bundle\" | \"a_la_carte\" | \"addon\";\n"
+    ],
+    [
+      "  if (visible.length === 0) return null;\n\n  function addUpgrade(slug: string, kind: \"service\" | \"addon\" = \"service\") {\n    const next = publicWizardQuery(new URLSearchParams(params.toString()));\n    if (kind === \"addon\") {\n      const addOns = [...state.addOns, slug].filter(unique);\n      next.set(\"add_ons\", addOns.join(\",\"));\n",
+      "  if (visible.length === 0) return null;\n\n  function addUpgrade(slug: string, kind: \"service\" | \"addon\" = \"service\") {\n    const next = new URLSearchParams(params.toString());\n    if (kind === \"addon\") {\n      const addOns = [...state.addOns, slug].filter(unique);\n      next.set(\"add_ons\", addOns.join(\",\"));\n"
+    ],
+    [
+      "      const services = [...state.services, slug].filter(unique);\n      next.set(\"services\", services.join(\",\"));\n    }\n    next.delete(\"slot\");\n    router.replace(`/book/schedule?${next.toString()}`, { scroll: false });\n  }\n\n  return (\n",
+      "      const services = [...state.services, slug].filter(unique);\n      next.set(\"services\", services.join(\",\"));\n    }\n    router.replace(`/book/confirm?${next.toString()}`, { scroll: false });\n  }\n\n  return (\n"
+    ],
+    [
+      "              <span className=\"mt-1 flex items-start justify-between gap-3\">\n                <span className=\"font-semibold text-realtor-text\">{upgrade.title}</span>\n                <span className=\"shrink-0 rounded-full bg-realtor-surface-muted/80 px-2 py-0.5 font-semibold text-realtor-primary ring-1 ring-realtor-primary/10\">\n                  +${(getCatalogItemPrice(item, state.squareFootage).totalPriceCents / 100).toFixed(0)}\n                </span>\n              </span>\n              <span className=\"mt-1 block text-[11px] leading-relaxed text-realtor-muted\">\n",
+      "              <span className=\"mt-1 flex items-start justify-between gap-3\">\n                <span className=\"font-semibold text-realtor-text\">{upgrade.title}</span>\n                <span className=\"shrink-0 rounded-full bg-realtor-surface-muted/80 px-2 py-0.5 font-semibold text-realtor-primary ring-1 ring-realtor-primary/10\">\n                  +${(item.price_cents / 100).toFixed(0)}\n                </span>\n              </span>\n              <span className=\"mt-1 block text-[11px] leading-relaxed text-realtor-muted\">\n"
+    ]
+  ],
+  "app/book/confirm/page.tsx": [
+    [
+      "import { bookingDurationMinutes } from \"@/lib/booking/quote\";\nimport { readPublicWizardState, loadPrivateWizardState, loadCompletedWizardReceipt } from \"@/lib/booking/wizard-draft\";\nimport { randomUUID } from \"node:crypto\";\nimport type { Metadata } from \"next\";\nimport { notFound, redirect } from \"next/navigation\";\n",
+      "import { randomUUID } from \"node:crypto\";\nimport type { Metadata } from \"next\";\nimport { notFound, redirect } from \"next/navigation\";\n"
+    ],
+    [
+      "  searchParams: Promise<Record<string, string | string[] | undefined>>;\n}) {\n  const rawSearchParams = await searchParams;\n  const state = readPublicWizardState(rawSearchParams, \"/book/confirm\");\n  const selectionNotice =\n    rawSearchParams.selection_notice === \"addon_changed\"\n      ? \"An add-on was removed because it is not available with the selected services.\"\n",
+      "  searchParams: Promise<Record<string, string | string[] | undefined>>;\n}) {\n  const rawSearchParams = await searchParams;\n  const state = parseWizardState(rawSearchParams);\n  const selectionNotice =\n    rawSearchParams.selection_notice === \"addon_changed\"\n      ? \"An add-on was removed because it is not available with the selected services.\"\n"
+    ],
+    [
+      "    state.organizationSlug,\n  );\n  if (!organization) notFound();\n  const completed = await loadCompletedWizardReceipt(state.draftId, organization.id);\n  if (completed) {\n    return <BookingBrandFrame organization={organization}>\n      <ConfirmForm requestId=\"\" state={state} profile={null} items={[]} completedResult={completed} />\n    </BookingBrandFrame>;\n  }\n  let scopedState = await loadPrivateWizardState({ ...state, organizationSlug: organization.slug }, organization.id);\n  const c = stepCompleteness(scopedState);\n  if (!c.step1) redirect(`/book?${serializeForRedirect(scopedState)}`);\n  if (!c.step2) redirect(`/book/property?${serializeForRedirect(scopedState)}`);\n",
+      "    state.organizationSlug,\n  );\n  if (!organization) notFound();\n  let scopedState = { ...state, organizationSlug: organization.slug };\n  const c = stepCompleteness(scopedState);\n  if (!c.step1) redirect(`/book?${serializeForRedirect(scopedState)}`);\n  if (!c.step2) redirect(`/book/property?${serializeForRedirect(scopedState)}`);\n"
+    ],
+    [
+      "    (n, row) => n + row.price.totalPriceCents,\n    0,\n  );\n  const duration = bookingDurationMinutes(\n    selectedItems.reduce((n, i) => n + i.duration_minutes, 0) +\n      selectedAddons.reduce((n, a) => n + a.duration_minutes, 0),\n    scopedState.includeBasement,\n  );\n\n  const whenLabel = scopedState.slot\n",
+      "    (n, row) => n + row.price.totalPriceCents,\n    0,\n  );\n  const duration = Math.max(\n    selectedItems.reduce((n, i) => n + i.duration_minutes, 0) +\n      selectedAddons.reduce((n, a) => n + a.duration_minutes, 0),\n    60,\n  );\n\n  const whenLabel = scopedState.slot\n"
+    ],
+    [
+      "            included_sqft: item.included_sqft,\n            overage_increment_sqft: item.overage_increment_sqft,\n            overage_price_cents: item.overage_price_cents,\n            video_overage_threshold_sqft: item.video_overage_threshold_sqft,\n            video_overage_price_cents: item.video_overage_price_cents,\n          }),\n        )}\n      >\n",
+      "            included_sqft: item.included_sqft,\n            overage_increment_sqft: item.overage_increment_sqft,\n            overage_price_cents: item.overage_price_cents,\n          }),\n        )}\n      >\n"
+    ],
+    [
+      "              name: item.name,\n              kind: item.kind,\n              price_cents: item.price_cents,\n              sqft_pricing_enabled: item.sqft_pricing_enabled,\n              included_sqft: item.included_sqft,\n              overage_increment_sqft: item.overage_increment_sqft,\n              overage_price_cents: item.overage_price_cents,\n              video_overage_threshold_sqft: item.video_overage_threshold_sqft,\n              video_overage_price_cents: item.video_overage_price_cents,\n              duration_minutes: item.duration_minutes,\n              is_photo: item.is_photo,\n              is_video: item.is_video,\n",
+      "              name: item.name,\n              kind: item.kind,\n              price_cents: item.price_cents,\n              duration_minutes: item.duration_minutes,\n              is_photo: item.is_photo,\n              is_video: item.is_video,\n"
+    ]
+  ],
+  "app/book/page.tsx": [
+    [
+      "import { readPublicWizardState, loadPrivateWizardState } from \"@/lib/booking/wizard-draft\";\nimport type { Metadata } from \"next\";\nimport { notFound } from \"next/navigation\";\n\n",
+      "import type { Metadata } from \"next\";\nimport { notFound } from \"next/navigation\";\n\n"
+    ],
+    [
+      "  type CatalogItemRow,\n} from \"@/lib/booking/catalog\";\nimport { publicAIRecommendationsEnabled } from \"@/lib/booking/public-ai-recommendations\";\nimport { resolvePublicBookingOrganization } from \"@/lib/organizations/public-booking\";\n\nimport AIPackageRecommender from \"./_components/AIPackageRecommender\";\n",
+      "  type CatalogItemRow,\n} from \"@/lib/booking/catalog\";\nimport { publicAIRecommendationsEnabled } from \"@/lib/booking/public-ai-recommendations\";\nimport { parseWizardState } from \"@/lib/booking/wizard-state\";\nimport { resolvePublicBookingOrganization } from \"@/lib/organizations/public-booking\";\n\nimport AIPackageRecommender from \"./_components/AIPackageRecommender\";\n"
+    ],
+    [
+      "  searchParams: Promise<Record<string, string | string[] | undefined>>;\n}) {\n  const rawSearchParams = await searchParams;\n  const state = readPublicWizardState(rawSearchParams, \"/book\");\n  const selectionNoticeRequested =\n    rawSearchParams.selection_notice === \"addon_changed\";\n  const organization = await resolvePublicBookingOrganization(\n    state.organizationSlug,\n  );\n  if (!organization) notFound();\n  const scopedState = await loadPrivateWizardState({ ...state, organizationSlug: organization.slug }, organization.id);\n  const [catalog, examplesByItem] = await Promise.all([\n    getActiveCatalog({ organizationId: organization.id }),\n    getActiveCatalogExamples(organization.id),\n",
+      "  searchParams: Promise<Record<string, string | string[] | undefined>>;\n}) {\n  const rawSearchParams = await searchParams;\n  const state = parseWizardState(rawSearchParams);\n  const selectionNoticeRequested =\n    rawSearchParams.selection_notice === \"addon_changed\";\n  const organization = await resolvePublicBookingOrganization(\n    state.organizationSlug,\n  );\n  if (!organization) notFound();\n  const scopedState = { ...state, organizationSlug: organization.slug };\n  const [catalog, examplesByItem] = await Promise.all([\n    getActiveCatalog({ organizationId: organization.id }),\n    getActiveCatalogExamples(organization.id),\n"
+    ],
+    [
+      "          aLaCarte={aLaCarte}\n          addons={addons}\n          organizationSlug={organization.slug}\n          initialState={scopedState}\n        />\n      ) : null}\n\n",
+      "          aLaCarte={aLaCarte}\n          addons={addons}\n          organizationSlug={organization.slug}\n        />\n      ) : null}\n\n"
+    ],
+    [
+      "        selectedSlugs={selectedSlugs}\n        selectedAddOnSlugs={selectedAddOnSlugs}\n        squareFootage={scopedState.squareFootage}\n        includeBasement={scopedState.includeBasement}\n      />\n    </BookingBrandFrame>\n  );\n",
+      "        selectedSlugs={selectedSlugs}\n        selectedAddOnSlugs={selectedAddOnSlugs}\n        squareFootage={scopedState.squareFootage}\n      />\n    </BookingBrandFrame>\n  );\n"
+    ],
+    [
+      "    included_sqft: r.included_sqft,\n    overage_increment_sqft: r.overage_increment_sqft,\n    overage_price_cents: r.overage_price_cents,\n    video_overage_threshold_sqft: r.video_overage_threshold_sqft,\n    video_overage_price_cents: r.video_overage_price_cents,\n    kind: r.kind,\n    is_photo: r.is_photo,\n    is_video: r.is_video,\n",
+      "    included_sqft: r.included_sqft,\n    overage_increment_sqft: r.overage_increment_sqft,\n    overage_price_cents: r.overage_price_cents,\n    kind: r.kind,\n    is_photo: r.is_photo,\n    is_video: r.is_video,\n"
+    ]
+  ],
+  "app/book/property/PropertyForm.tsx": [
+    [
+      "\"use client\";\n\nimport { useRouter, useSearchParams } from \"next/navigation\";\nimport { useRef, useState, useTransition, type FormEvent } from \"react\";\n\nimport AddressAutocomplete, {\n  type PlaceParts,\n} from \"@/app/_components/AddressAutocomplete\";\nimport { publicWizardQuery, type VacancyState } from \"@/lib/booking/wizard-state\";\nimport { saveBookingWizardDraft } from \"../draft-actions\";\nimport BookingTotalBar, {\n  type BookingTotalItem,\n} from \"../_components/BookingTotalBar\";\n",
+      "\"use client\";\n\nimport { useRouter, useSearchParams } from \"next/navigation\";\nimport { useRef, useState, type FormEvent } from \"react\";\n\nimport AddressAutocomplete, {\n  type PlaceParts,\n} from \"@/app/_components/AddressAutocomplete\";\nimport type { VacancyState } from \"@/lib/booking/wizard-state\";\nimport BookingTotalBar, {\n  type BookingTotalItem,\n} from \"../_components/BookingTotalBar\";\n"
+    ],
+    [
+      "/**\n * Step 2 — property details.\n *\n * Pre-fills all fields from a private browser draft on revisit so the user doesn't\n * lose their input when they go back to edit services.\n *\n * When the user picks a Google Places suggestion in the address field,\n",
+      "/**\n * Step 2 — property details.\n *\n * Pre-fills all fields from URL state on revisit so the user doesn't\n * lose their input when they go back to edit services.\n *\n * When the user picks a Google Places suggestion in the address field,\n"
+    ],
+    [
+      "  const [basement, setBasement] = useState<\"1\" | \"0\" | \"\">(initial.basement);\n  const [shotRequests, setShotRequests] = useState<string[]>(initial.shotRequests);\n  const [shootNotes, setShootNotes] = useState(initial.shootNotes);\n  const [pending, startTransition] = useTransition();\n  const [errors, setErrors] = useState<Record<string, string>>({});\n  const formRef = useRef<HTMLFormElement>(null);\n  const firstInvalidField = useRef<HTMLElement | null>(null);\n",
+      "  const [basement, setBasement] = useState<\"1\" | \"0\" | \"\">(initial.basement);\n  const [shotRequests, setShotRequests] = useState<string[]>(initial.shotRequests);\n  const [shootNotes, setShootNotes] = useState(initial.shootNotes);\n  const [errors, setErrors] = useState<Record<string, string>>({});\n  const formRef = useRef<HTMLFormElement>(null);\n  const firstInvalidField = useRef<HTMLElement | null>(null);\n"
+    ],
+    [
+      "\n  function onSubmit(e: FormEvent) {\n    e.preventDefault();\n    if (pending) return;\n    const next: Record<string, string> = {};\n    if (!address.trim()) next.address = \"Required — autocomplete or type it in.\";\n    if (!city.trim()) next.city = \"Required — can't book without a city.\";\n",
+      "\n  function onSubmit(e: FormEvent) {\n    e.preventDefault();\n    const next: Record<string, string> = {};\n    if (!address.trim()) next.address = \"Required — autocomplete or type it in.\";\n    if (!city.trim()) next.city = \"Required — can't book without a city.\";\n"
+    ],
+    [
+      "    }\n    setErrors({});\n\n    startTransition(async () => {\n      try {\n        const saved = await saveBookingWizardDraft({\n          query: publicWizardQuery(new URLSearchParams(params.toString())).toString(),\n          property: {\n            streetAddress: address, unitNumber: unit, city, postalCode: postal,\n            squareFootage: sqft.trim() ? Math.trunc(Number(sqft)) : null,\n            isVacant: vacant || null, includeBasement: basement === \"\" ? null : basement === \"1\",\n            shotRequests, shootNotes,\n          },\n        });\n        if (!saved.ok) { setErrors({ _form: saved.error }); return; }\n        router.push(`/book/schedule?${saved.query}`);\n      } catch {\n        setErrors({ _form: \"Property details could not be saved. Please try again.\" });\n      }\n    });\n  }\n\n  return (\n",
+      "    }\n    setErrors({});\n\n    // Carry forward all prior params (services, add_ons) + our new ones.\n    const out = new URLSearchParams(params.toString());\n    out.set(\"address\", address.trim());\n    if (unit.trim()) out.set(\"unit\", unit.trim());\n    else out.delete(\"unit\");\n    out.set(\"city\", city.trim());\n    if (postal.trim()) out.set(\"postal\", postal.trim());\n    else out.delete(\"postal\");\n    if (sqft.trim()) out.set(\"sqft\", sqft.trim());\n    else out.delete(\"sqft\");\n    if (vacant) out.set(\"vacant\", vacant);\n    else out.delete(\"vacant\");\n    if (basement) out.set(\"basement\", basement);\n    else out.delete(\"basement\");\n    if (shotRequests.length) out.set(\"shots\", shotRequests.join(\",\"));\n    else out.delete(\"shots\");\n    if (shootNotes.trim()) out.set(\"shoot_notes\", shootNotes.trim());\n    else out.delete(\"shoot_notes\");\n    // Dropping an old slot — if they edit property details, the time\n    // may no longer make sense for the new service duration anyway.\n    out.delete(\"slot\");\n\n    router.push(`/book/schedule?${out.toString()}`);\n  }\n\n  return (\n"
+    ],
+    [
+      "        >\n          <p className=\"font-semibold\">Please fix the highlighted fields.</p>\n          <p className=\"mt-1 text-xs\">\n            {errors._form ?? \"We moved you to the first field that needs attention.\"}\n          </p>\n        </div>\n      ) : null}\n",
+      "        >\n          <p className=\"font-semibold\">Please fix the highlighted fields.</p>\n          <p className=\"mt-1 text-xs\">\n            We moved you to the first field that needs attention.\n          </p>\n        </div>\n      ) : null}\n"
+    ],
+    [
+      "            name=\"basement\"\n            value=\"1\"\n            label=\"Yes, shoot the basement\"\n            helper=\"Adds 15 minutes once per booking for the finished basement.\"\n            current={basement}\n            onSelect={(v) => setBasement(v as \"1\" | \"0\")}\n          />\n",
+      "            name=\"basement\"\n            value=\"1\"\n            label=\"Yes, shoot the basement\"\n            helper=\"Finished basements add ~15 min.\"\n            current={basement}\n            onSelect={(v) => setBasement(v as \"1\" | \"0\")}\n          />\n"
+    ],
+    [
+      "        selectedSlugs={selectedSlugs}\n        selectedAddOnSlugs={selectedAddOnSlugs}\n        squareFootage={liveSquareFootage}\n        includeBasement={basement === \"1\"}\n        submit\n        ctaLabel={pending ? \"Saving…\" : \"Continue\"}\n        disabled={pending}\n        note=\"This updates as square footage changes.\"\n      />\n    </form>\n",
+      "        selectedSlugs={selectedSlugs}\n        selectedAddOnSlugs={selectedAddOnSlugs}\n        squareFootage={liveSquareFootage}\n        submit\n        ctaLabel=\"Continue\"\n        note=\"This updates as square footage changes.\"\n      />\n    </form>\n"
+    ]
+  ],
+  "app/book/property/page.tsx": [
+    [
+      "import { readPublicWizardState, loadPrivateWizardState } from \"@/lib/booking/wizard-draft\";\nimport type { Metadata } from \"next\";\nimport { notFound, redirect } from \"next/navigation\";\n\nimport { getActiveCatalog } from \"@/lib/booking/catalog\";\nimport {\n  serializeWizardState,\n  stepCompleteness,\n} from \"@/lib/booking/wizard-state\";\n",
+      "import type { Metadata } from \"next\";\nimport { notFound, redirect } from \"next/navigation\";\n\nimport { getActiveCatalog } from \"@/lib/booking/catalog\";\nimport {\n  parseWizardState,\n  serializeWizardState,\n  stepCompleteness,\n} from \"@/lib/booking/wizard-state\";\n"
+    ],
+    [
+      "}: {\n  searchParams: Promise<Record<string, string | string[] | undefined>>;\n}) {\n  const query = await searchParams;\n  const state = readPublicWizardState(query, \"/book/property\");\n  const organization = await resolvePublicBookingOrganization(\n    state.organizationSlug,\n  );\n  if (!organization) notFound();\n  const scopedState = await loadPrivateWizardState({ ...state, organizationSlug: organization.slug }, organization.id);\n  const catalog = await getActiveCatalog({ organizationId: organization.id });\n\n  // Guard — can't be here without step 1 done.\n",
+      "}: {\n  searchParams: Promise<Record<string, string | string[] | undefined>>;\n}) {\n  const state = parseWizardState(await searchParams);\n  const organization = await resolvePublicBookingOrganization(\n    state.organizationSlug,\n  );\n  if (!organization) notFound();\n  const scopedState = { ...state, organizationSlug: organization.slug };\n  const catalog = await getActiveCatalog({ organizationId: organization.id });\n\n  // Guard — can't be here without step 1 done.\n"
+    ],
+    [
+      "        </p>\n      </section>\n\n      {query.draft_notice === \"private_details_required\" ? (\n        <p role=\"status\" className=\"text-sm text-amber-800\">For your privacy, property details from older booking links must be entered again.</p>\n      ) : scopedState.draftId && !scopedState.streetAddress ? (\n        <p role=\"status\" className=\"text-sm text-amber-800\">Your private draft expired or is unavailable in this browser. Please enter the property details again.</p>\n      ) : null}\n      <PropertyForm\n        items={[...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(\n          (item) => ({\n",
+      "        </p>\n      </section>\n\n      <PropertyForm\n        items={[...catalog.bundles, ...catalog.aLaCarte, ...catalog.addons].map(\n          (item) => ({\n"
+    ],
+    [
+      "            included_sqft: item.included_sqft,\n            overage_increment_sqft: item.overage_increment_sqft,\n            overage_price_cents: item.overage_price_cents,\n            video_overage_threshold_sqft: item.video_overage_threshold_sqft,\n            video_overage_price_cents: item.video_overage_price_cents,\n          }),\n        )}\n        selectedSlugs={scopedState.services}\n",
+      "            included_sqft: item.included_sqft,\n            overage_increment_sqft: item.overage_increment_sqft,\n            overage_price_cents: item.overage_price_cents,\n          }),\n        )}\n        selectedSlugs={scopedState.services}\n"
+    ]
+  ],
+  "app/book/schedule/CalendarPicker.tsx": [
+    [
+      "\"use client\";\n\nimport { publicWizardQuery } from \"@/lib/booking/wizard-state\";\n\nimport { useRouter, useSearchParams } from \"next/navigation\";\nimport { useMemo, useState } from \"react\";\n",
+      "\"use client\";\n\nimport { useRouter, useSearchParams } from \"next/navigation\";\nimport { useMemo, useState } from \"react\";\n"
+    ],
+    [
+      "  const canGoNext = cursor < lastAvailableMonth;\n\n  function pickSlot(iso: string) {\n    const next = publicWizardQuery(new URLSearchParams(params.toString()));\n    next.set(\"slot\", iso);\n    router.push(`/book/confirm?${next.toString()}`);\n  }\n",
+      "  const canGoNext = cursor < lastAvailableMonth;\n\n  function pickSlot(iso: string) {\n    const next = new URLSearchParams(params.toString());\n    next.set(\"slot\", iso);\n    router.push(`/book/confirm?${next.toString()}`);\n  }\n"
+    ]
+  ],
+  "app/book/schedule/page.tsx": [
+    [
+      "import { bookingDurationMinutes } from \"@/lib/booking/quote\";\nimport { readPublicWizardState, loadPrivateWizardState } from \"@/lib/booking/wizard-draft\";\nimport type { Metadata } from \"next\";\nimport { notFound, redirect } from \"next/navigation\";\n\n",
+      "import type { Metadata } from \"next\";\nimport { notFound, redirect } from \"next/navigation\";\n\n"
+    ],
+    [
+      "}: {\n  searchParams: Promise<Record<string, string | string[] | undefined>>;\n}) {\n  const state = readPublicWizardState(await searchParams, \"/book/schedule\");\n  const organization = await resolvePublicBookingOrganization(\n    state.organizationSlug,\n  );\n  if (!organization) notFound();\n  const scopedState = await loadPrivateWizardState({ ...state, organizationSlug: organization.slug }, organization.id);\n  const c = stepCompleteness(scopedState);\n  if (!c.step1) redirect(`/book?${serializeForRedirect(scopedState)}`);\n  if (!c.step2) redirect(`/book/property?${serializeForRedirect(scopedState)}`);\n",
+      "}: {\n  searchParams: Promise<Record<string, string | string[] | undefined>>;\n}) {\n  const state = parseWizardState(await searchParams);\n  const organization = await resolvePublicBookingOrganization(\n    state.organizationSlug,\n  );\n  if (!organization) notFound();\n  const scopedState = { ...state, organizationSlug: organization.slug };\n  const c = stepCompleteness(scopedState);\n  if (!c.step1) redirect(`/book?${serializeForRedirect(scopedState)}`);\n  if (!c.step2) redirect(`/book/property?${serializeForRedirect(scopedState)}`);\n"
+    ],
+    [
+      "  for (const r of catalog.aLaCarte) bySlug.set(r.slug, r);\n  for (const r of catalog.addons) bySlug.set(r.slug, r);\n\n  const duration = bookingDurationMinutes(\n    scopedState.services.reduce(\n      (n, s) => n + (bySlug.get(s)?.duration_minutes ?? 0),\n      0,\n",
+      "  for (const r of catalog.aLaCarte) bySlug.set(r.slug, r);\n  for (const r of catalog.addons) bySlug.set(r.slug, r);\n\n  const duration = Math.max(\n    scopedState.services.reduce(\n      (n, s) => n + (bySlug.get(s)?.duration_minutes ?? 0),\n      0,\n"
+    ],
+    [
+      "        (n, s) => n + (bySlug.get(s)?.duration_minutes ?? 0),\n        0,\n      ),\n    scopedState.includeBasement,\n  );\n\n  const daysOfSlots = await loadSlotsForNextDays(duration, 28, {\n",
+      "        (n, s) => n + (bySlug.get(s)?.duration_minutes ?? 0),\n        0,\n      ),\n    60,\n  );\n\n  const daysOfSlots = await loadSlotsForNextDays(duration, 28, {\n"
+    ],
+    [
+      "            included_sqft: item.included_sqft,\n            overage_increment_sqft: item.overage_increment_sqft,\n            overage_price_cents: item.overage_price_cents,\n            video_overage_threshold_sqft: item.video_overage_threshold_sqft,\n            video_overage_price_cents: item.video_overage_price_cents,\n          }),\n        )}\n        selectedSlugs={scopedState.services}\n        selectedAddOnSlugs={scopedState.addOns}\n        squareFootage={scopedState.squareFootage}\n        includeBasement={scopedState.includeBasement}\n        href={\n          scopedState.slot\n            ? `/book/confirm?${serializeForRedirect(scopedState)}`\n",
+      "            included_sqft: item.included_sqft,\n            overage_increment_sqft: item.overage_increment_sqft,\n            overage_price_cents: item.overage_price_cents,\n          }),\n        )}\n        selectedSlugs={scopedState.services}\n        selectedAddOnSlugs={scopedState.addOns}\n        squareFootage={scopedState.squareFootage}\n        href={\n          scopedState.slot\n            ? `/book/confirm?${serializeForRedirect(scopedState)}`\n"
+    ]
+  ],
+  "app/book/error.tsx": [
+    [
+      "/**\n * Booking-flow error boundary — realtor-facing, so it uses the light\n * realtor theme (the segment layout still wraps this) and keeps the\n * realtor's wizard state: \"Try again\" re-renders the service selections\n * and reloads property details from the unexpired private browser draft.\n */\nexport default function BookError({\n  error,\n",
+      "/**\n * Booking-flow error boundary — realtor-facing, so it uses the light\n * realtor theme (the segment layout still wraps this) and keeps the\n * realtor's wizard state: \"Try again\" re-renders with the same URL\n * params, so their package/property selections survive.\n */\nexport default function BookError({\n  error,\n"
+    ],
+    [
+      "        Sorry — that did not work.\n      </h1>\n      <p className=\"mt-3 text-sm leading-6 text-realtor-muted\">\n        Try again to reload your saved selections. If this keeps happening, email{\" \"}\n        <a\n          className=\"font-semibold text-realtor-primary\"\n          href=\"mailto:info@pixelblastermedia.com\"\n",
+      "        Sorry — that did not work.\n      </h1>\n      <p className=\"mt-3 text-sm leading-6 text-realtor-muted\">\n        Your selections are saved in this page&apos;s link, so trying again\n        will not lose them. If it keeps happening, email{\" \"}\n        <a\n          className=\"font-semibold text-realtor-primary\"\n          href=\"mailto:info@pixelblastermedia.com\"\n"
+    ]
+  ],
+  "app/portal/[propertyId]/page.tsx": [
+    [
+      "\nimport CopyLinkButton from \"./CopyLinkButton\";\nimport ListingWebsiteEditor from \"./ListingWebsiteEditor\";\nimport RebookForm from \"../book/RebookForm\";\n\nexport const dynamic = \"force-dynamic\";\n\n",
+      "\nimport CopyLinkButton from \"./CopyLinkButton\";\nimport ListingWebsiteEditor from \"./ListingWebsiteEditor\";\n\nexport const dynamic = \"force-dynamic\";\n\n"
+    ],
+    [
+      "      .filter((url): url is string => Boolean(url)),\n  );\n  const defaultHeroImage = heroImageOptions[0] ?? \"\";\n\n  return (\n    <div className=\"realtor-theme space-y-8\">\n",
+      "      .filter((url): url is string => Boolean(url)),\n  );\n  const defaultHeroImage = heroImageOptions[0] ?? \"\";\n  const bookSimilarHref = buildSimilarBookingHref(property, latestBooking);\n\n  return (\n    <div className=\"realtor-theme space-y-8\">\n"
+    ],
+    [
+      "            </div>\n          </div>\n          <div className=\"flex lg:justify-end\">\n            <RebookForm propertyId={property.id} bookingId={latestBooking?.id} />\n          </div>\n        </div>\n        <PortalTabs propertyId={property.id} activeTab={activeTab} />\n",
+      "            </div>\n          </div>\n          <div className=\"flex lg:justify-end\">\n            <Link\n              href={bookSimilarHref}\n              className=\"rounded-xl border border-realtor-primary/15 bg-realtor-surface px-4 py-2 text-sm font-semibold text-realtor-text transition hover:border-realtor-primary/35 hover:bg-realtor-surface-muted\"\n            >\n              Book similar shoot\n            </Link>\n          </div>\n        </div>\n        <PortalTabs propertyId={property.id} activeTab={activeTab} />\n"
+    ],
+    [
+      "    .replace(/^-+|-+$/g, \"\")\n    .slice(0, 80);\n}\n",
+      "    .replace(/^-+|-+$/g, \"\")\n    .slice(0, 80);\n}\n\nfunction buildSimilarBookingHref(\n  property: PropertyRow,\n  booking: PropertyRow[\"bookings\"][number] | null,\n): string {\n  const params = new URLSearchParams();\n  params.set(\"repeat\", \"1\");\n  params.set(\"from_property\", property.id);\n  if (booking?.services.length) params.set(\"services\", booking.services.join(\",\"));\n  if (booking?.add_ons.length) params.set(\"add_ons\", booking.add_ons.join(\",\"));\n  params.set(\"street_address\", property.street_address);\n  if (property.city) params.set(\"city\", property.city);\n  if (property.postal_code) params.set(\"postal_code\", property.postal_code);\n  if (booking?.square_footage) {\n    params.set(\"square_footage\", String(booking.square_footage));\n  }\n  const qs = params.toString();\n  return qs ? `/portal/book?${qs}` : \"/portal/book\";\n}\n"
+    ]
+  ],
+  "app/portal/book/page.tsx": [
+    [
+      "\nimport { requireUser } from \"@/lib/auth/require-user\";\nimport { getServiceSupabase } from \"@/lib/supabase/server\";\nimport RebookForm from \"./RebookForm\";\n\nexport const metadata: Metadata = { title: \"Book a shoot\" };\nexport const dynamic = \"force-dynamic\";\n",
+      "\nimport { requireUser } from \"@/lib/auth/require-user\";\nimport { getServiceSupabase } from \"@/lib/supabase/server\";\n\nexport const metadata: Metadata = { title: \"Book a shoot\" };\nexport const dynamic = \"force-dynamic\";\n"
+    ],
+    [
+      "  const params = await searchParams;\n  const user = await requireUser(\"/portal/book\");\n  const organizationSlug = await getOrganizationSlug(user.organizationId);\n  const propertyId = firstParam(params.from_property);\n  const bookingId = firstParam(params.from_booking);\n  if (propertyId) {\n    // Legacy bookmarks may contain private fields. Strip them before displaying\n    // the explicit POST handoff; the action reloads owned data from the database.\n    if (Object.keys(params).some((key) => ![\"from_property\", \"from_booking\", \"rebook_error\"].includes(key))) {\n      const clean = new URLSearchParams({ from_property: propertyId });\n      if (bookingId) clean.set(\"from_booking\", bookingId);\n      redirect(`/portal/book?${clean.toString()}`);\n    }\n    return <main className=\"space-y-4\"><h1 className=\"text-xl font-semibold\">Book another shoot</h1>\n      <p>Review the property details and choose a new time.</p>\n      {firstParam(params.rebook_error) === \"draft_unavailable\" ? <p role=\"alert\">Your booking draft could not be opened. Please try again.</p> : null}\n      <RebookForm propertyId={propertyId} bookingId={bookingId || undefined} />\n    </main>;\n  }\n\n  const next = new URLSearchParams();\n  if (organizationSlug) next.set(\"org\", organizationSlug);\n  copyParam(params, next, \"services\", \"services\");\n  copyParam(params, next, \"add_ons\", \"add_ons\");\n\n  const hasServices = Boolean(next.get(\"services\"));\n  const step = hasServices ? \"/book/property\" : \"/book\";\n  const qs = next.toString();\n\n  redirect(qs ? `${step}?${qs}` : step);\n}\n\nfunction firstParam(value: string | string[] | undefined): string {\n  return (Array.isArray(value) ? value[0] : value)?.trim() ?? \"\";\n}\n\nasync function getOrganizationSlug(organizationId: string): Promise<string | null> {\n",
+      "  const params = await searchParams;\n  const user = await requireUser(\"/portal/book\");\n  const organizationSlug = await getOrganizationSlug(user.organizationId);\n\n  const next = new URLSearchParams();\n  if (organizationSlug) next.set(\"org\", organizationSlug);\n  copyParam(params, next, \"services\", \"services\");\n  copyParam(params, next, \"add_ons\", \"add_ons\");\n  copyParam(params, next, \"slot\", \"slot\");\n  copyParam(params, next, \"street_address\", \"address\");\n  copyParam(params, next, \"unit_number\", \"unit\");\n  copyParam(params, next, \"city\", \"city\");\n  copyParam(params, next, \"postal_code\", \"postal\");\n  copyParam(params, next, \"square_footage\", \"sqft\");\n  copyParam(params, next, \"is_vacant\", \"vacant\");\n  copyParam(params, next, \"include_basement\", \"basement\");\n  copyParam(params, next, \"shoot_notes\", \"shoot_notes\");\n\n  const hasServices = Boolean(next.get(\"services\"));\n  const hasProperty = Boolean(next.get(\"address\") && next.get(\"city\"));\n  const hasSlot = Boolean(next.get(\"slot\"));\n  const step = hasServices\n    ? hasProperty\n      ? hasSlot\n        ? \"/book/confirm\"\n        : \"/book/schedule\"\n      : \"/book/property\"\n    : \"/book\";\n  const qs = next.toString();\n\n  redirect(qs ? `${step}?${qs}` : step);\n}\n\nasync function getOrganizationSlug(organizationId: string): Promise<string | null> {\n"
+    ]
+  ]
+}

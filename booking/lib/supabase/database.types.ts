@@ -213,6 +213,7 @@ interface BookingsTable {
     unit_number: string | null;
     is_vacant: "vacant" | "occupied" | "partial" | null;
     include_basement: boolean | null;
+    basement_duration_minutes: number;
     reminder_sent_at: string | null;
     suppress_realtor_notifications: boolean;
     created_at: string;
@@ -247,6 +248,7 @@ interface BookingsTable {
     unit_number?: string | null;
     is_vacant?: "vacant" | "occupied" | "partial" | null;
     include_basement?: boolean | null;
+    basement_duration_minutes?: number;
     reminder_sent_at?: string | null;
     suppress_realtor_notifications?: boolean;
   };
@@ -653,6 +655,8 @@ interface CatalogItemsTable {
     included_sqft: number | null;
     overage_increment_sqft: number | null;
     overage_price_cents: number | null;
+    video_overage_threshold_sqft: number | null;
+    video_overage_price_cents: number;
     taxable: boolean;
     active: boolean;
     display_order: number;
@@ -683,6 +687,8 @@ interface CatalogItemsTable {
     included_sqft?: number | null;
     overage_increment_sqft?: number | null;
     overage_price_cents?: number | null;
+    video_overage_threshold_sqft?: number | null;
+    video_overage_price_cents?: number;
     taxable?: boolean;
     active?: boolean;
     display_order?: number;
@@ -1289,6 +1295,12 @@ export interface Database {
       booking_line_items: BookingLineItemsTable;
       integration_jobs: IntegrationJobsTable;
       booking_notifications: BookingNotificationsTable;
+      booking_lifecycle_notices: {
+        Row: { id: string; organization_id: string; booking_id: string; lifecycle_version: number; event: string; recipient: "realtor" | "admin"; scheduled_at: string | null; payload: Json; status: string; attempt_count: number; first_attempt_at: string | null; next_attempt_at: string; lease_token: string | null; lease_expires_at: string | null; provider_id: string | null; error_code: string | null; created_at: string; completed_at: string | null };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       push_subscriptions: PushSubscriptionsTable;
       autoenhance_batches: AutoenhanceBatchesTable;
       autoenhance_iguide_uploads: AutoenhanceIGuideUploadsTable;
@@ -1327,6 +1339,18 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      change_booking_with_lifecycle_notices: {
+        Args: { p_organization_id: string; p_booking_id: string; p_expected_version: number; p_event: string; p_initiator: string; p_notices: Json; p_scheduled_at: string | null; p_scheduled_ends_at: string | null };
+        Returns: Json;
+      };
+      claim_booking_lifecycle_notices: {
+        Args: { p_not_before: string; p_organization_id: string | null; p_booking_id: string | null; p_limit: number };
+        Returns: Database["public"]["Tables"]["booking_lifecycle_notices"]["Row"][];
+      };
+      finish_booking_lifecycle_notice: {
+        Args: { p_organization_id: string; p_id: string; p_lease_token: string; p_provider_id: string | null; p_error_code: string };
+        Returns: boolean;
+      };
       photo_finals_prepare_release: {Args:{p_org:string;p_actor:string;p_booking:string;p_property:string;p_batch:string;p_release:string;p_expected_revision:number;p_versions:Json};Returns:GalleryReleasesTable["Row"]};
       photo_finals_approve_release: {Args:{p_org:string;p_actor:string;p_booking:string;p_property:string;p_release:string;p_revision:number;p_hash:string};Returns:Json};
       photo_finals_package_claim: {Args:{p_org:string;p_booking:string;p_property:string;p_job:string;p_worker:string};Returns:Json};
@@ -1655,6 +1679,11 @@ export interface Database {
         };
         Returns: Json;
       };
+      create_public_booking_with_jobs_v2: {
+        Args: Database["public"]["Functions"]["create_public_booking_with_jobs"]["Args"] & { p_quote_policy_version: string };
+        Returns: Json;
+      };
+      current_booking_quote_policy: { Args: Record<string, never>; Returns: string };
       claim_integration_job: {
         Args: {
           p_organization_id: string;

@@ -1,5 +1,7 @@
 "use server";
 
+import { BOOKING_QUOTE_CHANGED_MESSAGE } from "@/lib/booking/quote";
+
 import { revalidatePath } from "next/cache";
 
 import {
@@ -199,6 +201,7 @@ interface BookingForManualEditRow {
   owner_id: string;
   scheduled_at: string | null;
   scheduled_ends_at: string | null;
+  basement_duration_minutes: number;
   services: string[];
   add_ons: string[];
   google_calendar_event_id: string | null;
@@ -403,7 +406,7 @@ export async function updateBookingDetails(
   const { data: booking, error: bookingError } = await service
     .from("bookings")
     .select(
-      "id, lifecycle_version, organization_id, property_id, owner_id, scheduled_at, scheduled_ends_at, services, add_ons, google_calendar_event_id, suppress_realtor_notifications, properties(street_address, city, province, postal_code), profiles(email, full_name, phone, brokerage, delivery_cc_emails)",
+      "id, lifecycle_version, organization_id, property_id, owner_id, scheduled_at, scheduled_ends_at, basement_duration_minutes, services, add_ons, google_calendar_event_id, suppress_realtor_notifications, properties(street_address, city, province, postal_code), profiles(email, full_name, phone, brokerage, delivery_cc_emails)",
     )
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
@@ -442,7 +445,7 @@ export async function updateBookingDetails(
     };
   }
   const totals = shouldReplaceCatalogItems
-    ? computeCartTotals(cart, catalog, squareFootage)
+    ? computeCartTotals(cart, catalog, squareFootage, booking.basement_duration_minutes === 15)
     : null;
   const existingDuration =
     booking.scheduled_at && booking.scheduled_ends_at
@@ -474,6 +477,7 @@ export async function updateBookingDetails(
     p_booking_id: booking.id,
     p_expected_version: Number(versionToken),
     p_input: {
+      quote_policy_version: str(formData, "quote_policy_version"),
       owner_id: booking.owner_id, street_address: streetAddress, city, province,
       contact_name: contactName, contact_phone: contactPhone, brokerage,
       postal_code: postalCode, unit_number: unitNumber, client_notes: clientNotes,
@@ -482,6 +486,7 @@ export async function updateBookingDetails(
       catalog_item_ids: selectedItems.map(item => item.id),
     },
   });
+  if (updateError?.code === "PB005") return { ok: false, error: BOOKING_QUOTE_CHANGED_MESSAGE };
   if (updateError || !saved) return { ok: false, error: "Booking changed or could not be saved. Reload and try again." };
   if (saved.replayed) return { ok: true, lifecycleVersion: saved.lifecycle_version };
   const lineItemWarning: string | undefined = undefined;
@@ -629,7 +634,7 @@ export async function updateBookingServicesFromCalendar(
   const { data: booking, error: bookingError } = await service
     .from("bookings")
     .select(
-      "id, lifecycle_version, organization_id, owner_id, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, unit_number, client_notes, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, properties(street_address, city, province, postal_code), profiles(email, full_name, phone, brokerage, delivery_cc_emails)",
+      "id, lifecycle_version, organization_id, owner_id, scheduled_at, scheduled_ends_at, basement_duration_minutes, services, add_ons, square_footage, unit_number, client_notes, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, properties(street_address, city, province, postal_code), profiles(email, full_name, phone, brokerage, delivery_cc_emails)",
     )
     .eq("id", bookingId)
     .eq("organization_id", admin.organizationId)
@@ -639,6 +644,7 @@ export async function updateBookingServicesFromCalendar(
       owner_id: string;
       scheduled_at: string | null;
       scheduled_ends_at: string | null;
+      basement_duration_minutes: number;
       services: string[];
       add_ons: string[];
       square_footage: number | null;
@@ -700,7 +706,7 @@ export async function updateBookingServicesFromCalendar(
   const cartError = validateCart(cart, catalog);
   if (cartError) return { ok: false, error: cartError };
 
-  const totals = computeCartTotals(cart, catalog, booking.square_footage);
+  const totals = computeCartTotals(cart, catalog, booking.square_footage, booking.basement_duration_minutes === 15);
   const durationMinutes = Math.max(totals.totalDurationMinutes, 60);
   const scheduledAt = booking.scheduled_at
     ? new Date(booking.scheduled_at)
@@ -721,6 +727,7 @@ export async function updateBookingServicesFromCalendar(
     p_booking_id: booking.id,
     p_expected_version: Number(versionToken),
     p_input: {
+      quote_policy_version: str(formData, "quote_policy_version"),
       owner_id: booking.owner_id, street_address: booking.properties.street_address,
       city: booking.properties.city, province: booking.properties.province,
       postal_code: booking.properties.postal_code, unit_number: booking.unit_number,
@@ -728,6 +735,7 @@ export async function updateBookingServicesFromCalendar(
       square_footage: booking.square_footage, catalog_item_ids: selectedCatalogIds,
     },
   });
+  if (updateError?.code === "PB005") return { ok: false, error: BOOKING_QUOTE_CHANGED_MESSAGE };
   if (updateError || !saved) return { ok: false, error: "Booking changed or could not be saved. Reload and try again." };
   if (saved.replayed) return { ok: true };
   const lineItemWarning: string | undefined = undefined;
@@ -2336,7 +2344,7 @@ async function sendBookingConfirmationEmailBestEffort(args: {
       service
         .from("bookings")
         .select(
-          "scheduled_at, scheduled_ends_at, services, add_ons, unit_number, quickbooks_invoice_url, properties(street_address, city, postal_code)",
+          "scheduled_at, scheduled_ends_at, basement_duration_minutes, services, add_ons, unit_number, quickbooks_invoice_url, properties(street_address, city, postal_code)",
         )
         .eq("organization_id", args.organizationId)
         .eq("id", args.bookingId)

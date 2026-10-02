@@ -26,6 +26,8 @@ interface SendEmailArgs {
   text?: string;
   /** Immutable sender display-name snapshot for durable job replay. */
   fromName?: string;
+  /** Complete immutable sender for durable lifecycle retries. Null means unconfigured. */
+  fromAddress?: string | null;
   /** Reply-To override; useful so client replies go to your real inbox. */
   replyTo?: string | null;
   /** Stable provider key; outbox reclaim is bounded inside Resend's 24-hour window. */
@@ -52,7 +54,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     getOrganizationEmailSettings(args.organizationId),
   ]);
   const baseFrom = process.env.EMAIL_FROM;
-  const from = baseFrom
+  const from = args.fromAddress !== undefined ? args.fromAddress : baseFrom
     ? formatFromAddress(baseFrom, args.fromName ?? settings.fromName)
     : null;
   const replyTo = args.replyTo === undefined

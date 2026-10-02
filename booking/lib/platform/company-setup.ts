@@ -561,6 +561,8 @@ async function copyStarterCatalog(
       included_sqft: item.included_sqft,
       overage_increment_sqft: item.overage_increment_sqft,
       overage_price_cents: item.overage_price_cents,
+      video_overage_threshold_sqft: item.video_overage_threshold_sqft,
+      video_overage_price_cents: item.video_overage_price_cents,
       taxable: item.taxable,
       active: item.active,
       display_order: item.display_order,

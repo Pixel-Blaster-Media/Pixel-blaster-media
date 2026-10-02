@@ -1,3 +1,4 @@
+import { readPublicWizardState, loadPrivateWizardState } from "@/lib/booking/wizard-draft";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
@@ -12,7 +13,6 @@ import {
   type CatalogItemRow,
 } from "@/lib/booking/catalog";
 import { publicAIRecommendationsEnabled } from "@/lib/booking/public-ai-recommendations";
-import { parseWizardState } from "@/lib/booking/wizard-state";
 import { resolvePublicBookingOrganization } from "@/lib/organizations/public-booking";
 
 import AIPackageRecommender from "./_components/AIPackageRecommender";
@@ -33,14 +33,14 @@ export default async function BookStep1Page({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const rawSearchParams = await searchParams;
-  const state = parseWizardState(rawSearchParams);
+  const state = readPublicWizardState(rawSearchParams, "/book");
   const selectionNoticeRequested =
     rawSearchParams.selection_notice === "addon_changed";
   const organization = await resolvePublicBookingOrganization(
     state.organizationSlug,
   );
   if (!organization) notFound();
-  const scopedState = { ...state, organizationSlug: organization.slug };
+  const scopedState = await loadPrivateWizardState({ ...state, organizationSlug: organization.slug }, organization.id);
   const [catalog, examplesByItem] = await Promise.all([
     getActiveCatalog({ organizationId: organization.id }),
     getActiveCatalogExamples(organization.id),
@@ -101,6 +101,7 @@ export default async function BookStep1Page({
           aLaCarte={aLaCarte}
           addons={addons}
           organizationSlug={organization.slug}
+          initialState={scopedState}
         />
       ) : null}
 
@@ -111,6 +112,7 @@ export default async function BookStep1Page({
         selectedSlugs={selectedSlugs}
         selectedAddOnSlugs={selectedAddOnSlugs}
         squareFootage={scopedState.squareFootage}
+        includeBasement={scopedState.includeBasement}
       />
     </BookingBrandFrame>
   );
@@ -131,6 +133,8 @@ function toDTO(
     included_sqft: r.included_sqft,
     overage_increment_sqft: r.overage_increment_sqft,
     overage_price_cents: r.overage_price_cents,
+    video_overage_threshold_sqft: r.video_overage_threshold_sqft,
+    video_overage_price_cents: r.video_overage_price_cents,
     kind: r.kind,
     is_photo: r.is_photo,
     is_video: r.is_video,
