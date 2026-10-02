@@ -16,7 +16,10 @@ booking database, in filename order. Never apply the fresh-project setup there.
 2. `20260930185759_booking_lifecycle_notices.sql`: installs the durable notice
    table, service-only RPCs, leases and receipts. No historical notice backfill.
 3. `20260930202500_booking_quote_policy_guard.sql`: pauses new public and admin
-   aggregate requests, while retaining previously committed request replays.
+   aggregate requests, including old function bodies already in flight, while
+   retaining previously committed request replays. Write-boundary triggers fence
+   public booking inserts and the admin aggregate's final request receipt. A
+   rejected receipt rolls back the whole aggregate and its outbox effects.
 4. `20260930203055_booking_size_and_basement_policy.sql`: installs catalog fee
    fields and new snapshot calculations, then activates quote policy
    `2026-09-30-v1`. Existing snapshots/end times are not rewritten.
@@ -33,6 +36,21 @@ Committed admin create/edit retries compare business inputs independently of
 quote-version metadata, including during the pause. Stored historical request
 fingerprints remain unchanged; actor, tenant and changed-input checks still run.
 Admin create retries cannot provision another account.
+
+Renaming/replacing functions alone does not drain an invocation already running
+the old body. The write-boundary triggers are required. Their installation takes
+relation locks that wait for previously admitted writes to commit or roll back;
+old calls that reach a write after installation are rejected without the reviewed
+scoped quote context. The new admin implementation restores that context on
+success and failure, including edits that retain historical terms.
+
+Both guard installation and schema activation have a five-second lock timeout.
+Run each complete migration transactionally through the linked migration tool.
+If guard installation times out, its transaction must roll back completely: no
+pause is claimed yet, and activation must not run. If activation times out, leave
+the committed guard/pause intact, inspect the blocking transaction read-only and
+stop the release until a reviewed retry is possible. Do not kill customer
+transactions, skip a migration, remove triggers or bypass a lock to proceed.
 
 Until compatible application code is deployed, old instances can still show old
 quotes but cannot create a new booking at the changed terms. Coordinate this
@@ -58,6 +76,13 @@ browser gate tests real Server Action/RSC POST, private owner-checked rebooking,
 repeated rebooking cookie bounds, stale/expired anonymous confirmation rejection,
 session-cookie receipt rerender, receipt reload and expired-cookie POST replay against a
 synthetic Supabase transport. These do not prove live provider delivery.
+
+The concurrent PostgreSQL gate additionally starts actual old admin create/edit
+and public wrapper/core invocations before the migrations, holds their real
+request locks, commits the migration phases in another session and then releases
+them. It verifies rollback or unchanged historical replay at both read-committed
+and repeatable-read isolation. Separate admitted-writer cases prove the bounded
+DDL timeout rolls back guard installation rather than overtaking an old commit.
 
 Deploy only through the repository's guarded release process. Read back Ready
 status, exact SHA, canonical aliases and cron configuration afterward. Use safe

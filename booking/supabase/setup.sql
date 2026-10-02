@@ -12922,10 +12922,47 @@ grant execute on function public.finish_booking_lifecycle_notice(uuid, uuid, uui
 -- Install BEFORE price/duration activation. Old app instances and old browser
 -- submissions fail closed for new bookings; committed request replays survive.
 -- The versioned entry remains paused until the policy migration finishes.
+-- CREATE TRIGGER waits for prior writers' transaction locks. Bound that wait:
+-- a busy old writer aborts this entire migration rather than opening a gap.
+set local lock_timeout = '5s';
+
 create function public.current_booking_quote_policy()
 returns text language sql stable security invoker set search_path = '' as $$ select 'paused'::text $$;
 revoke all on function public.current_booking_quote_policy() from public,anon,authenticated;
 grant execute on function public.current_booking_quote_policy() to service_role;
+
+-- Replacing/renaming a function does NOT stop an invocation already executing
+-- its old body. Fence actual writes as well as new entry-point invocations.
+-- The public booking insert and the admin aggregate's final request receipt
+-- cover old public creates and ALL old admin creates/edits. A rejected receipt
+-- rolls back the complete admin transaction, including its outbox effects.
+-- Prior writes hold conflicting relation locks until commit; trigger creation
+-- therefore drains those writes before this pause can become visible. Calls
+-- that have not yet written see these triggers even if their old body is cached.
+-- This is compatibility context, not tenant authorization. Only the reviewed
+-- public/admin implementations set it, and restore it on success and failure.
+create function public.require_current_booking_quote_write()
+returns trigger language plpgsql security invoker set search_path = '' as $$
+begin
+  if public.current_booking_quote_policy() is distinct from '2026-09-30-v1'
+     or pg_catalog.current_setting('pixel_booking.quote_policy', true)
+        is distinct from '2026-09-30-v1' then
+    raise exception 'Booking quote changed; refresh and review before saving'
+      using errcode = 'PB005';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.require_current_booking_quote_write() from public,anon,authenticated;
+grant execute on function public.require_current_booking_quote_write() to service_role;
+
+create trigger bookings_public_quote_write_guard
+  before insert on public.bookings
+  for each row when (new.public_request_id is not null)
+  execute function public.require_current_booking_quote_write();
+create trigger admin_booking_requests_quote_write_guard
+  before insert on public.admin_booking_requests
+  for each row execute function public.require_current_booking_quote_write();
 
 create function public.create_public_booking_with_jobs_v2(
   p_quote_policy_version text,
@@ -13109,6 +13146,9 @@ grant execute on function public.save_admin_booking_aggregate(uuid,uuid,uuid,uui
 -- video package above 2,500 sq ft, plus 15 minutes ONCE for a finished basement.
 -- No historical line prices, booking end times, or integration payloads are rewritten.
 -- Other organizations keep disabled video fees; future template clones copy rules.
+-- If a reader/writer prevents schema activation, stop boundedly with the already
+-- installed pause intact. Never skip a lock, migration or version check.
+set local lock_timeout = '5s';
 
 alter table public.catalog_items
   add column video_overage_threshold_sqft integer,
@@ -13633,6 +13673,7 @@ declare
   v_duration integer; v_services text[]; v_addons text[];
   v_old public.bookings%rowtype; v_request public.admin_booking_requests%rowtype;
   v_fingerprint jsonb; v_result jsonb; v_retained boolean := false; v_version bigint;
+  previous_quote_policy text;
 begin
   if not exists(select 1 from public.profiles p join public.organization_members m on m.profile_id=p.id and m.organization_id=p_organization_id where p.id=p_actor_id and p.organization_id=p_organization_id and p.archived_at is null and m.role in ('owner','admin'))
     or not exists(select 1 from public.profiles p where p.id=v_owner and p.organization_id=p_organization_id and p.role='realtor' and p.archived_at is null) then
@@ -13678,6 +13719,12 @@ begin
     select greatest(sum(unit_duration_minutes*quantity),60),coalesce(array_agg(item_slug) filter(where item_kind<>'addon'),'{}'),coalesce(array_agg(item_slug) filter(where item_kind='addon'),'{}') into v_duration,v_services,v_addons from public.booking_line_items where booking_id=p_booking_id;
   end if;
   v_duration := v_duration + v_basement_minutes;
+  -- The write-boundary trigger rejects old bodies already in flight at cutover.
+  -- Retained-item edits use reviewed historical snapshots; new/replacement
+  -- selections already required the posted current quote version above.
+  previous_quote_policy := pg_catalog.current_setting('pixel_booking.quote_policy', true);
+  perform pg_catalog.set_config('pixel_booking.quote_policy', '2026-09-30-v1', true);
+  begin
   perform pg_advisory_xact_lock(hashtextextended(p_organization_id::text||':'||v_owner::text||':'||lower(btrim(p_input->>'street_address')),1));
   select id into v_property from public.properties where organization_id=p_organization_id and owner_id=v_owner and lower(btrim(street_address))=lower(btrim(p_input->>'street_address')) and city is not distinct from nullif(p_input->>'city','') and province is not distinct from coalesce(nullif(p_input->>'province',''),'ON') and postal_code is not distinct from nullif(p_input->>'postal_code','') order by created_at,id limit 1;
   if v_property is null then
@@ -13724,6 +13771,11 @@ begin
   select lifecycle_version into v_version from public.bookings where id=v_booking and organization_id=p_organization_id;
   v_result := jsonb_build_object('booking_id',v_booking,'property_id',v_property,'lifecycle_version',v_version,'replayed',false);
   insert into public.admin_booking_requests values(p_organization_id,p_request_id,p_actor_id,v_fingerprint,v_booking,v_result);
+  exception when others then
+    perform pg_catalog.set_config('pixel_booking.quote_policy', coalesce(previous_quote_policy, ''), true);
+    raise;
+  end;
+  perform pg_catalog.set_config('pixel_booking.quote_policy', coalesce(previous_quote_policy, ''), true);
   return v_result;
 end $$;
 revoke all on function public.save_admin_booking_aggregate(uuid,uuid,uuid,uuid,bigint,jsonb) from public,anon,authenticated;

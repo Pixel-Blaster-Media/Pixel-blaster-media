@@ -91,12 +91,16 @@ begin
   result := public.save_admin_booking_aggregate(org_id,actor_id,gen_random_uuid(),row_case.id,old_version,
    jsonb_build_object('owner_id',owner_id,'street_address','10 Quote Street','city','Toronto','postal_code','M1M1M1',
     'scheduled_at',base_slot+interval '30 days'+make_interval(mins=>row_case.minutes),'square_footage',4000,'catalog_item_ids',jsonb_build_array(row_case.catalog_id)));
+  if nullif(current_setting('pixel_booking.quote_policy',true),'') is not null then
+   raise exception 'Retained admin edit leaked quote compatibility context';
+  end if;
   if (select extract(epoch from scheduled_ends_at-scheduled_at)/60 from public.bookings where id=row_case.id) <> row_case.minutes
    or (select unit_price_cents from public.booking_line_items where booking_id=row_case.id) <> row_case.price then
    raise exception 'Admin edit changed retained historical terms: id %, actual duration %, expected %, actual price %, expected %',row_case.id,(select extract(epoch from scheduled_ends_at-scheduled_at)/60 from public.bookings where id=row_case.id),row_case.minutes,(select unit_price_cents from public.booking_line_items where booking_id=row_case.id),row_case.price;
   end if;
  end loop;
  -- A new admin booking snapshots the same fee and once-only basement duration.
+ perform set_config('pixel_booking.quote_policy','caller-context',true);
  result := public.save_admin_booking_aggregate(org_id,actor_id,gen_random_uuid(),null,null,
   jsonb_build_object('quote_policy_version','2026-09-30-v1','owner_id',owner_id,'street_address','20 Quote Street','city','Toronto','postal_code','M1M1M1',
    'scheduled_at',base_slot+interval '40 days','square_footage',2501,'include_basement',true,'catalog_item_ids',jsonb_build_array(ultimate_id,video_id)));
@@ -105,6 +109,28 @@ begin
   or (select extract(epoch from scheduled_ends_at-scheduled_at)/60 from public.bookings where id=quote_booking_id) <> 315 then
   raise exception 'Admin new quote differs from public policy';
  end if;
+ if current_setting('pixel_booking.quote_policy',true) is distinct from 'caller-context' then
+  raise exception 'Admin creation did not restore caller context';
+ end if;
+ saved_count := (select count(*) from public.bookings);
+ begin
+  perform public.save_admin_booking_aggregate_pre_policy(org_id,actor_id,gen_random_uuid(),null,null,
+   jsonb_build_object('owner_id',owner_id,'street_address','Must roll back old body','city','Toronto','postal_code','M1M1M1',
+    'scheduled_at',base_slot+interval '42 days','square_footage',2501,'catalog_item_ids',jsonb_build_array(video_id)));
+  raise exception 'Old admin body reused a leaked quote context';
+ exception when sqlstate 'PB005' then null; end;
+ begin
+  perform public.save_admin_booking_aggregate(org_id,actor_id,gen_random_uuid(),null,null,
+   jsonb_build_object('quote_policy_version','2026-09-30-v1','owner_id',owner_id,'street_address','Must roll back failed new body',
+    'scheduled_at',base_slot+interval '43 days','square_footage',2501,'contact_name','',
+    'catalog_item_ids',jsonb_build_array(video_id)));
+  raise exception 'Invalid contact reached commit';
+ exception when sqlstate 'PB002' then null; end;
+ if (select count(*) from public.bookings)<>saved_count
+  or current_setting('pixel_booking.quote_policy',true) is distinct from 'caller-context' then
+  raise exception 'Failed admin attempt changed bookings or caller context';
+ end if;
+ perform set_config('pixel_booking.quote_policy','',true);
  set constraints all immediate;
 end $$;
 reset role;

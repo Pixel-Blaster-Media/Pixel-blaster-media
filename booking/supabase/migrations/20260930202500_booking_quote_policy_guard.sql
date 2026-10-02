@@ -1,10 +1,47 @@
 -- Install BEFORE price/duration activation. Old app instances and old browser
 -- submissions fail closed for new bookings; committed request replays survive.
 -- The versioned entry remains paused until the policy migration finishes.
+-- CREATE TRIGGER waits for prior writers' transaction locks. Bound that wait:
+-- a busy old writer aborts this entire migration rather than opening a gap.
+set local lock_timeout = '5s';
+
 create function public.current_booking_quote_policy()
 returns text language sql stable security invoker set search_path = '' as $$ select 'paused'::text $$;
 revoke all on function public.current_booking_quote_policy() from public,anon,authenticated;
 grant execute on function public.current_booking_quote_policy() to service_role;
+
+-- Replacing/renaming a function does NOT stop an invocation already executing
+-- its old body. Fence actual writes as well as new entry-point invocations.
+-- The public booking insert and the admin aggregate's final request receipt
+-- cover old public creates and ALL old admin creates/edits. A rejected receipt
+-- rolls back the complete admin transaction, including its outbox effects.
+-- Prior writes hold conflicting relation locks until commit; trigger creation
+-- therefore drains those writes before this pause can become visible. Calls
+-- that have not yet written see these triggers even if their old body is cached.
+-- This is compatibility context, not tenant authorization. Only the reviewed
+-- public/admin implementations set it, and restore it on success and failure.
+create function public.require_current_booking_quote_write()
+returns trigger language plpgsql security invoker set search_path = '' as $$
+begin
+  if public.current_booking_quote_policy() is distinct from '2026-09-30-v1'
+     or pg_catalog.current_setting('pixel_booking.quote_policy', true)
+        is distinct from '2026-09-30-v1' then
+    raise exception 'Booking quote changed; refresh and review before saving'
+      using errcode = 'PB005';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.require_current_booking_quote_write() from public,anon,authenticated;
+grant execute on function public.require_current_booking_quote_write() to service_role;
+
+create trigger bookings_public_quote_write_guard
+  before insert on public.bookings
+  for each row when (new.public_request_id is not null)
+  execute function public.require_current_booking_quote_write();
+create trigger admin_booking_requests_quote_write_guard
+  before insert on public.admin_booking_requests
+  for each row execute function public.require_current_booking_quote_write();
 
 create function public.create_public_booking_with_jobs_v2(
   p_quote_policy_version text,

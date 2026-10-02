@@ -144,6 +144,7 @@ jobs:
           bash scripts/generate-supabase-setup.sh
           git diff --exit-code -- supabase/setup.sql
           node --test tests/postgres/clean-bootstrap.test.mjs
+          node --test tests/postgres/booking-quote-cutover-concurrency.test.mjs
           node --test tests/postgres/audit-runner-fail-closed.test.mjs
       - name: Run disposable PostgreSQL behavior suites
         run: |
