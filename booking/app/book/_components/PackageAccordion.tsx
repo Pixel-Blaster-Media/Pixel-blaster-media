@@ -4,37 +4,15 @@ import { getCatalogItemPrice } from "@/lib/booking/quote";
 import { publicWizardQuery } from "@/lib/booking/wizard-state";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 
-import type {
-  CatalogItemDTO,
-  CatalogItemExampleDTO,
-} from "@/lib/booking/catalog-dto";
-import {
-  getCatalogSampleGroups,
-  type CatalogSampleGroup,
-} from "@/lib/booking/catalog-sample-groups";
+import type { CatalogItemDTO } from "@/lib/booking/catalog-dto";
+import { getCatalogSampleGroups } from "@/lib/booking/catalog-sample-groups";
 import { isAddonEligible } from "@/lib/booking/catalog-rules";
 import BookingTotalBar from "./BookingTotalBar";
-import {
-  findCommonPackageLines,
-  packageDescriptionLines,
-  withoutCommonPackageLines,
-} from "./package-description";
+import { packageDescriptionLines } from "./package-description";
 
-/**
- * Step 1 picker — two collapsible sections (Bundles, A-La-Carte) plus
- * auto-revealed Add-ons when the selected services satisfy their rules.
- *
- * State is URL-driven so the "Continue" button can just link to
- * /book/property with the same query params. Each toggle updates
- * `?services=...` / `?add_ons=...` via router.replace (no scroll jump).
- *
- * Why accordion: the Acuity page's 4 bundles + 7 a-la-carte items eat
- * a lot of screen on mobile. Collapsing to two section titles lets
- * someone scan the high-level choice ("bundle vs custom") before
- * drilling in.
- */
+/** URL-driven selection, with independent native details and example accordions. */
 export default function PackageAccordion({
   bundles,
   aLaCarte,
@@ -66,11 +44,6 @@ export default function PackageAccordion({
     [selectedSlugs, aLaCarte],
   );
   const [aLaCarteOpen, setALaCarteOpen] = useState(hasALaCarte);
-  const [exampleViewer, setExampleViewer] = useState<{
-    item: CatalogItemDTO;
-    group: CatalogSampleGroup;
-  } | null>(null);
-
   const bySlug = useMemo(() => {
     const m = new Map<string, CatalogItemDTO>();
     for (const r of [...bundles, ...aLaCarte, ...addons]) m.set(r.slug, r);
@@ -84,11 +57,6 @@ export default function PackageAccordion({
   const visibleAddons = addons.filter((addon) =>
     isAddonEligible(addon, selectedServices),
   );
-  const commonPackageLines = useMemo(
-    () => findCommonPackageLines(bundles.map((bundle) => bundle.description)),
-    [bundles],
-  );
-
   function updateUrl(nextServices: string[], nextAddons: string[]) {
     const next = publicWizardQuery(new URLSearchParams(params.toString()));
     // Prune addons that no longer qualify after the service change.
@@ -142,303 +110,134 @@ export default function PackageAccordion({
     : "/book/property";
 
   return (
-    <div className="space-y-5">
-      <section id="packages" className="booking-package-section">
-        <div className="booking-section-heading">
+    <div className="booking-refresh-picker">
+      <section id="packages" aria-labelledby="package-heading">
+        <div className="booking-refresh-section-heading">
           <div>
-            <p className="booking-section-kicker">Packages</p>
-            <h3>
-              Start with the closest fit.
-            </h3>
-            <p>
-              Pick a ready-made package or build a custom booking below.
-            </p>
+            <h2 id="package-heading">Choose your package</h2>
+            <p>Start with the right fit for your listing.</p>
           </div>
-          {hasBundle ? (
-            <button
-              type="button"
-              onClick={() => {
-                const withoutBundles = selectedSlugs.filter(
-                  (s) => !bundles.some((b) => b.slug === s),
-                );
-                updateUrl(withoutBundles, selectedAddOnSlugs);
-              }}
-              className="rounded-full border border-realtor-primary/25 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-muted transition hover:border-realtor-primary/50 hover:text-realtor-primary"
-            >
-              Clear package
-            </button>
-          ) : null}
+          <p>{squareFootage ? `Prices for ${squareFootage.toLocaleString()} sqft · CAD` : "Base prices in CAD"}</p>
         </div>
-
-        {commonPackageLines.length > 0 ? (
-          <aside className="mb-4 border-y border-realtor-primary/12 py-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-realtor-primary">
-              Every package includes
-            </p>
-            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-realtor-muted">
-              {commonPackageLines.map((line) => (
-                <li key={line} className="flex items-center gap-1.5">
-                  <span aria-hidden="true" className="text-realtor-primary">✓</span>
-                  <span>{line}</span>
-                </li>
-              ))}
-            </ul>
-          </aside>
-        ) : null}
-
-        <ul className="booking-package-grid">
+        <ul className="booking-refresh-grid">
           {bundles.map((b) => {
             const selected = selectedSlugs.includes(b.slug);
-            const uniquePackageLines = withoutCommonPackageLines(
-              b.description,
-              commonPackageLines,
-            );
             return (
               <li key={b.id}>
-                <article
-                  onClick={() => selectBundle(b.slug)}
-                  className={
-                    "realtor-package-card booking-package-card flex h-full min-w-0 cursor-pointer flex-col rounded-[1.65rem] border p-4 transition md:p-5 " +
-                    (selected
-                      ? "realtor-package-card-selected"
-                      : b.highlight
-                        ? "realtor-package-card-featured"
-                        : "")
-                  }
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-base font-semibold text-realtor-text md:text-lg">
-                          {b.name}
-                        </h4>
-                        {b.badge ? (
-                          <span className="rounded-full border border-realtor-primary/35 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">
-                            {b.badge}
-                          </span>
-                        ) : null}
-                      </div>
-                      {b.ideal_for ? (
-                        <p className="mt-1 text-sm leading-6 text-realtor-muted">
-                          {b.ideal_for}
-                        </p>
-                      ) : (
-                        <p className="mt-1 text-sm leading-6 text-realtor-muted">
-                          {uniquePackageLines[0] ??
-                            "A practical fit for a standard real estate listing."}
-                        </p>
-                      )}
+                <article className="booking-refresh-card" data-selected={selected} aria-labelledby={`package-${b.slug}`}>
+                  <div className="booking-refresh-card-heading">
+                    <div>
+                      <h3 id={`package-${b.slug}`}>{b.name}</h3>
+                      {b.ideal_for ? <p>{b.ideal_for}</p> : null}
                     </div>
-                    <div className="flex shrink-0 items-start gap-3">
-                      <div className="rounded-2xl bg-white px-3 py-2 text-right ring-1 ring-realtor-primary/20">
-                        <p className="text-lg font-semibold text-realtor-text md:text-xl">
-                          ${(priceForSqft(b, squareFootage) / 100).toFixed(0)}
-                        </p>
-                        <p className="text-[11px] uppercase tracking-wider text-realtor-muted">
-                          {priceForSqft(b, squareFootage) !== b.price_cents
-                            ? `${squareFootage?.toLocaleString()} sqft`
-                            : formatMinutes(b.duration_minutes)}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        aria-pressed={selected}
-                        aria-label={`${selected ? "Selected" : "Select"} ${b.name}`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          selectBundle(b.slug);
-                        }}
-                        className={
-                          "mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
-                          (selected
-                            ? "border-realtor-primary bg-realtor-primary text-white shadow-sm"
-                            : "border-realtor-primary/35 bg-white text-transparent")
-                        }
-                      >
-                        ✓
-                      </button>
+                    <div className="booking-refresh-price">
+                      <strong>${(priceForSqft(b, squareFootage) / 100).toFixed(0)}</strong>
+                      <span>{formatMinutes(b.duration_minutes)} on-site</span>
                     </div>
                   </div>
-
-                  <div className="mt-5 flex flex-wrap items-center gap-2">
-                    <MediaBadges
-                      item={b}
-                      onOpen={(group) => setExampleViewer({ item: b, group })}
-                    />
-                    {sqftRuleText(b) ? (
-                      <span className={`${capabilityPillClass} border-realtor-primary/20 text-realtor-muted`}>
-                        Sqft pricing
-                      </span>
-                    ) : null}
-                  </div>
-
-                  {sqftRuleText(b) ? (
-                    <p className="mt-3 rounded-2xl border border-realtor-primary/20 bg-white px-3 py-2 text-xs font-medium text-realtor-text">
-                      {sqftRuleText(b)}
-                    </p>
-                  ) : null}
-
-                  {uniquePackageLines.length > 0 ? (
-                    <PackageDetails lines={uniquePackageLines} />
-                  ) : null}
-                </article>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-
-      <AccordionSection
-        open={aLaCarteOpen}
-        onToggle={() => setALaCarteOpen((v) => !v)}
-        title="Build a custom order"
-        subtitle={
-          hasALaCarte
-            ? `${selectedSlugs.filter((s) => aLaCarte.some((a) => a.slug === s)).length} picked`
-            : "Choose individual services instead"
-        }
-        accent={hasALaCarte}
-      >
-        <ul className="grid gap-2">
-          {aLaCarte.map((a) => {
-            const selected = selectedSlugs.includes(a.slug);
-            return (
-              <li key={a.id}>
-                <article
-                  onClick={() => toggleALaCarte(a.slug)}
-                  className={
-                    "realtor-service-tile flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition " +
-                    (selected ? "realtor-service-tile-selected" : "")
-                  }
-                >
                   <button
                     type="button"
                     aria-pressed={selected}
-                    aria-label={`${selected ? "Remove" : "Add"} ${a.name}`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      toggleALaCarte(a.slug);
-                    }}
-                    className={
-                      "mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
-                      (selected
-                        ? "border-realtor-primary bg-realtor-primary text-white shadow-sm"
-                        : "border-realtor-primary/35 bg-white text-transparent")
-                    }
+                    aria-label={selected ? `Selected ${b.name}` : `Choose package: ${b.name}`}
+                    onClick={() => selectBundle(b.slug)}
+                    className="booking-refresh-select"
                   >
-                    ✓
+                    {selected ? <><span aria-hidden="true">✓</span> Selected</> : "Choose package"}
                   </button>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2 pr-2">
-                      <p className="font-semibold leading-5 text-realtor-text">
-                        {a.name}
-                      </p>
-                      <MediaBadges
-                        item={a}
-                        onOpen={(group) => setExampleViewer({ item: a, group })}
-                      />
-                      {selected ? (
-                        <span className="rounded-full bg-realtor-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
-                          Added
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="mt-1 text-xs text-realtor-muted">
-                      {a.ideal_for ?? shortDescription(a.description)}
-                    </p>
-                  </div>
-                  <div className="shrink-0 rounded-2xl bg-white px-3 py-2 text-right ring-1 ring-realtor-primary/20">
-                    <p className="text-sm font-semibold text-realtor-text">
-                      ${(priceForSqft(a, squareFootage) / 100).toFixed(0)}
-                    </p>
-                    <p className="text-[10px] uppercase tracking-wider text-realtor-muted">
-                      {formatMinutes(a.duration_minutes)}
-                    </p>
-                  </div>
+                  <PackageDetails item={b} />
                 </article>
               </li>
             );
           })}
         </ul>
-      </AccordionSection>
+        {hasBundle ? (
+          <button
+            type="button"
+            className="booking-refresh-text-button"
+            onClick={() => {
+              const withoutBundles = selectedSlugs.filter((s) => !bundles.some((b) => b.slug === s));
+              updateUrl(withoutBundles, selectedAddOnSlugs);
+            }}
+          >Clear package</button>
+        ) : null}
+      </section>
 
-      {/* Add-ons auto-reveal when the selected services satisfy their rules. */}
+      <section className="booking-refresh-custom">
+        <h2>
+          <button
+            type="button"
+            onClick={() => setALaCarteOpen((value) => !value)}
+            aria-expanded={aLaCarteOpen}
+            aria-controls="custom-services"
+            className="booking-refresh-custom-toggle"
+          >
+            <span>Build a custom order<span className="booking-refresh-custom-subtitle">
+              {hasALaCarte
+                ? `${selectedSlugs.filter((s) => aLaCarte.some((a) => a.slug === s)).length} services selected`
+                : "Choose individual services, or add them to your package."}
+            </span></span>
+            <Chevron open={aLaCarteOpen} />
+          </button>
+        </h2>
+        <div id="custom-services" hidden={!aLaCarteOpen}>
+          <ul className="booking-refresh-grid booking-refresh-service-grid">
+            {aLaCarte.map((a) => {
+              const selected = selectedSlugs.includes(a.slug);
+              return (
+                <li key={a.id}>
+                  <article className="booking-refresh-card booking-refresh-service" data-selected={selected} aria-labelledby={`service-${a.slug}`}>
+                    <div className="booking-refresh-card-heading">
+                      <div><h3 id={`service-${a.slug}`}>{a.name}</h3>{a.ideal_for ? <p>{a.ideal_for}</p> : null}</div>
+                      <div className="booking-refresh-price">
+                        <strong>${(priceForSqft(a, squareFootage) / 100).toFixed(0)}</strong>
+                        <span>{formatMinutes(a.duration_minutes)} on-site</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      aria-pressed={selected}
+                      aria-label={selected ? `Added: ${a.name} (remove service)` : `Add service: ${a.name}`}
+                      onClick={() => toggleALaCarte(a.slug)}
+                      className="booking-refresh-select"
+                    >{selected ? <><span aria-hidden="true">✓</span> Added</> : "Add service"}</button>
+                    <PackageDetails item={a} label="Service details" />
+                  </article>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </section>
+
       {visibleAddons.length > 0 ? (
-        <section className="realtor-warm-panel rounded-2xl p-4">
-          <div>
-            <p className="text-sm font-semibold text-realtor-text">Add-ons</p>
-            <p className="mt-1 text-xs text-realtor-muted">
-              These appear when they make sense for the services selected.
-            </p>
+        <section aria-labelledby="addons-heading">
+          <div className="booking-refresh-section-heading">
+            <div><h2 id="addons-heading">Make it yours</h2><p>Add-ons available with your selection.</p></div>
           </div>
-          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+          <ul className="booking-refresh-grid booking-refresh-service-grid">
             {visibleAddons.map((a) => {
               const selected = selectedAddOnSlugs.includes(a.slug);
               return (
                 <li key={a.id}>
-                  <article
-                    onClick={() => toggleAddon(a.slug)}
-                    className={
-                      "flex h-full cursor-pointer items-start gap-3 rounded-2xl p-3 transition " +
-                      (selected
-                        ? "realtor-choice-selected"
-                        : "realtor-choice hover:border-realtor-primary/50")
-                    }
-                  >
-
+                  <article className="booking-refresh-card booking-refresh-service" data-selected={selected} aria-labelledby={`addon-${a.slug}`}>
+                    <div className="booking-refresh-card-heading">
+                      <h3 id={`addon-${a.slug}`}>{a.name}</h3>
+                      <div className="booking-refresh-price"><strong>+${(priceForSqft(a, squareFootage) / 100).toFixed(0)}</strong><span>{formatMinutes(a.duration_minutes)} on-site</span></div>
+                    </div>
                     <button
                       type="button"
                       aria-pressed={selected}
-                      aria-label={`${selected ? "Remove" : "Add"} ${a.name}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        toggleAddon(a.slug);
-                      }}
-                      className={
-                        "mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold transition focus:outline-none focus:ring-2 focus:ring-realtor-primary/35 " +
-                        (selected
-                          ? "border-realtor-primary bg-realtor-primary text-white"
-                          : "border-realtor-primary/35 bg-white text-transparent")
-                      }
-                    >
-                      ✓
-                    </button>
-                    <div className="min-w-0 flex-1 text-sm">
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="font-semibold text-realtor-text">
-                          {a.name}
-                        </span>
-                        <span className="font-semibold text-realtor-primary">
-                          +${(priceForSqft(a, squareFootage) / 100).toFixed(0)}
-                        </span>
-                      </div>
-                      {a.description ? (
-                        <p className="mt-1 text-xs text-realtor-muted">
-                          {a.description}
-                        </p>
-                      ) : null}
-                      <div className="mt-2">
-                        <MediaBadges
-                          item={a}
-                          onOpen={(group) => setExampleViewer({ item: a, group })}
-                        />
-                      </div>
-                    </div>
+                      aria-label={selected ? `Added: ${a.name} (remove add-on)` : `Add to booking: ${a.name}`}
+                      onClick={() => toggleAddon(a.slug)}
+                      className="booking-refresh-select"
+                    >{selected ? <><span aria-hidden="true">✓</span> Added</> : "Add to booking"}</button>
+                    <PackageDetails item={a} label="Add-on details" />
                   </article>
                 </li>
               );
             })}
           </ul>
         </section>
-      ) : null}
-
-      {exampleViewer ? (
-        <ExampleViewer
-          key={`${exampleViewer.item.id}:${exampleViewer.group.key}`}
-          item={exampleViewer.item}
-          group={exampleViewer.group}
-          onClose={() => setExampleViewer(null)}
-        />
       ) : null}
 
       <BookingTotalBar
@@ -449,390 +248,77 @@ export default function PackageAccordion({
         includeBasement={includeBasement}
         href={continueHref}
         ctaLabel="Continue"
-        note={
-          squareFootage
-            ? undefined
-            : "Square footage adjustments appear after property details."
-        }
+        selectionSummary
+        note={squareFootage ? undefined : "Final total shown before confirmation."}
       />
     </div>
   );
 }
 
-function ExampleViewer({
-  item,
-  group,
-  onClose,
-}: {
-  item: CatalogItemDTO;
-  group: CatalogSampleGroup;
-  onClose: () => void;
-}) {
-  const examples = group.examples;
-  const modalRef = useRef<HTMLDialogElement>(null);
-  const dialogRef = useRef<HTMLElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-  const onCloseRef = useRef(onClose);
-  const [selectedId, setSelectedId] = useState(examples[0]?.id ?? "");
-  const selected =
-    examples.find((example) => example.id === selectedId) ?? examples[0];
-
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
-
-  useEffect(() => {
-    previousFocusRef.current = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    const handleKeyboard = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onCloseRef.current();
-        return;
-      }
-      if (event.key === "Tab") {
-        const focusable = Array.from(
-          dialogRef.current?.querySelectorAll<HTMLElement>(
-            'button:not([disabled]), a[href], iframe, [tabindex]:not([tabindex="-1"])',
-          ) ?? [],
-        );
-        if (focusable.length === 0) {
-          event.preventDefault();
-          dialogRef.current?.focus();
-          return;
-        }
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first.focus();
-        }
-      }
-    };
-    document.addEventListener("keydown", handleKeyboard);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    if (!modalRef.current?.open) modalRef.current?.showModal();
-    requestAnimationFrame(() => dialogRef.current?.focus());
-    return () => {
-      document.removeEventListener("keydown", handleKeyboard);
-      document.body.style.overflow = previousOverflow;
-      previousFocusRef.current?.focus();
-    };
-  }, []);
-
-  if (!selected) return null;
-  return (
-    <dialog
-      ref={modalRef}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="catalog-example-title"
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-      className="fixed inset-0 !m-0 h-dvh max-h-none w-full max-w-none items-center justify-center bg-transparent p-4 open:flex backdrop:bg-realtor-text/55 backdrop:backdrop-blur-sm sm:p-5"
-      onMouseDown={(event) => {
-        if (event.currentTarget === event.target) onClose();
-      }}
-    >
-      <section
-        ref={dialogRef}
-        tabIndex={-1}
-        className="max-h-[92dvh] w-full max-w-3xl overscroll-contain overflow-y-auto rounded-[1.75rem] bg-realtor-surface p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl sm:p-5"
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-realtor-primary">
-              {item.name}
-            </p>
-            <h2 id="catalog-example-title" className="mt-1 text-xl font-semibold text-realtor-text">
-              {selected.title}
-            </h2>
-            {selected.description ? (
-              <p className="mt-1 text-sm text-realtor-muted">{selected.description}</p>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close example"
-            className="tap-target flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-realtor-primary/20 bg-white text-xl text-realtor-text"
-          >
-            ×
-          </button>
-        </div>
-
-        {examples.length > 1 ? (
-          <div className="mt-4 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Available examples">
-            {examples.map((example) => (
-              <button
-                key={example.id}
-                id={`catalog-example-tab-${example.id}`}
-                type="button"
-                role="tab"
-                aria-selected={example.id === selected.id}
-                aria-controls={`catalog-example-panel-${example.id}`}
-                tabIndex={example.id === selected.id ? 0 : -1}
-                onClick={() => setSelectedId(example.id)}
-                onKeyDown={(event) => {
-                  const current = examples.findIndex((candidate) => candidate.id === example.id);
-                  let next = current;
-                  if (event.key === "ArrowRight") next = (current + 1) % examples.length;
-                  else if (event.key === "ArrowLeft") next = (current - 1 + examples.length) % examples.length;
-                  else if (event.key === "Home") next = 0;
-                  else if (event.key === "End") next = examples.length - 1;
-                  else return;
-                  event.preventDefault();
-                  const nextExample = examples[next];
-                  if (!nextExample) return;
-                  setSelectedId(nextExample.id);
-                  requestAnimationFrame(() => {
-                    document.getElementById(`catalog-example-tab-${nextExample.id}`)?.focus();
-                  });
-                }}
-                className={
-                  "tap-target shrink-0 rounded-full border px-3 py-2 text-xs font-semibold transition " +
-                  (example.id === selected.id
-                    ? "border-realtor-primary bg-realtor-primary text-white"
-                    : "border-realtor-primary/20 bg-white text-realtor-text")
-                }
-              >
-                {example.title}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        <ExampleFrame example={selected} hasTabs={examples.length > 1} />
-      </section>
-    </dialog>
-  );
+function Chevron({ open }: { open?: boolean }) {
+  return <svg className="booking-refresh-chevron" data-open={open} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>;
 }
 
-function ExampleFrame({
-  example,
-  hasTabs,
-}: {
-  example: CatalogItemExampleDTO;
-  hasTabs: boolean;
-}) {
-  const embedUrl = example.embed_url;
-  const trustedEmbed = embedUrl ? trustedExampleEmbed(embedUrl) : false;
-  return (
-    <div className="mt-4">
-      {embedUrl ? (
-        <div
-          id={`catalog-example-panel-${example.id}`}
-          role="tabpanel"
-          aria-labelledby={hasTabs ? `catalog-example-tab-${example.id}` : undefined}
-          aria-label={hasTabs ? undefined : example.title}
-          className={
-            "relative overflow-hidden rounded-2xl bg-black shadow-inner "
-            + (example.orientation === "portrait"
-              ? "mx-auto aspect-[9/16] w-full max-w-sm"
-              : "aspect-video w-full")
-          }
-        >
-          <iframe
-            key={example.id}
-            src={embedUrl}
-            title={example.title}
-            className="absolute inset-0 h-full w-full border-0"
-            loading="lazy"
-            allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-            allowFullScreen
-            referrerPolicy="strict-origin-when-cross-origin"
-            sandbox={
-              trustedEmbed
-                ? "allow-forms allow-popups allow-presentation allow-same-origin allow-scripts"
-                : "allow-presentation allow-scripts"
-            }
-          />
-        </div>
-      ) : (
-        <div
-          id={`catalog-example-panel-${example.id}`}
-          role="tabpanel"
-          aria-labelledby={hasTabs ? `catalog-example-tab-${example.id}` : undefined}
-          aria-label={hasTabs ? undefined : example.title}
-          className="rounded-2xl border border-realtor-primary/15 bg-white p-5 text-sm text-realtor-muted"
-        >
-          This example opens on the provider’s website. Your booking selections will remain here.
-        </div>
-      )}
-      {example.external_url ? (
-        <a
-          href={example.external_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-3 inline-flex min-h-11 items-center text-xs font-semibold text-realtor-primary hover:text-realtor-text"
-        >
-          Open full example in a new tab ↗
-        </a>
-      ) : null}
-    </div>
-  );
-}
-
-function trustedExampleEmbed(raw: string): boolean {
-  try {
-    const host = new URL(raw).hostname.toLowerCase();
-    return (
-      host === "www.youtube-nocookie.com" ||
-      host === "player.vimeo.com" ||
-      host === "youriguide.com" ||
-      host.endsWith(".youriguide.com") ||
-      host.endsWith(".cloudflarestream.com")
-    );
-  } catch {
-    return false;
-  }
-}
-
-const capabilityPillClass =
-  "inline-flex h-7 shrink-0 items-center rounded-full border bg-white px-2.5 text-[10px] font-semibold uppercase leading-none tracking-wider";
-
-function MediaBadges({
-  item,
-  onOpen,
-}: {
-  item: CatalogItemDTO;
-  onOpen: (group: CatalogSampleGroup) => void;
-}) {
+function PackageDetails({ item, label = "Package details" }: { item: CatalogItemDTO; label?: string }) {
+  const lines = packageDescriptionLines(item.description);
   const groups = getCatalogSampleGroups(item);
-  if (groups.length === 0) return null;
-
+  const rule = sqftRuleText(item);
   return (
-    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-      {groups.map((group) => group.examples.length > 0 ? (
-        <button
-          key={group.key}
-          type="button"
-          aria-label={`View ${group.examples.length} ${group.label} ${group.examples.length === 1 ? "sample" : "samples"} for ${item.name}`}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onOpen(group);
-          }}
-          onKeyDown={(event) => event.stopPropagation()}
-          className="tap-target group inline-flex items-center rounded-full focus:outline-none"
-        >
-          <span className={`${capabilityPillClass} gap-1 border-realtor-primary/40 text-realtor-primary transition group-hover:border-realtor-primary/65 group-hover:bg-realtor-primary/5 group-focus-visible:ring-2 group-focus-visible:ring-realtor-primary/35`}>
-            <span aria-hidden="true" className="text-[9px]">▶</span>
-            <span>{group.label}</span>
-            {group.examples.length > 1 ? <span aria-hidden="true">· {group.examples.length}</span> : null}
-          </span>
-        </button>
-      ) : (
-        <span
-          key={group.key}
-          className={`${capabilityPillClass} border-realtor-primary/25 text-realtor-primary`}
-        >
-          {group.label}
-        </span>
-      ))}
-    </div>
+    <details className="booking-refresh-details">
+      <summary><span>{label}</span><Chevron /></summary>
+      <div className="booking-refresh-detail-body">
+        {groups.length > 0 ? <p className="booking-refresh-media-list">{groups.map((group) => group.label).join(" · ")}</p> : null}
+        {lines.length > 0 ? (
+          <ul className="booking-refresh-inclusions">
+            {lines.map((line, index) => <li key={`${index}:${line}`}><span aria-hidden="true">✓</span><span>{line}</span></li>)}
+          </ul>
+        ) : null}
+        {rule ? <p className="booking-refresh-pricing-rule">{rule}</p> : null}
+        {groups.length > 0 ? (
+          <details className="booking-refresh-examples">
+            <summary><span>View examples</span><Chevron /></summary>
+            <ul>
+              {groups.map((group) => {
+                const examples = group.examples.filter((example) => sampleHref(example.external_url ?? example.embed_url));
+                return <li key={group.key} className="booking-refresh-example-group">
+                  <span>{group.label}</span>
+                  <div>
+                    {examples.length > 0 ? examples.map((example) => {
+                      const actionLabel = examples.length > 1 ? example.title : example.kind === "video" ? "Watch sample" : group.key === "iguide" ? "Explore iGUIDE" : "View example";
+                      return (
+                      <a
+                        key={example.id}
+                        href={sampleHref(example.external_url ?? example.embed_url)!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`${actionLabel}${examples.length === 1 ? `: ${example.title}` : ""} — ${group.label} for ${item.name} (opens in a new tab)`}
+                      >
+                        {example.kind === "video" ? <span aria-hidden="true">▶</span> : null}
+                        <span>{actionLabel}</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M14 3h7v7M21 3l-11 11M10 3H3v18h18v-7" /></svg>
+                      </a>
+                      );
+                    }) : <span className="booking-refresh-example-unavailable">No example yet</span>}
+                  </div>
+                </li>;
+              })}
+            </ul>
+            <p>Examples open in a new tab. Your selection stays here.</p>
+          </details>
+        ) : null}
+      </div>
+    </details>
   );
 }
 
-function PackageDetails({ lines }: { lines: string[] }) {
-  const content = lines.length > 0 ? (
-    <ul className="grid gap-1.5 text-xs text-realtor-muted sm:grid-cols-2">
-      {lines.map((line) => (
-        <li key={line} className="flex gap-2">
-          <span className="mt-0.5 text-realtor-primary">✓</span>
-          <span>{line}</span>
-        </li>
-      ))}
-    </ul>
-  ) : (
-    <p className="text-xs text-realtor-muted">
-      Package details will appear here once configured.
-    </p>
-  );
-
-  const boxClass =
-    "booking-package-details mt-3 rounded-2xl border border-realtor-primary/20 bg-white p-3";
-
-  return (
-    <>
-      <div className={`${boxClass} hidden md:block`}>{content}</div>
-      <details
-        className={`${boxClass} md:hidden`}
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => event.stopPropagation()}
-      >
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-realtor-primary [&::-webkit-details-marker]:hidden">
-          <span>Package details</span>
-          <span aria-hidden="true">▾</span>
-        </summary>
-        <div className="mt-3">{content}</div>
-      </details>
-    </>
-  );
-}
-
-function AccordionSection({
-  title,
-  subtitle,
-  open,
-  accent,
-  onToggle,
-  children,
-}: {
-  title: string;
-  subtitle: string;
-  open: boolean;
-  accent: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <section
-      className={
-        "rounded-2xl transition " +
-        (accent
-          ? "realtor-green-panel"
-          : "realtor-elevated-panel")
-      }
-    >
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 rounded-xl px-4 py-3 text-left transition hover:bg-realtor-primary/5"
-      >
-        <div>
-          <p className="text-sm font-semibold text-realtor-text">{title}</p>
-          <p className="text-[11px] uppercase tracking-wider text-realtor-muted">
-            {subtitle}
-          </p>
-        </div>
-        <span
-          aria-hidden="true"
-          className={
-            "text-xs text-realtor-muted transition " + (open ? "rotate-180" : "")
-          }
-        >
-          ▾
-        </span>
-      </button>
-      {open ? (
-        <div className="border-t border-realtor-primary/10 px-4 pb-4 pt-3">{children}</div>
-      ) : null}
-    </section>
-  );
-}
-
-function shortDescription(description: string): string {
-  const first = packageDescriptionLines(description)[0];
-  return first ?? "Good fit for a standard real estate media booking.";
+function sampleHref(raw: string | null): string | undefined {
+  if (!raw) return undefined;
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" && !url.username && !url.password ? raw : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function formatMinutes(minutes: number): string {

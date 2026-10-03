@@ -286,18 +286,12 @@ test("catalog examples cross schema, admin, public booking, and SaaS cloning bou
   assert.match(dto, /orientation: "portrait" \| "landscape"/);
   assert.match(dto, /examples: CatalogItemExampleDTO\[\]/);
   assert.match(page, /getActiveCatalogExamples/);
-  assert.match(picker, /MediaBadges/);
-  assert.match(picker, /role="dialog"/);
-  assert.match(picker, /className="fixed inset-0 !m-0 h-dvh max-h-none[^\"]*items-center[^\"]*p-4/);
-  assert.doesNotMatch(picker, /className="fixed inset-0 !m-0 h-dvh max-h-none[^\"]*items-end/);
-  assert.match(picker, /max-h-\[92dvh\] w-full max-w-3xl[^\"]*overscroll-contain[^\"]*rounded-\[1\.75rem\]/);
-  assert.match(picker, /example\.orientation === "portrait"/);
-  assert.match(picker, /aspect-\[9\/16\]/);
-  assert.match(picker, /event\.stopPropagation\(\)/);
-  assert.match(picker, /previousFocusRef/);
-  assert.match(picker, /event\.key === "Tab"/);
-  assert.match(picker, /dialogRef\.current\?\.focus/);
-  assert.match(picker, /trustedExampleEmbed/);
+  assert.match(picker, /<PackageDetails item=/);
+  assert.match(picker, /booking-refresh-examples/);
+  assert.match(picker, /target="_blank"/);
+  assert.match(picker, /rel="noopener noreferrer"/);
+  assert.match(picker, /sampleHref\(example.external_url \?\? example.embed_url\)/);
+  assert.doesNotMatch(picker, /<iframe|<dialog/);
   assert.match(editor, /Upload video/);
   assert.match(editor, /Use existing video/);
   assert.match(editor, /Recover video details/);
@@ -352,7 +346,7 @@ test("catalog video processing checks use an HTTP method implemented by the comp
   );
 });
 
-test("catalog samples live in grouped capability pills instead of a duplicate example action", async () => {
+test("catalog samples retain configured service groups inside the nested examples disclosure", async () => {
   const [picker, sampleGroups, dto, databaseTypes, editor, actions, migration, companySetup, dedicatedRunner, fullRunner, behavior] = await Promise.all([
     readFile(new URL("../app/book/_components/PackageAccordion.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/booking/catalog-sample-groups.ts", import.meta.url), "utf8"),
@@ -368,9 +362,9 @@ test("catalog samples live in grouped capability pills instead of a duplicate ex
   ]);
 
   assert.doesNotMatch(picker, /function ViewExampleButton/);
-  assert.doesNotMatch(picker, />View examples?</);
+  assert.match(picker, /<span>View examples<\/span>/);
   assert.match(picker, /getCatalogSampleGroups/);
-  assert.match(picker, /View \$\{group\.examples\.length\} \$\{group\.label\}/);
+  assert.match(picker, /group\.examples\.filter/);
   assert.match(sampleGroups, /item\.is_photo/);
   assert.match(sampleGroups, /item\.is_video/);
   assert.match(sampleGroups, /item\.is_iguide/);
@@ -409,35 +403,9 @@ test("Pixel catalog copy offers both Reel styles at the same product level", asy
   assert.match(migration, /slug = 'social_media_special'/);
 });
 
-test("capability pills share one compact visual box while playable pills retain a coarse-pointer target", async () => {
-  const picker = await readFile(
-    new URL("../app/book/_components/PackageAccordion.tsx", import.meta.url),
-    "utf8",
-  );
-
-  assert.match(
-    picker,
-    /const capabilityPillClass\s*=\s*[\s\S]*?h-7[\s\S]*?leading-none/,
-    "all visible capability pills should use one fixed-height visual class",
-  );
-  assert.match(
-    picker,
-    /className="tap-target group inline-flex items-center/,
-    "the playable wrapper should retain the coarse-pointer hit target",
-  );
-  assert.match(
-    picker,
-    /className="flex flex-wrap items-center gap-x-1\.5 gap-y-1"/,
-    "wrapped pill lines should center visual pills instead of stretching them",
-  );
-  assert.match(
-    picker,
-    /className=\{`\$\{capabilityPillClass\}[\s\S]*group-focus-visible:ring-2/,
-    "hover and focus treatment should live on the same visual shell",
-  );
-  assert.doesNotMatch(
-    picker,
-    />\s*Selected\s*</,
-    "the redundant Selected text pill should not crowd the capability row",
-  );
+test("compact example controls preserve coarse-pointer targets and visible keyboard focus", async () => {
+  const css = await readFile(new URL("../app/book/booking-refresh.css", import.meta.url), "utf8");
+  assert.match(css, /booking-refresh-example-group a \{[^}]*min-height: 44px/);
+  assert.match(css, /booking-refresh-examples\) > summary \{[^}]*min-height: 48px/);
+  assert.match(css, /:focus-visible \{[^}]*outline: 3px solid/);
 });

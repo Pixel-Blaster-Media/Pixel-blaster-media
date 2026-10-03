@@ -164,7 +164,7 @@ test("rendered mobile step links have distinct accessible names and never expose
   }).default;
   const state = { ...stateHelpers.parseWizardState({ services: "photos", draft: crypto.randomUUID(), slot: "2090-01-01T15:00:00Z" }), ...property };
   const html = renderToStaticMarkup(React.createElement(Stepper, { current: 4, state }));
-  const names = [...html.matchAll(/<a\b[^>]*>(.*?)<\/a>/g)].map((match) => match[1].match(/class="sr-only md:not-sr-only">([^<]+)/)?.[1]);
+  const names = [...html.matchAll(/<a\b[^>]*>(.*?)<\/a>/g)].map((match) => match[1].replace(/<span[^>]*aria-hidden="true"[^>]*>[\s\S]*?<\/span>/g, "").replace(/<[^>]+>/g, "").trim());
   assert.deepEqual(names, ["Services", "Property", "When"]);
   assert.match(html, /aria-current="step"/);
   assert.match(html, /aria-hidden="true"/);

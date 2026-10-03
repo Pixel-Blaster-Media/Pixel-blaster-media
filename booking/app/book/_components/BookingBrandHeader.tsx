@@ -15,7 +15,7 @@ export function BookingBrandFrame({
   children: ReactNode;
 }) {
   return (
-    <div className="space-y-6" data-pixel-default-palette={organization.id === DEFAULT_ORGANIZATION_ID ? true : undefined} style={organizationThemeStyle(organization)}>
+    <div className="booking-refresh space-y-6" data-pixel-default-palette={organization.id === DEFAULT_ORGANIZATION_ID ? true : undefined} style={organizationThemeStyle(organization)}>
       {children}
     </div>
   );
@@ -28,88 +28,37 @@ export default function BookingBrandHeader({
   organization: OrganizationBrand;
   compact?: boolean;
 }) {
-  const mainImageUrl = organization.bookingHeroImageUrl;
-  const secondaryImageUrl = organization.bookingHeroSecondaryImageUrl;
+  const mainImageUrl = organization.bookingHeroImageUrl ?? organization.bookingHeroSecondaryImageUrl;
   const logoUrl = organization.logoUrl;
 
-  if (compact) {
-    return (
-      <header className="booking-compact-header">
-        <div className="booking-hero-brand">
-          <span className="booking-hero-brand-logo" aria-hidden={!logoUrl}>
-            {logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoUrl} alt={`${organization.name} logo`} />
-            ) : (
-              <span>{initialsForOrganization(organization.name)}</span>
-            )}
-          </span>
-          <span className="booking-hero-brand-name">{organization.name}</span>
-        </div>
-        <p>Booking in progress</p>
-      </header>
-    );
-  }
-
   return (
-    <header className="booking-hero">
-      <div className="booking-hero-grid">
-        <div className="booking-hero-copy">
-          <div className="booking-hero-brand">
-            {logoUrl ? (
-              <span className="booking-hero-brand-logo">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={logoUrl} alt={`${organization.name} logo`} />
-              </span>
-            ) : null}
-            <span className="booking-hero-brand-name">{organization.name}</span>
-          </div>
-          <span className="booking-hero-pill">Real estate media booking</span>
-          <h1>Book a shoot. Skip the back-and-forth.</h1>
-          <p>
-            Pick a package, add the property details, choose a time, and your
-            shoot is ready to go.
-          </p>
+    <header className={compact ? "booking-refresh-header is-compact" : "booking-refresh-header"}>
+      <div className="booking-refresh-brandline">
+        <div className="booking-refresh-brand">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt="" width={48} height={48} />
+          ) : (
+            <span className="booking-refresh-monogram" aria-hidden="true">
+              {initialsForOrganization(organization.name)}
+            </span>
+          )}
+          <span>{organization.name}</span>
         </div>
-
-        <div className="booking-hero-visual" aria-hidden="true">
-          <div
-            className={`booking-media-tile booking-media-tile-large ${
-              mainImageUrl ? "booking-media-tile-has-image" : ""
-            }`}
-          >
-            {mainImageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={mainImageUrl}
-                alt=""
-                className="booking-media-photo"
-              />
-            ) : null}
-          </div>
-          <div
-            className={`booking-media-tile booking-media-tile-small ${
-              secondaryImageUrl ? "booking-media-tile-has-image" : ""
-            }`}
-          >
-            {secondaryImageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={secondaryImageUrl}
-                alt=""
-                className="booking-media-photo"
-              />
-            ) : null}
-          </div>
-          <div className="booking-media-panel">
-            <div>
-              <span className="booking-media-kicker">Next step</span>
-              <strong>Choose the best fit</strong>
-            </div>
-            <span className="booking-media-check">✓</span>
-          </div>
-        </div>
+        <p>{compact ? "Booking in progress" : "Real estate photography & media"}</p>
       </div>
+      {!compact ? (
+        <div className={`booking-refresh-hero${mainImageUrl ? " has-photo" : ""}`}>
+          <div className="booking-refresh-hero-copy">
+            <h1>Book your next listing.</h1>
+            <p>Choose your package. Then make it yours.</p>
+          </div>
+          {mainImageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img className="booking-refresh-hero-photo" src={mainImageUrl} alt="" fetchPriority="high" />
+          ) : null}
+        </div>
+      ) : null}
     </header>
   );
 }

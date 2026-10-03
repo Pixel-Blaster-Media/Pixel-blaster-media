@@ -69,7 +69,7 @@ test('server multiselect totals include independent line fees and basement only 
 
 test('actual running-total component shows the agreed fee and once-only basement time', () => {
   const Total = loadSource('app/book/_components/BookingTotalBar.tsx', {
-    '@/lib/booking/quote': quote, 'react/jsx-runtime': jsxRuntime,
+    '@/lib/booking/quote': quote, 'react/jsx-runtime': jsxRuntime, react: React,
   }).default;
   const markup = renderToStaticMarkup(React.createElement(Total, { items:[item()], selectedSlugs:['social_media_special','social_media_special'], selectedAddOnSlugs:[], squareFootage:2501, includeBasement:true }));
   assert.match(markup, /\$690/);
@@ -109,7 +109,7 @@ test('changing a package keeps the private draft but invalidates the old time sl
     './package-description': {findCommonPackageLines:()=>[],packageDescriptionLines:()=>[],withoutCommonPackageLines:()=>[]},
   }).default;
   const tree = Picker({bundles:[item({description:''})],aLaCarte:[item({slug:'video_tour',name:'Video Tour',kind:'a_la_carte',description:''})],addons:[],selectedSlugs:['social_media_special'],selectedAddOnSlugs:[],squareFootage:2501,includeBasement:true});
-  nodes(tree).find(node=>node.props?.['aria-label']==='Add Video Tour').props.onClick({stopPropagation(){}});
+  nodes(tree).find(node=>node.props?.['aria-label']==='Add service: Video Tour').props.onClick({stopPropagation(){}});
   const query = new URLSearchParams(destination.slice(1));
   assert.equal(query.get('draft'),draft);
   assert.equal(query.get('services'),'social_media_special,video_tour');

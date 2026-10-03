@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import test from 'node:test';
+import {beforeBookingDesignUi,bookingDesignUiPaths} from './helpers/booking-design-ui-boundary.mjs';
 import {beforeFinalsUi} from './helpers/photo-finals-ui-boundary.mjs';
 import {beforeBookingAuditUi,bookingAuditUiPaths} from './helpers/booking-audit-ui-boundary.mjs';
 const base = '3039dbc357f78b3c9a97d5dbe1d5c0c54785f85f';
@@ -49,7 +50,7 @@ test('historical skin changes remain exact after bounded finals UI and OTP lifec
     .filter(f => !['app/portal/[propertyId]/page.tsx', 'components/media/PhotoFinalsWorkspace.tsx', 'components/media/ResumableDownload.tsx', 'components/media/FinalsGallery.tsx', 'components/media/FinalsNavigationOwner.tsx', 'app/book/confirm/ConfirmForm.tsx'].includes(f));
   assert.deepEqual(presentationFiles.sort(), Object.keys(changes).sort());
   for (const [file, replacements] of Object.entries(changes)) {
-    let candidate = beforeFinalsUi(file,beforeBookingAuditUi(file,read(file)));
+    let candidate = beforeFinalsUi(file,beforeBookingAuditUi(file,beforeBookingDesignUi(file,read(file))));
     for (const [addition, removal] of replacements) {
       assert.ok(candidate.includes(addition), `Exact allowed addition missing: ${file}: ${addition}`);
       candidate = candidate.replaceAll(addition, removal);
@@ -59,12 +60,12 @@ test('historical skin changes remain exact after bounded finals UI and OTP lifec
 });
 test('functional booking audit UI slice preserves every other byte at the canonical source snapshot',()=>{
  for(const file of bookingAuditUiPaths) assert.equal(
-  beforeBookingAuditUi(file,read(file)),
+  beforeBookingAuditUi(file,beforeBookingDesignUi(file,read(file))),
   execFileSync('git',['show',`6346036961d38b4e9a0792f4fbc18519a4df4981:booking/${file}`],{cwd:new URL('..',import.meta.url),encoding:'utf8'}),file);
 });
 test('portal changes preserve the earlier finals handoff after the bounded private rebooking fix',()=>{
  const file='app/portal/[propertyId]/page.tsx';
- assert.equal(beforeFinalsUi(file,beforeBookingAuditUi(file,read(file))),execFileSync('git',['show',`87caa61815dd9ca8db5f84c41d8615b4b8a7a210:booking/${file}`],{cwd:new URL('..',import.meta.url),encoding:'utf8'}));
+ assert.equal(beforeFinalsUi(file,beforeBookingAuditUi(file,beforeBookingDesignUi(file,read(file)))),execFileSync('git',['show',`87caa61815dd9ca8db5f84c41d8615b4b8a7a210:booking/${file}`],{cwd:new URL('..',import.meta.url),encoding:'utf8'}));
 });
 test('default palette identity never falls back from failed brand loading', () => {
   for (const file of ['app/layout.tsx', 'app/admin/layout.tsx', 'app/portal/layout.tsx', 'app/book/_components/BookingBrandHeader.tsx']) {
@@ -73,4 +74,10 @@ test('default palette identity never falls back from failed brand loading', () =
     assert.match(markers[0][1], /=== DEFAULT_ORGANIZATION_ID \? true : undefined$/);
     assert.doesNotMatch(markers[0][1], /brand|primaryColor|name|slug/);
   }
+});
+
+test('booking design presentation preserves the exact released source outside its reviewed UI slice',()=>{
+ for(const file of bookingDesignUiPaths) assert.equal(
+  beforeBookingDesignUi(file,read(file)),
+  execFileSync('git',['show',`203f138d9f4347e1c201b18082d2cea61a72ce3f:booking/${file}`],{cwd:new URL('..',import.meta.url),encoding:'utf8'}),file);
 });
