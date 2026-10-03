@@ -1,5 +1,6 @@
 "use client";
 
+import { useLayoutEffect, useRef } from "react";
 import { bookingDurationMinutes, getCatalogItemPrice, type CatalogPricingItem } from "@/lib/booking/quote";
 export interface BookingTotalItem extends CatalogPricingItem {
   slug: string;
@@ -24,6 +25,7 @@ export default function BookingTotalBar({
   disabled = false,
   note,
   sticky = true,
+  selectionSummary = false,
 }: {
   items: BookingTotalItem[];
   selectedSlugs: string[];
@@ -36,12 +38,64 @@ export default function BookingTotalBar({
   disabled?: boolean;
   note?: string;
   sticky?: boolean;
+  selectionSummary?: boolean;
 }) {
+  const footerRef = useRef<HTMLElement>(null);
+
+  useLayoutEffect(() => {
+    const footer = footerRef.current;
+    if (!selectionSummary || !footer) return;
+
+    const root = document.documentElement;
+    const shell = footer.closest(".booking-shell");
+    const property = "--booking-footer-height";
+    const previousValue = root.style.getPropertyValue(property);
+    const previousPriority = root.style.getPropertyPriority(property);
+    let focusFrame = 0;
+
+    const keepFocusVisible = () => {
+      focusFrame = 0;
+      const active = document.activeElement;
+      if (!(active instanceof HTMLElement) || footer.contains(active) || !shell?.contains(active)) return;
+      const target = active.getBoundingClientRect();
+      const availableBottom = footer.getBoundingClientRect().top - 12;
+      // A disclosure/resize can cover a control that already has focus; focus
+      // navigation can also scroll after the ResizeObserver has delivered.
+      if (target.top < 12) {
+        window.scrollBy({ top: target.top - 12, behavior: "instant" });
+      } else if (target.bottom > availableBottom) {
+        window.scrollBy({ top: target.bottom - availableBottom, behavior: "instant" });
+      }
+    };
+    const scheduleFocusCheck = () => {
+      cancelAnimationFrame(focusFrame);
+      focusFrame = requestAnimationFrame(keepFocusVisible);
+    };
+    const measure = () => {
+      root.style.setProperty(property, `${Math.ceil(footer.getBoundingClientRect().height)}px`);
+      scheduleFocusCheck();
+    };
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(footer);
+    window.addEventListener("resize", measure);
+    document.addEventListener("focusin", scheduleFocusCheck);
+    measure();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+      document.removeEventListener("focusin", scheduleFocusCheck);
+      cancelAnimationFrame(focusFrame);
+      if (previousValue) root.style.setProperty(property, previousValue, previousPriority);
+      else root.style.removeProperty(property);
+    };
+  }, [selectionSummary]);
+
   const selected = [...new Set([...selectedSlugs, ...selectedAddOnSlugs])]
     .map((slug) => items.find((item) => item.slug === slug))
     .filter((item): item is BookingTotalItem => Boolean(item));
 
-  if (selected.length === 0) return null;
+  if (selected.length === 0 && !selectionSummary) return null;
 
   const rows = selected.map((item) => ({
     item,
@@ -53,6 +107,35 @@ export default function BookingTotalBar({
     includeBasement,
   );
   const overageRows = rows.filter((row) => row.price.overageCents > 0);
+
+  if (selectionSummary) {
+    return (
+      <section ref={footerRef} className="booking-refresh-total" aria-label="Booking selection">
+        <div className="booking-refresh-total-inner">
+          <div className="booking-refresh-total-summary" aria-live="polite" aria-atomic="true">
+            <p className="booking-refresh-selection-name" title={selected.map((item) => item.name).join(", ")}>
+              {selected.length ? `${selected[0].name}${selected.length > 1 ? ` + ${selected.length - 1} more` : ""}` : "Choose your services"}
+            </p>
+            {selected.length ? (
+              <p className="booking-refresh-total-price"><strong>${(totalCents / 100).toFixed(0)} <span>CAD</span></strong><span>~{formatMinutes(totalMinutes)} on-site</span></p>
+            ) : <p>Select a package or build a custom order.</p>}
+            <p className="booking-refresh-total-note">{note ?? "Final total shown before confirmation."}</p>
+          </div>
+          {selected.length > 0 && href && !disabled ? (
+            <a className="booking-refresh-continue" href={href}>{ctaLabel}<span aria-hidden="true">→</span></a>
+          ) : <button className="booking-refresh-continue" type="button" disabled>{ctaLabel}<span aria-hidden="true">→</span></button>}
+          {selected.length > 0 ? (
+            <details className="booking-refresh-total-breakdown">
+              <summary>Price details</summary>
+              <ul>{rows.map((row) => <li key={row.item.slug}><span>{row.item.name}</span><span>${(row.price.totalPriceCents / 100).toFixed(0)}</span></li>)}</ul>
+              {overageRows.length > 0 ? <p>{squareFootage?.toLocaleString()} sqft home: {overageRows.map((row) => `${row.item.name} +$${(row.price.overageCents / 100).toFixed(0)}`).join(", ")}</p> : null}
+              {includeBasement ? <p>Includes 15 minutes for the finished basement.</p> : null}
+            </details>
+          ) : null}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <div

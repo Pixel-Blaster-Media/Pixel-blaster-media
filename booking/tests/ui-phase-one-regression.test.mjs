@@ -38,11 +38,10 @@ const bottomNavSource = await readFile(
   "utf8",
 );
 
-test("package comparison shows shared inclusions once and removes them from each card", () => {
-  assert.match(packageSource, /Every package includes/);
-  assert.match(packageSource, /commonPackageLines/);
-  assert.match(packageSource, /uniquePackageLines/);
-  assert.match(packageSource, /uniquePackageLines\[0\]/);
+test("each package retains its full catalog inclusions inside its own details", () => {
+  assert.match(packageSource, /const lines = packageDescriptionLines\(item.description\)/);
+  assert.match(packageSource, /lines\.map\(\(line, index\)/);
+  assert.doesNotMatch(packageSource, /withoutCommonPackageLines|displayLimit/);
 });
 
 test("common package features are found after line eight and removed before display limits", () => {

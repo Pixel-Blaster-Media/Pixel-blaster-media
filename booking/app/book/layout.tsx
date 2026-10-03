@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import "./booking-refresh.css";
 
 export const metadata: Metadata = {
   title: "Book Real Estate Media",

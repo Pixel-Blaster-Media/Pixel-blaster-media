@@ -1,0 +1,144 @@
+/* Booking-only presentation. Catalog, quote policy and wizard state stay owned
+   by their existing modules. Brand teal comes from the marketing style.css. */
+.booking-shell:has(.booking-refresh) { background: #faf9f6; }
+html:has(.booking-refresh-picker) { scroll-padding-bottom: calc(var(--booking-footer-height, 0px) + 16px); }
+.booking-shell:has(.booking-refresh-picker) > div { padding-bottom: calc(var(--booking-footer-height, 0px) + 16px); }
+.booking-shell:has(.booking-refresh[data-pixel-default-palette="true"]) > div > footer a { color: #0d5f6b; }
+.booking-refresh {
+  --realtor-bg: #faf9f6;
+  --realtor-bg-rgb: 250 249 246;
+  --realtor-text: #22252a;
+  --realtor-text-rgb: 34 37 42;
+  --realtor-muted: #60656d;
+  --realtor-muted-rgb: 96 101 109;
+  --realtor-surface-muted: #f3f4f1;
+  color: var(--realtor-text);
+}
+.booking-shell .booking-refresh[data-pixel-default-palette="true"] {
+  --realtor-primary: #1a7f8e !important;
+  --realtor-primary-rgb: 26 127 142 !important;
+  --realtor-primary-light: #0d5f6b !important;
+  --realtor-primary-light-rgb: 13 95 107 !important;
+  --realtor-primary-dark: #0d5f6b !important;
+  --realtor-primary-dark-rgb: 13 95 107 !important;
+  --realtor-border: #d9dbdb;
+}
+.booking-refresh :is(button, a, summary):focus-visible { outline: 3px solid var(--realtor-primary); outline-offset: 4px; }
+.booking-refresh-header { border-bottom: 1px solid #d9dbdb; }
+.booking-refresh-brandline { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0 0 1.1rem; }
+.booking-refresh-brand { display: flex; align-items: center; gap: .7rem; min-width: 0; font-size: 1.3rem; font-weight: 700; letter-spacing: -.035em; }
+.booking-refresh-brand img { width: 48px; height: 48px; object-fit: contain; border-radius: 6px; }
+.booking-refresh-monogram { display: grid; place-items: center; width: 48px; height: 48px; color: var(--realtor-primary); font-size: 1rem; }
+.booking-refresh-brandline > p { color: var(--realtor-muted); font-size: .8rem; letter-spacing: .12em; text-transform: uppercase; }
+.booking-refresh-hero { display: grid; min-height: 190px; }
+.booking-refresh-hero.has-photo { grid-template-columns: 1.1fr 1fr; }
+.booking-refresh-hero-copy { align-self: center; padding: 1.5rem 1rem 1.75rem 0; }
+.booking-refresh-hero h1 { max-width: 12em; font-size: clamp(2.05rem, 3.9vw, 3.3rem); font-weight: 750; line-height: 1.08; letter-spacing: -.055em; }
+.booking-refresh-hero p { margin-top: .75rem; color: var(--realtor-muted); font-size: clamp(1.05rem, 1.5vw, 1.3rem); line-height: 1.5; }
+.booking-refresh-hero-photo { width: 100%; height: 210px; object-fit: cover; object-position: 50% 65%; border-radius: 10px 10px 0 0; }
+.booking-refresh-steps { display: flex; gap: .75rem; padding: .25rem 0; }
+.booking-refresh-steps li { display: flex; align-items: center; flex: 1; min-width: 0; gap: .75rem; color: var(--realtor-muted); }
+.booking-refresh-steps li:not(:last-child)::after { content: ""; height: 1px; flex: 1; background: #d0d3d4; }
+.booking-refresh-steps li > :is(a, span) { display: flex; align-items: center; gap: .55rem; min-height: 44px; font-size: .95rem; border-radius: 4px; }
+.booking-refresh-steps li > a { color: inherit; }
+.booking-refresh-step-number { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #e5e6e5; color: #555c61; }
+.booking-refresh-steps li[data-current="true"], .booking-refresh-steps li[data-done="true"] { color: var(--realtor-primary-dark); }
+.booking-refresh-steps li[data-current="true"] .booking-refresh-step-number, .booking-refresh-steps li[data-done="true"] .booking-refresh-step-number { background: var(--realtor-primary); color: white; }
+.booking-refresh-picker { display: grid; gap: 2rem; }
+.booking-refresh-section-heading { display: flex; align-items: end; justify-content: space-between; gap: 1rem; margin-bottom: 1.1rem; }
+.booking-refresh-section-heading h2 { font-size: clamp(1.55rem, 2.6vw, 2rem); font-weight: 750; letter-spacing: -.04em; line-height: 1.2; }
+.booking-refresh-section-heading p { margin-top: .4rem; color: var(--realtor-muted); font-size: 1rem; line-height: 1.5; }
+.booking-refresh-section-heading > p { flex-shrink: 0; font-size: .85rem; }
+.booking-refresh-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+.booking-refresh-card { min-width: 0; border: 1px solid #d2d6d6; border-radius: 10px; background: #fff; padding: 1.3rem; }
+.booking-refresh-card[data-selected="true"] { border-color: var(--realtor-primary); background: rgb(var(--realtor-primary-rgb) / .055); box-shadow: 0 0 0 1px var(--realtor-primary); }
+.booking-refresh-card-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; min-height: 94px; }
+.booking-refresh-card-heading > div:first-child { min-width: 0; }
+.booking-refresh-card h3 { font-size: clamp(1.2rem, 1.8vw, 1.55rem); font-weight: 700; line-height: 1.25; letter-spacing: -.035em; overflow-wrap: anywhere; }
+.booking-refresh-card-heading p { margin-top: .45rem; color: var(--realtor-muted); font-size: .95rem; line-height: 1.5; }
+.booking-refresh-price { display: flex; flex-direction: column; align-items: end; flex-shrink: 0; gap: .25rem; }
+.booking-refresh-price strong { font-size: clamp(1.9rem, 2.6vw, 2.4rem); font-weight: 750; line-height: 1.1; letter-spacing: -.05em; }
+.booking-refresh-price > span { font-size: .75rem; color: var(--realtor-muted); }
+.booking-refresh-select { display: flex; align-items: center; justify-content: center; gap: .6rem; width: 100%; min-height: 48px; padding: .65rem 1rem; margin-top: 1rem; border: 1px solid var(--realtor-primary); border-radius: 6px; background: transparent; color: var(--realtor-primary-dark); font-size: 1rem; font-weight: 650; }
+.booking-refresh-select:hover { background: rgb(var(--realtor-primary-rgb) / .08); }
+.booking-refresh-select[aria-pressed="true"] { color: #fff; background: var(--realtor-primary); }
+.booking-refresh-select[aria-pressed="true"]:hover { background: var(--realtor-primary-dark); }
+.booking-refresh-details { margin-top: 1rem; border-top: 1px solid #d9dddd; }
+.booking-refresh :is(.booking-refresh-details, .booking-refresh-examples) > summary { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 48px; padding: .7rem 0; cursor: pointer; list-style: none; color: var(--realtor-text); font-size: 1rem; font-weight: 650; }
+.booking-refresh summary::-webkit-details-marker { display: none; }
+.booking-refresh-chevron { flex-shrink: 0; color: var(--realtor-primary); transition: transform .15s ease; }
+.booking-refresh details[open] > summary > .booking-refresh-chevron, .booking-refresh-chevron[data-open="true"] { transform: rotate(180deg); }
+.booking-refresh-detail-body { padding: .5rem 0 .15rem; }
+.booking-refresh-media-list { margin-bottom: .65rem; color: var(--realtor-primary-dark); font-size: .9rem; font-weight: 600; }
+.booking-refresh-inclusions { display: grid; gap: .6rem; }
+.booking-refresh-inclusions li { display: flex; gap: .65rem; font-size: .95rem; line-height: 1.55; }
+.booking-refresh-inclusions li > span:first-child { color: var(--realtor-primary); font-weight: 700; }
+.booking-refresh-pricing-rule { margin-top: .9rem; font-size: .82rem; line-height: 1.55; color: var(--realtor-muted); }
+.booking-refresh-examples { margin-top: 1rem; padding: 0 .85rem; border: 1px solid rgb(var(--realtor-primary-rgb) / .5); border-radius: 6px; background: rgb(255 255 255 / .5); }
+.booking-refresh-example-group { display: flex; align-items: start; justify-content: space-between; gap: .8rem; border-top: 1px solid #d6dede; font-size: .9rem; }
+.booking-refresh-example-group > span { padding: .8rem 0; }
+.booking-refresh-example-group > div { min-width: 0; text-align: right; }
+.booking-refresh-example-group a { display: flex; align-items: center; justify-content: end; gap: .5rem; min-height: 44px; padding: .6rem 0; color: var(--realtor-primary-dark); text-decoration: underline; text-underline-offset: 3px; }
+.booking-refresh-example-group a svg { flex-shrink: 0; }
+.booking-refresh-example-unavailable { display: inline-block; padding: .8rem 0; color: var(--realtor-muted); font-size: .8rem; }
+.booking-refresh-examples > p { margin: .5rem 0 .8rem; color: var(--realtor-muted); font-size: .78rem; line-height: 1.5; }
+.booking-refresh-text-button { min-height: 44px; color: var(--realtor-primary-dark); text-decoration: underline; text-underline-offset: 3px; font-size: .9rem; }
+.booking-refresh-custom { border-top: 1px solid #d5d9d9; border-bottom: 1px solid #d5d9d9; }
+.booking-refresh-custom-toggle { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.2rem 0; text-align: left; font-size: 1.35rem; font-weight: 700; letter-spacing: -.02em; }
+.booking-refresh-custom-subtitle { display: block; margin-top: .35rem; color: var(--realtor-muted); font-size: .95rem; font-weight: 400; letter-spacing: 0; }
+.booking-refresh-custom #custom-services { padding: .25rem 0 1.2rem; }
+.booking-refresh-service .booking-refresh-card-heading { min-height: 60px; }
+.booking-refresh-service h3 { font-size: 1.15rem; }
+.booking-refresh-service .booking-refresh-price strong { font-size: 1.6rem; }
+.booking-refresh-total { position: fixed; z-index: 30; inset: auto 0 0; max-height: 70dvh; overflow-y: auto; padding: .85rem 1.5rem max(.5rem, env(safe-area-inset-bottom)); border-top: 1px solid #d4d8d8; background: #fff; box-shadow: 0 -4px 18px rgb(34 37 42 / .04); }
+.booking-refresh-total-inner { display: flex; flex-wrap: wrap; align-items: center; column-gap: 2rem; max-width: 1152px; margin: 0 auto; }
+.booking-refresh-total-summary { flex: 1 1 12rem; min-width: 0; }
+.booking-refresh-selection-name { font-size: 1rem; font-weight: 650; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.booking-refresh-total-price { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 1rem; margin-top: .15rem; }
+.booking-refresh-total-price strong { font-size: 1.5rem; line-height: 1.25; letter-spacing: -.03em; }
+.booking-refresh-total-price strong span { font-size: .85rem; }
+.booking-refresh-total-price > span, .booking-refresh-total-summary > p:not([class]) { color: var(--realtor-muted); font-size: .85rem; }
+.booking-refresh-total-note { color: var(--realtor-muted); font-size: .75rem; margin-top: .2rem; }
+.booking-refresh-continue { display: flex; flex: 0 0 auto; max-width: 100%; align-items: center; justify-content: center; gap: 1.1rem; min-height: 52px; padding: .9rem 2rem; border-radius: 6px; background: var(--realtor-primary); color: #fff; font-size: 1rem; font-weight: 650; }
+.booking-refresh-continue:hover { background: var(--realtor-primary-dark); }
+.booking-refresh-continue:disabled { background: #e6e9e8; color: #62686b; cursor: not-allowed; }
+.booking-refresh-total-breakdown { flex-basis: 100%; max-height: 35vh; overflow: auto; font-size: .82rem; color: var(--realtor-muted); }
+.booking-refresh-total-breakdown summary { display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.booking-refresh-total-breakdown ul { border-top: 1px solid #d9dddd; padding-top: .5rem; }
+.booking-refresh-total-breakdown li { display: flex; justify-content: space-between; gap: 1rem; padding: .3rem 0; }
+.booking-refresh-total-breakdown p { padding: .4rem 0; }
+@media (max-width: 767px) {
+  .booking-refresh-brandline { padding-bottom: .75rem; }
+  .booking-refresh-brand { font-size: 1.18rem; gap: .5rem; }
+  .booking-refresh-brand img, .booking-refresh-monogram { width: 42px; height: 42px; }
+  .booking-refresh-brandline > p { display: none; }
+  .booking-refresh-hero.has-photo { grid-template-columns: 1fr; }
+  .booking-refresh-hero-photo { grid-row: 1; height: 128px; border-radius: 6px; object-position: 50% 67%; }
+  .booking-refresh-hero-copy { padding: 1.15rem 0 1.35rem; }
+  .booking-refresh-hero h1 { max-width: none; font-size: clamp(1.8rem, 7.8vw, 2.65rem); }
+  .booking-refresh-hero p { font-size: 1rem; margin-top: .55rem; }
+  .booking-refresh-steps { gap: .5rem; }
+  .booking-refresh-steps li { gap: .35rem; align-items: start; }
+  .booking-refresh-steps li:not(:last-child)::after { margin-top: 14px; }
+  .booking-refresh-steps li > :is(a, span) { flex-direction: column; gap: .25rem; font-size: .72rem; min-height: 50px; }
+  .booking-refresh-section-heading { display: block; }
+  .booking-refresh-section-heading > div > p { font-size: .95rem; }
+  .booking-refresh-section-heading > p { margin-top: .4rem; font-size: .8rem; }
+  .booking-refresh-grid { grid-template-columns: 1fr; gap: .9rem; }
+  .booking-refresh-card { padding: 1.05rem; }
+  .booking-refresh-card-heading { min-height: 0; gap: .75rem; }
+  .booking-refresh-card h3 { font-size: 1.3rem; }
+  .booking-refresh-card-heading p { font-size: .9rem; }
+  .booking-refresh-price strong { font-size: 1.9rem; }
+  .booking-refresh-price > span { font-size: .7rem; }
+  .booking-refresh-service h3 { font-size: 1.1rem; }
+  .booking-refresh-total { padding: .7rem 1rem max(.35rem, env(safe-area-inset-bottom)); }
+  .booking-refresh-total-inner { column-gap: .75rem; }
+  .booking-refresh-selection-name { font-size: .86rem; }
+  .booking-refresh-total-price { gap: .1rem .5rem; }
+  .booking-refresh-total-price strong { font-size: 1.35rem; }
+  .booking-refresh-total-price > span { font-size: .72rem; }
+  .booking-refresh-total-note { font-size: .69rem; line-height: 1.4; }
+  .booking-refresh-continue { padding: .85rem 1rem; gap: .6rem; font-size: .94rem; }
+}
+@media (prefers-reduced-motion: reduce) { .booking-refresh-chevron { transition: none; } }
