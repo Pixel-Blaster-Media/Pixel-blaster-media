@@ -144,7 +144,7 @@ export default function PackageAccordion({
                   >
                     {selected ? <><span aria-hidden="true">✓</span> Selected</> : "Choose package"}
                   </button>
-                  <PackageDetails item={b} />
+                  <PackageDetails item={b} desktopDefaultOpen />
                 </article>
               </li>
             );
@@ -259,12 +259,16 @@ function Chevron({ open }: { open?: boolean }) {
   return <svg className="booking-refresh-chevron" data-open={open} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>;
 }
 
-function PackageDetails({ item, label = "Package details" }: { item: CatalogItemDTO; label?: string }) {
+function PackageDetails({ item, label = "Package details", desktopDefaultOpen = false }: {
+  item: CatalogItemDTO;
+  label?: string;
+  desktopDefaultOpen?: boolean;
+}) {
   const lines = packageDescriptionLines(item.description);
   const groups = getCatalogSampleGroups(item);
   const rule = sqftRuleText(item);
-  return (
-    <details className="booking-refresh-details">
+  const disclosure = (className: string, initiallyOpen = false) => (
+    <details className={className} open={initiallyOpen}>
       <summary><span>{label}</span><Chevron /></summary>
       <div className="booking-refresh-detail-body">
         {groups.length > 0 ? <p className="booking-refresh-media-list">{groups.map((group) => group.label).join(" · ")}</p> : null}
@@ -309,6 +313,15 @@ function PackageDetails({ item, label = "Package details" }: { item: CatalogItem
       </div>
     </details>
   );
+
+  // CSS chooses the native disclosure before hydration. Each layout keeps its
+  // own manual toggles; neither resizing nor booking updates reset them.
+  return desktopDefaultOpen ? (
+    <>
+      {disclosure("booking-refresh-details booking-refresh-details-desktop", true)}
+      {disclosure("booking-refresh-details booking-refresh-details-mobile")}
+    </>
+  ) : disclosure("booking-refresh-details");
 }
 
 function sampleHref(raw: string | null): string | undefined {

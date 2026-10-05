@@ -19,8 +19,14 @@ const assetFiles = new Map([[assets.logo,'logo.jpg'],[assets.hero,'hero.jpg'],[a
 const browser = await chromium.launch({headless:true, executablePath:process.env.BOOKING_CHROME_PATH});
 const context = await browser.newContext({viewport:{width:1280,height:1200}});
 const errors = [], unexpected = [], sampleRequests = [], checks = [];
-context.on('page',page=>page.on('pageerror',error=>errors.push(error.message)));
-await context.route('**/*',async route=>{
+const configureContext=async current=>{
+current.on('page',page=>{
+ page.on('pageerror',error=>errors.push(error.message));
+ page.on('console',message=>{
+  if(message.type()==='error'&&/hydrat|did not match|didn't match|server rendered HTML/i.test(message.text()))errors.push(message.text());
+ });
+});
+await current.route('**/*',async route=>{
  const request=route.request();const url=request.url();
  if(new URL(url).origin === origin) return route.continue();
  if(assetFiles.has(url))return route.fulfill({status:200,contentType:url===assets.secondary?'image/png':'image/jpeg',body:readFileSync(resolve(assetDir,assetFiles.get(url)))});
@@ -30,6 +36,8 @@ await context.route('**/*',async route=>{
  }
  unexpected.push(new URL(url).origin+new URL(url).pathname);return route.abort();
 });
+};
+await configureContext(context);
 const page=await context.newPage();page.setDefaultTimeout(12000);
 const total=page.getByRole('region',{name:'Booking selection',exact:true});
 const card=slug=>page.locator(`article[aria-labelledby="package-${slug}"]`);
@@ -65,8 +73,61 @@ const assertFooter=async()=>{
  const button=total.getByRole('link',{name:'Continue',exact:true});assert.ok(await button.isVisible());
 };
 try{
+ // Let Next reveal its streamed server HTML, while blocking the client bundles
+ // so these assertions run before React hydration or viewport effects.
+ for(const viewport of [{width:1280,height:900},{width:390,height:844},{width:767,height:900},{width:768,height:900}]){
+  const serverContext=await browser.newContext({viewport});await configureContext(serverContext);
+  await serverContext.route('**/_next/static/**/*.js',route=>route.abort());
+  try{
+   const serverPage=await serverContext.newPage();await serverPage.goto(origin+'/book');
+   await serverPage.locator('#packages article').first().waitFor({state:'visible'});
+   assert.equal(await serverPage.evaluate(()=>document.documentElement.style.getPropertyValue('--booking-footer-height')),'','React must not have hydrated');
+   const visible=serverPage.locator('#packages article > details:visible');
+   assert.equal(await visible.count(),fixture.bundles.length);
+   const open=await visible.evaluateAll(elements=>elements.map(element=>element.open));
+   assert.ok(open.every(value=>value===(viewport.width>=768)),'SSR disclosure default '+viewport.width);
+   assert.equal(await serverPage.locator('.booking-refresh-examples[open]').count(),0);
+   if([390,1280].includes(viewport.width)){
+    const firstPackage=serverPage.locator('#packages article').first();
+    await firstPackage.evaluate(element=>element.scrollIntoView({block:'start'}));
+    await firstPackage.screenshot({path:resolve(output,'package-default-'+viewport.width+'.png'),animations:'disabled'});
+   }
+  }finally{await serverContext.close();}
+ }
+ checks.push('responsive-package-default-before-react-hydration');
+ const mobileContext=await browser.newContext({viewport:{width:390,height:844}});await configureContext(mobileContext);
+ try{
+  const mobilePage=await mobileContext.newPage();await mobilePage.goto(origin+'/book');
+  await mobilePage.waitForFunction(()=>document.documentElement.style.getPropertyValue('--booking-footer-height'));
+  const visible=mobilePage.locator('#packages article > details:visible');
+  assert.equal(await visible.count(),fixture.bundles.length);
+  assert.ok((await visible.evaluateAll(elements=>elements.map(element=>element.open))).every(value=>!value));
+  assert.equal(await mobilePage.locator('.booking-refresh-examples[open]').count(),0);
+ }finally{await mobileContext.close();}
+ checks.push('mobile-first-hydration-retains-collapsed-package-and-example-defaults');
  await page.goto(origin+'/book');
  await page.getByRole('heading',{name:'Choose your package'}).waitFor();
+ await settledClearance(); // confirms React hydration has installed the footer effect
+ const packageDetails=()=>card('social_media_special').locator(':scope > details:visible');
+ assert.notEqual(await packageDetails().getAttribute('open'),null,'desktop remains open after hydration');
+ await packageDetails().locator(':scope > summary').focus();await page.keyboard.press('Enter');
+ assert.equal(await packageDetails().getAttribute('open'),null,'desktop closes manually');
+ await page.setViewportSize({width:390,height:844});
+ assert.equal(await packageDetails().getAttribute('open'),null,'mobile starts collapsed');
+ await packageDetails().locator(':scope > summary').focus();await page.keyboard.press('Space');
+ assert.notEqual(await packageDetails().getAttribute('open'),null,'mobile opens manually');
+ assert.equal(await packageDetails().locator('.booking-refresh-examples').getAttribute('open'),null,'nested examples remain closed');
+ await page.setViewportSize({width:1280,height:900});
+ assert.equal(await packageDetails().getAttribute('open'),null,'desktop remembers manual close after resize');
+ const customDisclosure=page.getByRole('button',{name:/Build a custom order/});
+ await customDisclosure.click();await customDisclosure.click();
+ assert.equal(await packageDetails().getAttribute('open'),null,'desktop manual close survives React rerenders');
+ await packageDetails().locator(':scope > summary').click();
+ await page.setViewportSize({width:390,height:844});
+ assert.notEqual(await packageDetails().getAttribute('open'),null,'mobile remembers manual open after resize');
+ await packageDetails().locator(':scope > summary').click();
+ await page.setViewportSize({width:1280,height:1200});
+ checks.push('hydration-and-resize-preserve-native-user-disclosure-choices');
  assert.equal(await total.getByRole('button',{name:'Continue',exact:true}).isDisabled(),true);
  assert.equal(await page.locator('iframe, dialog').count(),0);
  assert.equal(await page.locator('.booking-refresh-header img').count(),2);
@@ -87,7 +148,7 @@ try{
  await page.waitForFunction(()=>scrollY===0&&document.querySelector('.booking-refresh-brandline').getBoundingClientRect().top>=0);
  await capture('Pixel-Blaster-Booking-Mobile-2026-10-03');
  const special=card('social_media_special');
- const details=special.locator(':scope > details');
+ const details=special.locator(':scope > details:visible');
  const summary=details.locator(':scope > summary');
  // Native details retain Enter/Space semantics and never toggle package choice.
  const selectionUrl=page.url();
