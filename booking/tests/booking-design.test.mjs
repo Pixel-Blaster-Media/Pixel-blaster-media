@@ -40,8 +40,9 @@ test('details keep every catalog inclusion, including lines beyond the former ei
   const lines = Array.from({length: 12}, (_, i) => `Inclusion ${i + 1}`);
   const html = render([item({description: lines.join('\n')})]);
   for (const line of lines) assert.ok(html.includes(`<span>${line}</span>`), line);
-  assert.match(html, /<details class="booking-refresh-details">[\s\S]*<details class="booking-refresh-examples">/);
-  assert.doesNotMatch(html, /<details[^>]*\bopen(?:\s|=|>)/);
+  assert.match(html, /<details class="booking-refresh-details booking-refresh-details-desktop" open="">/);
+  assert.match(html, /<details class="booking-refresh-details booking-refresh-details-mobile">/);
+  assert.doesNotMatch(html, /<details class="booking-refresh-examples"[^>]*\bopen(?:\s|=|>)/);
   assert.doesNotMatch(html, /<article[^>]*tabindex|<iframe|<img/);
 });
 
@@ -54,6 +55,22 @@ test('each existing sample opens unchanged in a separate tab with descriptive ac
   assert.match(html, /Explore iGUIDE/);
   assert.match(html, /aria-hidden="true">▶/);
   assert.doesNotMatch(html, /<iframe|<dialog/);
+});
+
+test('only package details default open on desktop; mobile, services, add-ons and examples stay closed', () => {
+  const html = render([item()], {
+    aLaCarte: [item({id: 'service', slug: 'service', kind: 'a_la_carte'})],
+    addons: [item({id: 'addon', slug: 'addon', kind: 'addon'})],
+  });
+  const disclosures = [...html.matchAll(/<details([^>]*)><summary><span>([^<]+)<\/span>/g)]
+    .map(([, attributes, label]) => ({label, open: /\bopen=""/.test(attributes)}));
+  assert.deepEqual(disclosures.filter(row => row.label.endsWith('details')), [
+    {label: 'Package details', open: true},
+    {label: 'Package details', open: false},
+    {label: 'Service details', open: false},
+    {label: 'Add-on details', open: false},
+  ]);
+  assert.ok(disclosures.filter(row => row.label === 'View examples').every(row => !row.open));
 });
 
 test('missing and unsafe sample destinations never become invented or active links', () => {
@@ -71,7 +88,8 @@ test('missing and unsafe sample destinations never become invented or active lin
 
 test('multiple samples retain individual titles and custom service groups', () => {
   const html = render([item({examples: [sample(),sample({id:'second',title:'Second film'}),sample({id:'details',title:'Detail photos example',kind:'link',sample_group_key:'custom_details',sample_group_label:'Detail photos',external_url:'https://example.invalid/details'})]})]);
-  assert.equal((html.match(/target="_blank"/g) ?? []).length, 3);
+  // CSS exposes one native viewport variant; both retain the configured links.
+  assert.equal((html.match(/target="_blank"/g) ?? []).length, 6);
   assert.match(html, />Film example<\/span>/);
   assert.match(html, />Second film<\/span>/);
   assert.match(html, /Detail photos/);
