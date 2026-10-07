@@ -51,7 +51,9 @@ test('real in-flight old admin/public requests cannot cross the quote-policy wri
     child.stderr.on('data', bytes => { output += bytes; });
     const done = new Promise((resolve, reject) => {
       child.on('error', reject);
-      child.on('exit', code => { sessions.delete(child); resolve(code); });
+      // Exit can precede the last stdout/stderr chunk. The replay assertions
+      // must observe a completed process AND drained streams, especially on CI.
+      child.on('close', code => { sessions.delete(child); resolve(code); });
     });
     sessions.add(child);
     return { child, name, done, output: () => output };
