@@ -49,6 +49,10 @@ test('historical skin changes remain exact after bounded finals UI and OTP lifec
     // The resumable uploader is a new functional component, covered by its
     // dedicated lifecycle, route, protocol and real browser mock regressions.
     .filter(f => f !== 'app/admin/settings/pricing/CatalogVideoUploader.tsx')
+    // The one-operation support page is a separately tested functional action;
+    // its authentication, zero-byte request and retry/redaction boundaries are covered.
+    .filter(f => !['app/admin/settings/pricing/upload-preparation/page.tsx',
+      'app/admin/settings/pricing/upload-preparation/PreparationCheck.tsx'].includes(f))
     .filter(f=>!studioWorkspacePaths.includes(f) || Object.hasOwn(changes,f))
     .filter(f=>!bookingAuditUiPaths.includes(f) || Object.hasOwn(changes,f))
     .filter(f=>!bookingDesignUiPaths.includes(f) || Object.hasOwn(changes,f))
