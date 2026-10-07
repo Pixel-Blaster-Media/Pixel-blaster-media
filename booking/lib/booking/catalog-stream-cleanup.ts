@@ -17,6 +17,7 @@ export async function runCatalogStreamCleanup(): Promise<CatalogStreamCleanupRes
   const supabase = getServiceSupabase();
   const staleBefore = new Date(Date.now() - 5 * 60_000).toISOString();
   const abandonedUploadBefore = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+  const expiredResumableBefore = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
   const { data: unknownClaims, error: unknownError } = await supabase
     .from("catalog_stream_upload_claims")
     .select("id, organization_id")
@@ -68,7 +69,7 @@ export async function runCatalogStreamCleanup(): Promise<CatalogStreamCleanupRes
     .from("catalog_stream_upload_claims")
     .update({ state: "cleanup_required", updated_at: new Date().toISOString() })
     .eq("state", "attached")
-    .lt("updated_at", abandonedUploadBefore);
+    .or(`and(upload_protocol.eq.basic,updated_at.lt.${abandonedUploadBefore}),and(upload_protocol.eq.tus,upload_expires_at.lt.${expiredResumableBefore})`);
   if (attachedError) throw new Error("Could not reconcile abandoned Stream uploads.");
 
   const { data: claims, error } = await supabase

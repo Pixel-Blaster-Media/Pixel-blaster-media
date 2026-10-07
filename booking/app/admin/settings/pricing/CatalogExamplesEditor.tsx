@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import type {
   CatalogItemExampleAdminRow,
@@ -18,7 +18,7 @@ import {
   removeSharedCatalogVideoPlacement,
 } from "./example-actions";
 
-const MAX_BASIC_VIDEO_BYTES = 200 * 1024 * 1024;
+import CatalogVideoUploader from "./CatalogVideoUploader";
 
 export default function CatalogExamplesEditor({
   catalogItemId,
@@ -32,7 +32,6 @@ export default function CatalogExamplesEditor({
   streamConfigured: boolean;
 }) {
   const router = useRouter();
-  const fileRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<"closed" | "url" | "upload" | "reuse">("closed");
   const [sourceExampleId, setSourceExampleId] = useState("");
   const [title, setTitle] = useState("");
@@ -61,7 +60,6 @@ export default function CatalogExamplesEditor({
     setUrl("");
     setSampleGroup("iguide");
     setCustomSampleGroupLabel("");
-    if (fileRef.current) fileRef.current.value = "";
   };
 
   const attachUrl = () => {
@@ -100,54 +98,6 @@ export default function CatalogExamplesEditor({
       reset();
       router.refresh();
     });
-  };
-
-  const uploadVideo = async () => {
-    const file = fileRef.current?.files?.[0];
-    if (!file) return setError("Choose a video file.");
-    if (!title.trim()) return setError("Add a title for the example.");
-    if (!file.type.startsWith("video/")) return setError("Choose a video file.");
-    if (file.size < 1 || file.size > MAX_BASIC_VIDEO_BYTES) {
-      return setError("Video uploads must be 200 MB or smaller.");
-    }
-
-    setError(null);
-    setProgress("Preparing secure upload…");
-    try {
-      const prepared = await fetch("/api/admin/catalog-examples/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          catalogItemId,
-          title,
-          description,
-          idempotencyKey: crypto.randomUUID(),
-        }),
-      });
-      const preparedBody = await safeJson(prepared);
-      if (!prepared.ok || typeof preparedBody.uploadUrl !== "string" || typeof preparedBody.exampleId !== "string") {
-        throw new Error(message(preparedBody, "Could not prepare upload."));
-      }
-
-      setProgress("Uploading video to Cloudflare…");
-      const uploadBody = new FormData();
-      uploadBody.set("file", file);
-      const uploaded = await fetch(preparedBody.uploadUrl, {
-        method: "POST",
-        body: uploadBody,
-        referrerPolicy: "no-referrer",
-      });
-      if (!uploaded.ok) throw new Error("Cloudflare could not receive the video.");
-
-      setProgress("Processing video…");
-      await waitUntilReady(preparedBody.exampleId);
-      setProgress("Video example added.");
-      reset();
-      router.refresh();
-    } catch (caught) {
-      setProgress(null);
-      setError(caught instanceof Error ? caught.message : "Video upload failed.");
-    }
   };
 
   const checkProcessing = async (exampleId: string) => {
@@ -281,13 +231,13 @@ export default function CatalogExamplesEditor({
         </ul>
       ) : null}
 
-      {mode !== "closed" ? (
+      {mode === "upload" ? <CatalogVideoUploader catalogItemId={catalogItemId} onBusyChange={setProgress}
+        onComplete={() => { reset(); router.refresh(); }} /> : mode !== "closed" ? (
         <form
           onSubmit={(event) => {
             event.preventDefault();
             if (mode === "url") attachUrl();
             else if (mode === "reuse") attachReusable();
-            else void uploadVideo();
           }}
           className="mt-3 grid min-w-0 gap-3 border-t border-realtor-primary/10 pt-3"
         >
@@ -318,7 +268,7 @@ export default function CatalogExamplesEditor({
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
                 maxLength={120}
-                placeholder={photoMode ? "Living room" : mode === "upload" ? "Full property video" : "iGUIDE example"}
+                placeholder={photoMode ? "Living room" : "iGUIDE example"}
                 className="w-full min-w-0 rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
               />
             </Field>
@@ -404,7 +354,7 @@ export default function CatalogExamplesEditor({
                 {pending ? "Attaching…" : photoMode ? "Add photo to gallery" : "Attach example"}
               </button>
             </>
-          ) : mode === "reuse" ? (
+          ) : (
             <>
               <p className="text-[11px] text-realtor-muted">
                 This creates a shared placement. The same Cloudflare video is not uploaded or stored again.
@@ -415,20 +365,6 @@ export default function CatalogExamplesEditor({
                 className="tap-target justify-self-start rounded-full bg-realtor-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
               >
                 {pending ? "Adding…" : "Use video here"}
-              </button>
-            </>
-          ) : (
-            <>
-              <input ref={fileRef} type="file" accept="video/*" className="block w-full min-w-0 max-w-full text-xs text-realtor-muted file:mr-3 file:max-w-full file:rounded-full file:border-0 file:bg-realtor-primary/10 file:px-3 file:py-2 file:font-semibold file:text-realtor-primary" />
-              <p className="text-[11px] text-realtor-muted">
-                Cloudflare Stream optimizes playback automatically. Maximum 10 minutes and 200 MB per example.
-              </p>
-              <button
-                type="submit"
-                disabled={Boolean(progress)}
-                className="tap-target justify-self-start rounded-full bg-realtor-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
-              >
-                {progress ?? "Upload video"}
               </button>
             </>
           )}

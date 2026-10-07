@@ -174,3 +174,7 @@ forwards a request body to another provider. The discovery gate remains enabled.
 8. Fotello remains gated until actual output assets and commercial rights are contractually available.
 
 This inventory is a discovery artifact. It changes no runtime behavior and deletes nothing.
+
+## Catalog sample resumable upload boundary
+
+`lib/booking/catalog-upload-policy.ts` reads at most the first and last 64 KiB of an admin-selected browser file to identify a reselected upload. This is a resume fingerprint, not a full-file integrity assertion. No filename or upload capability is persisted in browser storage. `CatalogVideoUploader.tsx` sends bounded 10 MiB chunks directly to the existing Stream connection; the server reserves at most 1 GB, 600 seconds and six hours using tenant-scoped service-only claims. No customer deliverable storage, paid plan, historical data or photo-final processing gate is changed. **Retain and harden.**

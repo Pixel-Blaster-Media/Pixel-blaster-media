@@ -790,6 +790,11 @@ interface CatalogStreamUploadClaimsTable {
     state: "claimed" | "provider_unknown" | "provisioned" | "attached" | "completed" | "cleanup_required" | "cleaned";
     created_at: string;
     updated_at: string;
+    upload_protocol: "basic" | "tus";
+    upload_size: number | null;
+    upload_fingerprint: string | null;
+    upload_expires_at: string | null;
+    upload_url: string | null;
   };
   Insert: {
     id: string;
@@ -800,6 +805,11 @@ interface CatalogStreamUploadClaimsTable {
     state?: "claimed" | "provider_unknown" | "provisioned" | "attached" | "completed" | "cleanup_required" | "cleaned";
     created_at?: string;
     updated_at?: string;
+    upload_protocol?: "basic" | "tus";
+    upload_size?: number | null;
+    upload_fingerprint?: string | null;
+    upload_expires_at?: string | null;
+    upload_url?: string | null;
   };
   Update: Partial<CatalogStreamUploadClaimsTable["Insert"]>;
   Relationships: [];
@@ -1503,6 +1513,11 @@ export interface Database {
           p_catalog_item_id: string;
         };
         Returns: string;
+      };
+      claim_catalog_resumable_upload: {
+        Args: { p_claim_id: string; p_organization_id: string; p_catalog_item_id: string;
+          p_upload_size: number; p_upload_fingerprint: string };
+        Returns: Json;
       };
       is_admin: {
         Args: Record<string, never>;

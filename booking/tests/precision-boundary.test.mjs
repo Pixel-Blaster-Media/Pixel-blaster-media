@@ -45,6 +45,9 @@ test('historical skin changes remain exact after bounded finals UI and OTP lifec
   // Finals UI and ConfirmForm's separately tested OTP lifecycle fix are not
   // part of the earlier presentation-only release.
   const presentationFiles = files.map(f => f.replace(/^booking\//, ''))
+    // The resumable uploader is a new functional component, covered by its
+    // dedicated lifecycle, route, protocol and real browser mock regressions.
+    .filter(f => f !== 'app/admin/settings/pricing/CatalogVideoUploader.tsx')
     .filter(f=>!bookingAuditUiPaths.includes(f) || Object.hasOwn(changes,f))
     .filter(f=>!bookingDesignUiPaths.includes(f) || Object.hasOwn(changes,f))
     .filter(f=>!['app/DownloadSessionBoundary.tsx','app/_components/SiteHeaderMobileMenu.tsx','app/auth/no-workspace/page.tsx','app/admin/bookings/[id]/LifecycleNotices.tsx','app/portal/book/RebookForm.tsx'].includes(f))

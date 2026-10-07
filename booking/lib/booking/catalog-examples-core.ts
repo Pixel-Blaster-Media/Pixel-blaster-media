@@ -1,3 +1,5 @@
+import { CATALOG_VIDEO_MAX_SECONDS, validCatalogUploadSize, validStreamUploadCapability } from "./catalog-upload-policy.ts";
+
 const HTTPS_URL_MAX = 2048;
 const ACCOUNT_ID = /^[0-9a-f]{32}$/;
 const STREAM_UID = /^[0-9a-f]{32}$/;
@@ -11,11 +13,13 @@ export type CatalogExampleSource = "external_url" | "cloudflare_stream";
 
 export class StreamProvisioningError extends Error {
   readonly outcome: "definitive" | "ambiguous";
+  readonly streamUid?: string;
 
-  constructor(message: string, outcome: "definitive" | "ambiguous") {
+  constructor(message: string, outcome: "definitive" | "ambiguous", streamUid?: string) {
     super(message);
     this.name = "StreamProvisioningError";
     this.outcome = outcome;
+    this.streamUid = streamUid;
   }
 }
 
@@ -298,6 +302,66 @@ export async function createStreamDirectUpload(input: {
     throw new StreamProvisioningError("Cloudflare Stream returned an invalid upload capability.", "ambiguous");
   }
   return result;
+}
+
+export async function createStreamTusUpload(input: {
+  name: string;
+  operationId: string;
+  size: number;
+  expiresAt: string;
+  env?: NodeJS.ProcessEnv | Record<string, string | undefined>;
+  fetchImpl?: typeof fetch;
+}): Promise<{ uid: string; uploadUrl: string }> {
+  const name = input.name.trim();
+  if (!name || name.length > 120 || !UUID.test(input.operationId) || !validCatalogUploadSize(input.size)
+      || !Number.isFinite(Date.parse(input.expiresAt)) || Date.parse(input.expiresAt) <= Date.now()) {
+    throw new Error("Invalid resumable upload request.");
+  }
+  const config = loadStreamConfig(input.env);
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const metadata = Object.entries({
+    name, maxDurationSeconds: String(CATALOG_VIDEO_MAX_SECONDS), expiry: input.expiresAt,
+    allowedorigins: JSON.stringify([config.allowedOrigin]), catalogUploadClaimId: input.operationId,
+  }).map(([key, value]) => `${key} ${Buffer.from(value).toString("base64")}`).join(",");
+  let response: Response;
+  try {
+    response = await fetchImpl(`https://api.cloudflare.com/client/v4/accounts/${config.accountId}/stream?direct_user=true`, {
+      method: "POST", redirect: "error",
+      headers: { Authorization: `Bearer ${config.apiToken}`, "Tus-Resumable": "1.0.0",
+        "Upload-Length": String(input.size), "Upload-Metadata": metadata, "Upload-Creator": input.operationId },
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch { throw new StreamProvisioningError("Cloudflare could not confirm upload preparation.", "ambiguous"); }
+  if (response.status !== 201) {
+    const ambiguous = response.status >= 500 || response.status === 408 || response.status === 429 || response.ok;
+    throw new StreamProvisioningError("Cloudflare rejected resumable upload preparation.", ambiguous ? "ambiguous" : "definitive");
+  }
+  const uid = response.headers.get("stream-media-id");
+  const uploadUrl = response.headers.get("Location");
+  if (!uid || !STREAM_UID.test(uid) || !validStreamUploadCapability(uploadUrl)) {
+    throw new StreamProvisioningError("Cloudflare returned an invalid resumable upload capability.", "ambiguous",
+      uid && STREAM_UID.test(uid) ? uid : undefined);
+  }
+  // Do not expose a capability unless the provider retained our restrictions.
+  try {
+    const verified = await fetchImpl(`https://api.cloudflare.com/client/v4/accounts/${config.accountId}/stream/${uid}`, {
+      headers: { Authorization: `Bearer ${config.apiToken}` }, redirect: "error", signal: AbortSignal.timeout(15_000),
+    });
+    if (!verified.ok) throw new Error("Verification failed");
+    const data = await readBoundedProviderJson(verified) as {
+      success?: boolean; result?: { uid?: string; allowedOrigins?: unknown; creator?: string;
+        maxDurationSeconds?: number; uploadExpiry?: string; meta?: { catalogUploadClaimId?: string } };
+    };
+    if (data.success !== true || data.result?.uid !== uid
+        || JSON.stringify(data.result.allowedOrigins) !== JSON.stringify([config.allowedOrigin])
+        || data.result.maxDurationSeconds !== CATALOG_VIDEO_MAX_SECONDS
+        || typeof data.result.uploadExpiry !== "string"
+        || Date.parse(data.result.uploadExpiry) !== Date.parse(input.expiresAt)
+        || data.result.creator !== input.operationId || data.result.meta?.catalogUploadClaimId !== input.operationId) {
+      throw new Error("Upload restrictions were not retained");
+    }
+  } catch { throw new StreamProvisioningError("Could not verify upload restrictions.", "ambiguous", uid); }
+  return { uid, uploadUrl };
 }
 
 export interface StreamVideoDetails {
