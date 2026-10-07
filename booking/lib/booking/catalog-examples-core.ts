@@ -14,12 +14,14 @@ export type CatalogExampleSource = "external_url" | "cloudflare_stream";
 export class StreamProvisioningError extends Error {
   readonly outcome: "definitive" | "ambiguous";
   readonly streamUid?: string;
+  readonly diagnostic?: StreamTusInspection;
 
-  constructor(message: string, outcome: "definitive" | "ambiguous", streamUid?: string) {
+  constructor(message: string, outcome: "definitive" | "ambiguous", streamUid?: string, diagnostic?: StreamTusInspection) {
     super(message);
     this.name = "StreamProvisioningError";
     this.outcome = outcome;
     this.streamUid = streamUid;
+    this.diagnostic = diagnostic;
   }
 }
 
@@ -343,25 +345,58 @@ export async function createStreamTusUpload(input: {
       uid && STREAM_UID.test(uid) ? uid : undefined);
   }
   // Do not expose a capability unless the provider retained our restrictions.
+  const inspection = await inspectStreamTusReservation({ uid, operationId: input.operationId,
+    expiresAt: input.expiresAt, env: input.env, fetchImpl });
+  if (!inspection.verified) {
+    throw new StreamProvisioningError("Could not verify upload restrictions.", "ambiguous", uid, inspection);
+  }
+  return { uid, uploadUrl };
+}
+
+export interface StreamTusInspection {
+  verified: boolean;
+  stage: "provider_read" | "restriction_verification";
+  httpStatus: number | null;
+  checks: {
+    success: boolean; uid: boolean; allowedOrigin: boolean; maxDuration: boolean;
+    expiry: boolean; creator: boolean; claimMetadata: boolean;
+  } | null;
+}
+
+// Read-only. Never return provider payloads, capabilities, credentials or metadata values.
+export async function inspectStreamTusReservation(input: {
+  uid: string; operationId: string; expiresAt: string;
+  env?: NodeJS.ProcessEnv | Record<string, string | undefined>; fetchImpl?: typeof fetch;
+}): Promise<StreamTusInspection> {
+  if (!STREAM_UID.test(input.uid) || !UUID.test(input.operationId)
+      || !Number.isFinite(Date.parse(input.expiresAt))) throw new Error("Invalid upload inspection.");
+  const config = loadStreamConfig(input.env);
+  const fetchImpl = input.fetchImpl ?? fetch;
+  let httpStatus: number | null = null;
   try {
-    const verified = await fetchImpl(`https://api.cloudflare.com/client/v4/accounts/${config.accountId}/stream/${uid}`, {
+    const response = await fetchImpl(`https://api.cloudflare.com/client/v4/accounts/${config.accountId}/stream/${input.uid}`, {
       headers: { Authorization: `Bearer ${config.apiToken}` }, redirect: "error", signal: AbortSignal.timeout(15_000),
     });
-    if (!verified.ok) throw new Error("Verification failed");
-    const data = await readBoundedProviderJson(verified) as {
+    httpStatus = response.status;
+    if (!response.ok) return { verified: false, stage: "provider_read", httpStatus, checks: null };
+    const data = await readBoundedProviderJson(response) as {
       success?: boolean; result?: { uid?: string; allowedOrigins?: unknown; creator?: string;
         maxDurationSeconds?: number; uploadExpiry?: string; meta?: { catalogUploadClaimId?: string } };
     };
-    if (data.success !== true || data.result?.uid !== uid
-        || JSON.stringify(data.result.allowedOrigins) !== JSON.stringify([config.allowedOrigin])
-        || data.result.maxDurationSeconds !== CATALOG_VIDEO_MAX_SECONDS
-        || typeof data.result.uploadExpiry !== "string"
-        || Date.parse(data.result.uploadExpiry) !== Date.parse(input.expiresAt)
-        || data.result.creator !== input.operationId || data.result.meta?.catalogUploadClaimId !== input.operationId) {
-      throw new Error("Upload restrictions were not retained");
-    }
-  } catch { throw new StreamProvisioningError("Could not verify upload restrictions.", "ambiguous", uid); }
-  return { uid, uploadUrl };
+    const checks = {
+      success: data?.success === true,
+      uid: data?.result?.uid === input.uid,
+      allowedOrigin: JSON.stringify(data?.result?.allowedOrigins) === JSON.stringify([config.allowedOrigin]),
+      maxDuration: data?.result?.maxDurationSeconds === CATALOG_VIDEO_MAX_SECONDS,
+      expiry: typeof data?.result?.uploadExpiry === "string"
+        && Date.parse(data.result.uploadExpiry) === Date.parse(input.expiresAt),
+      creator: data?.result?.creator === input.operationId,
+      claimMetadata: data?.result?.meta?.catalogUploadClaimId === input.operationId,
+    };
+    return { verified: Object.values(checks).every(Boolean), stage: "restriction_verification", httpStatus, checks };
+  } catch {
+    return { verified: false, stage: "provider_read", httpStatus, checks: null };
+  }
 }
 
 export interface StreamVideoDetails {

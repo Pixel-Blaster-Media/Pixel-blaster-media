@@ -127,3 +127,28 @@ test('actual pinned browser XHR stack rejects timeouts instead of leaving the SD
   await assert.rejects(request.send(),error=>error.type==='error');
  }finally{globalThis.XMLHttpRequest=original}
 });
+
+
+test('existing reservation inspection is GET-only, identifies every mismatch, and never returns raw provider values',async()=>{
+ const expiresAt=new Date(Date.now()+3600_000).toISOString();
+ const baseline={uid,allowedOrigins:['pixelblastermedia.com'],maxDurationSeconds:600,
+  uploadExpiry:expiresAt,creator:claim,meta:{catalogUploadClaimId:claim}};
+ for(const [key,change] of [['uid',{uid:'wrong'}],['allowedOrigin',{allowedOrigins:['wrong.test']}],
+  ['maxDuration',{maxDurationSeconds:601}],['expiry',{uploadExpiry:'invalid'}],
+  ['creator',{creator:'wrong'}],['claimMetadata',{meta:{catalogUploadClaimId:'wrong'}}]]){
+  const calls=[];
+  const result=await core.inspectStreamTusReservation({uid,operationId:claim,expiresAt,env,
+   fetchImpl:async(url,init)=>{calls.push({url,init});return Response.json({success:true,result:{...baseline,...change,secret:'never-expose',uploadURL:'https://private.invalid/cap'}})}});
+  assert.equal(result.verified,false);assert.equal(result.stage,'restriction_verification');
+  assert.equal(result.checks[key],false);assert.equal(Object.values(result.checks).filter(x=>!x).length,1);
+  assert.equal(calls.length,1);assert.equal(calls[0].init.method,undefined);
+  assert.equal(calls[0].url.endsWith('/'+uid),true);
+  const publicResult=JSON.stringify(result);assert.doesNotMatch(publicResult,/never-expose|private.invalid|mock-only-token|wrong.test/);
+ }
+ const matched=await core.inspectStreamTusReservation({uid,operationId:claim,expiresAt,env,
+  fetchImpl:async()=>Response.json({success:true,result:baseline})});assert.equal(matched.verified,true);
+ for(const fetchImpl of [async()=>new Response(null,{status:404}),async()=>{throw new Error('secret provider exception')},async()=>Response.json(null)]){
+  const result=await core.inspectStreamTusReservation({uid,operationId:claim,expiresAt,env,fetchImpl});
+  assert.equal(result.verified,false);assert.doesNotMatch(JSON.stringify(result),/secret provider exception/);
+ }
+});
