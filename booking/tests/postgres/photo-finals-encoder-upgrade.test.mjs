@@ -54,9 +54,24 @@ test('encoder upgrade preserves history, grants and revision-specific package ke
   }
   const sql = query => command('psql', [...args(), '-c', query]).stdout.trim();
   const json = query => JSON.parse(sql(query));
-  function migrate({ failAfterDdl = false } = {}, required = true) {
+  function migrate({ transaction = true, failAfterDdl = false, failInsideDdl = false } = {}, required = true) {
     const path = join(temp, 'upgrade.sql');
-    writeFileSync(path, `begin;\n${migrationSql}\n${failAfterDdl ? 'select missing_encoder_upgrade_assertion();' : ''}\ncommit;\n`);
+    let source = migrationSql;
+    if (failInsideDdl) {
+      const oldDefinitions = surface().map(row => `(${literal(row.name)},${literal(createHash('md5').update(row.definition).digest('hex'))})`).join(',');
+      const trailer = /end;\s*\$photo_finals_encoder_revision\$;\s*$/i;
+      assert.match(source, trailer, 'internal failure must be inside the final atomic DO body');
+      const injection = `
+ if (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+   join (values ${oldDefinitions}) prior(name,definition_hash) on prior.name=p.proname
+   where n.nspname='public' and md5(pg_get_functiondef(p.oid))<>prior.definition_hash)<>5
+ then raise exception 'encoder_upgrade_injection_before_all_replacements';end if;
+ raise exception 'encoder_upgrade_injected_after_all_replacements' using errcode='P0001';
+`;
+      source = source.replace(trailer, ending => injection + ending);
+    }
+    assert.ok(transaction || !failAfterDdl, 'external failure proves rollback only inside an explicit transaction');
+    writeFileSync(path, `${transaction ? 'begin;\n' : ''}${source}\n${failAfterDdl ? 'select missing_encoder_upgrade_assertion();\n' : ''}${transaction ? 'commit;\n' : ''}`);
     return command('psql', [...args(), '-f', path], required);
   }
   function rpc(name, parameters) {
@@ -192,9 +207,9 @@ test('encoder upgrade preserves history, grants and revision-specific package ke
     assert.equal(oldSpecs.gallery.version, 1);
     assert.equal(oldSpecs.gallery.encoder, 'sharp-0.35.4_libvips-8.18.6_mozjpeg-0826579');
 
-    await t.test('empty-state upgrade retains function identity, API grants and bounded runtime configuration', () => isolated(async () => {
+    for (const transaction of [true, false]) await t.test(`empty-state upgrade retains function identity, grants and versioned keys with ${transaction ? 'an explicit transaction' : 'an autocommit migration file'}`, () => isolated(async () => {
       const before = surface(), originalRows = rows();
-      migrate();
+      migrate({ transaction });
       const after = surface();
       assert.deepEqual(after.map(({ definition, ...rest }) => rest), before.map(({ definition, ...rest }) => rest));
       assert.deepEqual(rows(), originalRows, 'DDL must not rewrite historical application rows');
@@ -242,6 +257,16 @@ test('encoder upgrade preserves history, grants and revision-specific package ke
       assert.notEqual(rejected.status, 0);
       assert.match(rejected.stderr, /42883.*missing_encoder_upgrade_assertion/);
       assert.deepEqual(surface(), before);
+      assert.deepEqual(rows(), originalRows);
+      assert.deepEqual(rpc('photo_finals_transform_specs', {}), oldSpecs);
+    }));
+
+    await t.test('internal failure after all five replacements rolls back an autocommit migration statement', () => isolated(() => {
+      const before = surface(), originalRows = rows();
+      const rejected = migrate({ transaction: false, failInsideDdl: true }, false);
+      assert.notEqual(rejected.status, 0);
+      assert.match(rejected.stderr, /P0001.*encoder_upgrade_injected_after_all_replacements/);
+      assert.deepEqual(surface(), before, 'implicit statement rollback must restore every replaced definition and ACL');
       assert.deepEqual(rows(), originalRows);
       assert.deepEqual(rpc('photo_finals_transform_specs', {}), oldSpecs);
     }));
