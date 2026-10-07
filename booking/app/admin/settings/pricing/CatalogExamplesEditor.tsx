@@ -41,6 +41,8 @@ export default function CatalogExamplesEditor({
   const [sampleGroup, setSampleGroup] = useState("iguide");
   const [customSampleGroupLabel, setCustomSampleGroupLabel] = useState("");
   const [url, setUrl] = useState("");
+  const [photoMode, setPhotoMode] = useState(false);
+  const [photoApproved, setPhotoApproved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -51,6 +53,8 @@ export default function CatalogExamplesEditor({
 
   const reset = () => {
     setMode("closed");
+    setPhotoMode(false);
+    setPhotoApproved(false);
     setSourceExampleId("");
     setTitle("");
     setDescription("");
@@ -69,6 +73,10 @@ export default function CatalogExamplesEditor({
     formData.set("sample_group", sampleGroup);
     formData.set("custom_sample_group_label", customSampleGroupLabel);
     formData.set("external_url", url);
+    if (photoMode) {
+      formData.set("photo_sample", "true");
+      formData.set("photo_public_ack", String(photoApproved));
+    }
     setError(null);
     startTransition(async () => {
       const result = await attachCatalogExample(formData);
@@ -173,10 +181,15 @@ export default function CatalogExamplesEditor({
           <button
             type="button"
             disabled={Boolean(progress)}
-            onClick={() => setMode(mode === "url" ? "closed" : "url")}
+            onClick={() => { setPhotoMode(false); setPhotoApproved(false); setMode(mode === "url" && !photoMode ? "closed" : "url"); }}
             className="tap-target rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-text hover:border-realtor-primary/40"
           >
             Attach URL
+          </button>
+          <button type="button" disabled={Boolean(progress)}
+            onClick={() => { reset(); setPhotoMode(true); setKind("link"); setSampleGroup("photos"); setMode("url"); }}
+            className="tap-target rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-text">
+            Add photo URL
           </button>
           <button
             type="button"
@@ -305,11 +318,11 @@ export default function CatalogExamplesEditor({
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
                 maxLength={120}
-                placeholder={mode === "upload" ? "Full property video" : "iGUIDE example"}
+                placeholder={photoMode ? "Living room" : mode === "upload" ? "Full property video" : "iGUIDE example"}
                 className="w-full min-w-0 rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
               />
             </Field>
-            {mode === "url" ? (
+            {mode === "url" && !photoMode ? (
               <Field label="Example type">
                 <select
                   value={kind}
@@ -335,10 +348,10 @@ export default function CatalogExamplesEditor({
                   onChange={(event) => setSampleGroup(event.target.value)}
                   className="w-full min-w-0 rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
                 >
-                  {CATALOG_SAMPLE_GROUP_OPTIONS.map((option) => (
+                  {CATALOG_SAMPLE_GROUP_OPTIONS.filter(option => !photoMode || option.key === "photos" || option.key === "aerial").map((option) => (
                     <option key={option.key} value={option.key}>{option.label} pill</option>
                   ))}
-                  <option value="custom">Custom pill</option>
+                  {!photoMode ? <option value="custom">Custom pill</option> : null}
                 </select>
               </Field>
               {sampleGroup === "custom" ? (
@@ -372,19 +385,23 @@ export default function CatalogExamplesEditor({
                   type="url"
                   value={url}
                   onChange={(event) => setUrl(event.target.value)}
-                  placeholder="https://…"
+                  placeholder={photoMode ? "https://your-photo-host/photo.jpg" : "https://…"}
                   className="w-full min-w-0 rounded-xl border border-realtor-primary/15 bg-realtor-surface px-3 py-2 text-sm text-realtor-text"
                 />
               </Field>
               <p className="text-[11px] text-realtor-muted">
-                YouTube, Vimeo, and iGUIDE open in the player. Other safe HTTPS examples open externally without losing booking progress.
+                {photoMode ? "Use a permanent public HTTPS image link (JPG, PNG, WebP, AVIF, GIF, or a Cloudflare Images delivery URL). Add one photo at a time (up to eight total examples per service); photos in the same group form a gallery. Cloudflare-hosted public image links work. Private delivery or expiring links should not be used." : "Cloudflare videos and recognized iGUIDE tours open here. Other HTTPS links open in a new tab without losing booking progress."}
               </p>
+              {photoMode ? <label className="flex items-start gap-2 text-xs text-realtor-text">
+                <input type="checkbox" required checked={photoApproved} onChange={event => setPhotoApproved(event.target.checked)} className="mt-1" />
+                <span>I have permission to show this photo publicly as a sample.</span>
+              </label> : null}
               <button
                 type="submit"
                 disabled={pending}
                 className="tap-target justify-self-start rounded-full bg-realtor-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
               >
-                {pending ? "Attaching…" : "Attach example"}
+                {pending ? "Attaching…" : photoMode ? "Add photo to gallery" : "Attach example"}
               </button>
             </>
           ) : mode === "reuse" ? (

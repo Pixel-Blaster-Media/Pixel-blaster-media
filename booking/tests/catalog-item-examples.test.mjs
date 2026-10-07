@@ -291,14 +291,14 @@ test("catalog examples cross schema, admin, public booking, and SaaS cloning bou
   assert.match(picker, /target="_blank"/);
   assert.match(picker, /rel="noopener noreferrer"/);
   assert.match(picker, /sampleHref\(example.external_url \?\? example.embed_url\)/);
-  assert.match(picker, /video \? <iframe/);
-  assert.match(picker, /referrerPolicy="strict-origin-when-cross-origin"/);
+  assert.match(picker, /view && view.kind !== "photos" \? <iframe/);
+  assert.match(picker, /referrerPolicy=\{view.kind === "video" \? "strict-origin-when-cross-origin" : "no-referrer"\}/);
   assert.match(picker, /aria-haspopup="dialog"/);
   assert.match(editor, /Upload video/);
   assert.match(editor, /Use existing video/);
   assert.match(editor, /Recover video details/);
   assert.match(editor, /Attach URL/);
-  assert.match(editor, /YouTube, Vimeo, and iGUIDE open in the player/i);
+  assert.match(editor, /Cloudflare videos and recognized iGUIDE tours open here/i);
   assert.match(editor, /Check processing/);
   assert.match(actions, /requireAdmin/);
   assert.match(actions, /eq\("organization_id", admin\.organizationId\)/);

@@ -29,6 +29,7 @@ const Picker = loadSource('app/book/_components/PackageAccordion.tsx', {
   'next/navigation': {useRouter: () => ({replace() { throw Error('render must not change selection'); }}), useSearchParams: () => new URLSearchParams('services=bundle')},
   '@/lib/booking/quote': quote, '@/lib/booking/wizard-state': wizard,
   '@/lib/booking/catalog-sample-groups': groups,
+  '@/lib/booking/catalog-sample-viewer': loadSource('lib/booking/catalog-sample-viewer.ts'),
   '@/lib/booking/catalog-rules': {isAddonEligible: () => true},
   './BookingTotalBar': {default: Total}, './package-description': description,
 }).default;
@@ -166,4 +167,17 @@ test('single and multiple video, link and tour example names start with their vi
     const names = visibleActionNames(render([item({examples})]));
     for (const control of names) assert.ok(control.name.startsWith(control.visible), JSON.stringify(control));
   }
+});
+
+test('direct photo examples become labelled lazy thumbnails; other photo links remain external',()=>{
+ const html=render([item({examples:[sample({id:'photo',title:'Living room',kind:'link',sample_group_key:'photos',sample_group_label:'Photos',external_url:'https://samples.example.invalid/room.JPG',embed_url:null}),sample({id:'album',title:'External album',kind:'link',sample_group_key:'photos',sample_group_label:'Photos',external_url:'https://samples.example.invalid/album',embed_url:null})]})]);
+ assert.match(html,/Enlarge Living room — Photos for Test package \(opens photo gallery\)/);
+ assert.match(html,/<img[^>]*loading="lazy"[^>]*referrerPolicy="no-referrer"/);
+ assert.match(html,/href="https:\/\/samples.example.invalid\/album" target="_blank" rel="noopener noreferrer"/);
+ assert.doesNotMatch(html,/<iframe|<dialog[^>]*\bopen=/);
+});
+test('recognized configured iGUIDE links offer an on-site tour without preloading a provider',()=>{
+ const html=render([item({examples:[sample({id:'tour',title:'Floor plan',kind:'interactive',embed_url:'https://youriguide.com/existing_tour?pano=5',external_url:'https://youriguide.com/existing_tour?pano=5'})]})]);
+ assert.match(html,/opens iGUIDE tour/);
+ assert.doesNotMatch(html,/<iframe|youriguide\.com/);
 });

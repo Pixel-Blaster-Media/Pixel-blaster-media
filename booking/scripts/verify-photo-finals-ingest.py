@@ -77,6 +77,7 @@ def main():
             migration=ROOT/'supabase/migrations/20260912120000_photo_finals_ingest.sql'
             if migration.exists(): run(cmd+['-f',str(migration)])
             run(cmd+['-f',str(ROOT/'supabase/migrations/20260912160000_photo_finals_packages.sql')])
+            run(cmd+['-c','BEGIN','-f',str(ROOT/'supabase/migrations/20261007140933_photo_finals_encoder_security_revision.sql'),'-c','COMMIT'])
             run(cmd+['-f',str(ROOT/'tests/postgres/photo-finals-ingest.sql')])
             run(cmd+['-f',str(ROOT/'tests/postgres/photo-finals-ingest.behavior.sql')])
             proofs=races(cmd)

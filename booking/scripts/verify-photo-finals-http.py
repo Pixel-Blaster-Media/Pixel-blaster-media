@@ -20,6 +20,7 @@ def main():
    if extra.exists():m.run(cmd+['-f',str(extra)])
    m.run(cmd+['-f',str(m.ROOT/'supabase/migrations/20260912210000_photo_finals_download_accounting.sql')])
    m.run(cmd+['-f',str(m.ROOT/'supabase/migrations/20260912220000_photo_finals_recovery.sql')])
+   m.run(cmd+['-c','BEGIN','-f',str(m.ROOT/'supabase/migrations/20261007140933_photo_finals_encoder_security_revision.sql'),'-c','COMMIT'])
    env={**m.ENV,'PF_TEST_SOCKET':t,'PF_TEST_PSQL':str(m.PG/'psql')}
    rest=None
    try:

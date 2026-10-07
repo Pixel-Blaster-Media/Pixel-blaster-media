@@ -46,6 +46,7 @@ test('historical skin changes remain exact after bounded finals UI and OTP lifec
   // part of the earlier presentation-only release.
   const presentationFiles = files.map(f => f.replace(/^booking\//, ''))
     .filter(f=>!bookingAuditUiPaths.includes(f) || Object.hasOwn(changes,f))
+    .filter(f=>!bookingDesignUiPaths.includes(f) || Object.hasOwn(changes,f))
     .filter(f=>!['app/DownloadSessionBoundary.tsx','app/_components/SiteHeaderMobileMenu.tsx','app/auth/no-workspace/page.tsx','app/admin/bookings/[id]/LifecycleNotices.tsx','app/portal/book/RebookForm.tsx'].includes(f))
     .filter(f => !['app/portal/[propertyId]/page.tsx', 'components/media/PhotoFinalsWorkspace.tsx', 'components/media/ResumableDownload.tsx', 'components/media/FinalsGallery.tsx', 'components/media/FinalsNavigationOwner.tsx', 'app/book/confirm/ConfirmForm.tsx'].includes(f));
   assert.deepEqual(presentationFiles.sort(), Object.keys(changes).sort());

@@ -104,6 +104,7 @@ test('changing a package keeps the private draft but invalidates the old time sl
     'next/navigation': {useRouter:()=>({replace:url=>{destination=url;}}),useSearchParams:()=>new URLSearchParams(`services=social_media_special&draft=${draft}&slot=2090-01-01T15:00:00Z&shoot_notes=private`)},
     '@/lib/booking/quote': quote, '@/lib/booking/wizard-state': wizard,
     '@/lib/booking/catalog-sample-groups': {getCatalogSampleGroups:()=>[]},
+    '@/lib/booking/catalog-sample-viewer': loadSource('lib/booking/catalog-sample-viewer.ts'),
     '@/lib/booking/catalog-rules': {isAddonEligible:()=>true},
     './BookingTotalBar': {default:()=>null},
     './package-description': {findCommonPackageLines:()=>[],packageDescriptionLines:()=>[],withoutCommonPackageLines:()=>[]},

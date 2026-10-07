@@ -32,6 +32,8 @@ await current.route('**/*',async route=>{
  if(assetFiles.has(url))return route.fulfill({status:200,contentType:url===assets.secondary?'image/png':'image/jpeg',body:readFileSync(resolve(assetDir,assetFiles.get(url)))});
  if(samples.has(url)){
   sampleRequests.push({url,method:request.method(),referer:request.headers().referer??null});
+  if(url.includes('unavailable'))return route.abort();
+  if(/\.(?:jpg|png)$/.test(new URL(url).pathname))return route.fulfill({status:200,contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64')});
   return route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><title>Isolated example navigation</title><button>Mock sample control</button><p>Provider content is isolated for this local navigation test.</p>'});
  }
  unexpected.push(new URL(url).origin+new URL(url).pathname);return route.abort();
@@ -184,6 +186,44 @@ try{
   await popup.waitForURL(expectedUrl);await popup.waitForLoadState('domcontentloaded');assert.equal(popup.url(),expectedUrl);assert.equal(await popup.evaluate(()=>window.opener),null);
   await popup.close();assert.equal(new URL(externalPage.url()).searchParams.get('services'),'blue_print');
  }finally{await externalContext.close();}
+ const sampleContext=await browser.newContext({viewport:{width:390,height:844}});await configureContext(sampleContext);
+ try{
+  const samplePage=await sampleContext.newPage();await samplePage.goto(origin+'/book?services=blue_print');
+  await samplePage.getByRole('button',{name:'Selected The Blue Print',exact:true}).waitFor();
+  const startUrl=samplePage.url();
+  for(const width of [390,1280]){
+   await samplePage.setViewportSize({width,height:900});
+   const photoCard=samplePage.locator('article[aria-labelledby="package-blue_print"]');
+   await photoCard.locator('details').evaluateAll(elements=>elements.forEach(element=>element.open=true));
+   const thumb=photoCard.locator('button:visible').filter({hasText:'Synthetic photo one'}).first();
+   await thumb.focus();await samplePage.keyboard.press('Enter');
+   const gallery=samplePage.locator('dialog[open]');await gallery.waitFor();
+   await gallery.getByRole('img',{name:'Synthetic photo one',exact:true}).waitFor();
+   assert.equal(await gallery.getByRole('button',{name:'Close sample photos',exact:true}).evaluate(e=>document.activeElement===e),true);
+   await samplePage.keyboard.press('ArrowRight');await gallery.getByRole('img',{name:'Synthetic photo two',exact:true}).waitFor();
+   assert.match(await gallery.getByRole('status').innerText(),/Photo 2 of 3/);
+   await gallery.getByRole('button',{name:'Next photo',exact:true}).click();
+   await gallery.getByRole('status').filter({hasText:'could not load'}).waitFor();
+   await gallery.getByRole('button',{name:'Next photo',exact:true}).click();await gallery.getByRole('img',{name:'Synthetic photo one',exact:true}).waitFor();
+   await gallery.screenshot({path:resolve(output,'photo-gallery-'+width+'.png')});
+   await gallery.getByRole('button',{name:'Close sample photos',exact:true}).focus();await samplePage.keyboard.press('Escape');
+   await samplePage.waitForFunction(()=>document.querySelectorAll('dialog[open]').length===0);
+   await thumb.evaluate(e=>new Promise(resolve=>requestAnimationFrame(()=>resolve())));
+   assert.equal(await thumb.evaluate(e=>document.activeElement===e),true);
+   const tour=samplePage.getByRole('button',{name:/opens iGUIDE tour/}).first();
+   await samplePage.locator('details').evaluateAll(elements=>elements.forEach(element=>element.open=true));
+   await tour.click();const tourDialog=samplePage.locator('dialog[open]');await tourDialog.waitFor();
+   const tourFrame=tourDialog.locator('iframe');const tourUrl=await tourFrame.getAttribute('src');assert.ok(samples.has(tourUrl));
+   await samplePage.frameLocator('dialog[open] iframe').getByRole('button',{name:'Mock sample control',exact:true}).waitFor();
+   assert.equal(await tourFrame.getAttribute('referrerpolicy'),'no-referrer');
+   assert.equal(await tourDialog.getByRole('link',{name:'Open the original tour in a new tab',exact:true}).getAttribute('href'),tourUrl);
+   await tourDialog.screenshot({path:resolve(output,'iguide-popup-'+width+'.png')});
+   await tourDialog.getByRole('button',{name:'Close sample tour',exact:true}).click();await samplePage.waitForFunction(()=>document.querySelectorAll('dialog[open],iframe').length===0);
+   assert.equal(await tour.evaluate(e=>document.activeElement===e),true);assert.equal(samplePage.url(),startUrl);assert.equal(sampleContext.pages().length,1);
+   assert.equal(await samplePage.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
+  }
+  checks.push('photo-gallery-thumbnail-arrows-wrap-error-recovery-and-escape-mobile-desktop','iguide-popup-lazy-load-fallback-referrer-focus-and-selection-mobile-desktop');
+ }finally{await sampleContext.close();}
  assert.equal(page.url(),selectionUrl);assert.equal(await special.getByRole('button',{name:'Selected Social Media Special',exact:true}).getAttribute('aria-pressed'),'true');
  assert.equal(sampleRequests[0].referer,null);checks.push('external-new-tab-return-preserves-selection-and-referrer-privacy');
  // Stream's restricted player stays inside this origin and is lazy-loaded.

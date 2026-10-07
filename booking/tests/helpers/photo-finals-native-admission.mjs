@@ -10,7 +10,7 @@ const sharp=()=>{
   async toBuffer(){events.push({step:'encode',at:clock});clock+=30000;return {data:Buffer.from('jpeg'),info:{width:1,height:1}};}};
  return pipeline;
 };
-sharp.versions={sharp:'0.35.4',vips:'8.18.6',mozjpeg:'0826579'};
+sharp.versions={sharp:'0.35.5',vips:'8.18.7',mozjpeg:'0826579'};
 mock.module('sharp',{defaultExport:sharp});
 const {transformFinalJpeg}=await import('../../lib/media/finals/transforms.ts');
 const {finalsDeadline}=await import('../../lib/media/finals/operator-deadline.ts');
