@@ -1,4 +1,4 @@
-import { CATALOG_VIDEO_MAX_SECONDS, validCatalogUploadSize, validStreamUploadCapability } from "./catalog-upload-policy.ts";
+import { CATALOG_VIDEO_MAX_SECONDS, inspectStreamUploadCapability, validCatalogUploadSize, validStreamUploadCapability } from "./catalog-upload-policy.ts";
 
 const HTTPS_URL_MAX = 2048;
 const ACCOUNT_ID = /^[0-9a-f]{32}$/;
@@ -14,9 +14,9 @@ export type CatalogExampleSource = "external_url" | "cloudflare_stream";
 export class StreamProvisioningError extends Error {
   readonly outcome: "definitive" | "ambiguous";
   readonly streamUid?: string;
-  readonly diagnostic?: StreamTusInspection;
+  readonly diagnostic?: StreamTusPreparationDiagnostic;
 
-  constructor(message: string, outcome: "definitive" | "ambiguous", streamUid?: string, diagnostic?: StreamTusInspection) {
+  constructor(message: string, outcome: "definitive" | "ambiguous", streamUid?: string, diagnostic?: StreamTusPreparationDiagnostic) {
     super(message);
     this.name = "StreamProvisioningError";
     this.outcome = outcome;
@@ -333,16 +333,23 @@ export async function createStreamTusUpload(input: {
         "Upload-Length": String(input.size), "Upload-Metadata": metadata, "Upload-Creator": input.operationId },
       signal: AbortSignal.timeout(15_000),
     });
-  } catch { throw new StreamProvisioningError("Cloudflare could not confirm upload preparation.", "ambiguous"); }
+  } catch {
+    throw new StreamProvisioningError("Cloudflare could not confirm upload preparation.", "ambiguous", undefined,
+      { verified: false, stage: "provider_create", httpStatus: null, checks: null });
+  }
   if (response.status !== 201) {
     const ambiguous = response.status >= 500 || response.status === 408 || response.status === 429 || response.ok;
-    throw new StreamProvisioningError("Cloudflare rejected resumable upload preparation.", ambiguous ? "ambiguous" : "definitive");
+    throw new StreamProvisioningError("Cloudflare rejected resumable upload preparation.", ambiguous ? "ambiguous" : "definitive", undefined,
+      { verified: false, stage: "provider_create", httpStatus: response.status, checks: null });
   }
   const uid = response.headers.get("stream-media-id");
   const uploadUrl = response.headers.get("Location");
   if (!uid || !STREAM_UID.test(uid) || !validStreamUploadCapability(uploadUrl)) {
     throw new StreamProvisioningError("Cloudflare returned an invalid resumable upload capability.", "ambiguous",
-      uid && STREAM_UID.test(uid) ? uid : undefined);
+      uid && STREAM_UID.test(uid) ? uid : undefined,
+      { verified: false, stage: "capability_validation", httpStatus: response.status,
+        checks: { uidPresent: Boolean(uid), uidValid: Boolean(uid && STREAM_UID.test(uid)),
+          ...inspectStreamUploadCapability(uploadUrl) } });
   }
   // Do not expose a capability unless the provider retained our restrictions.
   const inspection = await inspectStreamTusReservation({ uid, operationId: input.operationId,
@@ -361,7 +368,20 @@ export interface StreamTusInspection {
     success: boolean; uid: boolean; allowedOrigin: boolean; maxDuration: boolean;
     expiry: boolean; creator: boolean; claimMetadata: boolean;
   } | null;
+  expiryChecks?: { present: boolean; parseable: boolean; exactMatch: boolean; sameWholeSecond: boolean };
 }
+
+export type StreamTusPreparationDiagnostic = StreamTusInspection | {
+  verified: false;
+  stage: "provider_create";
+  httpStatus: number | null;
+  checks: null;
+} | {
+  verified: false;
+  stage: "capability_validation";
+  httpStatus: number;
+  checks: ReturnType<typeof inspectStreamUploadCapability> & { uidPresent: boolean; uidValid: boolean };
+};
 
 // Read-only. Never return provider payloads, capabilities, credentials or metadata values.
 export async function inspectStreamTusReservation(input: {
@@ -383,17 +403,27 @@ export async function inspectStreamTusReservation(input: {
       success?: boolean; result?: { uid?: string; allowedOrigins?: unknown; creator?: string;
         maxDurationSeconds?: number; uploadExpiry?: string; meta?: { catalogUploadClaimId?: string } };
     };
+    const rawProviderExpiry = data?.result?.uploadExpiry;
+    const expiryPresent = typeof rawProviderExpiry === "string";
+    const providerExpiry = typeof rawProviderExpiry === "string" ? Date.parse(rawProviderExpiry) : NaN;
+    const expectedExpiry = Date.parse(input.expiresAt);
+    const expiryChecks = {
+      present: expiryPresent,
+      parseable: Number.isFinite(providerExpiry),
+      exactMatch: providerExpiry === expectedExpiry,
+      // Diagnostic only. A same-second but different-millisecond expiry still fails.
+      sameWholeSecond: Math.floor(providerExpiry / 1000) === Math.floor(expectedExpiry / 1000),
+    };
     const checks = {
       success: data?.success === true,
       uid: data?.result?.uid === input.uid,
       allowedOrigin: JSON.stringify(data?.result?.allowedOrigins) === JSON.stringify([config.allowedOrigin]),
       maxDuration: data?.result?.maxDurationSeconds === CATALOG_VIDEO_MAX_SECONDS,
-      expiry: typeof data?.result?.uploadExpiry === "string"
-        && Date.parse(data.result.uploadExpiry) === Date.parse(input.expiresAt),
+      expiry: expiryChecks.exactMatch,
       creator: data?.result?.creator === input.operationId,
       claimMetadata: data?.result?.meta?.catalogUploadClaimId === input.operationId,
     };
-    return { verified: Object.values(checks).every(Boolean), stage: "restriction_verification", httpStatus, checks };
+    return { verified: Object.values(checks).every(Boolean), stage: "restriction_verification", httpStatus, checks, expiryChecks };
   } catch {
     return { verified: false, stage: "provider_read", httpStatus, checks: null };
   }

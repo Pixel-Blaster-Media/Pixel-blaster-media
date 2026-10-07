@@ -24,11 +24,33 @@ export async function catalogFileFingerprint(file: File): Promise<string> {
 }
 
 export function validStreamUploadCapability(value: unknown): value is string {
-  if (typeof value !== "string" || value.length > 4096) return false;
+  return Object.values(inspectStreamUploadCapability(value)).every(Boolean);
+}
+
+// Booleans only: never retain any part of the bearer capability in diagnostics.
+export function inspectStreamUploadCapability(value: unknown) {
+  const checks = {
+    capabilityPresent: typeof value === "string" && value.length > 0,
+    capabilityWithinLength: typeof value === "string" && value.length <= 4096,
+    capabilityParseable: false,
+    capabilityHttps: false,
+    capabilityNoCredentials: false,
+    capabilityDefaultPort: false,
+    capabilityNoFragment: false,
+    capabilityAllowedHost: false,
+    capabilityPath: false,
+  };
+  if (typeof value !== "string" || value.length > 4096) return checks;
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && !url.username && !url.password && !url.port && !url.hash
-      && (url.hostname === "upload.videodelivery.net" || /^[a-z0-9-]+\.cloudflarestream\.com$/.test(url.hostname))
-      && url.pathname.length > 1;
-  } catch { return false; }
+    checks.capabilityParseable = true;
+    checks.capabilityHttps = url.protocol === "https:";
+    checks.capabilityNoCredentials = !url.username && !url.password;
+    checks.capabilityDefaultPort = !url.port;
+    checks.capabilityNoFragment = !url.hash;
+    checks.capabilityAllowedHost = url.hostname === "upload.videodelivery.net"
+      || /^[a-z0-9-]+\.cloudflarestream\.com$/.test(url.hostname);
+    checks.capabilityPath = url.pathname.length > 1;
+  } catch { /* Unparseable capabilities remain rejected without logging input. */ }
+  return checks;
 }

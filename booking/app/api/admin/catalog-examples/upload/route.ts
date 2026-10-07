@@ -155,16 +155,19 @@ async function prepareResumableUpload(input: {
       upload = await createStreamTusUpload({ name: input.title, operationId: claimId,
         size: input.size, expiresAt: new Date(expiresAt).toISOString() });
     } catch (caught) {
+      const inspection = caught instanceof StreamProvisioningError ? caught.diagnostic ?? null : null;
       console.error("catalog_resumable_preparation_failed", {
         outcome: caught instanceof StreamProvisioningError ? caught.outcome : "unknown",
         knownVideo: caught instanceof StreamProvisioningError && Boolean(caught.streamUid),
-        inspection: caught instanceof StreamProvisioningError ? caught.diagnostic ?? null : null,
+        inspection,
       });
       if (caught instanceof StreamProvisioningError && caught.streamUid) {
         await setClaimCleanup(claimId, input.organizationId, caught.streamUid, "cleanup_required");
       } else await setClaimState(claimId, input.organizationId,
         caught instanceof StreamProvisioningError && caught.outcome === "definitive" ? "cleaned" : "provider_unknown");
-      return jsonError("Cloudflare could not safely prepare this upload. Resolve the pending operation before starting another copy.", 503);
+      // This authenticated response preserves only the same safe diagnostic as the log.
+      return NextResponse.json({ error: "Cloudflare could not safely prepare this upload. Resolve the pending operation before starting another copy.", inspection },
+        { status: 503, headers: noStoreHeaders() });
     }
     const { data: stored, error: persistError } = await supabase.from("catalog_stream_upload_claims")
       .update({ stream_uid: upload.uid, upload_url: upload.uploadUrl, state: "provisioned", updated_at: new Date().toISOString() })

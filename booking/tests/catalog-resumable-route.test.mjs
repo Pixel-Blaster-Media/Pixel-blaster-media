@@ -5,8 +5,8 @@ const policy=loadSource('lib/booking/catalog-upload-policy.ts');
 const core=loadSource('lib/booking/catalog-examples-core.ts',{'./catalog-upload-policy.ts':policy});
 const org='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',catalog='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const claim='cccccccc-cccc-4ccc-8ccc-cccccccccccc',example='dddddddd-dddd-4ddd-8ddd-dddddddddddd';
-function fixture({state='attached',status='resume',foreign=false,providerError=false,expired=false}={}){
- const calls=[];let providerCalls=0;let inspectionCalls=0;
+function fixture({state='attached',status='resume',foreign=false,providerError=false,providerDiagnostic,expired=false}={}){
+ const calls=[],logs=[];let providerCalls=0;let inspectionCalls=0;
  const row={id:claim,organization_id:foreign?'other-tenant':org,catalog_item_id:catalog,
   upload_protocol:'tus',state,stream_uid:'a'.repeat(32),example_id:example,
   upload_url:'https://upload.videodelivery.net/mock-capability',upload_size:500_000_000,
@@ -22,11 +22,11 @@ function fixture({state='attached',status='resume',foreign=false,providerError=f
  const route=loadSource('app/api/admin/catalog-examples/upload/route.ts',{
   'next/server':{NextResponse:Response},'@/lib/auth/require-admin':{requireAdmin:async()=>({organizationId:org})},
   '@/lib/supabase/server':{getServiceSupabase:()=>db},'@/lib/booking/catalog-upload-policy':policy,
-  '@/lib/booking/catalog-examples-core':{...core,inspectStreamTusReservation:async()=>{inspectionCalls++;return {verified:false,stage:'restriction_verification',httpStatus:200,checks:{claimMetadata:false}}},createStreamTusUpload:async()=>{providerCalls++;if(providerError)throw new core.StreamProvisioningError('mock provider ambiguous','ambiguous','a'.repeat(32));return {uid:'a'.repeat(32),uploadUrl:row.upload_url};}},
- });
+  '@/lib/booking/catalog-examples-core':{...core,inspectStreamTusReservation:async()=>{inspectionCalls++;return {verified:false,stage:'restriction_verification',httpStatus:200,checks:{claimMetadata:false}}},createStreamTusUpload:async()=>{providerCalls++;if(providerError)throw new core.StreamProvisioningError('mock provider ambiguous','ambiguous','a'.repeat(32),providerDiagnostic);return {uid:'a'.repeat(32),uploadUrl:row.upload_url};}},
+ },{console:{warn(){},error(...args){logs.push(args)}}});
  const post=(extra={})=>route.POST(new Request('https://booking.example.invalid/api/admin/catalog-examples/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({protocol:'tus',size:500_000_000,fingerprint:'e'.repeat(64),catalogItemId:catalog,title:'Sample video',description:'',idempotencyKey:claim,...extra})}));
  const get=(id=claim)=>route.GET(new Request('https://booking.example.invalid/api/admin/catalog-examples/upload?claimId='+id));
- return {post,get,row,calls,get providerCalls(){return providerCalls},get inspectionCalls(){return inspectionCalls}};
+ return {post,get,row,calls,logs,get providerCalls(){return providerCalls},get inspectionCalls(){return inspectionCalls}};
 }
 test('actual route resumes only the authorized service claim without allocating another provider upload',async()=>{
  const a=fixture();const r=await a.post();assert.equal(r.status,200);const body=await r.json();assert.equal(body.exampleId,example);assert.equal(body.resumed,true);assert.equal(a.providerCalls,0);
@@ -45,6 +45,20 @@ test('concurrent attachment is reread safely without deleting the successful pro
 });
 test('known provider UID survives restriction verification failure for durable cleanup',async()=>{
  const a=fixture({state:'claimed',status:'claimed',providerError:true});assert.equal((await a.post()).status,503);assert.equal(a.row.state,'cleanup_required');assert.equal(a.row.stream_uid,'a'.repeat(32));assert.equal(a.providerCalls,1);
+});
+
+test('failed admin preparation returns the safe diagnostic even if runtime logs are unavailable',async()=>{
+ const diagnostic={verified:false,stage:'capability_validation',httpStatus:201,
+  checks:{uidPresent:true,uidValid:true,...policy.inspectStreamUploadCapability('https://private.invalid/secret-capability')}};
+ const a=fixture({state:'claimed',status:'claimed',providerError:true,providerDiagnostic:diagnostic});
+ const response=await a.post();const logged=a.logs;
+ assert.equal(response.status,503);const body=await response.json();
+ assert.deepEqual(body.inspection,diagnostic);assert.deepEqual(logged[0][1].inspection,diagnostic);
+ assert.deepEqual(Object.keys(body).sort(),['error','inspection']);
+ assert.doesNotMatch(JSON.stringify({body,logged}),/private\.invalid|secret-capability|mock-capability|mock provider ambiguous|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/);
+ assert.equal(response.headers.get('cache-control'),'no-store');assert.equal(response.headers.get('referrer-policy'),'no-referrer');
+ assert.equal(a.providerCalls,1);assert.equal(a.inspectionCalls,0);assert.equal(a.row.state,'cleanup_required');
+ assert.equal(a.calls.filter(c=>c.name==='attach_catalog_stream_upload').length,0);
 });
 
 
