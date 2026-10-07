@@ -194,7 +194,7 @@ export default function CatalogExamplesEditor({
           <button
             type="button"
             disabled={availableReusableVideos.length === 0 || Boolean(progress)}
-            onClick={() => setMode(mode === "reuse" ? "closed" : "reuse")}
+            onClick={() => { setPhotoMode(false); setPhotoApproved(false); setMode(mode === "reuse" ? "closed" : "reuse"); }}
             title={availableReusableVideos.length > 0 ? undefined : "No other uploaded videos are available"}
             className="tap-target rounded-full border border-realtor-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-realtor-text hover:border-realtor-primary/40 disabled:cursor-not-allowed disabled:opacity-45"
           >
@@ -204,7 +204,7 @@ export default function CatalogExamplesEditor({
             type="button"
             disabled={!streamConfigured || Boolean(progress)}
             aria-describedby={!streamConfigured ? `stream-disabled-${catalogItemId}` : undefined}
-            onClick={() => setMode(mode === "upload" ? "closed" : "upload")}
+            onClick={() => { setPhotoMode(false); setPhotoApproved(false); setMode(mode === "upload" ? "closed" : "upload"); }}
             title={streamConfigured ? undefined : "Cloudflare Stream must be configured first"}
             className="tap-target rounded-full bg-realtor-primary px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
           >

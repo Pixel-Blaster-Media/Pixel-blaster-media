@@ -34,12 +34,16 @@ test('admin editor exposes configurable empty photo gallery and submits explicit
   './example-actions':{attachCatalogExample:async f=>{sent.push(Object.fromEntries(f));return {ok:true};},attachSharedCatalogVideo:async()=>({ok:true}),deleteCatalogExample:async()=>({ok:true}),removeSharedCatalogVideoPlacement:async()=>({ok:true})},
  },{FormData}).default;let tree;
  try{
-  await act(async()=>{tree=Renderer.create(React.createElement(Editor,{catalogItemId:'service',examples:[],reusableVideos:[],streamConfigured:false}));});
+  await act(async()=>{tree=Renderer.create(React.createElement(Editor,{catalogItemId:'service',examples:[],reusableVideos:[],streamConfigured:true}));});
   const text=node=>JSON.stringify(node.children);
   await act(async()=>tree.root.findAllByType('button').find(b=>text(b).includes('Add photo URL')).props.onClick());
   const inputs=tree.root.findAllByType('input');await act(async()=>{inputs.find(i=>i.props.placeholder==='Living room').props.onChange({target:{value:'Living room'}});inputs.find(i=>i.props.type==='url').props.onChange({target:{value:'https://images.example.invalid/living.jpg'}});inputs.find(i=>i.props.type==='checkbox').props.onChange({target:{checked:true}});});
   const options=tree.root.findAllByType('option').map(o=>o.props.value);assert.deepEqual(options,['photos','aerial']);
   await act(async()=>{tree.root.findByType('form').props.onSubmit({preventDefault(){}});});
   assert.equal(sent.length,1);assert.equal(sent[0].kind,'link');assert.equal(sent[0].sample_group,'photos');assert.equal(sent[0].photo_sample,'true');assert.equal(sent[0].photo_public_ack,'true');assert.equal(sent[0].title,'Living room');
+  await act(async()=>tree.root.findAllByType('button').find(b=>text(b).includes('Add photo URL')).props.onClick());
+  await act(async()=>tree.root.findAllByType('button').find(b=>text(b).includes('Upload video')).props.onClick());
+  assert.ok(tree.root.findAllByType('input').some(i=>i.props.placeholder==='Full property video'));
+  assert.equal(tree.root.findAllByType('input').filter(i=>i.props.type==='checkbox').length,0);
  }finally{if(tree)await act(async()=>tree.unmount());delete globalThis.IS_REACT_ACT_ENVIRONMENT;}
 });
