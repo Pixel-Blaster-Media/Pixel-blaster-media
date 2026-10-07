@@ -29,6 +29,7 @@ const Picker = loadSource('app/book/_components/PackageAccordion.tsx', {
   'next/navigation': {useRouter: () => ({replace() { throw Error('render must not change selection'); }}), useSearchParams: () => new URLSearchParams('services=bundle')},
   '@/lib/booking/quote': quote, '@/lib/booking/wizard-state': wizard,
   '@/lib/booking/catalog-sample-groups': groups,
+  '@/lib/booking/catalog-sample-viewer': loadSource('lib/booking/catalog-sample-viewer.ts'),
   '@/lib/booking/catalog-rules': {isAddonEligible: () => true},
   './BookingTotalBar': {default: Total}, './package-description': description,
 }).default;
@@ -54,7 +55,27 @@ test('each existing sample opens unchanged in a separate tab with descriptive ac
   assert.match(html, /Watch sample/);
   assert.match(html, /Explore iGUIDE/);
   assert.match(html, /aria-hidden="true">▶/);
-  assert.doesNotMatch(html, /<iframe|<dialog/);
+  assert.doesNotMatch(html, /<iframe|<dialog[^>]*\bopen=/);
+});
+
+test('Cloudflare videos offer an on-site dialog without loading a player before interaction', () => {
+  const src = 'https://customer-example.cloudflarestream.com/ae26683a8919895dabdb9b102e5679d3/iframe';
+  const html = render([item({examples: [sample({embed_url:src,orientation:'portrait'})]})]);
+  assert.match(html, /<button[^>]*aria-haspopup="dialog"[^>]*aria-label="Watch sample: Film example — Video for Test package \(opens video player\)"/);
+  assert.match(html, /<dialog[^>]*aria-labelledby=/);
+  assert.doesNotMatch(html, /<iframe|<dialog[^>]*\bopen=|cloudflarestream\.com|opens in a new tab/);
+});
+
+test('only exact Cloudflare Stream embed URLs can enter the on-site player', () => {
+  for (const embed_url of [
+    'https://customer-example.cloudflarestream.com.attacker.invalid/ae26683a8919895dabdb9b102e5679d3/iframe',
+    'https://customer-example.cloudflarestream.com/ae26683a8919895dabdb9b102e5679d3/iframe?redirect=elsewhere',
+    'https://customer-example.cloudflarestream.com/not-a-video/iframe',
+  ]) {
+    const html = render([item({examples:[sample({embed_url})]})]);
+    assert.doesNotMatch(html, /aria-haspopup="dialog"/);
+    assert.doesNotMatch(html, /<iframe/);
+  }
 });
 
 test('only package details default open on desktop; mobile, services, add-ons and examples stay closed', () => {
@@ -111,6 +132,7 @@ test('selection footer waits for a service and uses the shared multiselect quote
 });
 
 function visibleActionNames(markup) {
+  markup = markup.replace(/<dialog\b[^>]*>[\s\S]*?<\/dialog>/g, '');
   return [...markup.matchAll(/<(button|a)\b([^>]*)>([\s\S]*?)<\/\1>/g)]
     .map((match) => ({
       visible: match[3].replace(/<([a-z]+)[^>]*aria-hidden="true"[^>]*>[\s\S]*?<\/\1>/g, '').replace(/<[^>]+>/g, '').trim(),
@@ -145,4 +167,17 @@ test('single and multiple video, link and tour example names start with their vi
     const names = visibleActionNames(render([item({examples})]));
     for (const control of names) assert.ok(control.name.startsWith(control.visible), JSON.stringify(control));
   }
+});
+
+test('direct photo examples become labelled lazy thumbnails; other photo links remain external',()=>{
+ const html=render([item({examples:[sample({id:'photo',title:'Living room',kind:'link',sample_group_key:'photos',sample_group_label:'Photos',external_url:'https://samples.example.invalid/room.JPG',embed_url:null}),sample({id:'album',title:'External album',kind:'link',sample_group_key:'photos',sample_group_label:'Photos',external_url:'https://samples.example.invalid/album',embed_url:null})]})]);
+ assert.match(html,/Enlarge Living room — Photos for Test package \(opens photo gallery\)/);
+ assert.match(html,/<img[^>]*loading="lazy"[^>]*referrerPolicy="no-referrer"/);
+ assert.match(html,/href="https:\/\/samples.example.invalid\/album" target="_blank" rel="noopener noreferrer"/);
+ assert.doesNotMatch(html,/<iframe|<dialog[^>]*\bopen=/);
+});
+test('recognized configured iGUIDE links offer an on-site tour without preloading a provider',()=>{
+ const html=render([item({examples:[sample({id:'tour',title:'Floor plan',kind:'interactive',embed_url:'https://youriguide.com/existing_tour?pano=5',external_url:'https://youriguide.com/existing_tour?pano=5'})]})]);
+ assert.match(html,/opens iGUIDE tour/);
+ assert.doesNotMatch(html,/<iframe|youriguide\.com/);
 });

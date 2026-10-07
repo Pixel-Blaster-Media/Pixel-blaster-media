@@ -16,6 +16,7 @@ def main():
     m.run(cmd+['-f',str(m.ROOT/f)])
    migration=m.ROOT/'supabase/migrations/20260912160000_photo_finals_packages.sql'
    if migration.exists():m.run(cmd+['-f',str(migration)])
+   m.run(cmd+['-c','BEGIN','-f',str(m.ROOT/'supabase/migrations/20261007140933_photo_finals_encoder_security_revision.sql'),'-c','COMMIT'])
    m.ENV['PF_TEST_SOCKET']=t;m.ENV['PF_TEST_PSQL']=str(m.PG/'psql')
    test='photo-finals-packages.resource.mjs' if os.environ.get('PF_PACKAGE_RESOURCE')=='1' else 'photo-finals-packages.integration.mjs'
    # This deliberate 125s I/O proof must outlive the shared ingest runner's 90s cap.

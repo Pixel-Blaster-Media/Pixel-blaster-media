@@ -14,7 +14,7 @@ const output = process.env.BOOKING_DESIGN_EVIDENCE_DIR;
 assert.ok(output, 'explicit evidence directory required');
 mkdirSync(output, {recursive:true});
 const catalog = ['bundles','aLaCarte','addons'].flatMap(key=>fixture[key]);
-const samples = new Set(catalog.flatMap(item=>item.examples.map(example=>example.external_url ?? example.embed_url)));
+const samples = new Set(catalog.flatMap(item=>item.examples.flatMap(example=>[example.external_url,example.embed_url].filter(Boolean))));
 const assetFiles = new Map([[assets.logo,'logo.jpg'],[assets.hero,'hero.jpg'],[assets.secondary,'hero-secondary.png']]);
 const browser = await chromium.launch({headless:true, executablePath:process.env.BOOKING_CHROME_PATH});
 const context = await browser.newContext({viewport:{width:1280,height:1200}});
@@ -32,7 +32,9 @@ await current.route('**/*',async route=>{
  if(assetFiles.has(url))return route.fulfill({status:200,contentType:url===assets.secondary?'image/png':'image/jpeg',body:readFileSync(resolve(assetDir,assetFiles.get(url)))});
  if(samples.has(url)){
   sampleRequests.push({url,method:request.method(),referer:request.headers().referer??null});
-  return route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><title>Isolated example navigation</title><p>Provider content is isolated for this local navigation test.</p>'});
+  if(url.includes('unavailable'))return route.abort();
+  if(/\.(?:jpg|png)$/.test(new URL(url).pathname))return route.fulfill({status:200,contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64')});
+  return route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><title>Isolated example navigation</title><button>Mock sample control</button><p>Provider content is isolated for this local navigation test.</p>'});
  }
  unexpected.push(new URL(url).origin+new URL(url).pathname);return route.abort();
 });
@@ -129,7 +131,7 @@ try{
  await page.setViewportSize({width:1280,height:1200});
  checks.push('hydration-and-resize-preserve-native-user-disclosure-choices');
  assert.equal(await total.getByRole('button',{name:'Continue',exact:true}).isDisabled(),true);
- assert.equal(await page.locator('iframe, dialog').count(),0);
+ assert.equal(await page.locator('iframe, dialog[open]').count(),0);
  assert.equal(await page.locator('.booking-refresh-header img').count(),2);
  assert.equal(await page.locator('.booking-refresh').evaluate(e=>getComputedStyle(e).getPropertyValue('--realtor-primary').trim()),'#1a7f8e');
  await checkLayout('desktop-initial');
@@ -168,18 +170,99 @@ try{
  await nestedSummary.focus();await page.keyboard.press('Enter');
  assert.equal(await nestedSummary.evaluate(e=>getComputedStyle(e).outlineStyle),'solid');
  assert.ok(await nestedSummary.evaluate(e=>e.getBoundingClientRect().height>=44));
- assert.ok(await nested.getByRole('link').first().evaluate(e=>e.getBoundingClientRect().height>=44));
+ assert.ok(await nested.locator('a, button').first().evaluate(e=>e.getBoundingClientRect().height>=44));
  assert.equal(page.url(),selectionUrl);
  await checkLayout('mobile-keyboard-nested-examples');
- const external=nested.getByRole('link').first();
- assert.equal(await external.getAttribute('target'),'_blank');
- assert.equal(await external.getAttribute('rel'),'noopener noreferrer');
- const expectedUrl=await external.getAttribute('href');
- const popupPromise=context.waitForEvent('page');await external.click();const popup=await popupPromise;
- await popup.waitForURL(expectedUrl);await popup.waitForLoadState('domcontentloaded');assert.equal(popup.url(),expectedUrl);assert.equal(await popup.evaluate(()=>window.opener),null);
- await popup.close();await page.bringToFront();
+ const externalContext=await browser.newContext({viewport:{width:1280,height:900}});await configureContext(externalContext);
+ try{
+  const externalPage=await externalContext.newPage();await externalPage.goto(origin+'/book?services=blue_print');
+  await externalPage.getByRole('button',{name:'Selected The Blue Print',exact:true}).waitFor();
+  await externalPage.locator('details').evaluateAll(elements=>elements.forEach(element=>element.open=true));
+  const external=externalPage.locator('.booking-refresh-examples a:visible').first();
+  assert.equal(await external.getAttribute('target'),'_blank');
+  assert.equal(await external.getAttribute('rel'),'noopener noreferrer');
+  const expectedUrl=await external.getAttribute('href');
+  const popupPromise=externalContext.waitForEvent('page');await external.click();const popup=await popupPromise;
+  await popup.waitForURL(expectedUrl);await popup.waitForLoadState('domcontentloaded');assert.equal(popup.url(),expectedUrl);assert.equal(await popup.evaluate(()=>window.opener),null);
+  await popup.close();assert.equal(new URL(externalPage.url()).searchParams.get('services'),'blue_print');
+ }finally{await externalContext.close();}
+ const sampleContext=await browser.newContext({viewport:{width:390,height:844}});await configureContext(sampleContext);
+ try{
+  const samplePage=await sampleContext.newPage();await samplePage.goto(origin+'/book?services=blue_print');
+  await samplePage.getByRole('button',{name:'Selected The Blue Print',exact:true}).waitFor();
+  const startUrl=samplePage.url();
+  for(const width of [390,1280]){
+   await samplePage.setViewportSize({width,height:900});
+   const photoCard=samplePage.locator('article[aria-labelledby="package-blue_print"]');
+   await photoCard.locator('details').evaluateAll(elements=>elements.forEach(element=>element.open=true));
+   const thumb=photoCard.locator('button:visible').filter({hasText:'Synthetic photo one'}).first();
+   await thumb.focus();await samplePage.keyboard.press('Enter');
+   const gallery=samplePage.locator('dialog[open]');await gallery.waitFor();
+   await gallery.getByRole('img',{name:'Synthetic photo one',exact:true}).waitFor();
+   assert.equal(await gallery.getByRole('button',{name:'Close sample photos',exact:true}).evaluate(e=>document.activeElement===e),true);
+   await samplePage.keyboard.press('ArrowRight');await gallery.getByRole('img',{name:'Synthetic photo two',exact:true}).waitFor();
+   assert.match(await gallery.getByRole('status').innerText(),/Photo 2 of 3/);
+   await gallery.getByRole('button',{name:'Next photo',exact:true}).click();
+   await gallery.getByRole('status').filter({hasText:'could not load'}).waitFor();
+   await gallery.getByRole('button',{name:'Next photo',exact:true}).click();await gallery.getByRole('img',{name:'Synthetic photo one',exact:true}).waitFor();
+   await gallery.screenshot({path:resolve(output,'photo-gallery-'+width+'.png')});
+   await gallery.getByRole('button',{name:'Close sample photos',exact:true}).focus();await samplePage.keyboard.press('Escape');
+   await samplePage.waitForFunction(()=>document.querySelectorAll('dialog[open]').length===0);
+   await thumb.evaluate(e=>new Promise(resolve=>requestAnimationFrame(()=>resolve())));
+   assert.equal(await thumb.evaluate(e=>document.activeElement===e),true);
+   const tour=samplePage.getByRole('button',{name:/opens iGUIDE tour/}).first();
+   await samplePage.locator('details').evaluateAll(elements=>elements.forEach(element=>element.open=true));
+   await tour.click();const tourDialog=samplePage.locator('dialog[open]');await tourDialog.waitFor();
+   const tourFrame=tourDialog.locator('iframe');const tourUrl=await tourFrame.getAttribute('src');assert.ok(samples.has(tourUrl));
+   await samplePage.frameLocator('dialog[open] iframe').getByRole('button',{name:'Mock sample control',exact:true}).waitFor();
+   assert.equal(await tourFrame.getAttribute('referrerpolicy'),'no-referrer');
+   assert.equal(await tourDialog.getByRole('link',{name:'Open the original tour in a new tab',exact:true}).getAttribute('href'),tourUrl);
+   await tourDialog.screenshot({path:resolve(output,'iguide-popup-'+width+'.png')});
+   await tourDialog.getByRole('button',{name:'Close sample tour',exact:true}).click();await samplePage.waitForFunction(()=>document.querySelectorAll('dialog[open],iframe').length===0);
+   assert.equal(await tour.evaluate(e=>document.activeElement===e),true);assert.equal(samplePage.url(),startUrl);assert.equal(sampleContext.pages().length,1);
+   assert.equal(await samplePage.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
+  }
+  checks.push('photo-gallery-thumbnail-arrows-wrap-error-recovery-and-escape-mobile-desktop','iguide-popup-lazy-load-fallback-referrer-focus-and-selection-mobile-desktop');
+ }finally{await sampleContext.close();}
  assert.equal(page.url(),selectionUrl);assert.equal(await special.getByRole('button',{name:'Selected Social Media Special',exact:true}).getAttribute('aria-pressed'),'true');
  assert.equal(sampleRequests[0].referer,null);checks.push('external-new-tab-return-preserves-selection-and-referrer-privacy');
+ // Stream's restricted player stays inside this origin and is lazy-loaded.
+ const videoButton=nested.getByRole('button',{name:/opens video player/}).first();
+ assert.equal(await page.locator('iframe').count(),0);
+ await videoButton.focus();await page.keyboard.press('Enter');
+ const player=page.getByRole('dialog');await player.waitFor({state:'visible'});
+ const frame=player.locator('iframe');await frame.waitFor();
+ const videoSrc=await frame.getAttribute('src');assert.ok(samples.has(videoSrc));
+ await page.frameLocator('dialog[open] iframe').getByRole('button',{name:'Mock sample control',exact:true}).waitFor();
+ assert.equal(page.url(),selectionUrl);assert.equal(context.pages().length,1);
+ const close=player.getByRole('button',{name:'Close sample video',exact:true});
+ assert.equal(await close.evaluate(e=>document.activeElement===e),true);
+ assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).overflow),'hidden');
+ for(let index=0;index<4;index++){
+  await page.keyboard.press('Tab');
+  const focusState=await player.evaluate(e=>({inside:e.contains(document.activeElement),tag:document.activeElement.tagName,hasFocus:document.hasFocus()}));
+  // Native dialog permits focus to enter browser chrome; booking controls stay inert.
+  assert.ok(focusState.inside || (!focusState.hasFocus && focusState.tag==='BODY'),JSON.stringify(focusState));
+ }
+ await page.getByRole('link',{name:'Continue',exact:true}).evaluate(e=>e.focus());
+ assert.equal(await page.getByRole('link',{name:'Continue',exact:true}).evaluate(e=>document.activeElement===e),false,'background booking navigation is inert');
+ await close.focus();
+ await player.screenshot({path:resolve(output,'video-player-mobile.png'),animations:'disabled'});
+ await page.keyboard.press('Escape');await player.waitFor({state:'hidden'});
+ await page.waitForFunction(()=>document.querySelectorAll('iframe').length===0);
+ assert.equal(await videoButton.evaluate(e=>document.activeElement===e),true);
+ await videoButton.click();await player.waitFor({state:'visible'});await page.setViewportSize({width:1280,height:900});
+ await close.click();await player.waitFor({state:'hidden'});
+ await page.waitForFunction(()=>document.querySelectorAll('iframe').length===0);
+ const restoredFocus=await card('social_media_special').evaluate(e=>{const active=document.activeElement;return {visible:!!active?.getClientRects().length,inCard:e.contains(active),tag:active?.tagName,example:active?.getAttribute('data-booking-example')};});
+ assert.ok(restoredFocus.visible && restoredFocus.inCard && (restoredFocus.tag==='SUMMARY' || restoredFocus.example),JSON.stringify(restoredFocus));
+ await page.setViewportSize({width:390,height:844});
+ await videoButton.click();await player.waitFor({state:'visible'});await close.click();await player.waitFor({state:'hidden'});
+ await page.waitForFunction(()=>document.querySelectorAll('iframe').length===0);
+ assert.equal(page.url(),selectionUrl);
+ const streamRequest=sampleRequests.find(request=>request.url===videoSrc);
+ assert.ok(streamRequest);assert.equal(streamRequest.referer,origin+'/');
+ checks.push('stream-player-stays-on-site-with-focus-escape-close-cleanup-and-origin-only-referrer');
  // Repeated native disclosure toggles retain state through selection rerenders.
  await summary.click();assert.equal(await details.getAttribute('open'),null);await summary.click();
  assert.notEqual(await nested.getAttribute('open'),null);

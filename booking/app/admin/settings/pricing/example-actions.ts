@@ -6,6 +6,7 @@ import {
   deleteStreamVideo,
   parseExampleUrl,
 } from "@/lib/booking/catalog-examples-core";
+import { photoSampleHref } from "@/lib/booking/catalog-sample-viewer";
 import { normalizeCatalogSampleGroupInput } from "@/lib/booking/catalog-sample-groups";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getServiceSupabase } from "@/lib/supabase/server";
@@ -35,6 +36,10 @@ export async function attachCatalogExample(formData: FormData): Promise<ExampleA
   if (!KINDS.has(kind)) return { ok: false, error: "Choose a valid example type." };
   if (!sampleGroup) return { ok: false, error: "Choose where this sample should appear." };
   if (!externalUrl) return { ok: false, error: "Enter a valid HTTPS example URL." };
+  if (text(formData, "photo_sample") === "true" && (
+    kind !== "link" || !["photos", "aerial"].includes(sampleGroup.key) || !photoSampleHref(externalUrl)
+    || text(formData, "photo_public_ack") !== "true"
+  )) return { ok: false, error: "Use a direct public image URL and confirm permission to display the photo." };
 
   const supabase = getServiceSupabase();
   const { data: attachedId, error } = await supabase.rpc(

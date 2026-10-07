@@ -118,12 +118,12 @@ async function processFinalReleaseAttempt(o:Options,execution?:{signal:AbortSign
     let stored=checkpoints.find(e=>e.kind===kind&&e.version_id===item.media_version_id);
     if(stored){
      const checkpointKey=inspectMediaObjectKey(text(stored.key),o.scope.organizationId).key;
-     if(checkpointKey!==buildDerivativeKey(o.scope.organizationId,item.media_version_id,1,text(stored.sha256),'jpg')||o.storage.location(checkpointKey).bucket!==stored.bucket||!Number.isSafeInteger(stored.bytes)||Number(stored.bytes)<1||Number(stored.bytes)>33_554_432)throw new Error('finals_checkpoint_invalid');
+     if(checkpointKey!==buildDerivativeKey(o.scope.organizationId,item.media_version_id,TRANSFORMS[kind].version,text(stored.sha256),'jpg')||o.storage.location(checkpointKey).bucket!==stored.bucket||!Number.isSafeInteger(stored.bytes)||Number(stored.bytes)<1||Number(stored.bytes)>33_554_432)throw new Error('finals_checkpoint_invalid');
      await verifyStored(o.storage,checkpointKey,text(stored.sha256),Number(stored.bytes),signal);
     }else{
      if(!bytes){bytes=await readOriginal(o.storage,key,item.sha256,item.byte_size,signal);execution?.check(30_000);await verifyFinalJpeg(bytes,item.sha256,item.byte_size);}
      await heartbeat();const transformed=await transformFinalJpeg(bytes,kind,{signal,check:execution?.check});
-     const outputKey=buildDerivativeKey(o.scope.organizationId,item.media_version_id,1,hash(transformed.bytes),'jpg');
+     const outputKey=buildDerivativeKey(o.scope.organizationId,item.media_version_id,TRANSFORMS[kind].version,hash(transformed.bytes),'jpg');
      await heartbeat();const output=await putJpeg(o.storage,outputKey,transformed.bytes,signal);
      stored={...output,kind,version_id:item.media_version_id,width:transformed.width,height:transformed.height};
      await rpc(o.db,'photo_finals_package_checkpoint',{...fenced,p_evidence:stored},signal);

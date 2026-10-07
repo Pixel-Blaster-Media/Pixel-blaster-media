@@ -4,9 +4,10 @@ import { getCatalogItemPrice } from "@/lib/booking/quote";
 import { publicWizardQuery } from "@/lib/booking/wizard-state";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 
 import type { CatalogItemDTO } from "@/lib/booking/catalog-dto";
+import { sampleHref, photoSampleHref, iGuideSampleHref, streamSampleHref } from "@/lib/booking/catalog-sample-viewer";
 import { getCatalogSampleGroups } from "@/lib/booking/catalog-sample-groups";
 import { isAddonEligible } from "@/lib/booking/catalog-rules";
 import BookingTotalBar from "./BookingTotalBar";
@@ -259,14 +260,38 @@ function Chevron({ open }: { open?: boolean }) {
   return <svg className="booking-refresh-chevron" data-open={open} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>;
 }
 
+type PhotoSample = { id: string; src: string; title: string; description: string | null };
+type SampleView =
+  | { kind: "video" | "tour"; src: string; title: string; orientation: string; external: string | undefined }
+  | { kind: "photos"; photos: PhotoSample[]; index: number };
+
 function PackageDetails({ item, label = "Package details", desktopDefaultOpen = false }: {
   item: CatalogItemDTO;
   label?: string;
   desktopDefaultOpen?: boolean;
 }) {
+  const player = useRef<HTMLDialogElement>(null);
+  const opener = useRef<{ element: HTMLButtonElement; exampleId: string } | null>(null);
+  const playerTitle = useId();
+  const [view, setView] = useState<SampleView | null>(null);
+  const [photoFailed, setPhotoFailed] = useState(false);
   const lines = packageDescriptionLines(item.description);
   const groups = getCatalogSampleGroups(item);
   const rule = sqftRuleText(item);
+  const activePhoto = view?.kind === "photos" ? view.photos[view.index] : null;
+  const title = activePhoto?.title ?? (view && view.kind !== "photos" ? view.title : "Sample");
+  function openSample(element: HTMLButtonElement, exampleId: string, next: SampleView) {
+    opener.current = { element, exampleId };
+    setPhotoFailed(false);
+    setView(next);
+    player.current?.showModal();
+  }
+  function stepPhoto(direction: number) {
+    setPhotoFailed(false);
+    setView(current => current?.kind === "photos" ? {
+      ...current, index: (current.index + direction + current.photos.length) % current.photos.length,
+    } : current);
+  }
   const disclosure = (className: string, initiallyOpen = false) => (
     <details className={className} open={initiallyOpen}>
       <summary><span>{label}</span><Chevron /></summary>
@@ -284,30 +309,49 @@ function PackageDetails({ item, label = "Package details", desktopDefaultOpen = 
             <ul>
               {groups.map((group) => {
                 const examples = group.examples.filter((example) => sampleHref(example.external_url ?? example.embed_url));
+                const photos: PhotoSample[] = (group.key === "photos" || group.key === "aerial") ? examples.flatMap(example => {
+                  const src = example.kind === "link" ? photoSampleHref(example.external_url) : undefined;
+                  return src ? [{ id: example.id, src, title: example.title, description: example.description }] : [];
+                }) : [];
                 return <li key={group.key} className="booking-refresh-example-group">
                   <span>{group.label}</span>
                   <div>
-                    {examples.length > 0 ? examples.map((example) => {
+                    {photos.length > 0 ? <div className="booking-refresh-photo-thumbnails" aria-label={`${group.label} samples for ${item.name}`}>
+                      {photos.map((photo, index) => <button key={photo.id} type="button" data-booking-example={photo.id}
+                        aria-haspopup="dialog" aria-label={`Enlarge ${photo.title} — ${group.label} for ${item.name} (opens photo gallery)`}
+                        onClick={event => openSample(event.currentTarget, photo.id, { kind: "photos", photos, index })}>
+                        {/* Native images keep configured public photo URLs unchanged. */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={photo.src} alt="" loading="lazy" width={88} height={64} referrerPolicy="no-referrer" />
+                        <span>{photo.title}</span>
+                      </button>)}
+                    </div> : null}
+                    {examples.filter(example => !photos.some(photo => photo.id === example.id)).map((example) => {
                       const actionLabel = examples.length > 1 ? example.title : example.kind === "video" ? "Watch sample" : group.key === "iguide" ? "Explore iGUIDE" : "View example";
-                      return (
-                      <a
-                        key={example.id}
-                        href={sampleHref(example.external_url ?? example.embed_url)!}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={`${actionLabel}${examples.length === 1 ? `: ${example.title}` : ""} — ${group.label} for ${item.name} (opens in a new tab)`}
-                      >
-                        {example.kind === "video" ? <span aria-hidden="true">▶</span> : null}
-                        <span>{actionLabel}</span>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M14 3h7v7M21 3l-11 11M10 3H3v18h18v-7" /></svg>
-                      </a>
+                      const streamSrc = example.kind === "video" ? streamSampleHref(example.embed_url) : undefined;
+                      const tourSrc = example.kind !== "video" ? iGuideSampleHref(example.embed_url ?? example.external_url) : undefined;
+                      if (streamSrc || tourSrc) return (
+                        <button key={example.id} type="button" data-booking-example={example.id} aria-haspopup="dialog"
+                          aria-label={`${actionLabel}${examples.length === 1 ? `: ${example.title}` : ""} — ${group.label} for ${item.name} (opens ${streamSrc ? "video player" : "iGUIDE tour"})`}
+                          onClick={event => openSample(event.currentTarget, example.id, {
+                            kind: streamSrc ? "video" : "tour", src: (streamSrc ?? tourSrc)!, title: example.title,
+                            orientation: example.orientation, external: sampleHref(example.external_url ?? example.embed_url),
+                          })}>
+                          {streamSrc ? <span aria-hidden="true">▶</span> : null}<span>{actionLabel}</span>
+                        </button>
                       );
-                    }) : <span className="booking-refresh-example-unavailable">No example yet</span>}
+                      return <a key={example.id} href={sampleHref(example.external_url ?? example.embed_url)!} target="_blank" rel="noopener noreferrer"
+                        aria-label={`${actionLabel}${examples.length === 1 ? `: ${example.title}` : ""} — ${group.label} for ${item.name} (opens in a new tab)`}>
+                        {example.kind === "video" ? <span aria-hidden="true">▶</span> : null}<span>{actionLabel}</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M14 3h7v7M21 3l-11 11M10 3H3v18h18v-7" /></svg>
+                      </a>;
+                    })}
+                    {examples.length === 0 ? <span className="booking-refresh-example-unavailable">No example yet</span> : null}
                   </div>
                 </li>;
               })}
             </ul>
-            <p>Examples open in a new tab. Your selection stays here.</p>
+            <p>Your booking selection stays here while you view examples.</p>
           </details>
         ) : null}
       </div>
@@ -316,22 +360,60 @@ function PackageDetails({ item, label = "Package details", desktopDefaultOpen = 
 
   // CSS chooses the native disclosure before hydration. Each layout keeps its
   // own manual toggles; neither resizing nor booking updates reset them.
-  return desktopDefaultOpen ? (
-    <>
+  return <>
+    {desktopDefaultOpen ? <>
       {disclosure("booking-refresh-details booking-refresh-details-desktop", true)}
       {disclosure("booking-refresh-details booking-refresh-details-mobile")}
-    </>
-  ) : disclosure("booking-refresh-details");
-}
-
-function sampleHref(raw: string | null): string | undefined {
-  if (!raw) return undefined;
-  try {
-    const url = new URL(raw);
-    return url.protocol === "https:" && !url.username && !url.password ? raw : undefined;
-  } catch {
-    return undefined;
-  }
+    </> : disclosure("booking-refresh-details")}
+    <dialog ref={player} className="booking-refresh-sample-dialog" aria-labelledby={playerTitle}
+      onKeyDown={event => {
+        if (view?.kind !== "photos" || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+        event.preventDefault(); stepPhoto(event.key === "ArrowLeft" ? -1 : 1);
+      }}
+      onClose={() => {
+        setView(null);
+        setPhotoFailed(false);
+        const previous = opener.current;
+        if (!previous) return;
+        const visibleButton = (button: HTMLButtonElement) => button.getClientRects().length > 0 && !button.closest('details:not([open])');
+        if (visibleButton(previous.element)) return previous.element.focus();
+        const owner = player.current?.parentElement;
+        const counterpart = Array.from(owner?.querySelectorAll<HTMLButtonElement>('button[data-booking-example]') ?? [])
+          .find(button => button.dataset.bookingExample === previous.exampleId && visibleButton(button));
+        if (counterpart) return counterpart.focus();
+        const details = Array.from(owner?.querySelectorAll<HTMLDetailsElement>(':scope > details') ?? [])
+          .find(element => element.getClientRects().length);
+        details?.querySelector<HTMLElement>('summary')?.focus();
+      }}
+      onClick={event => { if (event.target === event.currentTarget) event.currentTarget.close(); }}>
+      <div className="booking-refresh-sample-panel">
+        <header>
+          <div><h2 id={playerTitle}>{title}</h2><p>{view?.kind === "photos" ? "Photo" : view?.kind === "tour" ? "iGUIDE" : "Video"} example for {item.name}</p></div>
+          <button type="button" aria-label={`Close sample ${view?.kind === "photos" ? "photos" : view?.kind === "tour" ? "tour" : "video"}`} onClick={() => player.current?.close()}>Close <span aria-hidden="true">×</span></button>
+        </header>
+        {view && view.kind !== "photos" ? <iframe
+          className={`booking-refresh-sample-player${view.orientation === "portrait" ? " is-portrait" : ""}`}
+          src={view.src} title={view.title}
+          referrerPolicy={view.kind === "video" ? "strict-origin-when-cross-origin" : "no-referrer"}
+          allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen /> : null}
+        {view?.kind === "tour" && view.external ? <p className="booking-refresh-sample-fallback">Tour not loading? <a href={view.external} target="_blank" rel="noopener noreferrer">Open the original tour in a new tab</a>.</p> : null}
+        {activePhoto ? <>
+          <div className="booking-refresh-gallery-image">
+            {photoFailed ? <p role="status">This photo could not load. Try another photo or open the original below.</p> :
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img key={activePhoto.src} src={activePhoto.src} alt={activePhoto.title} referrerPolicy="no-referrer" onError={() => setPhotoFailed(true)} />}
+          </div>
+          <footer className="booking-refresh-gallery-controls">
+            {view?.kind === "photos" && view.photos.length > 1 ? <button type="button" aria-label="Previous photo" onClick={() => stepPhoto(-1)}>← Previous</button> : null}
+            <p role="status" aria-live="polite">Photo {view?.kind === "photos" ? view.index + 1 : 1} of {view?.kind === "photos" ? view.photos.length : 1}</p>
+            {view?.kind === "photos" && view.photos.length > 1 ? <button type="button" aria-label="Next photo" onClick={() => stepPhoto(1)}>Next →</button> : null}
+          </footer>
+          {activePhoto.description ? <p className="booking-refresh-sample-fallback">{activePhoto.description}</p> : null}
+          <p className="booking-refresh-sample-fallback"><a href={activePhoto.src} target="_blank" rel="noopener noreferrer">Open the original photo in a new tab</a></p>
+        </> : null}
+      </div>
+    </dialog>
+  </>;
 }
 
 function formatMinutes(minutes: number): string {

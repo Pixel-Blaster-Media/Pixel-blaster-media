@@ -14,6 +14,7 @@ with tempfile.TemporaryDirectory(prefix='pf-after-pg-',dir='/tmp') as t:
   cmd=[str(m.PG/'psql'),'-X','-qAt','-h',t,'-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1']
   for f in ['tests/postgres/canonical-media-bootstrap.sql','supabase/migrations/20260811225000_canonical_media_releases.sql','supabase/migrations/20260912120000_photo_finals_ingest.sql','tests/postgres/photo-finals-ingest.sql','supabase/migrations/20260912160000_photo_finals_packages.sql','supabase/migrations/20260912200000_photo_finals_application.sql']:
    m.run(cmd+['-f',str(m.ROOT/f)])
+  m.run(cmd+['-c','BEGIN','-f',str(m.ROOT/'supabase/migrations/20261007140933_photo_finals_encoder_security_revision.sql'),'-c','COMMIT'])
   binary=shutil.which('postgrest');assert binary
   with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
   secret='synthetic-postgrest-test-only-secret-not-a-production-key'

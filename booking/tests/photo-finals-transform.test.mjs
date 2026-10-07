@@ -14,7 +14,10 @@ test('versioned transforms preserve originals and produce bounded metadata-free 
  assert.equal(mls.width,1024);assert.equal(mls.height,2048);
  assert.equal((await sharp(gallery.bytes).metadata()).exif,undefined);
  assert.equal(TRANSFORMS.mls.status,'provisional');
- assert.equal(TRANSFORMS.gallery.encoder,'sharp-0.35.4_libvips-8.18.6_mozjpeg-0826579');
+ assert.equal(TRANSFORMS.gallery.encoder,'sharp-0.35.5_libvips-8.18.7_mozjpeg-0826579');
+ assert.deepEqual((await transformFinalJpeg(source,'gallery')).bytes,gallery.bytes,'patched encoder output is deterministic');
+ assert.equal(TRANSFORMS.gallery.version,2);
+ assert.equal(TRANSFORMS.mls.version,2);
  assert.equal(TRANSFORMS.gallery.progressive,false);
  const dir=await mkdtemp(join(tmpdir(),'pf-zip-'));
  try {const path=join(dir,'actual.zip');const zip=await StoredZip.create(path);
@@ -23,4 +26,11 @@ test('versioned transforms preserve originals and produce bounded metadata-free 
  assert.deepEqual(info.names,['001.jpg','002.jpg']);assert.equal(info.valid,null);assert.deepEqual(Buffer.from(info.first),source);
  assert.ok((await readFile(path)).length>source.length);
  } finally {await rm(dir,{recursive:true,force:true});}
+});
+
+test('patched encoder approval remains fail-closed on runtime drift',async()=>{
+ const source=await sharp({create:{width:16,height:16,channels:3,background:'#abc'}}).jpeg().toBuffer();
+ const vips=sharp.versions.vips;
+ try {sharp.versions.vips='unapproved';await assert.rejects(transformFinalJpeg(source,'gallery'),/finals_encoder_version_unapproved/);}
+ finally {sharp.versions.vips=vips;}
 });

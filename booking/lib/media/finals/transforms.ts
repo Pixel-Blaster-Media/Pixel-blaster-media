@@ -2,11 +2,11 @@ import sharp from 'sharp';
 import { open, type FileHandle } from 'node:fs/promises';
 import { verifyFinalJpeg } from './ingest.ts';
 
-// Revision 1 is executable, not a claim of universal MLS compliance.
+// Revision 2 pins the security-patched encoder; original bytes and MLS rules are unchanged.
 export const TRANSFORMS = Object.freeze({
  full_res: Object.freeze({id:'client.fullres.share.v1',version:1,operation:'original_bytes',metadata:'preserve',status:'defined'}),
- gallery: Object.freeze({id:'web.listing.2048.v1',version:1,operation:'jpeg',encoder:'sharp-0.35.4_libvips-8.18.6_mozjpeg-0826579',progressive:false,mozjpeg:false,fit:'inside',maxSide:2048,quality:82,chroma:'4:2:0',orientation:'auto',colour:'srgb',metadata:'strip',enlarge:false,status:'defined'}),
- mls: Object.freeze({id:'ontario.proptx.provisional.2026-08-11.v1',version:1,operation:'jpeg',encoder:'sharp-0.35.4_libvips-8.18.6_mozjpeg-0826579',progressive:false,mozjpeg:false,fit:'inside',maxSide:2048,quality:90,chroma:'4:2:0',orientation:'auto',colour:'srgb',metadata:'strip',enlarge:false,status:'provisional',label:'Provisional MLS export — verify destination requirements'}),
+ gallery: Object.freeze({id:'web.listing.2048.v1',version:2,operation:'jpeg',encoder:'sharp-0.35.5_libvips-8.18.7_mozjpeg-0826579',progressive:false,mozjpeg:false,fit:'inside',maxSide:2048,quality:82,chroma:'4:2:0',orientation:'auto',colour:'srgb',metadata:'strip',enlarge:false,status:'defined'}),
+ mls: Object.freeze({id:'ontario.proptx.provisional.2026-08-11.v1',version:2,operation:'jpeg',encoder:'sharp-0.35.5_libvips-8.18.7_mozjpeg-0826579',progressive:false,mozjpeg:false,fit:'inside',maxSide:2048,quality:90,chroma:'4:2:0',orientation:'auto',colour:'srgb',metadata:'strip',enlarge:false,status:'provisional',label:'Provisional MLS export — verify destination requirements'}),
 });
 export async function transformFinalJpeg(bytes: Buffer, kind:'gallery'|'mls', execution?:{signal:AbortSignal;check?:(tailMs:number)=>void}) {
  const hash=(await import('node:crypto')).createHash('sha256').update(bytes).digest('hex');

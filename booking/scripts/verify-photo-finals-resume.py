@@ -15,6 +15,7 @@ def main():
    cmd=[str(m.PG/'psql'),'-X','-qAt','-h',t,'-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1']
    files=['tests/postgres/canonical-media-bootstrap.sql','supabase/migrations/20260811225000_canonical_media_releases.sql','supabase/migrations/20260912120000_photo_finals_ingest.sql','tests/postgres/photo-finals-ingest.sql','supabase/migrations/20260912160000_photo_finals_packages.sql','supabase/migrations/20260912200000_photo_finals_application.sql','supabase/migrations/20260912210000_photo_finals_download_accounting.sql','supabase/migrations/20260912220000_photo_finals_recovery.sql']
    for f in files:m.run(cmd+['-f',str(m.ROOT/f)])
+   m.run(cmd+['-c','BEGIN','-f',str(m.ROOT/'supabase/migrations/20261007140933_photo_finals_encoder_security_revision.sql'),'-c','COMMIT'])
    migration=m.ROOT/'supabase/migrations/20260915120000_photo_finals_resume.sql'
    if migration.exists():m.run(cmd+['-f',str(migration)])
    env={**m.ENV,'PF_TEST_SOCKET':t,'PF_TEST_PSQL':str(m.PG/'psql')}

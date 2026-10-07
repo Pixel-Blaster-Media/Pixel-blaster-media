@@ -47,6 +47,7 @@ def main():
                     text=(ROOT/'tests/postgres/canonical-media-bootstrap.sql').read_text()
                     listing=text[text.index('create table public.listing_websites'):text.index('grant all')]
                     run(cmd+['-c',listing+'alter table bookings add column reminder_sent_at timestamptz;'])
+            run(cmd+['-c','BEGIN','-f',str(ROOT/'supabase/migrations/20261007140933_photo_finals_encoder_security_revision.sql'),'-c','COMMIT'])
             ENV.update(PF_TEST_SOCKET=t,PF_TEST_PSQL=str(PG/'psql'),PF_EVIDENCE_DIR=str(out),PF_SMALL_BINDING=binding)
             print(run(['node',str(ROOT/'tests/postgres/photo-finals-small-pilot.integration.mjs')]),end='')
         finally:
