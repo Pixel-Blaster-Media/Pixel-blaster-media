@@ -192,7 +192,7 @@ else {
     await expect(page.getByText('Loading adjoining weeks…')).toHaveCount(0);
     await timeline.evaluate(el=>el.scrollTop=0);
     const shoot = page.locator('[data-calendar-item="booking:fixture-2026-10-07:2026-10-07"]');
-    await shoot.click(); await page.getByText('Change date & time',{exact:true}).click(); await expect(page.getByRole('button',{name:'Save new date & time'})).toHaveCount(1);
+    await shoot.click(); await page.locator('summary').filter({hasText:'Change date & time'}).click(); await expect(page.getByRole('button',{name:'Save new date & time'})).toHaveCount(1);
     await page.getByTitle('Close',{exact:true}).click();
     const dragBox=await shoot.boundingBox();
     await page.mouse.move(dragBox.x+30,dragBox.y+25);await page.mouse.down();
