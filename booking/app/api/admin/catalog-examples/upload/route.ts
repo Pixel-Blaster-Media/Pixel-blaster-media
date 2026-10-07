@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import {
   createStreamDirectUpload,
   createStreamTusUpload,
+  inspectStreamTusReservation,
   deleteStreamVideo,
   StreamProvisioningError,
 } from "@/lib/booking/catalog-examples-core";
@@ -14,6 +15,28 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// Inspect an existing same-company reservation without reserving, attaching or deleting anything.
+export async function GET(request: NextRequest) {
+  const admin = await requireAdmin();
+  const claimId = new URL(request.url).searchParams.get("claimId") ?? "";
+  if (!UUID.test(claimId)) return jsonError("A valid upload operation is required.", 400);
+  const { data: claim, error } = await getServiceSupabase().from("catalog_stream_upload_claims")
+    .select("state, stream_uid, upload_expires_at")
+    .eq("id", claimId).eq("organization_id", admin.organizationId).eq("upload_protocol", "tus").maybeSingle();
+  if (error) return jsonError("Could not inspect this upload operation.", 503);
+  if (!claim) return jsonError("Upload operation not found.", 404);
+  if (!claim.stream_uid || !claim.upload_expires_at) {
+    return NextResponse.json({ state: claim.state, inspection: null }, { headers: noStoreHeaders() });
+  }
+  try {
+    const inspection = await inspectStreamTusReservation({ uid: claim.stream_uid,
+      operationId: claimId, expiresAt: claim.upload_expires_at });
+    return NextResponse.json({ state: claim.state, inspection }, { headers: noStoreHeaders() });
+  } catch {
+    return jsonError("Could not safely inspect this upload operation.", 503);
+  }
+}
 
 export async function POST(request: NextRequest) {
   const admin = await requireAdmin();
@@ -132,6 +155,11 @@ async function prepareResumableUpload(input: {
       upload = await createStreamTusUpload({ name: input.title, operationId: claimId,
         size: input.size, expiresAt: new Date(expiresAt).toISOString() });
     } catch (caught) {
+      console.error("catalog_resumable_preparation_failed", {
+        outcome: caught instanceof StreamProvisioningError ? caught.outcome : "unknown",
+        knownVideo: caught instanceof StreamProvisioningError && Boolean(caught.streamUid),
+        inspection: caught instanceof StreamProvisioningError ? caught.diagnostic ?? null : null,
+      });
       if (caught instanceof StreamProvisioningError && caught.streamUid) {
         await setClaimCleanup(claimId, input.organizationId, caught.streamUid, "cleanup_required");
       } else await setClaimState(claimId, input.organizationId,
