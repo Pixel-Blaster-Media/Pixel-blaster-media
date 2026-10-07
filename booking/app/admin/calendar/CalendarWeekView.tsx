@@ -1180,7 +1180,6 @@ export default function CalendarWeekView({
 
       <div className="studio-calendar-scroll-status">
         <p aria-live="polite">Week of {calendar.visibleWeek} · {items.filter(item => item.kind === "booking" && calendarWeekStart(item.localDate) === calendar.visibleWeek).length} bookings</p>
-        <p id="calendar-scroll-help">Scroll sideways or use Shift + mouse wheel for adjacent weeks. Up and down moves through hours.</p>
         {calendar.loading ? <p role="status">Loading adjoining weeks…</p> : null}
         {calendar.failedWeeks.length ? <div role="alert">Some weeks could not load. Existing bookings remain visible. <button type="button" onClick={calendar.retry} className="underline">Try again</button></div> : null}
         {calendar.googleLoadFailed ? <p role="status">Some Google Calendar events are unavailable. Booking data is still shown.</p> : null}
@@ -1197,7 +1196,7 @@ export default function CalendarWeekView({
       ) : (
       <div
         ref={desktopTimelineScrollRef}
-        role="region" tabIndex={0} aria-label="Continuous week calendar" aria-describedby="calendar-scroll-help"
+        role="region" tabIndex={0} aria-label="Continuous week calendar"
         onScroll={calendar.onScroll}
         onKeyDown={event => {
           if (event.target !== event.currentTarget) return;

@@ -121,7 +121,11 @@ body:has(.studio-workspace) .site-main {max-width:none;margin:0;padding:0}
 @media(prefers-reduced-motion:reduce){.studio-workspace *{scroll-behavior:auto!important}}
 
 .studio-calendar-timeline {max-height:calc(100dvh - 270px);min-height:330px;overflow:auto;overscroll-behavior-x:contain;touch-action:pan-x pan-y;border:1px solid var(--realtor-border);border-radius:10px;background:white;scrollbar-gutter:stable}
-.studio-calendar-scroll-status {font-size:12px;color:var(--realtor-muted);line-height:1.6;min-height:60px}
+.studio-content:has(.studio-calendar-page) {padding-top:18px}
+.studio-workspace .studio-calendar-page [data-admin-page-heading] {margin:0}
+.studio-workspace .studio-calendar-page [data-admin-page-heading] > div > div:first-child {display:flex;align-items:baseline;gap:4px 10px}
+.studio-workspace .studio-calendar-page [data-admin-page-heading] h1 {font-size:clamp(26px,2.3vw,32px);line-height:1.15;margin:0}
+.studio-calendar-scroll-status {display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;font-size:12px;color:var(--realtor-muted);line-height:1.5}
 .studio-calendar-scroll-status>p:first-child {font-weight:700;color:var(--realtor-text)}
 .studio-calendar-timeline [data-calendar-day-header] {min-height:72px}
 .studio-calendar-timeline [data-calendar-day-header]:nth-child(7n + 2) {border-left:2px solid var(--realtor-primary)}

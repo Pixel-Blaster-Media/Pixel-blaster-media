@@ -8,6 +8,8 @@ import http from 'node:http';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const root = path.resolve(import.meta.dirname, '..');
+const port = Number(process.env.STUDIO_REVIEW_PORT || 8766);
+const baseURL = `http://127.0.0.1:${port}`;
 const output = path.resolve(process.env.STUDIO_REVIEW_DIR || path.join(os.tmpdir(), 'pixel-studio-review'));
 fs.mkdirSync(output, { recursive: true });
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'pixel-studio-fixture-'));
@@ -61,6 +63,12 @@ export const getServerSupabase=async()=>({rpc:async(_name,args)=>({data:${JSON.s
 export const action=async(...args)=>{if(typeof window==='undefined')throw Error('No server mutation');window.fixture.actions.push(args.map(x=>x instanceof FormData?Object.fromEntries(x):x));await new Promise(r=>setTimeout(r,window.fixture.delay||0));if(window.fixture.saveMode==='throw')throw Error('Fixture connection interrupted');if(window.fixture.saveMode==='reject')return{ok:false,error:'Booking changed in another session. Refresh before saving.'};return{ok:true,lifecycleVersion:8,confirmationSent:false}};
 `;
 function plugin(server = false) { return { name: 'isolated-providers', setup(b) {
+  if(server){
+    b.onResolve({filter:/^\.\/CalendarWeekView$/},a=>({path:a.path,namespace:'calendar-island'}));
+    b.onResolve({filter:/^\.\/calendar-data$/},a=>({path:a.path,namespace:'calendar-data'}));
+  }
+  b.onLoad({filter:/.*/,namespace:'calendar-island'},()=>({contents:`import React from 'react';export default function Calendar(){return <div data-calendar-island/>}`,resolveDir:root,loader:'tsx'}));
+  b.onLoad({filter:/.*/,namespace:'calendar-data'},()=>({contents:`import React from 'react';export async function loadCalendarWeek(){return ${JSON.stringify({...weekFixture('2026-10-04'),catalogItems:catalog,navigation:{},calendarSources:[],todayKey:'2026-10-07'})}}export function CalendarSidebar(){return <p>Sample calendar · fictional data</p>}`,resolveDir:root,loader:'tsx'}));
   if(server)b.onResolve({filter:/^\.\/EditBookingForm$/},a=>({path:a.path,namespace:'editor-island'}));
   b.onLoad({filter:/.*/,namespace:'editor-island'},()=>({contents:`import React from 'react';export default function Editor(){return <div data-editor-island/>}`,resolveDir:root,loader:'tsx'}));
   b.onResolve({filter:/^@\/lib\/(booking\/catalog$|integrations\/(iguide\/portal-client$|provider-enablement$|autoenhance\/workflow$))/},a=>({path:a.path,namespace:'fixture'}));
@@ -80,11 +88,11 @@ function plugin(server = false) { return { name: 'isolated-providers', setup(b) 
   });
 } }; }
 
-await build({ stdin: { contents: `import React from 'react';import{renderToPipeableStream}from'react-dom/server';import{PassThrough}from'node:stream';import Today from './app/admin/today/page';import Jobs from './app/admin/bookings/page';import Detail from './app/admin/bookings/[id]/page';
-export async function render(view,params){const tree=view==='today'?await Today():view==='booking'?await Detail({params:Promise.resolve({id:'sample-1'}),searchParams:Promise.resolve({tab:'details'})}):await Jobs({searchParams:Promise.resolve(params)});return await new Promise((resolve,reject)=>{const out=new PassThrough();let html='';out.on('data',chunk=>html+=chunk);out.on('end',()=>resolve(html));const stream=renderToPipeableStream(tree,{onAllReady(){stream.pipe(out)},onError:reject});});}`, resolveDir: root, loader: 'tsx' }, platform: 'node', format: 'cjs', bundle: true, outfile: temp + '/server.cjs', jsx: 'automatic', tsconfig: root + '/tsconfig.json', plugins: [plugin(true)], logLevel: 'warning' });
+await build({ stdin: { contents: `import React from 'react';import{renderToPipeableStream}from'react-dom/server';import{PassThrough}from'node:stream';import Today from './app/admin/today/page';import Jobs from './app/admin/bookings/page';import Detail from './app/admin/bookings/[id]/page';import CalendarPage from './app/admin/calendar/page';
+export async function render(view,params){const tree=view==='calendar'?await CalendarPage({searchParams:Promise.resolve(params)}):view==='today'?await Today():view==='booking'?await Detail({params:Promise.resolve({id:'sample-1'}),searchParams:Promise.resolve({tab:'details'})}):await Jobs({searchParams:Promise.resolve(params)});return await new Promise((resolve,reject)=>{const out=new PassThrough();let html='';out.on('data',chunk=>html+=chunk);out.on('end',()=>resolve(html));const stream=renderToPipeableStream(tree,{onAllReady(){stream.pipe(out)},onError:reject});});}`, resolveDir: root, loader: 'tsx' }, platform: 'node', format: 'cjs', bundle: true, outfile: temp + '/server.cjs', jsx: 'automatic', tsconfig: root + '/tsconfig.json', plugins: [plugin(true)], logLevel: 'warning' });
 const render = require(temp + '/server.cjs').render;
-const browserBundle = await build({ stdin: { contents: `import React from 'react';import{createRoot}from'react-dom/client';import Shell from './app/admin/AdminWorkspace';import Edit from './app/admin/bookings/[id]/EditBookingForm';import Calendar from './app/admin/calendar/CalendarWeekView';import Heading from './app/admin/AdminPageHeading';
-const f=window.fixture;function activateStream(root){for(const old of root.querySelectorAll('script')){const script=document.createElement('script');script.textContent=old.textContent;old.replaceWith(script)}}function Markup(){const ref=React.useRef(null);React.useLayoutEffect(()=>activateStream(ref.current),[]);return <div ref={ref} dangerouslySetInnerHTML={{__html:f.markup}}/>}function Booking(){const ref=React.useRef(null);React.useEffect(()=>{activateStream(ref.current);const root=createRoot(ref.current.querySelector('[data-editor-island]'));root.render(<Edit bookingId='sample-1' initial={f.initial} catalogItems={f.catalog}/>);return()=>root.unmount()},[]);return <div ref={ref} dangerouslySetInnerHTML={{__html:f.markup}}/>;}const child=f.view==='booking'?<Booking/>:f.view==='calendar'?<><Heading eyebrow='Schedule' title='Calendar' meta='Scroll across weeks. Keep your day in view.'/><Calendar days={f.week.days} items={f.week.items} catalogItems={f.catalog} navigation={{previousHref:'/admin/calendar?week=2026-09-27',todayHref:'/admin/calendar',nextHref:'/admin/calendar?week=2026-10-11',search:'',weekValue:null,clearSearchHref:null}} calendarMenu={<p className='p-4'>Sample calendar · fictional data</p>}/></>:<Markup/>;
+const browserBundle = await build({ stdin: { contents: `import React from 'react';import{createRoot}from'react-dom/client';import Shell from './app/admin/AdminWorkspace';import Edit from './app/admin/bookings/[id]/EditBookingForm';import Calendar from './app/admin/calendar/CalendarWeekView';
+const f=window.fixture;function activateStream(root){for(const old of root.querySelectorAll('script')){const script=document.createElement('script');script.textContent=old.textContent;old.replaceWith(script)}}function Markup(){const ref=React.useRef(null);React.useLayoutEffect(()=>activateStream(ref.current),[]);return <div ref={ref} dangerouslySetInnerHTML={{__html:f.markup}}/>}function Booking(){const ref=React.useRef(null);React.useEffect(()=>{activateStream(ref.current);const root=createRoot(ref.current.querySelector('[data-editor-island]'));root.render(<Edit bookingId='sample-1' initial={f.initial} catalogItems={f.catalog}/>);return()=>root.unmount()},[]);return <div ref={ref} dangerouslySetInnerHTML={{__html:f.markup}}/>;}function CalendarScreen(){const ref=React.useRef(null);React.useEffect(()=>{const root=createRoot(ref.current.querySelector('[data-calendar-island]'));root.render(<Calendar days={f.week.days} items={f.week.items} catalogItems={f.catalog} navigation={{previousHref:'/admin/calendar?week=2026-09-27',todayHref:'/admin/calendar',nextHref:'/admin/calendar?week=2026-10-11',search:'',weekValue:null,clearSearchHref:null}} calendarMenu={<p className='p-4'>Sample calendar · fictional data</p>}/>);return()=>root.unmount()},[]);return <div ref={ref} dangerouslySetInnerHTML={{__html:f.markup}}/>;}const child=f.view==='booking'?<Booking/>:f.view==='calendar'?<CalendarScreen/>:<Markup/>;
 createRoot(document.getElementById('root')).render(<div className='pixel-app-skin studio-workspace admin-earth realtor-theme realtor-backdrop' data-pixel-default-palette='true'><Shell name='Pixel Blaster Media' logoUrl={f.logoUrl} signOutAction={async()=>{throw Error('No real sign-out')}}>{child}</Shell></div>);`, resolveDir: root, loader: 'tsx' }, bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic', tsconfig: root + '/tsconfig.json', plugins: [plugin()], define: { 'process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY': 'undefined' }, logLevel: 'warning' });
 const requests = [];
 const weekFailures = new Set();
@@ -101,13 +109,13 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/fixture.js') { res.setHeader('Content-Type','text/javascript');res.end(browserBundle.outputFiles[0].text);return; }
     const view = url.pathname.includes('/calendar') ? 'calendar' : url.pathname.includes('/bookings/sample') ? 'booking' : url.pathname.includes('/bookings') ? 'jobs' : 'today';
-    const fixture = { logoUrl, view, pathname: url.pathname, initial, catalog, week: weekFixture('2026-10-04'), actions: [], refreshes: 0, saveMode: 'success', markup: ['today','jobs','booking'].includes(view) ? await render(view, Object.fromEntries(url.searchParams)) : '' };
+    const fixture = { logoUrl, view, pathname: url.pathname, initial, catalog, week: weekFixture('2026-10-04'), actions: [], refreshes: 0, saveMode: 'success', markup: ['today','jobs','booking','calendar'].includes(view) ? await render(view, Object.fromEntries(url.searchParams)) : '' };
     if (view==='today') fs.writeFileSync(temp+'/today.html',fixture.markup);
     res.setHeader('Content-Type','text/html');res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Studio Workspace · implementation review</title><style>${css}</style></head><body><div style="padding:8px 18px;background:#edf3f1;color:#28545a;font:12px system-ui;text-align:right">ACTUAL COMPONENTS · FICTIONAL DATA · LOCAL REVIEW</div><div id="root"></div><script>window.fixture=${JSON.stringify(fixture).replaceAll('<','\\u003c')}</script><script src="/fixture.js"></script></body></html>`);
   } catch(error) { console.error(error); res.statusCode=500;res.end(String(error)); }
 });
-await new Promise(resolve => server.listen(8766, '127.0.0.1', resolve));
-if (process.argv.includes('--serve')) { console.log('Implementation fixture: http://127.0.0.1:8766/admin/today'); }
+await new Promise(resolve => server.listen(port, '127.0.0.1', resolve));
+if (process.argv.includes('--serve')) { console.log(`Implementation fixture: ${baseURL}/admin/today`); }
 else {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
@@ -118,7 +126,7 @@ else {
   const screens=[], accessibility=[], checks=[];
   try {
     for(const width of [1440,390,768])for(const [screen,route]of [['Today','today'],['Bookings','bookings'],['Editor','bookings/sample-1?tab=details'],['Calendar','calendar']]){
-      await page.setViewportSize({width,height:1000});assert.equal((await page.goto('http://127.0.0.1:8766/admin/'+route)).status(),200,screen);await page.locator('.studio-content').waitFor();await page.waitForTimeout(200);
+      await page.setViewportSize({width,height:1000});assert.equal((await page.goto(baseURL+'/admin/'+route)).status(),200,screen);await page.locator('.studio-content').waitFor();await page.waitForTimeout(200);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${screen} ${width}`);
       const filename=`Studio-Implementation-${screen}-${width}.png`;await page.screenshot({path:path.join(output,filename),fullPage:true});screens.push(filename);
       if(width===390){if(screen==='Editor')await page.locator('.studio-editor-grid').scrollIntoViewIfNeeded();const phone=`Studio-Implementation-${screen}-Phone.png`;await page.screenshot({path:path.join(output,phone)});screens.push(phone);await page.evaluate(()=>window.scrollTo(0,0));}
@@ -128,7 +136,7 @@ else {
     }
     // Test native scrolling and the actual read-only loading hook.
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.goto('http://127.0.0.1:8766/admin/calendar');
+    await page.goto(baseURL+'/admin/calendar');
     const timeline = page.getByRole('region', { name: 'Continuous week calendar' });
     await expect(page.getByText('Loading adjoining weeks…')).toHaveCount(0);
     const box = await timeline.boundingBox();
@@ -202,7 +210,7 @@ else {
     checks.push('booking quick view and deliberate mouse drag reschedule still call the existing action');
 
     // Failed or interrupted saves retain input and the request/version tokens.
-    await page.goto('http://127.0.0.1:8766/admin/bookings/sample-1?tab=details');
+    await page.goto(baseURL+'/admin/bookings/sample-1?tab=details');
     await page.locator('[name="contact_name"]').fill('Edited Sample Realtor');
     await page.evaluate(() => { window.fixture.saveMode='reject'; window.fixture.delay=100; });
     await page.getByRole('button',{name:'Save booking',exact:true}).click();
@@ -239,7 +247,7 @@ else {
     // Touch gestures are native scrolling, with no drag/save side effects.
     const touch = await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
     await touch.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
-    const mobile = await touch.newPage(); await mobile.clock.setFixedTime(new Date('2026-10-07T16:00:00Z')); await mobile.goto('http://127.0.0.1:8766/admin/calendar');
+    const mobile = await touch.newPage(); await mobile.clock.setFixedTime(new Date('2026-10-07T16:00:00Z')); await mobile.goto(baseURL+'/admin/calendar');
     const mobileTimeline = mobile.getByRole('region',{name:'Continuous week calendar'});
     await expect(mobile.getByText('Loading adjoining weeks…')).toHaveCount(0);
     await mobileTimeline.scrollIntoViewIfNeeded();
