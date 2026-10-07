@@ -4,7 +4,8 @@ import React from 'react';
 import * as jsxRuntime from 'react/jsx-runtime';
 import Renderer,{act} from 'react-test-renderer';
 import {loadSource} from './helpers/source-module.mjs';
-const core=loadSource('lib/booking/catalog-examples-core.ts');
+const policy=loadSource('lib/booking/catalog-upload-policy.ts');
+const core=loadSource('lib/booking/catalog-examples-core.ts',{'./catalog-upload-policy.ts':policy});
 const groups=loadSource('lib/booking/catalog-sample-groups.ts');
 const viewer=loadSource('lib/booking/catalog-sample-viewer.ts');
 function actions(){
@@ -27,9 +28,9 @@ test('photo-specific form rejects unsafe/indirect URLs and missing public permis
  for(const extra of [{photo_public_ack:'false'},{external_url:'https://images.example.invalid/album'},{external_url:'https://images.example.invalid/p.svg'},{external_url:'https://127.0.0.1/p.jpg'},{sample_group:'custom',custom_sample_group_label:'Other'},{kind:'interactive'}]){const a=actions();assert.equal((await a.attachCatalogExample(form(extra))).ok,false);assert.equal(a.writes.length,0);}
 });
 test('admin editor exposes configurable empty photo gallery and submits explicit public photo fields',async()=>{
- globalThis.IS_REACT_ACT_ENVIRONMENT=true;const sent=[];
+ globalThis.IS_REACT_ACT_ENVIRONMENT=true;const sent=[];const MockUploader=()=>null;
  const Editor=loadSource('app/admin/settings/pricing/CatalogExamplesEditor.tsx',{
-  react:React,'react/jsx-runtime':jsxRuntime,'next/navigation':{useRouter:()=>({refresh(){}})},
+  react:React,'react/jsx-runtime':jsxRuntime,'./CatalogVideoUploader':{default:MockUploader},'next/navigation':{useRouter:()=>({refresh(){}})},
   '@/lib/booking/catalog-sample-groups':groups,
   './example-actions':{attachCatalogExample:async f=>{sent.push(Object.fromEntries(f));return {ok:true};},attachSharedCatalogVideo:async()=>({ok:true}),deleteCatalogExample:async()=>({ok:true}),removeSharedCatalogVideoPlacement:async()=>({ok:true})},
  },{FormData}).default;let tree;
@@ -43,7 +44,7 @@ test('admin editor exposes configurable empty photo gallery and submits explicit
   assert.equal(sent.length,1);assert.equal(sent[0].kind,'link');assert.equal(sent[0].sample_group,'photos');assert.equal(sent[0].photo_sample,'true');assert.equal(sent[0].photo_public_ack,'true');assert.equal(sent[0].title,'Living room');
   await act(async()=>tree.root.findAllByType('button').find(b=>text(b).includes('Add photo URL')).props.onClick());
   await act(async()=>tree.root.findAllByType('button').find(b=>text(b).includes('Upload video')).props.onClick());
-  assert.ok(tree.root.findAllByType('input').some(i=>i.props.placeholder==='Full property video'));
+  assert.equal(tree.root.findByType(MockUploader).props.catalogItemId,'service');
   assert.equal(tree.root.findAllByType('input').filter(i=>i.props.type==='checkbox').length,0);
  }finally{if(tree)await act(async()=>tree.unmount());delete globalThis.IS_REACT_ACT_ENVIRONMENT;}
 });

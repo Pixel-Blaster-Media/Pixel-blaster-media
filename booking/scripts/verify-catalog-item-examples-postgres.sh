@@ -106,4 +106,37 @@ printf '\\set ON_ERROR_STOP on\nbegin;\n\\ir %s\ncommit;\n' "$GROUPS_MIGRATION" 
 "${PSQL[@]}" -f "$TMP_DIR/groups-apply.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/tests/postgres/grouped-catalog-sample-pills.behavior.sql" >/dev/null
 
-echo "Catalog item examples, shared placements, video dimensions, and grouped sample pills PostgreSQL 17 suites passed."
+RESUMABLE_MIGRATION="$ROOT/supabase/migrations/20261007173355_catalog_resumable_stream_uploads.sql"
+printf '\\set ON_ERROR_STOP on\nbegin;\n\\ir %s\nrollback;\n' "$RESUMABLE_MIGRATION" > "$TMP_DIR/resumable-rollback-proof.sql"
+"${PSQL[@]}" -f "$TMP_DIR/resumable-rollback-proof.sql" >/dev/null
+if [[ "$("${PSQL[@]}" -Atc "select count(*) from information_schema.columns where table_schema='public' and table_name='catalog_stream_upload_claims' and column_name='upload_protocol'")" != "0" ]]; then
+  echo "Rollback proof left resumable upload metadata residue." >&2
+  exit 1
+fi
+# Direct-file autocommit transport, matching the linked migration CLI.
+"${PSQL[@]}" -f "$RESUMABLE_MIGRATION" >/dev/null
+"${PSQL[@]}" -f "$ROOT/tests/postgres/catalog-resumable-uploads.behavior.sql" >/dev/null
+"${PSQL[@]}" >/dev/null <<'SQL'
+insert into public.organizations(id,name,slug) values ('99000000-0000-4000-8000-000000000003','Concurrent upload fixture','upload-concurrent');
+insert into public.catalog_items(id,organization_id,slug,name) values ('99000000-0000-4000-8000-000000000013','99000000-0000-4000-8000-000000000003','upload-concurrent','Concurrent upload');
+SQL
+"${PSQL[@]}" > "$TMP_DIR/resumable-first.log" <<'SQL' &
+begin;
+set local role service_role;
+select public.claim_catalog_resumable_upload('99000000-0000-4000-8000-000000000031','99000000-0000-4000-8000-000000000003','99000000-0000-4000-8000-000000000013',500000000,repeat('d',64));
+select pg_sleep(0.5);
+commit;
+SQL
+FIRST_RESUME_PID=$!
+"${PSQL[@]}" > "$TMP_DIR/resumable-second.log" <<'SQL' &
+set role service_role;
+select public.claim_catalog_resumable_upload('99000000-0000-4000-8000-000000000032','99000000-0000-4000-8000-000000000003','99000000-0000-4000-8000-000000000013',500000000,repeat('d',64));
+SQL
+SECOND_RESUME_PID=$!
+wait "$FIRST_RESUME_PID"
+wait "$SECOND_RESUME_PID"
+if [[ "$("${PSQL[@]}" -Atc "select count(*) from public.catalog_stream_upload_claims where organization_id='99000000-0000-4000-8000-000000000003'")" != "1" ]]; then
+  echo "Concurrent resume allocated duplicate provider work." >&2
+  exit 1
+fi
+echo "Catalog examples, shared placements, dimensions, groups and resumable reservation/rollback/concurrency PostgreSQL 17 suites passed."

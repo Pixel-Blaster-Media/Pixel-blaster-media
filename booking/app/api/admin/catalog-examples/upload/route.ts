@@ -3,10 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import {
   createStreamDirectUpload,
+  createStreamTusUpload,
   deleteStreamVideo,
   StreamProvisioningError,
 } from "@/lib/booking/catalog-examples-core";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { validCatalogUploadSize, validUploadFingerprint, validStreamUploadCapability } from "@/lib/booking/catalog-upload-policy";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -23,6 +25,14 @@ export async function POST(request: NextRequest) {
     const claimId = field(raw, "idempotencyKey", 40);
     if (!catalogItemId || !title || !UUID.test(claimId)) {
       return jsonError("Service, title, and a valid upload operation are required.", 400);
+    }
+    if (raw.protocol !== undefined && raw.protocol !== "tus") return jsonError("Unsupported upload method.", 400);
+    if (raw.protocol === "tus") {
+      if (!validCatalogUploadSize(raw.size) || !validUploadFingerprint(raw.fingerprint)) {
+        return jsonError("Choose a video of 1 GB or smaller.", 400);
+      }
+      return prepareResumableUpload({ catalogItemId, title, description, claimId,
+        organizationId: admin.organizationId, size: raw.size, fingerprint: raw.fingerprint });
     }
 
     const supabase = getServiceSupabase();
@@ -100,6 +110,67 @@ export async function POST(request: NextRequest) {
   } catch {
     return jsonError("Could not prepare the upload.", 400);
   }
+}
+
+async function prepareResumableUpload(input: {
+  catalogItemId: string; title: string; description: string; claimId: string;
+  organizationId: string; size: number; fingerprint: string;
+}) {
+  const supabase = getServiceSupabase();
+  const { data, error } = await supabase.rpc("claim_catalog_resumable_upload", {
+    p_claim_id: input.claimId, p_organization_id: input.organizationId,
+    p_catalog_item_id: input.catalogItemId, p_upload_size: input.size, p_upload_fingerprint: input.fingerprint,
+  });
+  if (error || !data || typeof data !== "object" || Array.isArray(data)) return jsonError("Could not reserve a resumable upload.", 503);
+  const claimId = data.claim_id, expiresAt = data.expires_at;
+  if (data.status !== "claimed" && data.status !== "resume") return claimFailure(typeof data.status === "string" ? data.status : null);
+  if (typeof claimId !== "string" || !UUID.test(claimId) || typeof expiresAt !== "string"
+      || !Number.isFinite(Date.parse(expiresAt)) || Date.parse(expiresAt) <= Date.now()) return jsonError("Upload reservation is invalid or expired.", 409);
+  if (data.status === "claimed") {
+    let upload: { uid: string; uploadUrl: string };
+    try {
+      upload = await createStreamTusUpload({ name: input.title, operationId: claimId,
+        size: input.size, expiresAt: new Date(expiresAt).toISOString() });
+    } catch (caught) {
+      if (caught instanceof StreamProvisioningError && caught.streamUid) {
+        await setClaimCleanup(claimId, input.organizationId, caught.streamUid, "cleanup_required");
+      } else await setClaimState(claimId, input.organizationId,
+        caught instanceof StreamProvisioningError && caught.outcome === "definitive" ? "cleaned" : "provider_unknown");
+      return jsonError("Cloudflare could not safely prepare this upload. Resolve the pending operation before starting another copy.", 503);
+    }
+    const { data: stored, error: persistError } = await supabase.from("catalog_stream_upload_claims")
+      .update({ stream_uid: upload.uid, upload_url: upload.uploadUrl, state: "provisioned", updated_at: new Date().toISOString() })
+      .eq("id", claimId).eq("organization_id", input.organizationId).eq("state", "claimed")
+      .eq("upload_protocol", "tus").select("id").maybeSingle();
+    if (persistError || !stored) {
+      const deleted = await deleteStreamVideo(upload.uid);
+      await setClaimCleanup(claimId, input.organizationId, upload.uid, deleted ? "cleaned" : "cleanup_required");
+      return jsonError("Could not persist the upload safely.", 503);
+    }
+  }
+  const readClaim = () => supabase.from("catalog_stream_upload_claims")
+    .select("id, state, stream_uid, example_id, upload_url, upload_size, upload_fingerprint, upload_expires_at")
+    .eq("id", claimId).eq("organization_id", input.organizationId).eq("catalog_item_id", input.catalogItemId)
+    .eq("upload_protocol", "tus").maybeSingle();
+  let { data: claim, error: readError } = await readClaim();
+  if (readError || !claim || claim.upload_size !== input.size || claim.upload_fingerprint !== input.fingerprint
+      || !claim.upload_expires_at || Date.parse(claim.upload_expires_at) <= Date.now()) return jsonError("This upload cannot be resumed. Cancel it and start again.", 409);
+  if (claim.state === "claimed" || claim.state === "provider_unknown") return jsonError("Upload preparation is still pending. Retry shortly; do not start another copy.", 409);
+  if (claim.state === "provisioned" && claim.stream_uid) {
+    const { error: attachError } = await supabase.rpc("attach_catalog_stream_upload", {
+      p_claim_id: claimId, p_organization_id: input.organizationId, p_catalog_item_id: input.catalogItemId,
+      p_stream_uid: claim.stream_uid, p_title: input.title, p_description: input.description || null,
+    });
+    if (attachError) return jsonError("Could not attach this upload safely. Retry shortly.", 503);
+    // Concurrent attachment may have completed already. Read it, never delete that video.
+    ({ data: claim, error: readError } = await readClaim());
+  }
+  if (readError || claim?.state !== "attached" || !claim.example_id || !UUID.test(claim.example_id)
+      || claim.upload_size !== input.size || claim.upload_fingerprint !== input.fingerprint
+      || !claim.upload_expires_at || Date.parse(claim.upload_expires_at) <= Date.now()
+      || !validStreamUploadCapability(claim.upload_url)) return jsonError("This upload is no longer available to resume.", 409);
+  return NextResponse.json({ exampleId: claim.example_id, uploadUrl: claim.upload_url,
+    expiresAt: claim.upload_expires_at, resumed: data.status === "resume" }, { headers: noStoreHeaders() });
 }
 
 async function setClaimState(
