@@ -1,0 +1,133 @@
+/* Studio Workspace is scoped to authenticated admin layout. Other tenants keep
+   their resolved brand; public booking, realtor and listing skins are unchanged. */
+.studio-workspace.pixel-app-skin {
+  --realtor-bg:#faf9f6; --realtor-bg-rgb:250 249 246;
+  --realtor-bg-soft:#f0f3f1; --realtor-bg-soft-rgb:240 243 241;
+  --realtor-surface:#fff; --realtor-surface-rgb:255 255 255;
+  --realtor-text:#22252a; --realtor-text-rgb:34 37 42;
+  --realtor-muted:#59616b; --realtor-muted-rgb:89 97 107;
+  --realtor-border:#d7dddc; --studio-nav-height:76px;
+  min-height:100dvh; background:var(--realtor-bg); color:var(--realtor-text);
+}
+.studio-workspace.pixel-app-skin[data-pixel-default-palette="true"] {
+  --realtor-primary:#1a7f8e !important; --realtor-primary-rgb:26 127 142 !important;
+  --realtor-primary-light:#14717f !important; --realtor-primary-light-rgb:20 113 127 !important;
+  --realtor-primary-dark:#075f6c !important; --realtor-primary-dark-rgb:7 95 108 !important;
+}
+body:has(.studio-workspace) :is(.site-header,.site-footer) {display:none}
+body:has(.studio-workspace) .site-main {max-width:none;margin:0;padding:0}
+.studio-workspace * {scroll-margin-top:6rem;scroll-margin-bottom:11rem}
+.studio-workspace :is(a,button,input,select,textarea,summary):focus-visible {outline:3px solid var(--realtor-primary);outline-offset:3px}
+.studio-workspace :is(button,a,summary) {-webkit-tap-highlight-color:transparent}
+.studio-sidebar {position:fixed;inset:0 auto 0 0;width:220px;padding:28px 18px;background:#fff;border-right:1px solid var(--realtor-border);display:flex;flex-direction:column;z-index:120;overflow-y:auto}
+.studio-brand {display:flex;align-items:center;gap:10px;min-width:0;color:var(--realtor-text)}
+.studio-brand-mark {width:36px;height:40px;flex-shrink:0;display:grid;place-items:center;background-size:contain;background-position:center;background-repeat:no-repeat;color:var(--realtor-primary);font-size:14px;font-weight:800}
+.studio-brand strong {display:block;font-size:15px;line-height:1.2;letter-spacing:-.035em;overflow-wrap:anywhere}
+.studio-brand small {display:block;margin-top:4px;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--realtor-muted)}
+.studio-nav-label {font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--realtor-muted);margin:38px 12px 12px}
+.studio-sidebar :is(nav a,nav button,.studio-sidebar-footer button),.studio-more-menu :is(a,button) {display:flex;align-items:center;gap:12px;min-height:46px;padding:11px 12px;width:100%;border-radius:7px;font-size:14px;text-align:left;color:var(--realtor-muted)}
+.studio-sidebar nav {display:grid;gap:4px}
+.studio-sidebar a[aria-current="page"] {color:var(--realtor-primary-dark);background:rgb(var(--realtor-primary-rgb)/.1);font-weight:700}
+.studio-sidebar :is(nav a,nav button):hover,.studio-more-menu :is(a,button):hover {background:rgb(var(--realtor-primary-rgb)/.06)}
+.studio-sidebar-footer {margin-top:auto;padding-top:30px}
+.studio-main {margin-left:220px;min-width:0}
+.studio-topbar {min-height:78px;display:flex;align-items:center;gap:20px;justify-content:space-between;padding:16px 32px;border-bottom:1px solid var(--realtor-border);background:var(--realtor-bg)}
+.studio-breadcrumb {font-size:13px;color:var(--realtor-muted);display:flex;align-items:center;gap:14px}
+.studio-global-search {display:flex;align-items:center;gap:10px;padding:0 12px;min-height:42px;width:300px;max-width:100%;border:1px solid var(--realtor-border);background:#fff;border-radius:7px}
+.studio-global-search input {min-width:0;width:100%;background:transparent;font-size:14px;outline:none}
+.studio-global-search button {min-height:44px;min-width:44px;color:var(--realtor-muted)}
+.studio-content {padding:32px;max-width:1800px;margin:auto;min-width:0}
+.studio-mobile-brand,.studio-bottom-nav {display:none}
+.studio-skip-link {position:fixed;top:8px;left:8px;z-index:500;background:white;padding:12px;transform:translateY(-180%)}
+.studio-skip-link:focus {transform:none}
+.studio-workspace [data-admin-page-heading] {padding:0;margin:0 0 28px}
+.studio-workspace [data-admin-page-heading] > div {align-items:center}
+.studio-workspace [data-admin-page-heading] > div > div:first-child {display:block}
+.studio-workspace [data-admin-page-heading] h1 {font-size:clamp(30px,3.1vw,44px);line-height:1.12;letter-spacing:-.055em;margin:10px 0 12px}
+.studio-workspace [data-admin-page-heading] > div > div > span[aria-hidden] {display:none}
+.studio-workspace [data-admin-page-heading] p {white-space:normal}
+.studio-workspace .studio-primary {display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 18px;border-radius:7px;background:var(--realtor-primary);color:#fff;font-size:14px;font-weight:700}
+.studio-workspace .studio-primary:disabled {opacity:.6;cursor:wait}
+.studio-workspace .text-brand-light {color:var(--realtor-primary-dark)!important}
+.studio-workspace .studio-brand-mark,.studio-workspace .studio-booking-search nav a[aria-current="page"],.studio-workspace .studio-editor-section legend {color:var(--realtor-primary-dark)}
+.studio-workspace nav[aria-label="Job result pages"] {color:var(--realtor-muted)}
+.studio-workspace .text-white\/75 {color:#fff}
+.studio-workspace :is(.text-realtor-primary,.text-realtor-primary\/80) {color:var(--realtor-primary-dark)}
+.studio-workspace .precision-shoot-tabs a[aria-current="page"] span {color:var(--realtor-primary-dark)}
+.studio-workspace .studio-secondary {display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 14px;border:1px solid var(--realtor-border);border-radius:7px;background:#fff;font-size:13px;font-weight:600}
+.studio-workspace :is(.precision-shoot-panel,.studio-panel) {border:1px solid var(--realtor-border);border-radius:10px;background:white;box-shadow:none}
+.studio-stats {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:24px 0;margin-bottom:30px;border-block:1px solid var(--realtor-border)}
+.studio-stats > div {padding:0 22px;border-left:1px solid var(--realtor-border)}
+.studio-stats > div:first-child {padding-left:0;border:0}
+.studio-stats dt {font-size:12px;color:var(--realtor-muted)}
+.studio-stats dd {font-size:30px;letter-spacing:-.04em;font-weight:750;margin-top:7px}
+.studio-today-layout {display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:24px;align-items:start}
+.studio-today-layout > * {min-width:0}
+.studio-section-title {font-size:20px;font-weight:750;letter-spacing:-.03em;margin-bottom:16px}
+.studio-shoot-card {border:1px solid var(--realtor-border);border-radius:10px;background:#fff;padding:20px}
+.studio-shoot-footer {display:flex;align-items:center;justify-content:space-between;gap:18px;border-top:1px solid var(--realtor-border);padding-top:12px;margin-top:14px;font-size:12px;color:var(--realtor-muted)}
+.studio-shoot-footer a {min-height:44px;display:flex;align-items:center;flex-shrink:0;font-size:13px;font-weight:700;color:var(--realtor-primary-dark)}
+.studio-weather {display:flex;align-items:center;gap:5px;min-height:40px;font-size:11px;line-height:1.4;color:var(--realtor-muted);max-width:300px;width:100%}
+.studio-weather span {display:block}
+.studio-weather-placeholder {background:linear-gradient(90deg,#f0f3f1,#fafbf9,#f0f3f1);border-radius:5px;padding:5px 8px}
+.studio-booking-search {padding:0;background:transparent;border:0;box-shadow:none}
+.studio-booking-search input {border-radius:7px;background:white}
+.studio-booking-search button {border-radius:7px}
+.studio-booking-search nav {margin-top:18px;gap:5px}
+.studio-booking-search nav a {border-color:transparent;border-radius:6px;min-height:42px;display:flex;align-items:center}
+.studio-bookings-list {overflow:hidden;border:1px solid var(--realtor-border);border-radius:10px;background:white}
+.studio-booking-columns,.studio-booking-row {display:grid;grid-template-columns:1.3fr 1.25fr 1fr .65fr auto;align-items:center;gap:22px;padding:18px}
+.studio-booking-columns {font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--realtor-muted);background:#f2f5f3}
+.studio-booking-row {font-size:13px;border-top:1px solid var(--realtor-border);min-height:88px}
+.studio-booking-row > * {min-width:0;overflow-wrap:anywhere}
+.studio-booking-row strong {display:block;font-size:14px;letter-spacing:-.02em}
+.studio-booking-row small {display:block;font-size:12px;color:var(--realtor-muted);margin-top:3px}
+.studio-booking-actions {display:flex;gap:6px;align-items:center}
+.studio-booking-actions :is(a,button) {display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:44px;font-size:12px;font-weight:700}
+.studio-booking-actions a {color:var(--realtor-primary-dark)}
+.studio-workspace .precision-shoot-heading {padding:0 0 24px;border:0;background:transparent;box-shadow:none}
+.studio-workspace .precision-shoot-heading h1 {font-size:clamp(30px,3vw,42px);letter-spacing:-.055em;line-height:1.14}
+.studio-workspace .precision-shoot-tabs {border:0;border-bottom:1px solid var(--realtor-border);border-radius:0;padding:0;background:transparent}
+.studio-workspace .precision-shoot-tabs > div {display:flex;gap:22px;overflow-x:auto}
+.studio-workspace .precision-shoot-tabs a {border:0;border-radius:0;background:transparent;box-shadow:none;color:var(--realtor-muted);min-width:70px;min-height:50px;padding:14px 4px}
+.studio-workspace .precision-shoot-tabs a[aria-current="page"] {border-bottom:3px solid var(--realtor-primary);color:var(--realtor-primary-dark);font-weight:750}
+.studio-editor-grid {display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:24px;align-items:start}
+.studio-editor-form {min-width:0}
+.studio-editor-section {min-width:0;padding:24px;margin:0 0 20px;border:1px solid var(--realtor-border);border-radius:10px;background:white}
+.studio-editor-section > legend {float:left;width:100%;padding:0;margin-bottom:20px;font-size:20px;font-weight:750;letter-spacing:-.03em}
+.studio-editor-section > legend + * {clear:both}
+.studio-editor-section :is(input:not([type="checkbox"]),textarea,select) {min-height:44px;border-color:var(--realtor-border);border-radius:6px;background:#fff;font-size:14px}
+.studio-editor-section label > span:first-child {font-size:12px;text-transform:none;letter-spacing:0}
+.studio-editor-section input[type="checkbox"] {width:18px;height:18px;accent-color:var(--realtor-primary);flex-shrink:0}
+.studio-editor-summary {position:sticky;top:24px;border:1px solid var(--realtor-border);border-radius:10px;background:white;padding:22px;font-size:13px}
+.studio-editor-summary h3 {font-size:20px;font-weight:750;letter-spacing:-.035em;margin:10px 0}
+.studio-editor-summary p {color:var(--realtor-muted);overflow-wrap:anywhere}
+.studio-editor-summary dl {display:grid;gap:15px;margin-top:20px;padding-top:20px;border-top:1px solid var(--realtor-border)}
+.studio-editor-summary dt {font-size:11px;color:var(--realtor-muted)}
+.studio-editor-summary dd {margin-top:4px;font-size:13px;line-height:1.5}
+.studio-editor-actions {display:flex;justify-content:flex-end;align-items:center;gap:12px;padding:14px 0;background:var(--realtor-bg);position:sticky;bottom:0;z-index:40}
+.studio-editor-actions > p {margin-right:auto;font-size:12px;color:var(--realtor-muted)}
+@media(max-width:1199px){.studio-today-layout {grid-template-columns:minmax(0,1fr) 250px}.studio-editor-grid{grid-template-columns:minmax(0,1fr)}.studio-editor-summary{position:static}.studio-booking-columns,.studio-booking-row{gap:12px;grid-template-columns:1.2fr 1fr 1fr .65fr auto}}
+@media(max-width:1023px){.studio-sidebar{width:190px;padding-inline:12px}.studio-main{margin-left:190px}.studio-content{padding:24px}.studio-topbar{padding:15px 24px}.studio-today-layout{grid-template-columns:1fr}.studio-booking-columns{display:none}.studio-booking-row{grid-template-columns:1fr 1fr}.studio-booking-row > :nth-child(4){grid-column:1}.studio-booking-actions{justify-content:flex-end}}
+@media(max-width:767px){
+  .studio-sidebar,.studio-breadcrumb{display:none}.studio-main{margin:0}.studio-mobile-brand{display:block;min-width:0}.studio-topbar{padding:18px 20px;min-height:78px;gap:12px;flex-wrap:wrap}.studio-global-search{width:100%;min-height:44px}.studio-content{padding:24px 18px calc(100px + env(safe-area-inset-bottom))}
+  .studio-bottom-nav{position:fixed;inset:auto 0 0;display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--realtor-border);background:#fff;padding:8px 12px calc(8px + env(safe-area-inset-bottom));z-index:210}
+  .studio-bottom-nav > a,.studio-more > summary{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:5px;min-height:52px;font-size:10px;color:var(--realtor-muted);list-style:none;cursor:pointer}.studio-more > summary::-webkit-details-marker{display:none}.studio-bottom-nav a[aria-current="page"]{color:var(--realtor-primary-dark);font-weight:750}
+  .studio-more-menu{position:absolute;bottom:calc(100% + 8px);right:14px;width:230px;padding:8px;border:1px solid var(--realtor-border);border-radius:10px;background:white;box-shadow:0 12px 35px #22252a20}
+  .studio-workspace [data-admin-page-heading] h1 {font-size:32px}.studio-stats{padding:18px 0}.studio-stats>div{padding:0 12px}.studio-stats dt{font-size:10px}.studio-stats dd{font-size:25px}
+  .studio-shoot-card{padding:16px}.studio-shoot-footer{align-items:flex-start}.studio-today-layout{gap:24px}.studio-booking-row{padding:18px;gap:12px}.studio-booking-row > :first-child{grid-column:1/-1}.studio-booking-row > :nth-child(2){grid-column:1}.studio-booking-row > :nth-child(3){text-align:right}.studio-booking-actions{flex-wrap:wrap}
+  .studio-editor-section{padding:18px}.studio-editor-section > legend{font-size:19px}.studio-editor-actions{position:fixed;left:0;right:0;bottom:calc(69px + env(safe-area-inset-bottom));padding:10px 18px;border-top:1px solid var(--realtor-border);background:white;z-index:170}.studio-editor-form{padding-bottom:68px}.studio-editor-actions>p{max-width:110px;font-size:11px}.studio-editor-summary{display:none}
+}
+@media(prefers-reduced-motion:reduce){.studio-workspace *{scroll-behavior:auto!important}}
+
+.studio-calendar-timeline {max-height:calc(100dvh - 270px);min-height:330px;overflow:auto;overscroll-behavior-x:contain;touch-action:pan-x pan-y;border:1px solid var(--realtor-border);border-radius:10px;background:white;scrollbar-gutter:stable}
+.studio-calendar-scroll-status {font-size:12px;color:var(--realtor-muted);line-height:1.6;min-height:60px}
+.studio-calendar-scroll-status>p:first-child {font-weight:700;color:var(--realtor-text)}
+.studio-calendar-timeline [data-calendar-day-header] {min-height:72px}
+.studio-calendar-timeline [data-calendar-day-header]:nth-child(7n + 2) {border-left:2px solid var(--realtor-primary)}
+@media(max-width:767px){.studio-calendar-timeline{max-height:62dvh;min-height:340px}.studio-calendar-scroll-status{font-size:11px}}
+
+.studio-workspace [data-admin-page-heading] > div > div:first-child > p:first-child {color:var(--realtor-primary-dark)!important}
+.studio-workspace.pixel-app-skin.admin-earth[data-pixel-default-palette="true"] :is(.precision-calendar-confirmed,.precision-calendar-drag) {border-color:#8cbfc6;background:#e7f2f2;color:#22252a;border-left-color:#1a7f8e}
+.studio-workspace.pixel-app-skin.admin-earth[data-pixel-default-palette="true"] .precision-calendar-confirmed:hover {background:#d9ecec}
+.studio-weather {flex-wrap:wrap}

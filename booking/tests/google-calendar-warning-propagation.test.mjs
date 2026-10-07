@@ -32,7 +32,7 @@ const [
   read("app/book/manage/[token]/ManageBookingClient.tsx"),
   read("lib/booking/calendar-event-service.ts"),
   read("app/admin/assistant/actions.ts"),
-  read("app/admin/calendar/page.tsx"),
+  read("app/admin/calendar/calendar-data.tsx"),
   read("lib/booking/availability.ts"),
   read("app/admin/AdminAssistant.tsx"),
 ]);

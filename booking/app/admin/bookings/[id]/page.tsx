@@ -186,10 +186,12 @@ export default async function BookingDetailPage({
   const followUpWarning = followUpWarningMessage(query.follow_up);
   const admin = await requireAdmin();
   const supabase = await getServerSupabase();
-  const [autoHDREnabled, autoenhanceEnabled] = await Promise.all([
-    isPhotoEditingProviderEnabled("autohdr", admin.organizationId),
-    isPhotoEditingProviderEnabled("autoenhance", admin.organizationId),
-  ]);
+  const providerFlags = activeTabId === "media"
+    ? Promise.all([
+        isPhotoEditingProviderEnabled("autohdr", admin.organizationId),
+        isPhotoEditingProviderEnabled("autoenhance", admin.organizationId),
+      ])
+    : Promise.resolve([false, false]);
 
   const [
     { data: booking, error: bookErr },
@@ -198,6 +200,8 @@ export default async function BookingDetailPage({
     { data: listingWebsite },
     autoenhanceBatches,
     catalog,
+    [autoHDREnabled, autoenhanceEnabled],
+    portalApiConfigured,
   ] =
     await Promise.all([
       supabase
@@ -216,42 +220,41 @@ export default async function BookingDetailPage({
         .eq("booking_id", id)
         .order("created_at", { ascending: false })
         .returns<DeliverableRow[]>(),
-      supabase
+      activeTabId === "media" ? supabase
         .from("iguide_jobs")
         .select("status, work_order_id, default_view_id, match_source")
         .eq("booking_id", id)
         .eq("organization_id", admin.organizationId)
-        .maybeSingle<IGuideJobRow>(),
-      supabase
+        .maybeSingle<IGuideJobRow>() : Promise.resolve({ data: null }),
+      activeTabId === "website" ? supabase
         .from("listing_websites")
         .select(
           "template, slug, is_published, headline, description, feature_bullets, included_sections, gallery_image_urls, hero_image_url, agent_name, agent_email, agent_phone, brokerage_name, cta_text, cta_url",
         )
         .eq("booking_id", id)
-        .maybeSingle<ListingWebsiteRow>(),
-      autoenhanceEnabled
-        ? listBookingAutoenhanceBatches({ admin, bookingId: id })
-        : Promise.resolve([]),
-      getFullCatalog({ organizationId: admin.organizationId }),
+        .maybeSingle<ListingWebsiteRow>() : Promise.resolve({ data: null }),
+      providerFlags.then(([, enabled]) => enabled ? listBookingAutoenhanceBatches({ admin, bookingId: id }) : []),
+      activeTabId === "details" ? getFullCatalog({ organizationId: admin.organizationId }) : Promise.resolve<Catalog>({ bundles: [], aLaCarte: [], addons: [] }),
+      providerFlags,
+      activeTabId === "media" ? hasPortalCredentials({ organizationId: admin.organizationId }) : Promise.resolve(false),
     ]);
 
   if (bookErr || !booking) notFound();
 
-  const privateShootNotes = await loadBookingInternalNote({
+  const privateShootNotes = activeTabId === "details" ? await loadBookingInternalNote({
     organizationId: admin.organizationId,
     bookingId: booking.id,
     actorId: admin.userId,
-  });
+  }) : { notes: null, revision: 0 };
 
-  const service = getServiceSupabase();
-  const { data: deliveryNotification } = await service
+  const { data: deliveryNotification } = activeTabId === "delivery" ? await getServiceSupabase()
     .from("booking_notifications")
     .select("sent_at")
     .eq("booking_id", booking.id)
     .eq("kind", "delivery_ready")
     .order("sent_at", { ascending: false })
     .limit(1)
-    .maybeSingle<BookingNotificationRow>();
+    .maybeSingle<BookingNotificationRow>() : { data: null };
 
   const property = booking.properties;
   const profile = booking.profiles;
@@ -272,9 +275,6 @@ export default async function BookingDetailPage({
     (deliverable) => deliverable.source !== "fotello",
   );
   const readyDeliverables = visibleDeliverables.filter((d) => d.ready_at);
-  const portalApiConfigured = await hasPortalCredentials({
-    organizationId: admin.organizationId,
-  });
   const iguidePhotoDownloads = findIGuidePhotoDownloads(visibleDeliverables);
   const deliveryLinks = buildDeliveryLinks(
     readyDeliverables.map((deliverable) => ({
@@ -610,6 +610,13 @@ function DetailsTab({
         title="Edit and reference"
         body="Fix the schedule, address, selected services, realtor info, or notes without leaving this booking."
       />
+      <section aria-label="Edit booking">
+        <EditBookingForm
+          bookingId={booking.id}
+          initial={editableInitial}
+          catalogItems={catalogItems}
+        />
+      </section>
       <div id="reschedule">
         <RescheduleBookingForm
           bookingId={booking.id}
@@ -622,13 +629,6 @@ function DetailsTab({
         </summary>
         <div className="mt-4">{invoice}</div>
       </details>
-      <Panel title="Edit booking">
-        <EditBookingForm
-          bookingId={booking.id}
-          initial={editableInitial}
-          catalogItems={catalogItems}
-        />
-      </Panel>
       <BookingActions
         bookingId={booking.id}
         currentStatus={booking.status}

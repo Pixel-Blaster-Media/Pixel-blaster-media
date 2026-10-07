@@ -1,7 +1,7 @@
 "use client";
 import { BOOKING_QUOTE_POLICY_VERSION } from "@/lib/booking/quote";
 
-import { useRef, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import AddressAutocomplete, {
@@ -46,6 +46,22 @@ export default function EditBookingForm({
   catalogItems: EditCatalogItem[];
 }) {
   const [isPending, startTransition] = useTransition();
+  const [dirty, setDirty] = useState(false);
+  const [resetKey, setResetKey] = useState(0);
+  useEffect(() => {
+    if (!dirty && !isPending) return;
+    const beforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    const beforeNavigation = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (!(target instanceof HTMLAnchorElement) || target.target === "_blank" || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+      const url = new URL(target.href, window.location.href);
+      if (!["http:", "https:"].includes(url.protocol) || (url.pathname === window.location.pathname && url.search === window.location.search)) return;
+      if (!window.confirm(isPending ? "A save is still in progress. Leave this booking?" : "Leave this booking and discard your unsaved changes?")) { event.preventDefault(); event.stopPropagation(); }
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    document.addEventListener("click", beforeNavigation, true);
+    return () => { window.removeEventListener("beforeunload", beforeUnload); document.removeEventListener("click", beforeNavigation, true); };
+  }, [dirty, isPending]);
   const requestRef = useRef<string | null>(null);
   const versionRef = useRef(initial.lifecycleVersion);
   const router = useRouter();
@@ -79,6 +95,7 @@ export default function EditBookingForm({
       formData.set("admin_request_id", requestRef.current);
       formData.set("quote_policy_version", BOOKING_QUOTE_POLICY_VERSION);
       formData.set("lifecycle_version", String(versionRef.current));
+      try {
       const result = await updateBookingDetails(bookingId, formData);
       if (!result.ok) {
         setError(result.error ?? "Could not save booking.");
@@ -95,7 +112,11 @@ export default function EditBookingForm({
         versionRef.current = result.lifecycleVersion;
       }
       requestRef.current = null;
+      setDirty(false);
       router.refresh();
+      } catch {
+        setError("The save could not be confirmed. Your changes are still here. Try saving again.");
+      }
     });
   }
 
@@ -103,64 +124,21 @@ export default function EditBookingForm({
   const aLaCarte = catalogItems.filter((item) => item.kind === "a_la_carte");
   const addons = catalogItems.filter((item) => item.kind === "addon");
 
+
+  function discardChanges() {
+    setProperty({ street_address: initial.streetAddress, unit_number: initial.unitNumber, city: initial.city, province: initial.province || "ON", postal_code: initial.postalCode });
+    setResetKey(key => key + 1);
+    setDirty(false); setError(null); setSavedMessage(null); setWarning(null);
+    requestRef.current = null;
+    versionRef.current = initial.lifecycleVersion;
+  }
+
   return (
-    <form action={onSubmit} className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-2">
-        <Field label="Date and time">
-          <input
-            name="scheduled_at"
-            type="datetime-local"
-            defaultValue={initial.scheduledAtLocal}
-            className={inputClass}
-          />
-        </Field>
-        <Field label="Realtor email">
-          <input
-            type="email"
-            value={initial.contactEmail}
-            readOnly
-            className={`${inputClass} cursor-not-allowed opacity-70`}
-          />
-        </Field>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2">
-        <Field label="Realtor name">
-          <input
-            name="contact_name"
-            defaultValue={initial.contactName}
-            required
-            className={inputClass}
-          />
-        </Field>
-        <Field label="Phone">
-          <input
-            name="contact_phone"
-            defaultValue={initial.contactPhone}
-            className={inputClass}
-          />
-        </Field>
-        <Field label="Brokerage">
-          <input
-            name="brokerage"
-            defaultValue={initial.brokerage}
-            className={inputClass}
-          />
-        </Field>
-        <Field label="Square footage">
-          <input
-            name="square_footage"
-            type="number"
-            min="0"
-            step="1"
-            defaultValue={initial.squareFootage}
-            className={inputClass}
-          />
-        </Field>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-[2fr_1fr]">
-        <AddressAutocomplete
+    <div className="studio-editor-grid">
+    <form key={resetKey} className="studio-editor-form" onChange={() => setDirty(true)} onSubmit={event => { event.preventDefault(); if (!isPending) onSubmit(new FormData(event.currentTarget)); }}>
+      <fieldset disabled={isPending} className="min-w-0">
+      <fieldset className="studio-editor-section"><legend>1 · Property</legend>
+        <div className="grid gap-4 md:grid-cols-[2fr_1fr]"><AddressAutocomplete
           name="street_address"
           label="Address"
           required
@@ -170,8 +148,7 @@ export default function EditBookingForm({
             setProperty((current) => ({ ...current, street_address: value }))
           }
           onPlace={applyPlace}
-        />
-        <Field label="Unit">
+        /><Field label="Unit">
           <input
             name="unit_number"
             value={property.unit_number}
@@ -183,11 +160,8 @@ export default function EditBookingForm({
             }
             className={inputClass}
           />
-        </Field>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-3">
-        <Field label="City">
+        </Field></div>
+        <div className="mt-4 grid gap-4 md:grid-cols-3"><Field label="City">
           <input
             name="city"
             value={property.city}
@@ -196,8 +170,7 @@ export default function EditBookingForm({
             }
             className={inputClass}
           />
-        </Field>
-        <Field label="Province">
+        </Field><Field label="Province">
           <input
             name="province"
             value={property.province}
@@ -209,8 +182,7 @@ export default function EditBookingForm({
             }
             className={inputClass}
           />
-        </Field>
-        <Field label="Postal code">
+        </Field><Field label="Postal code">
           <input
             name="postal_code"
             value={property.postal_code}
@@ -222,37 +194,70 @@ export default function EditBookingForm({
             }
             className={inputClass}
           />
-        </Field>
-      </div>
-
-      <div className="grid gap-3 lg:grid-cols-3">
-        <CatalogGroup
-          title="Packages"
-          items={bundles}
-          selected={initial.selectedCatalogItemIds}
-        />
-        <CatalogGroup
-          title="A la carte"
-          items={aLaCarte}
-          selected={initial.selectedCatalogItemIds}
-        />
-        <CatalogGroup
-          title="Add-ons"
-          items={addons}
-          selected={initial.selectedCatalogItemIds}
-        />
-      </div>
-
-      <Field label="Realtor notes">
+        </Field></div>
+        <div className="mt-4"><Field label="Square footage">
+          <input
+            name="square_footage"
+            type="number"
+            min="0"
+            step="1"
+            defaultValue={initial.squareFootage}
+            className={inputClass}
+          />
+        </Field></div>
+      </fieldset>
+      <fieldset className="studio-editor-section"><legend>2 · Shoot &amp; services</legend>
+        <Field label="Date and time">
+          <input
+            name="scheduled_at"
+            type="datetime-local"
+            defaultValue={initial.scheduledAtLocal}
+            className={inputClass}
+          />
+        </Field><p className="mt-2 text-xs text-realtor-muted">All times are in Eastern time.</p>
+        <div className="mt-5 grid gap-4">
+          <CatalogGroup title="Packages" items={bundles} selected={initial.selectedCatalogItemIds} />
+          <CatalogGroup title="A la carte" items={aLaCarte} selected={initial.selectedCatalogItemIds} />
+          <CatalogGroup title="Add-ons" items={addons} selected={initial.selectedCatalogItemIds} />
+        </div>
+      </fieldset>
+      <fieldset className="studio-editor-section"><legend>3 · Realtor &amp; notes</legend>
+        <div className="grid gap-4 md:grid-cols-2"><Field label="Realtor name">
+          <input
+            name="contact_name"
+            defaultValue={initial.contactName}
+            required
+            className={inputClass}
+          />
+        </Field><Field label="Phone">
+          <input
+            name="contact_phone"
+            defaultValue={initial.contactPhone}
+            className={inputClass}
+          />
+        </Field><Field label="Brokerage">
+          <input
+            name="brokerage"
+            defaultValue={initial.brokerage}
+            className={inputClass}
+          />
+        </Field><Field label="Realtor email">
+          <input
+            type="email"
+            value={initial.contactEmail}
+            readOnly
+            className={`${inputClass} cursor-not-allowed opacity-70`}
+          />
+        </Field></div>
+        <div className="mt-5"><Field label="Realtor notes">
         <textarea
           name="client_notes"
           defaultValue={initial.clientNotes}
           rows={4}
           className={inputClass}
         />
-      </Field>
-
-      <label className="flex items-start gap-3 rounded-xl border border-realtor-primary/15 bg-white/70 p-3 text-sm text-realtor-text">
+      </Field></div>
+        <div className="mt-5">      <label className="flex items-start gap-3 rounded-xl border border-realtor-primary/15 bg-white/70 p-3 text-sm text-realtor-text">
         <input
           name="send_confirmation"
           type="checkbox"
@@ -267,33 +272,25 @@ export default function EditBookingForm({
           </span>
         </span>
       </label>
-
-      {error ? (
-        <p className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </p>
-      ) : null}
-      {savedMessage ? (
-        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          {savedMessage}
-        </p>
-      ) : null}
-      {warning ? (
-        <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          {warning}
-        </p>
-      ) : null}
-
-      <div className="flex justify-end">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded-full bg-realtor-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-realtor-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isPending ? "Saving..." : "Save booking"}
-        </button>
+</div>
+      </fieldset>
+      </fieldset>
+      {error ? <p role="alert" className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p> : null}
+      {savedMessage ? <p role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{savedMessage}</p> : null}
+      {warning ? <p role="status" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">{warning}</p> : null}
+      <div className="studio-editor-actions">
+        <p aria-live="polite">{isPending ? "Saving your changes…" : dirty ? "You have unsaved changes" : "Review changes before saving"}</p>
+        <button type="button" disabled={isPending || !dirty} className="studio-secondary disabled:opacity-50" onClick={discardChanges}>Discard</button>
+        <button type="submit" disabled={isPending} className="studio-primary">{isPending ? "Saving…" : "Save booking"}</button>
       </div>
     </form>
+    <aside className="studio-editor-summary" aria-label="Saved booking summary">
+      <p className="text-xs uppercase tracking-widest">Saved booking</p>
+      <h3>{initial.streetAddress || "Address not set"}</h3>
+      <p>{[initial.city, initial.province].filter(Boolean).join(", ")}</p>
+      <dl><div><dt>Realtor</dt><dd>{initial.contactName}</dd></div><div><dt>Scheduled · Eastern time</dt><dd>{initial.scheduledAtLocal?.replace("T", " · ") || "Needs scheduling"}</dd></div><div><dt>Services</dt><dd>{catalogItems.filter(item => initial.selectedCatalogItemIds.includes(item.id)).map(item => item.name).join(", ") || "No services selected"}</dd></div></dl>
+    </aside>
+    </div>
   );
 }
 

@@ -8,7 +8,9 @@ import {
 } from "@/lib/organizations/branding";
 
 import AdminAssistant from "./AdminAssistant";
-import AdminBottomNav from "./AdminBottomNav";
+import AdminWorkspace from "./AdminWorkspace";
+import { signOut } from "@/lib/auth/sign-out";
+import "./studio-workspace.css";
 
 export const viewport: Viewport = {
   colorScheme: "light",
@@ -26,17 +28,16 @@ export default async function AdminLayout({
 
   return (
     <div
-      className="pixel-app-skin admin-earth realtor-theme realtor-backdrop min-h-screen w-full max-w-full overflow-x-hidden px-3 pb-[calc(6.5rem+env(safe-area-inset-bottom))] sm:px-6 md:px-4 md:pb-8 lg:px-6"
+      className="pixel-app-skin studio-workspace admin-earth realtor-theme realtor-backdrop"
       data-pixel-default-palette={admin.organizationId === DEFAULT_ORGANIZATION_ID ? true : undefined}
       style={{
         ...(brand ? organizationThemeStyle(brand) : {}),
       }}
     >
-      <section className="mx-auto min-w-0 max-w-none space-y-4 overflow-hidden py-3 md:py-4">
+      <AdminWorkspace name={brand?.name ?? "Studio workspace"} logoUrl={brand?.logoUrl ?? null} signOutAction={signOut}>
         <AdminAssistant />
         {children}
-      </section>
-      <AdminBottomNav />
+      </AdminWorkspace>
     </div>
   );
 }

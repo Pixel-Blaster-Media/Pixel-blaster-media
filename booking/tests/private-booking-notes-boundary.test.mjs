@@ -30,7 +30,7 @@ test("all booking-note readers and writers leave the realtor-readable bookings c
   const files = [
     "app/admin/today/page.tsx",
     "app/admin/today/actions.ts",
-    "app/admin/calendar/page.tsx",
+    "app/admin/calendar/calendar-data.tsx",
     "app/admin/bookings/[id]/page.tsx",
     "app/admin/assistant/actions.ts",
     "app/admin/internal-shoot-notes/actions.ts",
