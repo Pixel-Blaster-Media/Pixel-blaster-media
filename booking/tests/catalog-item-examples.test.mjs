@@ -291,7 +291,9 @@ test("catalog examples cross schema, admin, public booking, and SaaS cloning bou
   assert.match(picker, /target="_blank"/);
   assert.match(picker, /rel="noopener noreferrer"/);
   assert.match(picker, /sampleHref\(example.external_url \?\? example.embed_url\)/);
-  assert.doesNotMatch(picker, /<iframe|<dialog/);
+  assert.match(picker, /video \? <iframe/);
+  assert.match(picker, /referrerPolicy="strict-origin-when-cross-origin"/);
+  assert.match(picker, /aria-haspopup="dialog"/);
   assert.match(editor, /Upload video/);
   assert.match(editor, /Use existing video/);
   assert.match(editor, /Recover video details/);
@@ -405,7 +407,7 @@ test("Pixel catalog copy offers both Reel styles at the same product level", asy
 
 test("compact example controls preserve coarse-pointer targets and visible keyboard focus", async () => {
   const css = await readFile(new URL("../app/book/booking-refresh.css", import.meta.url), "utf8");
-  assert.match(css, /booking-refresh-example-group a \{[^}]*min-height: 44px/);
+  assert.match(css, /booking-refresh-example-group :is\(a, button\) \{[^}]*min-height: 44px/);
   assert.match(css, /booking-refresh-examples\) > summary \{[^}]*min-height: 48px/);
   assert.match(css, /:focus-visible \{[^}]*outline: 3px solid/);
 });

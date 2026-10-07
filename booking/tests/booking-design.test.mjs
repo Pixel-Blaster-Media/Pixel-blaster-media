@@ -54,7 +54,27 @@ test('each existing sample opens unchanged in a separate tab with descriptive ac
   assert.match(html, /Watch sample/);
   assert.match(html, /Explore iGUIDE/);
   assert.match(html, /aria-hidden="true">▶/);
-  assert.doesNotMatch(html, /<iframe|<dialog/);
+  assert.doesNotMatch(html, /<iframe|<dialog[^>]*\bopen=/);
+});
+
+test('Cloudflare videos offer an on-site dialog without loading a player before interaction', () => {
+  const src = 'https://customer-example.cloudflarestream.com/ae26683a8919895dabdb9b102e5679d3/iframe';
+  const html = render([item({examples: [sample({embed_url:src,orientation:'portrait'})]})]);
+  assert.match(html, /<button[^>]*aria-haspopup="dialog"[^>]*aria-label="Watch sample: Film example — Video for Test package \(opens video player\)"/);
+  assert.match(html, /<dialog[^>]*aria-labelledby=/);
+  assert.doesNotMatch(html, /<iframe|<dialog[^>]*\bopen=|cloudflarestream\.com|opens in a new tab/);
+});
+
+test('only exact Cloudflare Stream embed URLs can enter the on-site player', () => {
+  for (const embed_url of [
+    'https://customer-example.cloudflarestream.com.attacker.invalid/ae26683a8919895dabdb9b102e5679d3/iframe',
+    'https://customer-example.cloudflarestream.com/ae26683a8919895dabdb9b102e5679d3/iframe?redirect=elsewhere',
+    'https://customer-example.cloudflarestream.com/not-a-video/iframe',
+  ]) {
+    const html = render([item({examples:[sample({embed_url})]})]);
+    assert.doesNotMatch(html, /aria-haspopup="dialog"/);
+    assert.doesNotMatch(html, /<iframe/);
+  }
 });
 
 test('only package details default open on desktop; mobile, services, add-ons and examples stay closed', () => {
@@ -111,6 +131,7 @@ test('selection footer waits for a service and uses the shared multiselect quote
 });
 
 function visibleActionNames(markup) {
+  markup = markup.replace(/<dialog\b[^>]*>[\s\S]*?<\/dialog>/g, '');
   return [...markup.matchAll(/<(button|a)\b([^>]*)>([\s\S]*?)<\/\1>/g)]
     .map((match) => ({
       visible: match[3].replace(/<([a-z]+)[^>]*aria-hidden="true"[^>]*>[\s\S]*?<\/\1>/g, '').replace(/<[^>]+>/g, '').trim(),

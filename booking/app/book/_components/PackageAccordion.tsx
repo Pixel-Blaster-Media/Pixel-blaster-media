@@ -4,7 +4,7 @@ import { getCatalogItemPrice } from "@/lib/booking/quote";
 import { publicWizardQuery } from "@/lib/booking/wizard-state";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 
 import type { CatalogItemDTO } from "@/lib/booking/catalog-dto";
 import { getCatalogSampleGroups } from "@/lib/booking/catalog-sample-groups";
@@ -264,6 +264,10 @@ function PackageDetails({ item, label = "Package details", desktopDefaultOpen = 
   label?: string;
   desktopDefaultOpen?: boolean;
 }) {
+  const player = useRef<HTMLDialogElement>(null);
+  const opener = useRef<{ element: HTMLButtonElement; exampleId: string } | null>(null);
+  const playerTitle = useId();
+  const [video, setVideo] = useState<{ src: string; title: string; orientation: string } | null>(null);
   const lines = packageDescriptionLines(item.description);
   const groups = getCatalogSampleGroups(item);
   const rule = sqftRuleText(item);
@@ -289,6 +293,23 @@ function PackageDetails({ item, label = "Package details", desktopDefaultOpen = 
                   <div>
                     {examples.length > 0 ? examples.map((example) => {
                       const actionLabel = examples.length > 1 ? example.title : example.kind === "video" ? "Watch sample" : group.key === "iguide" ? "Explore iGUIDE" : "View example";
+                      const streamSrc = example.kind === "video" ? streamSampleHref(example.embed_url) : undefined;
+                      if (streamSrc) return (
+                        <button
+                          key={example.id}
+                          type="button"
+                          data-booking-example={example.id}
+                          aria-haspopup="dialog"
+                          aria-label={`${actionLabel}${examples.length === 1 ? `: ${example.title}` : ""} — ${group.label} for ${item.name} (opens video player)`}
+                          onClick={(event) => {
+                            opener.current = { element: event.currentTarget, exampleId: example.id };
+                            setVideo({ src: streamSrc, title: example.title, orientation: example.orientation });
+                            player.current?.showModal();
+                          }}
+                        >
+                          <span aria-hidden="true">▶</span><span>{actionLabel}</span>
+                        </button>
+                      );
                       return (
                       <a
                         key={example.id}
@@ -307,7 +328,7 @@ function PackageDetails({ item, label = "Package details", desktopDefaultOpen = 
                 </li>;
               })}
             </ul>
-            <p>Examples open in a new tab. Your selection stays here.</p>
+            <p>Your booking selection stays here while you view examples.</p>
           </details>
         ) : null}
       </div>
@@ -316,12 +337,62 @@ function PackageDetails({ item, label = "Package details", desktopDefaultOpen = 
 
   // CSS chooses the native disclosure before hydration. Each layout keeps its
   // own manual toggles; neither resizing nor booking updates reset them.
-  return desktopDefaultOpen ? (
+  return <>
+    {desktopDefaultOpen ? (
     <>
       {disclosure("booking-refresh-details booking-refresh-details-desktop", true)}
       {disclosure("booking-refresh-details booking-refresh-details-mobile")}
     </>
-  ) : disclosure("booking-refresh-details");
+    ) : disclosure("booking-refresh-details")}
+    <dialog
+      ref={player}
+      className="booking-refresh-sample-dialog"
+      aria-labelledby={playerTitle}
+      onClose={() => {
+        setVideo(null);
+        const previous = opener.current;
+        if (!previous) return;
+        const visibleButton = (button: HTMLButtonElement) => button.getClientRects().length > 0 && !button.closest('details:not([open])');
+        if (visibleButton(previous.element)) return previous.element.focus();
+        // The responsive counterpart may be hidden inside a closed disclosure.
+        const owner = player.current?.parentElement;
+        const counterpart = Array.from(owner?.querySelectorAll<HTMLButtonElement>('button[data-booking-example]') ?? [])
+          .find(button => button.dataset.bookingExample === previous.exampleId && visibleButton(button));
+        if (counterpart) return counterpart.focus();
+        const details = Array.from(owner?.querySelectorAll<HTMLDetailsElement>(':scope > details') ?? [])
+          .find(element => element.getClientRects().length);
+        details?.querySelector<HTMLElement>('summary')?.focus();
+      }}
+      onClick={(event) => { if (event.target === event.currentTarget) event.currentTarget.close(); }}
+    >
+      <div className="booking-refresh-sample-panel">
+        <header>
+          <div><h2 id={playerTitle}>{video?.title ?? "Sample video"}</h2><p>Video example for {item.name}</p></div>
+          <button type="button" aria-label="Close sample video" onClick={() => player.current?.close()}>Close <span aria-hidden="true">×</span></button>
+        </header>
+        {video ? <iframe
+          className={`booking-refresh-sample-player${video.orientation === "portrait" ? " is-portrait" : ""}`}
+          src={video.src}
+          title={video.title}
+          referrerPolicy="strict-origin-when-cross-origin"
+          allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+          allowFullScreen
+        /> : null}
+      </div>
+    </dialog>
+  </>;
+}
+
+/** Stream's domain restriction requires its player to remain inside our site. */
+function streamSampleHref(raw: string | null): string | undefined {
+  if (!raw) return undefined;
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" && !url.username && !url.password && !url.port
+      && /^customer-[a-zA-Z0-9]+\.cloudflarestream\.com$/.test(url.hostname)
+      && /^\/[a-f0-9]{32}\/iframe$/.test(url.pathname) && !url.search && !url.hash
+      ? url.href : undefined;
+  } catch { return undefined; }
 }
 
 function sampleHref(raw: string | null): string | undefined {
