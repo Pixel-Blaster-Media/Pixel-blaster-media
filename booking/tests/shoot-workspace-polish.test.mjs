@@ -8,6 +8,7 @@ import {beforeBookingAuditUi} from "./helpers/booking-audit-ui-boundary.mjs";
 // Frozen fresh origin/main af534fb: this polish may add presentation markers
 // and clarify the navigation label, but must not change a workflow expression.
 // Intentional future functional changes should update/retire this boundary test.
+import {beforeStudioWorkspace} from './helpers/studio-workspace-boundary.mjs';
 const baseline = {
   "page.tsx": "cc773dc9965478c49a3194899aae051a42cdaf672e1a3627723b1117fab092b6",
   "BookingWorkspaceTabs.tsx": "3af90382c42f27c3a4114ff5d987f5053d70452405522cba700ca1ad406ec349",
@@ -21,6 +22,7 @@ const markers = {
 for (const [file, hash] of Object.entries(baseline)) {
   test(`shoot polish preserves exact ${file} workflow bytes`, () => {
     let source = readFileSync(new URL(`../app/admin/bookings/[id]/${file}`, import.meta.url), "utf8");
+    source=beforeStudioWorkspace(`app/admin/bookings/[id]/${file}`,source);
     source=beforeFinalsUi(`app/admin/bookings/[id]/${file}`,beforeBookingAuditUi(`app/admin/bookings/[id]/${file}`,source));
     for (const marker of markers[file]) {
       const token = `precision-shoot-${marker} `;

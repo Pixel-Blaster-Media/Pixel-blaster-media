@@ -36,7 +36,7 @@ const settings = readFileSync(
 test("photo provider toggles are tenant-scoped and hide disabled booking tools", () => {
   assert.match(bookingPage, /isPhotoEditingProviderEnabled\("autohdr", admin\.organizationId\)/);
   assert.match(bookingPage, /isPhotoEditingProviderEnabled\("autoenhance", admin\.organizationId\)/);
-  assert.match(bookingPage, /autoenhanceEnabled\s*\?\s*listBookingAutoenhanceBatches/);
+  assert.match(bookingPage, /providerFlags\.then\(\(\[, enabled\]\) => enabled \? listBookingAutoenhanceBatches/);
   assert.match(mediaWorkflow, /autoHDREnabled \? \(/);
   assert.match(mediaWorkflow, /autoenhanceEnabled \? \(/);
   assert.match(settings, /ProviderEnablementToggle/);

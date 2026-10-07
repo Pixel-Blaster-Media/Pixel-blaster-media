@@ -15,7 +15,8 @@ import {
   summarizeRealtorAIMemory,
 } from "@/lib/realtors/memory";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { getCredential } from "@/lib/integrations/credentials";
+import { Suspense, type ReactNode } from "react";
+import { loadShootWeather, type ShootWeather } from "./weather";
 import type {
   BookingStatus,
   DeliverableSource,
@@ -73,14 +74,6 @@ interface DeliverableRow {
   metadata: { status?: string } | null;
 }
 
-interface ShootWeather {
-  location: string;
-  temperatureC: number | null;
-  windKph: number | null;
-  cloudCover: number | null;
-  precipitationProbability: number | null;
-  weatherCode: number | null;
-}
 
 export default async function AdminTodayPage() {
   const todayKey = localDateKey(new Date());
@@ -114,21 +107,14 @@ export default async function AdminTodayPage() {
     );
   }
 
-  const privateNotesByBooking = await loadBookingInternalNotes({
-    organizationId: admin.organizationId,
-    actorId: admin.userId,
-    bookingIds: (bookings ?? []).map((booking) => booking.id),
-  });
-
   const bookingIds = (bookings ?? []).map((booking) => booking.id);
-  const { data: deliverables } =
+  const [privateNotesByBooking, { data: deliverables }, preferences] = await Promise.all([
+    loadBookingInternalNotes({ organizationId: admin.organizationId, actorId: admin.userId, bookingIds }),
     bookingIds.length > 0
-      ? await supabase
-          .from("deliverables")
-          .select("booking_id, type, source, ready_at, metadata")
-          .in("booking_id", bookingIds)
-          .returns<DeliverableRow[]>()
-      : { data: [] as DeliverableRow[] };
+      ? supabase.from("deliverables").select("booking_id, type, source, ready_at, metadata").in("booking_id", bookingIds).returns<DeliverableRow[]>()
+      : Promise.resolve({ data: [] as DeliverableRow[] }),
+    loadTodayCommandPreferences(admin.organizationId),
+  ]);
 
   const deliverablesByBooking = new Map<string, DeliverableRow[]>();
   for (const deliverable of deliverables ?? []) {
@@ -138,14 +124,6 @@ export default async function AdminTodayPage() {
     ]);
   }
 
-  const preferences = await loadTodayCommandPreferences(admin.organizationId);
-  const weatherEntries = await Promise.all(
-    (bookings ?? []).map(async (booking) => [
-      booking.id,
-      await getShootWeather(booking, admin.organizationId),
-    ] as const),
-  );
-  const weatherByBooking = new Map(weatherEntries);
   const offlineTodayData: OfflineTodayData = {
     dateLabel: formatFullDate(start),
     updatedAt: new Date().toISOString(),
@@ -164,16 +142,17 @@ export default async function AdminTodayPage() {
     <div className="space-y-4">
       <OfflineTodaySnapshot userId={admin.userId} data={offlineTodayData} />
       <AdminPageHeading
-        eyebrow="Today"
-        title={formatFullDate(start)}
-        mobileTitle={formatCompactDate(start)}
-        titleLabel={`Today, ${formatFullDate(start)}`}
+        eyebrow={formatFullDate(start)}
+        title="A clear view of your day."
         meta={`${(bookings ?? []).length} shoot${(bookings ?? []).length === 1 ? "" : "s"}`}
       />
-      <TodayOverview
-        bookings={bookings ?? []}
-        preferences={preferences}
-      />
+      <dl className="studio-stats" aria-label="Today’s schedule summary">
+        <div><dt>Today’s shoots</dt><dd>{(bookings ?? []).length}</dd></div>
+        <div><dt>Confirmed today</dt><dd>{(bookings ?? []).filter(b => b.status === "confirmed").length}</dd></div>
+        <div><dt>Shot or editing today</dt><dd>{(bookings ?? []).filter(b => b.status === "shot" || b.status === "editing").length}</dd></div>
+      </dl>
+      <div className="studio-today-layout"><section aria-labelledby="today-schedule-title">
+      <h2 id="today-schedule-title" className="studio-section-title">Today’s shoots</h2>
 
       {bookings && bookings.length > 0 ? (
         <ol className="space-y-4">
@@ -191,7 +170,7 @@ export default async function AdminTodayPage() {
               deliverables={deliverablesByBooking.get(booking.id) ?? []}
               preferences={preferences}
               defaultOpen={bookings.length <= 2}
-              weather={weatherByBooking.get(booking.id) ?? null}
+              weather={<Suspense fallback={<WeatherPlaceholder />}><DeferredShootWeather booking={booking} organizationId={admin.organizationId} /></Suspense>}
             />
           ))}
         </ol>
@@ -200,6 +179,7 @@ export default async function AdminTodayPage() {
           No shoots scheduled today.
         </p>
       )}
+      </section><aside aria-label="Day overview"><h2 className="studio-section-title">Your day, at a glance</h2><TodayOverview bookings={bookings ?? []} preferences={preferences} /></aside></div>
     </div>
   );
 }
@@ -296,7 +276,7 @@ function ShootCard({
   deliverables: DeliverableRow[];
   preferences: TodayCommandPreferences;
   defaultOpen: boolean;
-  weather: ShootWeather | null;
+  weather: ReactNode;
 }) {
   const property = booking.properties;
   const profile = booking.profiles;
@@ -326,7 +306,7 @@ function ShootCard({
   );
 
   return (
-    <li className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/85 p-4 shadow-lg shadow-realtor-text/10">
+    <li className="studio-shoot-card">
       <details className="group" open={defaultOpen}>
         <summary className="relative flex cursor-pointer list-none items-start gap-3 md:justify-between [&::-webkit-details-marker]:hidden">
           <div className="min-w-0 flex-1">
@@ -343,7 +323,7 @@ function ShootCard({
               <span>
                 {[property?.city, property?.postal_code].filter(Boolean).join(" ")}
               </span>
-              <ShootWeatherLine weather={weather} />
+              {weather}
             </p>
           </div>
           <div className="absolute right-0 top-0 flex items-center gap-2 md:static">
@@ -505,6 +485,7 @@ function ShootCard({
         </div>
       ) : null}
       </details>
+      <div className="studio-shoot-footer"><span>{services.join(" · ") || "Services not set"}</span><Link href={`/admin/bookings/${booking.id}`}>Open booking →<span className="sr-only"> {addressLine}</span></Link></div>
     </li>
   );
 }
@@ -526,8 +507,17 @@ function NoteDisclosure({ title, body }: { title: string; body: string }) {
   );
 }
 
+function WeatherPlaceholder() {
+  return <span className="studio-weather studio-weather-placeholder" role="status"><span aria-hidden="true">◌</span> Loading forecast…</span>;
+}
+
+async function DeferredShootWeather({ booking, organizationId }: { booking: BookingRow; organizationId: string }) {
+  const weather = await loadShootWeather(booking, organizationId);
+  return <span className="studio-weather" aria-live="polite"><ShootWeatherLine weather={weather} /></span>;
+}
+
 function ShootWeatherLine({ weather }: { weather: ShootWeather | null }) {
-  if (!weather) return null;
+  if (!weather) return <span>Forecast unavailable</span>;
   const condition =
     weather.temperatureC != null
       ? `${Math.round(weather.temperatureC)}°${weather.weatherCode != null ? ` ${shortWeatherLabel(weather.weatherCode)}` : ""}`
@@ -543,7 +533,7 @@ function ShootWeatherLine({ weather }: { weather: ShootWeather | null }) {
       : null,
   ].filter((chip): chip is string => Boolean(chip));
 
-  if (!chips.length) return null;
+  if (!chips.length) return <span>Forecast unavailable</span>;
 
   return (
     <>
@@ -626,251 +616,6 @@ function chip(label: string, state: "done" | "pending" | "todo") {
         ? "border-amber-300 bg-amber-50 text-amber-800"
         : "border-realtor-primary/15 bg-white/65 text-realtor-muted";
   return { label, className, state };
-}
-
-async function getShootWeather(
-  booking: BookingRow,
-  organizationId: string,
-): Promise<ShootWeather | null> {
-  if (!booking.scheduled_at) return null;
-  const coords = await geocodeBookingArea(booking, organizationId);
-  if (!coords) return null;
-  const params = new URLSearchParams({
-    latitude: String(coords.latitude),
-    longitude: String(coords.longitude),
-    hourly:
-      "temperature_2m,precipitation_probability,weather_code,cloud_cover,wind_speed_10m",
-    timezone: BUSINESS_TZ,
-    forecast_days: "2",
-  });
-
-  try {
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, {
-      next: { revalidate: 900 },
-    });
-    if (!res.ok) return null;
-    const json = (await res.json()) as {
-      hourly?: {
-        time?: string[];
-        temperature_2m?: number[];
-        precipitation_probability?: number[];
-        weather_code?: number[];
-        cloud_cover?: number[];
-        wind_speed_10m?: number[];
-      };
-    };
-    const index = hourlyIndex(json.hourly?.time ?? [], booking.scheduled_at);
-    if (index == null) return null;
-
-    return {
-      location: coords.label,
-      temperatureC: numeric(json.hourly?.temperature_2m?.[index]),
-      windKph: numeric(json.hourly?.wind_speed_10m?.[index]),
-      cloudCover: numeric(json.hourly?.cloud_cover?.[index]),
-      precipitationProbability: numeric(
-        json.hourly?.precipitation_probability?.[index],
-      ),
-      weatherCode: numeric(json.hourly?.weather_code?.[index]),
-    };
-  } catch {
-    return null;
-  }
-}
-
-async function geocodeBookingArea(
-  booking: BookingRow,
-  organizationId: string,
-): Promise<{
-  latitude: number;
-  longitude: number;
-  label: string;
-  source: "shoot";
-} | null> {
-  const city = booking.properties?.city?.trim();
-  const province = booking.properties?.province?.trim() ?? "ON";
-  const address = fullAddress(booking);
-  const googleCoords = await geocodeWithGoogle(address, organizationId);
-  if (googleCoords) return googleCoords;
-
-  const queries = [city].filter(
-    (query, index, list): query is string =>
-      Boolean(query) && list.indexOf(query) === index,
-  );
-
-  for (const query of queries) {
-    const coords = await geocodeWithOpenMeteo(query, province);
-    if (coords) return coords;
-  }
-
-  return null;
-}
-
-async function geocodeWithGoogle(
-  address: string,
-  organizationId: string,
-): Promise<{
-  latitude: number;
-  longitude: number;
-  label: string;
-  source: "shoot";
-} | null> {
-  if (!address) return null;
-  const apiKey =
-    (await getCredential(
-      "google_maps",
-      "api_key",
-      "GOOGLE_MAPS_SERVER_API_KEY",
-      organizationId,
-    )) ??
-    process.env.GOOGLE_ROUTES_API_KEY?.trim() ??
-    null;
-  if (!apiKey) return null;
-
-  try {
-    const params = new URLSearchParams({
-      address,
-      key: apiKey,
-    });
-    const res = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?${params}`,
-      { next: { revalidate: 86400 } },
-    );
-    if (!res.ok) return null;
-    const json = (await res.json()) as {
-      status?: string;
-      results?: Array<{
-        formatted_address?: string;
-        geometry?: { location?: { lat?: number; lng?: number } };
-        address_components?: Array<{
-          long_name?: string;
-          types?: string[];
-        }>;
-      }>;
-    };
-    const result = json.results?.[0];
-    const latitude = result?.geometry?.location?.lat;
-    const longitude = result?.geometry?.location?.lng;
-    if (
-      json.status !== "OK" ||
-      typeof latitude !== "number" ||
-      typeof longitude !== "number"
-    ) {
-      return null;
-    }
-    const locality =
-      result?.address_components?.find((component) =>
-        component.types?.includes("locality"),
-      )?.long_name ??
-      result?.address_components?.find((component) =>
-        component.types?.includes("postal_town"),
-      )?.long_name ??
-      result?.address_components?.find((component) =>
-        component.types?.includes("administrative_area_level_3"),
-      )?.long_name;
-    return {
-      latitude,
-      longitude,
-      label: locality ?? result?.formatted_address ?? "Shoot location",
-      source: "shoot",
-    };
-  } catch {
-    return null;
-  }
-}
-
-async function geocodeWithOpenMeteo(
-  query: string,
-  province: string,
-): Promise<{
-  latitude: number;
-  longitude: number;
-  label: string;
-  source: "shoot";
-} | null> {
-  try {
-    const params = new URLSearchParams({
-      name: query,
-      count: "5",
-      language: "en",
-      format: "json",
-    });
-    const res = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?${params}`,
-      { next: { revalidate: 86400 } },
-    );
-    if (!res.ok) return null;
-    const json = (await res.json()) as {
-      results?: Array<{
-        latitude?: number;
-        longitude?: number;
-        name?: string;
-        admin1?: string;
-        country_code?: string;
-      }>;
-    };
-    const provinceKey = normalize(province);
-    const result =
-      json.results?.find(
-        (entry) =>
-          entry.country_code === "CA" &&
-          (!provinceKey || normalize(entry.admin1) === provinceKey),
-      ) ??
-      json.results?.find((entry) => entry.country_code === "CA") ??
-      json.results?.[0];
-    if (
-      typeof result?.latitude !== "number" ||
-      typeof result.longitude !== "number"
-    ) {
-      return null;
-    }
-    return {
-      latitude: result.latitude,
-      longitude: result.longitude,
-      label: [result.name, result.admin1].filter(Boolean).join(", ") || query,
-      source: "shoot",
-    };
-  } catch {
-    return null;
-  }
-}
-
-function numeric(value: number | undefined): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function hourlyIndex(times: string[], scheduledAt: string): number | null {
-  if (!times.length) return null;
-  const target = localHourKey(scheduledAt);
-  const exact = times.indexOf(target);
-  if (exact >= 0) return exact;
-
-  const targetTime = new Date(scheduledAt).getTime();
-  let bestIndex = 0;
-  let bestDelta = Number.POSITIVE_INFINITY;
-  for (let index = 0; index < times.length; index += 1) {
-    const timestamp = businessDateTimeLocalToUtc(times[index]);
-    if (!timestamp) continue;
-    const delta = Math.abs(timestamp.getTime() - targetTime);
-    if (delta < bestDelta) {
-      bestDelta = delta;
-      bestIndex = index;
-    }
-  }
-  return Number.isFinite(bestDelta) ? bestIndex : null;
-}
-
-function localHourKey(iso: string): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: BUSINESS_TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date(iso));
-  const get = (type: string) =>
-    parts.find((part) => part.type === type)?.value ?? "";
-  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:00`;
 }
 
 function timedBookings(bookings: BookingRow[]): BookingRow[] {

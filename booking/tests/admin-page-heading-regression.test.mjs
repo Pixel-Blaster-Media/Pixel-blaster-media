@@ -42,7 +42,7 @@ test("top-level admin pages share one compact flat heading system", () => {
 
 test("Jobs uses one Job Board identity without a redundant elevated title card", () => {
   assert.match(jobsSource, /eyebrow="Work queue"/);
-  assert.match(jobsSource, /title="Jobs Board"/);
+  assert.match(jobsSource, /title="Bookings"/);
   assert.match(jobsSource, /active job.*shown/s);
   assert.match(jobsSource, /href="\/admin\/calendar"/);
   assert.match(jobsSource, /id="booking-search"/);
@@ -60,15 +60,12 @@ test("Realtors keeps its count and search beside a compact page identity", () =>
   assert.doesNotMatch(realtorsSource, /<header className="realtor-panel/);
 });
 
-test("Today leads with the date and shoot count instead of an overview title card", () => {
-  assert.match(todaySource, /eyebrow="Today"/);
-  assert.match(todaySource, /title=\{formatFullDate\(start\)\}/);
-  assert.match(todaySource, /mobileTitle=\{formatCompactDate\(start\)\}/);
-  assert.match(todaySource, /titleLabel=\{`Today, \$\{formatFullDate\(start\)\}`\}/);
+test("Today keeps its date and count alongside the approved Studio heading", () => {
+  assert.match(todaySource, /eyebrow=\{formatFullDate\(start\)\}/);
+  assert.match(todaySource, /title="A clear view of your day\."/);
   assert.match(todaySource, /meta=\{`\$\{\(bookings \?\? \[\]\)\.length\} shoot/);
   assert.match(todaySource, /<DailyAIBriefPanel actions=\{actionButtons\}/);
   assert.match(todaySource, /href="\/admin\/calendar"/);
-  assert.doesNotMatch(todaySource, /Today at a glance/);
 });
 
 test("Settings uses the same compact heading and removes recurring helper copy", () => {

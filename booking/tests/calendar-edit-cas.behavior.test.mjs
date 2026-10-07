@@ -15,7 +15,7 @@ after(() => { console.error = originalError; });
 const read = path => fs.readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const compile = source => ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
 test('calendar page selects and projects the loaded lifecycle version', () => {
-  const source = read('app/admin/calendar/page.tsx');
+  const source = read('app/admin/calendar/calendar-data.tsx');
   assert.match(source, /"id, lifecycle_version, status, scheduled_at/);
   assert.match(source, /bookingDetails: \{\s*lifecycleVersion: booking.lifecycle_version,/);
 });
@@ -61,6 +61,8 @@ function quickView(action) {
     '@/app/_components/AddressAutocomplete': () => null,
     '@/app/admin/bookings/[id]/actions': { updateBookingServicesFromCalendar: action },
     '@/lib/booking/catalog-rules': { isAddonEligible: () => true },
+    './useContinuousCalendar': {},
+    '@/lib/booking/calendar-week-range': loadSource('lib/booking/calendar-week-range.ts'),
     '@/lib/booking/quote': loadSource('lib/booking/quote.ts'),
     '@/app/admin/settings/availability/actions': {}, './actions': {},
   }, { window: { addEventListener() {}, removeEventListener() {} } }).CalendarQuickView;
@@ -71,7 +73,7 @@ function fullView(action) {
     '@/app/_components/AddressAutocomplete': () => null,
     './actions': { updateBookingDetails: action },
     '@/lib/booking/quote': loadSource('lib/booking/quote.ts'),
-  }).default;
+  }, { FormData: class extends FormData { constructor(form) { super(); if (form) for (const [key,value] of form) this.append(key,value); } }, window: { addEventListener() {}, removeEventListener() {} }, document: { addEventListener() {}, removeEventListener() {} } }).default;
 }
 function editForm() {
   const form = new FormData();
@@ -99,9 +101,9 @@ test('full editor can begin a second edit from its own acknowledged commit', asy
   let renderer;
   await act(async () => { renderer = TestRenderer.create(React.createElement(View, { bookingId: 'booking', initial: { lifecycleVersion: 7, selectedCatalogItemIds: ['old'] }, catalogItems: catalog })); });
   try {
-    await act(async () => renderer.root.findByType('form').props.action(editForm()));
+    await act(async () => renderer.root.findByType('form').props.onSubmit({ preventDefault() {}, currentTarget: editForm() }));
     const next = editForm(); next.set('catalog_item_id', 'other');
-    await act(async () => renderer.root.findByType('form').props.action(next));
+    await act(async () => renderer.root.findByType('form').props.onSubmit({ preventDefault() {}, currentTarget: next }));
     assert.deepEqual(h.booking.services, ['other']);
     assert.notEqual(h.calls[0].p_request_id, h.calls[1].p_request_id);
   } finally { await act(async () => renderer.unmount()); }
@@ -115,11 +117,11 @@ test('full editor submits its draft version even when newer props arrive', async
   try {
     h.booking.lifecycle_version = 8;
     await act(async () => renderer.update(React.createElement(View, { ...props, initial: { ...initial, lifecycleVersion: 8 } })));
-    await act(async () => renderer.root.findByType('form').props.action(editForm()));
+    await act(async () => renderer.root.findByType('form').props.onSubmit({ preventDefault() {}, currentTarget: editForm() }));
     assert.equal(h.calls[0].p_expected_version, 7);
     assert.deepEqual(h.booking.services, ['old']);
     assert.match(JSON.stringify(renderer.toJSON()), /Booking changed/);
-    await act(async () => renderer.root.findByType('form').props.action(editForm()));
+    await act(async () => renderer.root.findByType('form').props.onSubmit({ preventDefault() {}, currentTarget: editForm() }));
     assert.equal(h.calls[0].p_request_id, h.calls[1].p_request_id);
   } finally { await act(async () => renderer.unmount()); }
 });

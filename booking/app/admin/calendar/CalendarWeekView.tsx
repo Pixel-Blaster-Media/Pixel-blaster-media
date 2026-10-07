@@ -1,4 +1,6 @@
 "use client";
+import { useContinuousCalendar } from "./useContinuousCalendar";
+import { calendarWeekStart, shiftCalendarDate } from "@/lib/booking/calendar-week-range";
 import { BOOKING_QUOTE_POLICY_VERSION } from "@/lib/booking/quote";
 
 import { getCatalogItemPrice } from "@/lib/booking/quote";
@@ -48,7 +50,7 @@ import {
 // precision tool, so it lands on 5-minute marks.
 const DRAG_SNAP_MINUTES = 5;
 
-interface CalendarItem {
+export interface CalendarItem {
   id: string;
   kind: "booking" | "block" | "google";
   title: string;
@@ -94,7 +96,7 @@ interface CalendarItemLayout {
   laneCount: number;
 }
 
-interface DayColumn {
+export interface DayColumn {
   key: string;
   label: string;
   shortLabel: string;
@@ -170,7 +172,7 @@ interface CalendarNavigation {
 }
 
 type DesktopCalendarView = "day" | "week" | "agenda";
-type MobileCalendarView = "day" | "agenda";
+type MobileCalendarView = "day" | "week" | "agenda";
 
 const START_HOUR = 6;
 const END_HOUR = 22;
@@ -193,8 +195,8 @@ const calendarPartsFormatter = new Intl.DateTimeFormat("en-CA", {
 });
 
 export default function CalendarWeekView({
-  days,
-  items,
+  days: initialDays,
+  items: initialItems,
   catalogItems,
   navigation,
   calendarMenu,
@@ -255,15 +257,34 @@ export default function CalendarWeekView({
   );
   const [mobileDayKey, setMobileDayKey] = useState(() => {
     const today = dateInputForLocalDate();
-    if (days.some((day) => day.dateInput === today)) return today;
-    return days.find((day) => day.enabled)?.dateInput ?? days[0]?.dateInput ?? "";
+    if (initialDays.some((day) => day.dateInput === today)) return today;
+    return initialDays.find((day) => day.enabled)?.dateInput ?? initialDays[0]?.dateInput ?? "";
   });
   const [desktopView, setDesktopView] =
     useState<DesktopCalendarView>("week");
-  const [mobileView, setMobileView] = useState<MobileCalendarView>("day");
+  const [mobileView, setMobileView] = useState<MobileCalendarView>("week");
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [previewItem, setPreviewItem] = useState<CalendarItem | null>(null);
   const [now, setNow] = useState<Date | null>(null);
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const update = () => setCompact(media.matches);
+    update(); media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  const calendar = useContinuousCalendar({ initialDays, initialItems, search: navigation.search, scrollerRef: desktopTimelineScrollRef });
+  const { days, items, activeDays } = calendar;
+  const timelineView = compact ? mobileView : desktopView;
+  const focusedTimeline = useRef("");
+  const focusedMobileDay = useRef("");
+  useEffect(() => {
+    if (!activeDays.some(day => day.dateInput === mobileDayKey)) setMobileDayKey(activeDays.find(day => day.enabled)?.dateInput ?? activeDays[0]?.dateInput ?? mobileDayKey);
+  }, [activeDays, mobileDayKey]);
+  const weekHref = (week: string) => `/admin/calendar?${new URLSearchParams({ week, q: navigation.search })}`;
+  const jumpWeek = (offset: number) => calendar.jumpToDate(shiftCalendarDate(calendar.visibleWeek, offset * 7));
+  const jumpToday = () => { const today = dateInputForLocalDate(); setMobileDayKey(today); calendar.jumpToDate(today); };
+
 
   const itemsByDay = useMemo(() => {
     const map = new Map<string, CalendarItem[]>();
@@ -280,8 +301,8 @@ export default function CalendarWeekView({
   const mobileDay =
     days.find((day) => day.dateInput === mobileDayKey) ?? days[0] ?? null;
   const displayedDesktopDays = useMemo(
-    () => (desktopView === "day" && mobileDay ? [mobileDay] : days),
-    [days, desktopView, mobileDay],
+    () => (timelineView === "day" && mobileDay ? [mobileDay] : days),
+    [days, timelineView, mobileDay],
   );
   const desktopDayWidths = useMemo(() => {
     const widths = new Map<string, number>();
@@ -384,6 +405,9 @@ export default function CalendarWeekView({
   useEffect(() => {
     const scroller = mobileTimelineScrollRef.current;
     if (!scroller || !mobileDay) return;
+    const focusKey = `${mobileView}:${mobileDay.dateInput}`;
+    if (focusedMobileDay.current === focusKey) return;
+    focusedMobileDay.current = focusKey;
 
     const firstItemStart = mobileDayItems.reduce<number | null>(
       (earliest, item) => {
@@ -398,10 +422,13 @@ export default function CalendarWeekView({
     );
     scroller.scrollTop =
       ((focusMinutes - mobileTimelineStart) / 60) * MOBILE_HOUR_HEIGHT;
-  }, [mobileDay, mobileDayItems, mobileTimelineStart]);
+  }, [mobileDay, mobileDayItems, mobileTimelineStart, mobileView]);
   useEffect(() => {
     const scroller = desktopTimelineScrollRef.current;
-    if (!scroller || desktopView === "agenda") return;
+    if (!scroller || timelineView === "agenda" || scroller.clientWidth === 0) return;
+    const focusKey = timelineView === "day" ? `day:${mobileDayKey}` : "week";
+    if (focusedTimeline.current === focusKey) return;
+    focusedTimeline.current = focusKey;
 
     const visibleItems = displayedDesktopDays.flatMap(
       (day) => positionedItemsByDay.get(day.dateInput) ?? [],
@@ -427,7 +454,7 @@ export default function CalendarWeekView({
     );
     scroller.scrollTop =
       ((focusMinutes - START_HOUR * 60) / 60) * HOUR_HEIGHT;
-  }, [desktopView, displayedDesktopDays, positionedItemsByDay]);
+  }, [timelineView, mobileDayKey, displayedDesktopDays, positionedItemsByDay]);
 
   useEffect(() => {
     const query = realtor.contact_name.trim();
@@ -504,7 +531,7 @@ export default function CalendarWeekView({
     const dateInput = element?.dataset.calendarDropDay;
     if (!element || !dateInput) return null;
     const day = days.find((candidate) => candidate.dateInput === dateInput);
-    if (!day) return null;
+    if (!day || calendar.stateForDay(day.dateInput) !== "ready") return null;
 
     const mode =
       element.dataset.calendarDropMode === "mobile" ? "mobile" : "desktop";
@@ -771,7 +798,7 @@ export default function CalendarWeekView({
   };
 
   const openAddSheet = (day = mobileDay) => {
-    if (!day) return;
+    if (!day || calendar.stateForDay(day.dateInput) !== "ready") return;
     const minutes = defaultMobileAddMinutes(day);
     openCreateSheet({
       day,
@@ -789,7 +816,8 @@ export default function CalendarWeekView({
               className="flex shrink-0 items-center gap-1"
             >
               <Link
-                href={navigation.previousHref}
+                href={weekHref(shiftCalendarDate(calendar.visibleWeek, -7))}
+                onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); jumpWeek(-1); } }}
                 aria-label="Previous week"
                 title="Previous week"
                 className="flex h-11 w-11 items-center justify-center rounded-full border border-realtor-primary/15 bg-white text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
@@ -798,12 +826,14 @@ export default function CalendarWeekView({
               </Link>
               <Link
                 href={navigation.todayHref}
+                onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); jumpToday(); } }}
                 className="inline-flex h-11 items-center justify-center rounded-full border border-realtor-primary/25 bg-white px-3 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/45"
               >
                 Today
               </Link>
               <Link
-                href={navigation.nextHref}
+                href={weekHref(shiftCalendarDate(calendar.visibleWeek, 7))}
+                onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); jumpWeek(1); } }}
                 aria-label="Next week"
                 title="Next week"
                 className="flex h-11 w-11 items-center justify-center rounded-full border border-realtor-primary/15 bg-white text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
@@ -837,9 +867,9 @@ export default function CalendarWeekView({
           <div
             role="group"
             aria-label="Calendar view"
-            className="mt-2 grid grid-cols-2 rounded-xl bg-realtor-soft/70 p-1"
+            className="mt-2 grid grid-cols-3 rounded-xl bg-realtor-soft/70 p-1"
           >
-            {(["day", "agenda"] as const).map((view) => (
+            {(["day", "week", "agenda"] as const).map((view) => (
               <button
                 key={view}
                 type="button"
@@ -857,7 +887,7 @@ export default function CalendarWeekView({
           </div>
 
           <div className="mt-2 grid max-w-full grid-cols-7 gap-1 border-t border-realtor-primary/10 pt-2">
-            {days.map((day) => {
+            {activeDays.map((day) => {
               const isSelected = day.dateInput === mobileDay?.dateInput;
               const dayItems = itemsByDay.get(day.dateInput) ?? [];
               return (
@@ -913,7 +943,8 @@ export default function CalendarWeekView({
         <div className="hidden flex-wrap items-center gap-2 md:flex">
           <nav className="flex shrink-0 items-center gap-1">
             <Link
-              href={navigation.previousHref}
+              href={weekHref(shiftCalendarDate(calendar.visibleWeek, -7))}
+                onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); jumpWeek(-1); } }}
               aria-label="Previous week"
               className="flex h-10 w-10 items-center justify-center rounded-full border border-realtor-primary/15 bg-white text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
             >
@@ -921,12 +952,14 @@ export default function CalendarWeekView({
             </Link>
             <Link
               href={navigation.todayHref}
+                onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); jumpToday(); } }}
               className="inline-flex h-10 items-center justify-center rounded-full border border-realtor-primary/25 bg-white px-4 text-sm font-semibold text-realtor-primary transition hover:border-realtor-primary/45"
             >
               Today
             </Link>
             <Link
-              href={navigation.nextHref}
+              href={weekHref(shiftCalendarDate(calendar.visibleWeek, 7))}
+                onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); jumpWeek(1); } }}
               aria-label="Next week"
               className="flex h-10 w-10 items-center justify-center rounded-full border border-realtor-primary/15 bg-white text-realtor-muted transition hover:border-realtor-primary/35 hover:text-realtor-primary"
             >
@@ -956,8 +989,8 @@ export default function CalendarWeekView({
             action="/admin/calendar"
             className="order-last flex min-w-0 basis-full gap-1.5 lg:order-none lg:min-w-48 lg:flex-1 lg:basis-48"
           >
-            {navigation.weekValue ? (
-              <input type="hidden" name="week" value={navigation.weekValue} />
+            {calendar.visibleWeek ? (
+              <input type="hidden" name="week" value={calendar.visibleWeek} />
             ) : null}
             <label className="sr-only" htmlFor="calendar-search-desktop">
               Search calendar
@@ -1053,8 +1086,8 @@ export default function CalendarWeekView({
             </header>
 
             <form action="/admin/calendar" className="flex gap-2">
-              {navigation.weekValue ? (
-                <input type="hidden" name="week" value={navigation.weekValue} />
+              {calendar.visibleWeek ? (
+                <input type="hidden" name="week" value={calendar.visibleWeek} />
               ) : null}
               <label className="sr-only" htmlFor="calendar-search-mobile">
                 Search calendar
@@ -1122,7 +1155,7 @@ export default function CalendarWeekView({
 
       {desktopView === "day" ? (
         <div className="hidden grid-cols-7 gap-1 rounded-2xl border border-realtor-primary/10 bg-white/70 p-1.5 md:grid">
-          {days.map((day) => {
+          {activeDays.map((day) => {
             const selectedDay = day.dateInput === mobileDay?.dateInput;
             return (
               <button
@@ -1145,10 +1178,17 @@ export default function CalendarWeekView({
         </div>
       ) : null}
 
-      {desktopView === "agenda" ? (
+      <div className="studio-calendar-scroll-status">
+        <p aria-live="polite">Week of {calendar.visibleWeek} · {items.filter(item => item.kind === "booking" && calendarWeekStart(item.localDate) === calendar.visibleWeek).length} bookings</p>
+        <p id="calendar-scroll-help">Scroll sideways or use Shift + mouse wheel for adjacent weeks. Up and down moves through hours.</p>
+        {calendar.loading ? <p role="status">Loading adjoining weeks…</p> : null}
+        {calendar.failedWeeks.length ? <div role="alert">Some weeks could not load. Existing bookings remain visible. <button type="button" onClick={calendar.retry} className="underline">Try again</button></div> : null}
+        {calendar.googleLoadFailed ? <p role="status">Some Google Calendar events are unavailable. Booking data is still shown.</p> : null}
+      </div>
+      {timelineView === "agenda" ? (
         <div className="hidden md:block">
           <CalendarAgendaView
-            days={days}
+            days={activeDays}
             itemsByDay={itemsByDay}
             onOpen={openCalendarItem}
             onAdd={openAddSheet}
@@ -1157,19 +1197,30 @@ export default function CalendarWeekView({
       ) : (
       <div
         ref={desktopTimelineScrollRef}
-        className="precision-panel hidden max-h-[calc(100dvh-210px)] overflow-auto rounded-3xl border border-realtor-primary/10 bg-realtor-surface/85 shadow-lg shadow-black/10 md:block xl:max-h-[calc(100dvh-190px)]"
+        role="region" tabIndex={0} aria-label="Continuous week calendar" aria-describedby="calendar-scroll-help"
+        onScroll={calendar.onScroll}
+        onKeyDown={event => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === "PageDown") { event.preventDefault(); jumpWeek(1); }
+          if (event.key === "PageUp") { event.preventDefault(); jumpWeek(-1); }
+          if (event.key === "Home") { event.preventDefault(); jumpToday(); }
+        }}
+        className={`precision-panel studio-calendar-timeline ${mobileView === "week" ? "block" : "hidden md:block"}`}
+
       >
         <div
           className="grid"
           style={{
             gridTemplateColumns: desktopGridTemplateColumns,
             minWidth: desktopGridMinWidth,
+            width: desktopGridMinWidth,
           }}
         >
           <div className="sticky left-0 top-0 z-30 border-b border-realtor-primary/10 bg-realtor-surface px-2 py-3" />
           {displayedDesktopDays.map((day) => (
             <div
               key={day.key}
+              data-calendar-day-header={day.dateInput}
               className={`sticky top-0 z-20 border-b border-l border-realtor-primary/10 px-3 py-3 ${
                 currentDayKey === day.dateInput
                   ? "bg-realtor-primary/5"
@@ -1185,6 +1236,7 @@ export default function CalendarWeekView({
                 ) : null}
               </div>
               <p className="text-xs font-semibold text-realtor-text">{day.label}</p>
+              {calendar.stateForDay(day.dateInput) !== "ready" ? <p className="text-[10px] text-realtor-muted">{calendar.stateForDay(day.dateInput) === "error" ? "Unavailable" : "Loading…"}</p> : null}
             </div>
           ))}
 
@@ -1247,7 +1299,8 @@ export default function CalendarWeekView({
                     <button
                       key={slot}
                       type="button"
-                      disabled={!slotIsWorking}
+                      disabled={!slotIsWorking || calendar.stateForDay(day.dateInput) !== "ready"}
+                      tabIndex={calendarWeekStart(day.dateInput) === calendar.visibleWeek ? 0 : -1}
                       aria-label={`Select ${day.label} ${formatTime(
                         hour,
                         minute,
@@ -1473,7 +1526,7 @@ export default function CalendarWeekView({
           </section>
         ) : mobileView === "agenda" ? (
           <CalendarAgendaView
-            days={days}
+            days={activeDays}
             itemsByDay={itemsByDay}
             onOpen={openCalendarItem}
             onAdd={openAddSheet}
@@ -3318,6 +3371,7 @@ function CalendarEvent({
     return (
       <button
         type="button"
+        data-calendar-item={`${item.kind}:${item.id}:${item.localDate}`}
         aria-label={`Open or drag ${item.title}`}
         onClick={() => onOpen(item)}
         onPointerDown={(event) => onPointerDown(event, item)}

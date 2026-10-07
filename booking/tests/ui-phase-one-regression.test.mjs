@@ -111,7 +111,7 @@ test("active jobs include unscheduled requested work and call it out", () => {
     "editing",
   ]);
   assert.match(bookingsSource, /Needs scheduling/);
-  assert.match(bookingsSource, /title="Jobs Board"/);
+  assert.match(bookingsSource, /title="Bookings"/);
   assert.match(bottomNavSource, /label: "Jobs"/);
 });
 

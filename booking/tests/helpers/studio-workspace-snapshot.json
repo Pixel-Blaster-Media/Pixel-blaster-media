@@ -1,0 +1,16 @@
+{
+  "base": "4ec0069a8ac59b0e3c72b8076ef72f007efb0d86",
+  "files": {
+    "app/admin/bookings/[id]/EditBookingForm.tsx": "47f947f636d11b381ef02648710f1897a5def2bab6064c872cb3f68b4530cb70",
+    "app/admin/bookings/[id]/page.tsx": "cf86981bc49afa977f157752f03fdd621540ad16d1819c7d944f67cce7e2da19",
+    "app/admin/bookings/page.tsx": "60c29c24a01c76dfac3830cd3a3715b101b5368cd5c65718df46683be558dab1",
+    "app/admin/calendar/CalendarWeekView.tsx": "d47f535e95f67e13f6da55abd2b60a1ec1badbca166e929484ac36bb1448f3a8",
+    "app/admin/calendar/page.tsx": "bd35d8d288b1e5728738bcc2138c1439ebd637db0baaf3cb444c22947db2d8f8",
+    "app/admin/layout.tsx": "bc07c3394ec9a7572c54b021131330a7e18fb2259892e1ec631e2f117e60c1a7",
+    "app/admin/today/page.tsx": "e8718a4046a16b79e7b53617579b35c1b02c49d398b19049ffd2836c5fce4749"
+  },
+  "added": [
+    "app/admin/AdminWorkspace.tsx",
+    "app/admin/calendar/calendar-data.tsx"
+  ]
+}

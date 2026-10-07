@@ -14,7 +14,7 @@ require('tsx/cjs');
 const config = require('../tailwind.config.ts').default;
 config.content = [source + '/app/**/*.{ts,tsx}'];
 const css = (await require('postcss')([require('tailwindcss')(config), require('autoprefixer')]).process(
-  fs.readFileSync(source + '/app/globals.css', 'utf8') + '\n' + fs.readFileSync(source + '/app/precision-skin.css', 'utf8'), { from: source + '/app/globals.css' })).css;
+  fs.readFileSync(source + '/app/globals.css', 'utf8') + '\n' + fs.readFileSync(source + '/app/precision-skin.css', 'utf8') + '\n' + fs.readFileSync(source + '/app/admin/studio-workspace.css', 'utf8'), { from: source + '/app/globals.css' })).css;
 const bundle = await build({ stdin: { contents: `
 import React from 'react'; import {createRoot} from 'react-dom/client';
 import {BookingBrandFrame} from './app/book/_components/BookingBrandHeader';
@@ -24,7 +24,7 @@ const {kind,app,nested}=window.fixture;
 const organization={id:kind==='default'?DEFAULT_ORGANIZATION_ID:kind==='unknown'?undefined:'custom-id',name:'Same name',primaryColor:kind==='custom'?'#993366':'#3f7356',accentColor:'#c7b17a'};
 const controls=<><button id="primary" style={{background:'var(--realtor-primary)',color:'white'}}>Action</button><div id="selected" className="realtor-choice realtor-choice-selected">Selected</div><input id="focus" className="realtor-field" /></>;
 createRoot(document.getElementById('root')).render(<div className={app?'pixel-app-skin realtor-theme':'realtor-theme'} {...(!nested?{'data-pixel-default-palette':organization.id===DEFAULT_ORGANIZATION_ID?true:undefined,style:organizationThemeStyle(organization)}:{})}>{nested?<BookingBrandFrame organization={organization}>{controls}</BookingBrandFrame>:controls}</div>);
-`, resolveDir: source, loader: 'tsx' }, bundle: true, write: false, format: 'iife', platform: 'browser', jsx: 'automatic', tsconfig: source + '/tsconfig.json', plugins: [{ name: 'deny-server', setup(b) {
+`, resolveDir: source, loader: 'tsx' }, bundle: true, write: false, format: 'iife', platform: 'browser', define: {'process.env.PHOTO_FINALS_RESUMABLE_ENABLED':'undefined'}, jsx: 'automatic', tsconfig: source + '/tsconfig.json', plugins: [{ name: 'deny-server', setup(b) {
   b.onResolve({ filter: /^(server-only|@\/lib\/supabase\/server)$/ }, a => ({ path: a.path, namespace: 'denied' }));
   b.onLoad({ filter: /.*/, namespace: 'denied' }, () => ({ contents: 'export const getServiceSupabase=()=>{throw Error("No database in palette test")}' }));
 } }] });
@@ -40,14 +40,14 @@ window.renderShell=async()=>{
  if(f.route==='portal')child=await Portal({children:button});
  if(f.route==='book')child=<Book><BookingBrandFrame organization={{id:f.bookingId,name:'Same name',primaryColor:f.bookingId==='custom-id'?'#993366':'#3f7356',accentColor:'#c7b17a'}}>{button}</BookingBrandFrame></Book>;
  return renderToStaticMarkup(await Root({children:child}));
-};`, resolveDir: source, loader: 'tsx' }, bundle: true, write: false, format: 'iife', platform: 'browser', jsx: 'automatic', tsconfig: source + '/tsconfig.json', plugins: [{ name: 'shell-readonly-boundaries', setup(b) {
+};`, resolveDir: source, loader: 'tsx' }, bundle: true, write: false, format: 'iife', platform: 'browser', define: {'process.env.PHOTO_FINALS_RESUMABLE_ENABLED':'undefined'}, jsx: 'automatic', tsconfig: source + '/tsconfig.json', plugins: [{ name: 'shell-readonly-boundaries', setup(b) {
   b.onResolve({ filter: /\.css$/ }, a => ({ path: a.path, namespace: 'empty' }));
   b.onResolve({ filter: /^(server-only|@\/lib\/auth\/|@\/lib\/supabase\/server|next\/|\.\/AuthSessionHandler|\.\/PwaClient|\.\/_components\/SiteHeaderMobileMenu|\.\/AdminAssistant|\.\/AdminBottomNav)/ }, a => ({ path: a.path, namespace: 'fixture' }));
   b.onLoad({ filter: /.*/, namespace: 'empty' }, () => ({ contents: '' }));
   b.onLoad({ filter: /.*/, namespace: 'fixture' }, a => {
     if(a.path==='next/link')return {contents:'import React from "react";export default function Link({children,...props}){return React.createElement("a",props,children)}',resolveDir:source};
     return {contents: `const user=()=>window.fixture.rootId===null?null:{organizationId:window.fixture.rootId,userId:'fixture-user',email:'fixture@example.invalid',role:window.fixture.route==='admin'?'admin':'realtor'};
-export const redirect=()=>{throw Error('Unexpected redirect')};export const getCurrentUser=async()=>user();export const requireAdmin=async()=>user();export const requireUser=async()=>user();export const signOut=()=>{throw Error('No actions')};
+export const usePathname=()=>'/admin/today';export const redirect=()=>{throw Error('Unexpected redirect')};export const getCurrentUser=async()=>user();export const requireAdmin=async()=>user();export const requireUser=async()=>user();export const signOut=()=>{throw Error('No actions')};
 export const getServiceSupabase=()=>({from:()=>({select:()=>({eq:(_key,id)=>({maybeSingle:async()=>({data:window.fixture.brandFailure?null:{name:'Same name',primary_color:id==='custom-id'?'#993366':'#3f7356',accent_color:'#c7b17a'},error:window.fixture.brandFailure?{message:'fixture failure'}:null})})})})});
 export default function Empty(){return null}`};
   });
@@ -103,7 +103,7 @@ try {
     const actual = await page.evaluate(() => ({primary:getComputedStyle(document.getElementById('primary')).backgroundColor,rootMarker:document.body.getAttribute('data-pixel-default-palette'),markers:document.querySelectorAll('[data-pixel-default-palette="true"]').length}));
     const owner = fixture.route === 'book' ? fixture.bookingId : fixture.rootId;
     const blue = fixture.route !== 'nonapp' && owner === defaultId;
-    const expected = blue ? 'rgb(7, 102, 216)' : owner === 'custom-id' && (!fixture.brandFailure || fixture.route === 'book') ? 'rgb(153, 51, 102)' : 'rgb(63, 115, 86)';
+    const expected = blue && fixture.route === 'admin' ? 'rgb(26, 127, 142)' : blue ? 'rgb(7, 102, 216)' : owner === 'custom-id' && (!fixture.brandFailure || fixture.route === 'book') ? 'rgb(153, 51, 102)' : 'rgb(63, 115, 86)';
     const failures = [];
     if (actual.primary !== expected) failures.push(`primary ${actual.primary} !== ${expected}`);
     if(actual.rootMarker !== (fixture.rootId===null||fixture.rootId===defaultId?'true':null)) failures.push('root marker identity mismatch');

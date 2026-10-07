@@ -18,7 +18,7 @@ const [
   read("app/admin/bookings/[id]/page.tsx"),
   read("app/admin/bookings/[id]/EditBookingForm.tsx"),
   read("app/admin/bookings/[id]/actions.ts"),
-  read("app/admin/calendar/page.tsx"),
+  read("app/admin/calendar/calendar-data.tsx"),
   read("app/admin/calendar/CalendarWeekView.tsx"),
   read("app/admin/calendar/actions.ts"),
   read("lib/booking/realtor-calendar-fanout.ts"),

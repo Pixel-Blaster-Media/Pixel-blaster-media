@@ -35,6 +35,7 @@ const calendarServiceCorePath = new URL(
 const calendarSource = await readFile(calendarPath, "utf8");
 const calendarActionsSource = await readFile(calendarActionsPath, "utf8");
 const calendarPageSource = await readFile(calendarPagePath, "utf8");
+const calendarDataSource = await readFile(new URL("../app/admin/calendar/calendar-data.tsx", import.meta.url), "utf8");
 const bottomNavSource = await readFile(bottomNavPath, "utf8");
 const bookingActionsSource = await readFile(bookingActionsPath, "utf8");
 const calendarSyncSource = await readFile(calendarSyncPath, "utf8");
@@ -45,53 +46,15 @@ const quickViewSource = calendarSource.slice(
   calendarSource.indexOf("function QuickViewSection"),
 );
 
-test("calendar headings keep the date and appointment count in one compact row", () => {
-  assert.match(
-    calendarPageSource,
-    /flex min-w-0 items-baseline justify-between gap-2 md:hidden/,
-  );
-  assert.match(calendarPageSource, /text-\[clamp\(1\.25rem,6vw,1\.5rem\)\]/);
-  assert.match(
-    calendarPageSource,
-    /flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-right text-\[clamp\(11px,3vw,14px\)\]/,
-  );
-  assert.match(calendarPageSource, /data-calendar-week-summary/);
-  assert.match(calendarPageSource, /formatCompactWeekRange\(weekStart\)/);
-  assert.match(calendarPageSource, /month: "short"/);
-  assert.match(calendarPageSource, /appointmentCount} appt/);
-  assert.match(
-    calendarPageSource,
-    /max-w-full space-y-4 px-0\.5 md:space-y-2/,
-  );
-  assert.match(
-    calendarPageSource,
-    /<header className="-mb-2 px-1 py-1 md:mb-0 md:py-0">/,
-  );
-  assert.match(
-    calendarPageSource,
-    /data-calendar-desktop-heading[^>]*className="hidden min-w-0 items-baseline gap-2 md:flex"/,
-  );
-  assert.match(
-    calendarPageSource,
-    /className="whitespace-nowrap lg:hidden"[\s\S]{0,100}formatCompactWeekRange\(weekStart\)/,
-  );
-  assert.match(
-    calendarPageSource,
-    /className="hidden whitespace-nowrap lg:inline"[\s\S]{0,100}formatWeekRange\(weekStart\)/,
-  );
-  assert.match(
-    calendarPageSource,
-    /data-calendar-desktop-count[^>]*className="whitespace-nowrap text-sm text-realtor-muted"/,
-  );
-  assert.doesNotMatch(
-    calendarPageSource,
-    /mt-1 hidden text-sm text-realtor-muted md:block/,
-  );
+test("calendar heading and visible-week count follow the continuous workspace", () => {
+  assert.match(calendarPageSource, /<AdminPageHeading eyebrow="Schedule" title="Calendar"/);
+  assert.match(calendarSource, /aria-live="polite">Week of \{calendar.visibleWeek\}/);
+  assert.match(calendarSource, /calendarWeekStart\(item.localDate\) === calendar.visibleWeek/);
 });
 
 test("mobile day schedule uses one unified Apple-inspired canvas", () => {
   assert.match(calendarSource, /sticky top-2[^\n]*rounded-3xl/);
-  assert.match(calendarSource, /overflow-auto rounded-3xl[^\n]*md:block/);
+  assert.match(calendarSource, /studio-calendar-timeline/);
   assert.match(
     calendarSource,
     /max-w-full overflow-hidden rounded-3xl[^\n]*bg-realtor-surface/,
@@ -184,7 +147,7 @@ test("property facts and notes are collapsed behind one secondary disclosure", (
 });
 
 test("pre-existing Google Calendar drift stays visible in the compact summary", () => {
-  assert.match(calendarPageSource, /syncWarning:\s*googleOutOfSync/);
+  assert.match(calendarDataSource, /syncWarning:\s*googleOutOfSync/);
   assert.match(quickViewSource, /item\.syncWarning/);
   assert.match(
     quickViewSource,
@@ -193,15 +156,15 @@ test("pre-existing Google Calendar drift stays visible in the compact summary", 
 });
 
 test("calendar surfaces use the shared warm workspace palette", () => {
-  assert.match(calendarPageSource, />\s*Schedule\s*</);
+  assert.match(calendarPageSource, /eyebrow="Schedule"/);
   assert.match(calendarSource, /bg-realtor-bg\/60/);
   assert.match(calendarSource, /bg-realtor-soft\/60/);
   assert.match(calendarSource, /border-realtor-primary\/10/);
-  assert.match(calendarSource, /grid grid-cols-2 rounded-xl bg-realtor-soft\/70/);
+  assert.match(calendarSource, /grid grid-cols-3 rounded-xl bg-realtor-soft\/70/);
   assert.match(calendarSource, /aria-label="Calendar view"/);
   assert.match(calendarSource, /focus-visible:ring-2/);
   assert.match(
-    calendarPageSource,
+    calendarDataSource,
     /statusClass:\s*calendarStatusPill\(booking\.status\)/,
   );
   assert.doesNotMatch(calendarSource, /#fffdf8|#d8cab9|#d7d1c4|#d0cabd|#ded6c8|#ede6d9/);

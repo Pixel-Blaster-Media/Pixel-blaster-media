@@ -12,7 +12,7 @@ import AdminPageHeading from "../AdminPageHeading";
 import CancelBookingButton from "./CancelBookingButton";
 
 
-export const metadata = { title: "Jobs Board" };
+export const metadata = { title: "Bookings" };
 export const dynamic = "force-dynamic";
 
 interface BookingRow {
@@ -72,7 +72,7 @@ export default async function BookingsPage({
     <div className="space-y-4">
       <AdminPageHeading
         eyebrow="Work queue"
-        title="Jobs Board"
+        title="Bookings"
         meta={
           filter === "active"
             ? `${bookings.length} active job${bookings.length === 1 ? "" : "s"} shown`
@@ -88,17 +88,17 @@ export default async function BookingsPage({
         }
       />
 
-      <section className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/60 p-2.5 shadow-sm">
+      <section className="studio-booking-search">
         <form className="flex min-w-0 gap-2" action="/admin/bookings">
           <input type="hidden" name="filter" value={filter} />
           <label className="sr-only" htmlFor="booking-search">
-            Search jobs
+            Search bookings
           </label>
           <input
             id="booking-search"
             name="q"
             defaultValue={search}
-            placeholder="Search jobs..."
+            placeholder="Search bookings..."
             className="min-h-11 min-w-0 flex-1 rounded-full border border-realtor-primary/15 bg-white/65 px-4 text-sm text-realtor-text outline-none transition placeholder:text-realtor-muted focus:border-realtor-primary/45"
           />
           <div className="flex shrink-0 gap-2">
@@ -118,11 +118,12 @@ export default async function BookingsPage({
             ) : null}
           </div>
         </form>
-        <nav className="mt-3 flex gap-1 overflow-x-auto pb-1 text-xs">
+        <nav aria-label="Booking status filters" className="mt-3 flex gap-1 overflow-x-auto pb-1 text-xs">
           {FILTERS.map((f) => (
             <Link
               key={f.id}
               href={bookingHref(f.id, search)}
+              aria-current={f.id === filter ? "page" : undefined}
               className={
                 "tap-target shrink-0 rounded-full border px-3 py-1.5 transition " +
                 (f.id === filter
@@ -142,8 +143,9 @@ export default async function BookingsPage({
         {hasMore ? <Link href={`/admin/bookings?${nextParams}`}>Next page</Link> : null}
       </nav>
       {bookings && bookings.length > 0 ? (
-        <section>
-          <ul className="grid gap-3">
+        <section aria-label="Bookings" className="studio-bookings-list">
+          <div className="studio-booking-columns" aria-hidden="true"><span>Property</span><span>Realtor &amp; services</span><span>Scheduled</span><span>Status</span><span>Actions</span></div>
+          <ul>
             {bookings.map((booking) => (
               <BookingListItem key={booking.id} booking={booking} />
             ))}
@@ -168,45 +170,17 @@ function BookingListItem({ booking }: { booking: BookingRow }) {
   const meta = BOOKING_STATUSES[booking.status];
 
   return (
-    <li className="rounded-2xl border border-realtor-primary/15 bg-realtor-surface/60 p-4 transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <Link href={`/admin/bookings/${booking.id}`} className="min-w-0 flex-1">
-          <p className="font-semibold text-realtor-text">
-            {property?.street_address ?? "-"}
-            {property?.city ? (
-              <span className="text-realtor-muted"> · {property.city}</span>
-            ) : null}
-          </p>
-          <p className="mt-0.5 text-xs text-realtor-muted">
-            {profile?.full_name ?? profile?.email ?? "Unknown realtor"}
-          </p>
-          <p className="mt-2 line-clamp-2 text-xs text-realtor-muted">
-            {booking.services.map(labelForService).join(", ") || "-"}
-          </p>
-        </Link>
-        <div className="flex shrink-0 flex-col items-end gap-2">
-          <span
-            className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${meta.pill}`}
-          >
-            {meta.label}
-          </span>
-          <span className="text-[10px] text-realtor-muted">
-            {booking.scheduled_at
-              ? formatBookingDate(booking.scheduled_at)
-              : "Needs scheduling"}
-          </span>
-          <div className="flex flex-wrap justify-end gap-2">
-            <Link
-              href={`/admin/bookings/${booking.id}`}
-              className="rounded-full border border-realtor-primary/20 bg-white px-2.5 py-1 text-[11px] font-semibold text-realtor-primary transition hover:border-realtor-primary/40 hover:bg-realtor-primary/5"
-            >
-              Open
-            </Link>
-            {isCancellable(booking.status) ? (
-              <CancelBookingButton bookingId={booking.id} label="Cancel" compact />
-            ) : null}
-          </div>
-        </div>
+    <li className="studio-booking-row">
+      <Link href={`/admin/bookings/${booking.id}`}>
+        <strong>{property?.street_address ?? "Address not set"}</strong>
+        <small>{property?.city ?? "City not set"}</small>
+      </Link>
+      <div><span>{profile?.full_name ?? profile?.email ?? "Unknown realtor"}</span><small>{booking.services.map(labelForService).join(", ") || "Services not set"}</small></div>
+      <div>{booking.scheduled_at ? <time dateTime={booking.scheduled_at}>{formatBookingDate(booking.scheduled_at)}</time> : "Needs scheduling"}</div>
+      <div><span className={`inline-block rounded border px-2 py-1 text-[11px] font-semibold ${meta.pill}`}>{meta.label}</span></div>
+      <div className="studio-booking-actions">
+        <Link href={`/admin/bookings/${booking.id}`} aria-label={`Open booking for ${property?.street_address ?? "unknown address"}`}>Open →</Link>
+        {isCancellable(booking.status) ? <CancelBookingButton bookingId={booking.id} label="Cancel" compact /> : null}
       </div>
     </li>
   );
