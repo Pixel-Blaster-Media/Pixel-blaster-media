@@ -4,6 +4,10 @@
 -- A new revision/profile and key namespace keep old approved bytes immutable.
 -- Existing ready packages remain readable by both app versions while gates stay off.
 -- Refuse rollout if any previous encoder work still needs operator resolution.
+-- One statement keeps locks, the guard and every replacement atomic even when
+-- the migration transport executes statements with autocommit enabled.
+do $photo_finals_encoder_revision$
+begin
 set local lock_timeout='5s';
 lock table public.gallery_releases, public.media_ingest_jobs, public.media_derivatives, public.media_packages in share row exclusive mode;
 do $$ begin
@@ -166,3 +170,5 @@ begin
  update public.media_ingest_jobs set state='review_pending',completed_at=clock_timestamp(),finals_lease_token=null,finals_lease_started_at=null,finals_lease_expires_at=null,finals_worker_id=null where organization_id=p_org and id=p_job;
  update public.gallery_releases set state='ready' where organization_id=p_org and id=r.id;
 end $$;
+end;
+$photo_finals_encoder_revision$;
