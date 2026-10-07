@@ -52,6 +52,86 @@ test('provider ambiguity/restriction mismatch withholds capability and preserves
  expiresAt:new Date(Date.now()+3600_000).toISOString(),env,fetchImpl:()=>{throw new Error('Must not call provider')}}),/Invalid resumable/);
 });
 
+test('capability rejection reports boolean reasons without a follow-up request or any capability value',async()=>{
+ const cases=[
+  {location:null,key:'capabilityPresent'},
+  {location:'',key:'capabilityPresent'},
+  {location:'not-a-url',key:'capabilityParseable'},
+  {location:'https://upload.videodelivery.net/'+ 'x'.repeat(4096),key:'capabilityWithinLength'},
+  {location:'http://upload.videodelivery.net/secret-cap',key:'capabilityHttps'},
+  {location:'https://private.invalid/secret-cap',key:'capabilityAllowedHost'},
+  {location:'https://upload.videodelivery.net.private.invalid/secret-cap',key:'capabilityAllowedHost'},
+  {location:'https://user:secret-password@upload.videodelivery.net/secret-cap',key:'capabilityNoCredentials'},
+  {location:'https://upload.videodelivery.net:444/secret-cap',key:'capabilityDefaultPort'},
+  {location:'https://upload.videodelivery.net/secret-cap#secret-fragment',key:'capabilityNoFragment'},
+  {location:'https://upload.videodelivery.net/',key:'capabilityPath'},
+  {location:'https://upload.videodelivery.net/secret-cap',videoId:null,key:'uidPresent'},
+  {location:'https://upload.videodelivery.net/secret-cap',videoId:'bad-secret-id',key:'uidValid'},
+ ];
+ for(const {location,videoId=uid,key} of cases){
+  let calls=0;const headers=new Headers();if(location!==null)headers.set('Location',location);if(videoId!==null)headers.set('stream-media-id',videoId);
+  await assert.rejects(core.createStreamTusUpload({name:'Sample',operationId:claim,size:227010474,
+   expiresAt:new Date(Date.now()+3600_000).toISOString(),env,fetchImpl:async()=>{calls++;return new Response('secret-provider-body',{status:201,headers})}}),error=>{
+    assert.equal(error.outcome,'ambiguous');assert.equal(error.streamUid,videoId===uid?uid:undefined);
+    assert.equal(error.diagnostic.stage,'capability_validation');assert.equal(error.diagnostic.httpStatus,201);
+    assert.equal(error.diagnostic.verified,false);assert.equal(error.diagnostic.checks[key],false);
+    assert.ok(Object.values(error.diagnostic.checks).every(value=>typeof value==='boolean'));
+    assert.doesNotMatch(JSON.stringify(error.diagnostic),/secret-|private\.invalid|mock-only-token|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/);
+    return true;
+   });assert.equal(calls,1);
+ }
+});
+
+test('capability diagnostics preserve the existing acceptance predicate, including URL normalization',()=>{
+ const prior=value=>{if(typeof value!=='string'||value.length>4096)return false;try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password&&!u.port&&!u.hash&&(u.hostname==='upload.videodelivery.net'||/^[a-z0-9-]+\.cloudflarestream\.com$/.test(u.hostname))&&u.pathname.length>1;}catch{return false}};
+ const hosts=['upload.videodelivery.net','customer-abc.cloudflarestream.com','cloudflarestream.com','a.b.cloudflarestream.com','bad.example','UPLOAD.VIDEODELIVERY.NET'];
+ const values=[undefined,null,0,{},'', 'not-a-url', 'x'.repeat(4097)];
+ for(const host of hosts)for(const scheme of ['http:','https:'])for(const suffix of ['/','/cap','/cap?secret=query','/cap#fragment']){
+  values.push(`${scheme}//${host}${suffix}`,`${scheme}//user:pass@${host}${suffix}`,`${scheme}//${host}:443${suffix}`,`${scheme}//${host}:444${suffix}`);
+ }
+ for(const value of values)assert.equal(policy.validStreamUploadCapability(value),prior(value));
+});
+
+test('provider creation status and transport failures are distinguished without reading or logging response bodies',async()=>{
+ for(const status of [400,408,429,500,200]){
+  let calls=0;await assert.rejects(core.createStreamTusUpload({name:'Sample',operationId:claim,size:227010474,
+   expiresAt:new Date(Date.now()+3600_000).toISOString(),env,fetchImpl:async()=>{calls++;return new Response('private-secret-response',{status})}}),error=>{
+   assert.deepEqual(error.diagnostic,{verified:false,stage:'provider_create',httpStatus:status,checks:null});
+   assert.equal(error.outcome,status===400?'definitive':'ambiguous');assert.equal(error.streamUid,undefined);return true;
+  });assert.equal(calls,1);
+ }
+ await assert.rejects(core.createStreamTusUpload({name:'Sample',operationId:claim,size:227010474,
+  expiresAt:new Date(Date.now()+3600_000).toISOString(),env,fetchImpl:async()=>{throw new Error('private-secret-transport')}}),error=>{
+  assert.deepEqual(error.diagnostic,{verified:false,stage:'provider_create',httpStatus:null,checks:null});
+  assert.doesNotMatch(JSON.stringify(error),/private-secret-transport/);return true;
+ });
+});
+
+test('expiry diagnostics distinguish missing, invalid and subsecond mismatch while requiring the exact timestamp',async()=>{
+ const expiresAt=new Date(Math.floor((Date.now()+3600_000)/1000)*1000+123).toISOString();
+ const baseline={uid,allowedOrigins:['pixelblastermedia.com'],maxDurationSeconds:600,
+  creator:claim,meta:{catalogUploadClaimId:claim}};
+ const epoch=Date.parse(expiresAt);
+ for(const [uploadExpiry,expected] of [
+  [undefined,{present:false,parseable:false,exactMatch:false,sameWholeSecond:false}],
+  ['secret-invalid-expiry',{present:true,parseable:false,exactMatch:false,sameWholeSecond:false}],
+  [new Date(epoch+1).toISOString(),{present:true,parseable:true,exactMatch:false,sameWholeSecond:true}],
+  [new Date(epoch+1000).toISOString(),{present:true,parseable:true,exactMatch:false,sameWholeSecond:false}],
+  [expiresAt,{present:true,parseable:true,exactMatch:true,sameWholeSecond:true}],
+  [expiresAt.replace('Z','+00:00'),{present:true,parseable:true,exactMatch:true,sameWholeSecond:true}],
+ ]){
+  const fetchImpl=async()=>Response.json({success:true,result:{...baseline,uploadExpiry}});
+  const inspection=await core.inspectStreamTusReservation({uid,operationId:claim,expiresAt,env,fetchImpl});
+  assert.deepEqual(inspection.expiryChecks,expected);assert.equal(inspection.checks.expiry,expected.exactMatch);
+  assert.equal(inspection.verified,expected.exactMatch);
+  assert.doesNotMatch(JSON.stringify(inspection),/secret-invalid-expiry|uploadExpiry|expiresAt|T\d\d:/);
+  if(!expected.exactMatch){let calls=0;await assert.rejects(core.createStreamTusUpload({name:'Sample',operationId:claim,size:227010474,expiresAt,env,
+   fetchImpl:async()=>++calls===1?new Response(null,{status:201,headers:{Location:'https://upload.videodelivery.net/private-cap','stream-media-id':uid}}):fetchImpl()}),error=>{
+    assert.deepEqual(error.diagnostic.expiryChecks,expected);assert.equal(error.streamUid,uid);return true;
+   });assert.equal(calls,2);}
+ }
+});
+
 test('duration, expiry and claim identity must survive provider readback before exposing a capability',async()=>{
  const expiresAt=new Date(Date.now()+3600_000).toISOString();
  for(const changed of [{maxDurationSeconds:601},{maxDurationSeconds:undefined},{uploadExpiry:undefined},
