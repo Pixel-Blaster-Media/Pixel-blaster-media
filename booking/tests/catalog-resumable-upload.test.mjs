@@ -36,9 +36,56 @@ test('tus provisioning pins length/duration/origin, verifies provider restrictio
  assert.equal(calls[0].init.headers['Tus-Resumable'],'1.0.0');
  const meta=Object.fromEntries(calls[0].init.headers['Upload-Metadata'].split(',').map(p=>{const [k,v]=p.split(' ');return [k,Buffer.from(v,'base64').toString()]}));
  assert.equal(meta.maxDurationSeconds,'600');assert.equal(meta.expiry,expiresAt);
- assert.deepEqual(JSON.parse(meta.allowedorigins),['pixelblastermedia.com']);assert.equal(meta.catalogUploadClaimId,claim);
+ assert.equal(meta.allowedorigins,'pixelblastermedia.com');assert.equal(meta.catalogUploadClaimId,claim);
  assert.equal(calls[0].init.headers['Upload-Creator'],claim);
  assert.equal(calls[1].url.endsWith('/'+uid),true);
+});
+
+test('tus origin metadata round-trips as a domain list, without JSON punctuation',async()=>{
+ const expiresAt=new Date(Date.now()+3600_000).toISOString();
+ let retainedOrigins,originEntry;const methods=[];
+ const result=await core.createStreamTusUpload({name:"One'er",operationId:claim,size:227010474,expiresAt,env,
+  fetchImpl:async(url,init)=>{
+   methods.push(init.method??'GET');
+   if(init.method==='POST'){
+    assert.equal(init.body,undefined);assert.equal(init.headers['Upload-Length'],'227010474');
+    originEntry=init.headers['Upload-Metadata'].split(',').find(value=>value.startsWith('allowedorigins '));
+    // A single-domain list has the exact UTF-8/base64 bytes below. The provider list
+    // decoder must not need JSON.parse: JSON brackets/quotes become part of a domain.
+    retainedOrigins=Buffer.from(originEntry.slice('allowedorigins '.length),'base64').toString('utf8').split(',');
+    return new Response(null,{status:201,headers:{Location:'https://upload.videodelivery.net/mock-capability','stream-media-id':uid}});
+   }
+   assert.equal(url.endsWith('/'+uid),true);
+   return Response.json({success:true,result:{uid,allowedOrigins:retainedOrigins,maxDurationSeconds:600,
+    uploadExpiry:expiresAt,creator:claim,meta:{catalogUploadClaimId:claim}}});
+  }});
+ assert.equal(originEntry,'allowedorigins cGl4ZWxibGFzdGVybWVkaWEuY29t');
+ assert.deepEqual(retainedOrigins,['pixelblastermedia.com']);
+ assert.deepEqual(methods,['POST','GET']);assert.equal(result.uid,uid);
+});
+
+test('origin encoding repair still rejects missing, malformed, widened and different retained restrictions',async()=>{
+ const expiresAt=new Date(Date.now()+3600_000).toISOString();
+ const rejected=[undefined,null,[],['*'],['*.pixelblastermedia.com'],['www.pixelblastermedia.com'],
+  ['https://pixelblastermedia.com'],['pixelblastermedia.com.attacker.test'],
+  ['pixelblastermedia.com','attacker.test'],['pixelblastermedia.com','pixelblastermedia.com'],
+  ['["pixelblastermedia.com"]'],'pixelblastermedia.com'];
+ for(const allowedOrigins of rejected){
+  let calls=0;
+  await assert.rejects(core.createStreamTusUpload({name:'Sample',operationId:claim,size:227010474,expiresAt,env,
+   fetchImpl:async()=>++calls===1
+    ?new Response(null,{status:201,headers:{Location:'https://upload.videodelivery.net/never-expose-capability','stream-media-id':uid}})
+    :Response.json({success:true,result:{uid,allowedOrigins,maxDurationSeconds:600,uploadExpiry:expiresAt,
+      creator:claim,meta:{catalogUploadClaimId:claim}}})}),error=>{
+    assert.equal(error.outcome,'ambiguous');assert.equal(error.streamUid,uid);
+    assert.equal(error.diagnostic.stage,'restriction_verification');
+    assert.equal(error.diagnostic.checks.allowedOrigin,false);
+    assert.equal(Object.values(error.diagnostic.checks).filter(value=>!value).length,1);
+    assert.doesNotMatch(JSON.stringify(error),/never-expose-capability|mock-only-token|attacker/);
+    return true;
+   });
+  assert.equal(calls,2);
+ }
 });
 
 test('provider ambiguity/restriction mismatch withholds capability and preserves known UID for cleanup',async()=>{
