@@ -1,6 +1,7 @@
-// One specifically approved support operation. Never generate a replacement on retry.
-export const PREPARATION_CHECK_SOURCE = "aeaf49ad-614a-48e9-b5bb-df74be933f67";
-export const PREPARATION_CHECK_OPERATION = "b02f0969-4523-4c3b-afd5-28713cffcd01";
+// One newly approved post-fix operation, sourced from the consumed diagnostic.
+// Prior operation IDs and reports remain consumed. Never generate an ID on retry.
+export const PREPARATION_CHECK_SOURCE = "b02f0969-4523-4c3b-afd5-28713cffcd01";
+export const PREPARATION_CHECK_OPERATION = "1e2d1c53-403a-40cc-a108-5cbce90bcafc";
 export const PREPARATION_CHECK_STORAGE = `pixel-blaster-preparation-only:${PREPARATION_CHECK_OPERATION}`;
 
 const stages = ["provider_create", "capability_validation", "provider_read", "restriction_verification"];
