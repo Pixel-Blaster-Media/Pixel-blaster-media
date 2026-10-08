@@ -29,7 +29,7 @@ export default async function PreparationCheckPage({ searchParams }: { searchPar
     <Link href="/admin/settings/pricing" className="text-sm font-semibold text-realtor-primary">← Services & pricing</Link>
     <header>
       <h1 className="text-3xl font-semibold text-realtor-text">Upload preparation check</h1>
-      <p className="mt-3 text-sm leading-6 text-realtor-muted">Run the single approved test for your earlier video upload. This checks whether Cloudflare can prepare the upload and keeps the result for review.</p>
+      <p className="mt-3 text-sm leading-6 text-realtor-muted">Run the newly approved test after the upload preparation repair. The previous test remains closed. This checks whether Cloudflare can prepare the upload and keeps the result for review.</p>
     </header>
     {available && source.data ? <PreparationCheck title={title.trim()} catalogItemId={source.data.catalog_item_id!}
       size={source.data.upload_size!} fingerprint={source.data.upload_fingerprint!} alreadyAttempted={Boolean(operation.data)} />

@@ -58,14 +58,14 @@ export default function PreparationCheck(props: Props) {
   return <div className="space-y-5 rounded-2xl border border-realtor-primary/15 bg-realtor-surface p-6">
     <div><h2 className="text-lg font-semibold">{props.title}</h2><p className="mt-1 text-sm text-realtor-muted">Original file: {(props.size / 1_000_000).toFixed(1)} MB</p></div>
     <ul className="list-disc space-y-2 pl-5 text-sm leading-6">
-      <li>One preparation request, using up to 10 minutes of your existing Stream allowance.</li>
+      <li>One preparation request, using up to 10 minutes of your existing Stream allowance. Confirm that capacity is available before starting.</li>
       <li>No video file is needed and no video bytes will be sent.</li>
       <li>No payment or plan changes. The test will not retry or start another copy.</li>
     </ul>
     {phase === "checking" ? <p role="status" className="text-sm">Checking whether this test has already run…</p> : null}
     {phase === "ready" || phase === "running" ? <button type="button" disabled={phase === "running"}
       onClick={() => void run()} className="tap-target rounded-full bg-realtor-primary px-5 py-3 text-sm font-semibold text-white disabled:opacity-60">
-      {phase === "running" ? "Checking preparation…" : "Run preparation test"}</button> : null}
+      {phase === "running" ? "Checking preparation…" : "Run new preparation test"}</button> : null}
     {phase === "running" ? <p role="status" className="text-sm">Keep this page open. Only preparation metadata is being sent.</p> : null}
     {phase === "locked" ? <p role="status" className="text-sm">This test has already been attempted. It cannot run again. Share this message so the existing operation can be reviewed.</p> : null}
     {phase === "unavailable" ? <p role="alert" className="text-sm">Your browser could not save the one-attempt lock. No preparation request was sent. Share this message for help.</p> : null}
