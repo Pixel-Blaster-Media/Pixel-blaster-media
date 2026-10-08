@@ -4,10 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import type { UploadOptions } from "tus-js-client";
 import { catalogFileFingerprint, CATALOG_UPLOAD_CHUNK_BYTES, validCatalogUploadSize } from "@/lib/booking/catalog-upload-policy";
 import { configureCatalogUploadRequest } from "@/lib/booking/catalog-upload-transport";
+import { waitForCatalogVideoCompletion } from "@/lib/booking/catalog-video-completion";
 import { deleteCatalogExample } from "./example-actions";
 
 type Transfer = { start(): void; abort(terminate?: boolean): Promise<void> };
-type Phase = "idle" | "preparing" | "uploading" | "paused" | "processing" | "processing_pending" | "cancelling" | "cancel_failed";
+type Phase = "idle" | "preparing" | "uploading" | "paused" | "processing" | "processing_pending" | "processing_blocked" | "complete" | "cancelling" | "cancel_failed";
 type Props = {
   catalogItemId: string; onBusyChange: (message: string | null) => void; onComplete: () => void;
   createTransfer?: (file: File, options: UploadOptions) => Promise<Transfer>;
@@ -29,7 +30,10 @@ export default function CatalogVideoUploader(props: Props) {
   const phaseRef = useRef<Phase>("idle");
   const [percent, setPercent] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const transfer = useRef<Transfer | null>(null);
+  const completion = useRef<AbortController | null>(null);
+  const bytesReceived = useRef(false);
   const exampleId = useRef<string | null>(null);
   const expiry = useRef(0);
   const alive = useRef(true);
@@ -38,8 +42,18 @@ export default function CatalogVideoUploader(props: Props) {
   callbacks.current = props;
   useEffect(() => {
     alive.current = true;
+    const pauseVerification = () => {
+      if (!completion.current) return;
+      completion.current.abort(); completion.current = null;
+      phaseRef.current = "processing_pending"; setPhase("processing_pending");
+      setNotice("Video verification paused. Use Check processing when you return; you do not need to upload again.");
+      callbacks.current.onBusyChange(null);
+    };
+    if (typeof window !== "undefined") window.addEventListener("pagehide", pauseVerification);
     return () => {
+      if (typeof window !== "undefined") window.removeEventListener("pagehide", pauseVerification);
       alive.current = false; generation.current += 1;
+      completion.current?.abort(); completion.current = null;
       void transfer.current?.abort();
       callbacks.current.onBusyChange(null);
     };
@@ -50,34 +64,35 @@ export default function CatalogVideoUploader(props: Props) {
     setPhase(next); callbacks.current.onBusyChange(label);
   };
   const checkProcessing = async () => {
+    if (!exampleId.current || completion.current || phaseRef.current === "complete") return;
+    const controller = new AbortController();
+    completion.current = controller;
     const run = generation.current;
-    setError(null); changePhase("processing", "Processing video…");
-    for (let attempt = 0; attempt < 40 && alive.current && generation.current === run; attempt += 1) {
-      try {
-        const response = await fetch(`/api/admin/catalog-examples/${encodeURIComponent(exampleId.current!)}/complete`, {
-          method: "POST", signal: AbortSignal.timeout(15_000),
-        });
-        const body = await responseJson(response);
-        if (!alive.current || generation.current !== run) return;
-        if (response.ok && body.ok === true) {
-          callbacks.current.onBusyChange(null); callbacks.current.onComplete(); return;
-        }
-        if (response.status !== 202) throw new Error(typeof body.error === "string" ? body.error : "Could not check processing yet.");
-      } catch (caught) {
-        if (!alive.current || generation.current !== run) return;
-        setError(caught instanceof Error ? caught.message : "Could not check processing yet.");
-        changePhase("processing_pending", null); return;
-      }
-      await new Promise(resolve => setTimeout(resolve, 3000));
+    setError(null); setNotice("Upload received. Checking video status…");
+    changePhase("processing", "Checking video status…");
+    const result = await waitForCatalogVideoCompletion(exampleId.current, {
+      signal: controller.signal,
+      onPending: message => {
+        if (alive.current && generation.current === run && !controller.signal.aborted) setNotice(message);
+      },
+    });
+    if (completion.current === controller) completion.current = null;
+    if (!alive.current || generation.current !== run || controller.signal.aborted || result.status === "cancelled") return;
+    if (result.status === "ready") {
+      changePhase("complete", null); callbacks.current.onComplete(); return;
     }
-    if (alive.current && generation.current === run) changePhase("processing_pending", null);
+    if (result.status === "pending") {
+      setNotice(result.message); changePhase("processing_pending", null);
+    } else {
+      setNotice(null); setError(result.message); changePhase("processing_blocked", null);
+    }
   };
   const start = async () => {
     if (phaseRef.current !== "idle") return;
     if (!file || !file.type.startsWith("video/")) return setError("Choose a video file.");
     if (!title.trim()) return setError("Add a title for the example.");
     if (!validCatalogUploadSize(file.size)) return setError("Video uploads must be 1 GB or smaller.");
-    setError(null); setPercent(0);
+    setError(null); setNotice(null); setPercent(0); bytesReceived.current = false;
     const run = ++generation.current;
     changePhase("preparing", "Preparing secure upload…");
     try {
@@ -109,15 +124,16 @@ export default function CatalogVideoUploader(props: Props) {
           return status === 0 || status === 408 || status === 409 || status === 429 || status >= 500;
         },
         onProgress(sent, total) {
-          if (alive.current && generation.current === run && total > 0) setPercent(Math.max(0, Math.min(100, Math.floor(sent / total * 100))));
+          if (alive.current && generation.current === run && !bytesReceived.current && total > 0) setPercent(Math.max(0, Math.min(100, Math.floor(sent / total * 100))));
         },
         onError() {
-          if (!alive.current || generation.current !== run) return;
+          if (!alive.current || generation.current !== run || bytesReceived.current) return;
           setError("The upload stopped. Resume to retry. If the link expired, cancel and start again.");
           changePhase("paused", "Upload paused.");
         },
         onSuccess() {
-          if (!alive.current || generation.current !== run) return;
+          if (!alive.current || generation.current !== run || bytesReceived.current) return;
+          bytesReceived.current = true;
           setPercent(100); void checkProcessing();
         },
       });
@@ -135,12 +151,14 @@ export default function CatalogVideoUploader(props: Props) {
     catch { setError("Could not pause the upload. Try again."); }
   };
   const resume = () => {
+    if (phaseRef.current !== "paused" || bytesReceived.current) return;
     if (Date.now() >= expiry.current) return setError("This upload expired. Cancel it before starting again.");
     setError(null); changePhase("uploading", "Resuming video upload…"); transfer.current?.start();
   };
   const cancel = async () => {
-    if (!exampleId.current) return;
+    if (!exampleId.current || bytesReceived.current) return;
     generation.current += 1; changePhase("cancelling", "Cancelling upload…");
+    completion.current?.abort(); completion.current = null;
     try {
       await transfer.current?.abort();
       const result = await deleteCatalogExample(exampleId.current);
@@ -151,6 +169,13 @@ export default function CatalogVideoUploader(props: Props) {
       if (!alive.current) return;
       setError(caught instanceof Error ? caught.message : "Could not cancel the upload."); changePhase("cancel_failed", null);
     }
+  };
+  const close = () => {
+    if (phaseRef.current === "complete") return;
+    generation.current += 1;
+    completion.current?.abort(); completion.current = null;
+    changePhase("complete", null);
+    callbacks.current.onComplete();
   };
   const locked = phase !== "idle";
   return <form onSubmit={event => { event.preventDefault(); void start(); }} className="mt-3 grid min-w-0 gap-3 border-t border-realtor-primary/10 pt-3">
@@ -172,10 +197,10 @@ export default function CatalogVideoUploader(props: Props) {
       {phase === "uploading" ? <button type="button" onClick={() => void pause()} className="tap-target rounded-full border px-4 py-2 text-xs">Pause upload</button> : null}
       {phase === "paused" ? <button type="button" onClick={resume} className="tap-target rounded-full border px-4 py-2 text-xs">Resume upload</button> : null}
       {phase === "processing_pending" ? <button type="button" onClick={() => void checkProcessing()} className="tap-target rounded-full border px-4 py-2 text-xs">Check processing</button> : null}
-      {phase === "cancel_failed" ? <button type="button" onClick={() => callbacks.current.onComplete()} className="tap-target rounded-full border px-4 py-2 text-xs">Close uploader</button> : null}
-      {exampleId.current && !["preparing", "cancelling"].includes(phase) ? <button type="button" onClick={() => void cancel()} className="tap-target rounded-full border px-4 py-2 text-xs">Cancel upload</button> : null}
+      {["processing", "processing_pending", "processing_blocked", "cancel_failed"].includes(phase) ? <button type="button" onClick={close} className="tap-target rounded-full border px-4 py-2 text-xs">Close uploader</button> : null}
+      {exampleId.current && !bytesReceived.current && !["preparing", "cancelling", "complete"].includes(phase) ? <button type="button" onClick={() => void cancel()} className="tap-target rounded-full border px-4 py-2 text-xs">Cancel upload</button> : null}
     </div>
-    {phase === "processing_pending" ? <p role="status" className="text-xs">Your upload was received. It stays hidden until processing finishes. Check again shortly.</p> : null}
+    {notice ? <p role="status" aria-live="polite" className="text-xs text-realtor-muted">{notice}</p> : null}
     {error ? <p role="alert" className="text-xs text-red-700">{error}</p> : null}
   </form>;
 }

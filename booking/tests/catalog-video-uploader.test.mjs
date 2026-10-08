@@ -7,17 +7,19 @@ import {loadSource} from './helpers/source-module.mjs';
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 const policy=loadSource('lib/booking/catalog-upload-policy.ts');
 const transport=loadSource('lib/booking/catalog-upload-transport.ts');
-async function setup({prepareError=false,cancelError=false}={}){
+const completion=loadSource('lib/booking/catalog-video-completion.ts',{}, {AbortController,setTimeout,clearTimeout});
+async function setup({prepareError=false,cancelError=false,completionReply}={}){
  const requests=[],busy=[];let options,starts=0,aborts=0,complete=0;
+ const fetch=async(url,init)=>{requests.push({url,init});if(url.endsWith('/complete'))return completionReply?.(url,init)??Response.json({error:'Mock check unavailable'},{status:503});
+  if(prepareError)return Response.json({error:'Mock preparation rejected'},{status:503});
+  return Response.json({exampleId:'owned-example',uploadUrl:'https://upload.videodelivery.net/mock',expiresAt:new Date(Date.now()+3600_000).toISOString(),resumed:false});};
  const Uploader=loadSource('app/admin/settings/pricing/CatalogVideoUploader.tsx',{
   react:React,'react/jsx-runtime':jsxRuntime,
   '@/lib/booking/catalog-upload-policy':{...policy,catalogFileFingerprint:async()=> 'a'.repeat(64)},
   '@/lib/booking/catalog-upload-transport':transport,
+  '@/lib/booking/catalog-video-completion':{waitForCatalogVideoCompletion:(id,opts)=>completion.waitForCatalogVideoCompletion(id,{...opts,fetchImpl:fetch,sleep:async()=>{}})},
   './example-actions':{deleteCatalogExample:async id=>{requests.push({cancel:id});return cancelError?{ok:false,error:'Mock cancellation failed'}:{ok:true};}},
- },{AbortSignal,crypto,setTimeout,XMLHttpRequest:undefined,
-  fetch:async(url,init)=>{requests.push({url,init});if(url.endsWith('/complete'))return Response.json({error:'Mock check unavailable'},{status:503});
-   if(prepareError)return Response.json({error:'Mock preparation rejected'},{status:503});
-   return Response.json({exampleId:'owned-example',uploadUrl:'https://upload.videodelivery.net/mock',expiresAt:new Date(Date.now()+3600_000).toISOString(),resumed:false});},
+ },{AbortSignal,AbortController,crypto,setTimeout,XMLHttpRequest:undefined,fetch,
  }).default;
  let tree;await act(async()=>{tree=Renderer.create(React.createElement(React.StrictMode,null,React.createElement(Uploader,{
   catalogItemId:'owned-catalog',onBusyChange:x=>busy.push(x),onComplete:()=>{complete++},
@@ -57,4 +59,54 @@ test('oversize and blank title fail before reservation; preparation failure unlo
  await act(async()=>{a.file(500_000_000);a.title('   ')});await act(async()=>a.submit());assert.equal(a.requests.length,0);
  await act(async()=>a.title('Sample video'));await act(async()=>a.submit());assert.equal(a.starts,0);assert.ok(a.button('Upload video'));assert.equal(a.busy.at(-1),null);
  await act(async()=>a.tree.unmount());
+});
+
+test('auth outage and non-JSON response recover to ready without another preparation or transfer',async()=>{
+ let checks=0;
+ const a=await setup({completionReply:()=> ++checks===1
+  ? Response.json({retryable:true,code:'authentication_unavailable'},{status:503})
+  : checks===2?new Response('<html>Unavailable</html>'):Response.json({ok:true,status:'ready'})});
+ await act(async()=>{a.submit();a.submit()});
+ await act(async()=>{a.options.onSuccess();a.options.onSuccess()});
+ assert.equal(checks,3);assert.equal(a.complete,1);assert.equal(a.starts,1);
+ assert.equal(a.requests.filter(r=>r.url==='/api/admin/catalog-examples/upload').length,1);
+ await act(async()=>{a.options.onError();a.options.onSuccess();a.options.onProgress(1,2)});
+ assert.equal(a.button('Resume upload'),undefined);assert.equal(a.button('Cancel upload'),undefined);
+ assert.equal(a.complete,1);assert.equal(a.tree.root.findByType('progress').props.value,100);
+ await act(async()=>a.tree.unmount());
+});
+
+test('verification pending is a status notice, repeated check clicks share one run, and close never deletes',async()=>{
+ let resolveCheck,checking=false;
+ const a=await setup({completionReply:()=> checking?new Promise(r=>{resolveCheck=r}):Response.json({retryable:true},{status:503})});
+ await act(async()=>a.submit());await act(async()=>a.options.onSuccess());
+ assert.equal(a.tree.root.findAll(n=>n.props.role==='alert').length,0);
+ assert.match(a.tree.root.findByProps({role:'status'}).children.join(''),/verification is still pending/);
+ assert.equal(a.button('Cancel upload'),undefined);
+ checking=true;const check=a.button('Check processing').props.onClick;
+ await act(async()=>{check();check()});
+ const checks=a.requests.filter(r=>r.url?.endsWith('/complete'));
+ assert.equal(checks.length,4);
+ const close=a.button('Close uploader').props.onClick;
+ await act(async()=>{close();close()});
+ assert.equal(checks.at(-1).init.signal.aborted,true);assert.equal(a.complete,1);
+ await act(async()=>resolveCheck(Response.json({ok:true,status:'ready'})));
+ assert.equal(a.complete,1);assert.equal(a.starts,1);assert.equal(a.requests.some(r=>r.cancel),false);
+ await act(async()=>a.tree.unmount());
+});
+
+test('permission denial stops checks; refresh/back unmount prevents stale completion callbacks',async()=>{
+ const denied=await setup({completionReply:()=>Response.json({retryable:true},{status:403})});
+ await act(async()=>denied.submit());await act(async()=>denied.options.onSuccess());
+ assert.equal(denied.requests.filter(r=>r.url?.endsWith('/complete')).length,1);
+ assert.match(denied.tree.root.findByProps({role:'alert'}).children.join(''),/permission/);
+ assert.equal(denied.button('Check processing'),undefined);assert.equal(denied.button('Resume upload'),undefined);
+ await act(async()=>denied.tree.unmount());
+ let resolveCheck;
+ const a=await setup({completionReply:()=>new Promise(r=>{resolveCheck=r})});
+ await act(async()=>a.submit());await act(async()=>a.options.onSuccess());
+ const request=a.requests.at(-1);await act(async()=>a.tree.unmount());
+ assert.equal(request.init.signal.aborted,true);
+ await act(async()=>resolveCheck(Response.json({ok:true,status:'ready'})));
+ assert.equal(a.complete,0);assert.equal(a.starts,1);assert.equal(a.requests.some(r=>r.cancel),false);
 });

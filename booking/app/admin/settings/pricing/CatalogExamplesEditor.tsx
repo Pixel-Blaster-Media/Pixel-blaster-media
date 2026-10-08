@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+
+import { waitForCatalogVideoCompletion } from "@/lib/booking/catalog-video-completion";
 
 import type {
   CatalogItemExampleAdminRow,
@@ -44,6 +46,21 @@ export default function CatalogExamplesEditor({
   const [photoApproved, setPhotoApproved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
+  const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
+  const completion = useRef<AbortController | null>(null);
+  useEffect(() => {
+    const pauseVerification = () => {
+      if (!completion.current) return;
+      completion.current.abort(); completion.current = null;
+      setProgress(null);
+      setVerificationNotice("Video verification paused. Use Check processing when you return.");
+    };
+    if (typeof window !== "undefined") window.addEventListener("pagehide", pauseVerification);
+    return () => {
+      if (typeof window !== "undefined") window.removeEventListener("pagehide", pauseVerification);
+      completion.current?.abort(); completion.current = null;
+    };
+  }, []);
   const [pending, startTransition] = useTransition();
   const attachedSources = new Set(examples.map((example) => example.source_example_id));
   const availableReusableVideos = reusableVideos.filter(
@@ -101,15 +118,29 @@ export default function CatalogExamplesEditor({
   };
 
   const checkProcessing = async (exampleId: string) => {
+    if (completion.current) return;
+    const controller = new AbortController();
+    completion.current = controller;
     setError(null);
-    setProgress("Checking video processing…");
-    try {
-      await waitUntilReady(exampleId);
-      setProgress(null);
+    setVerificationNotice(null);
+    setProgress("Checking video status…");
+    const result = await waitForCatalogVideoCompletion(exampleId, {
+      signal: controller.signal,
+      onPending: message => {
+        if (!controller.signal.aborted) setVerificationNotice(message);
+      },
+    });
+    if (completion.current === controller) completion.current = null;
+    if (controller.signal.aborted || result.status === "cancelled") return;
+    setProgress(null);
+    if (result.status === "ready") {
+      setVerificationNotice(null);
       router.refresh();
-    } catch (caught) {
-      setProgress(null);
-      setError(caught instanceof Error ? caught.message : "Could not check video processing.");
+    } else if (result.status === "pending") {
+      setVerificationNotice(result.message);
+    } else {
+      setVerificationNotice(null);
+      setError(result.message);
     }
   };
 
@@ -206,7 +237,7 @@ export default function CatalogExamplesEditor({
                 ) : null}
                 <button
                   type="button"
-                  disabled={pending}
+                  disabled={pending || Boolean(progress)}
                   onClick={() => {
                     const prompt = example.is_shared
                       ? `Unlink “${example.title}” from this service? The uploaded video will remain available elsewhere.`
@@ -377,6 +408,7 @@ export default function CatalogExamplesEditor({
         </p>
       ) : null}
       {error ? <p role="alert" className="mt-3 text-xs text-red-700">{error}</p> : null}
+      {verificationNotice ? <p role="status" aria-live="polite" className="mt-3 text-xs text-realtor-muted">{verificationNotice}</p> : null}
     </section>
   );
 }
@@ -388,32 +420,4 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </label>
   );
-}
-
-async function waitUntilReady(exampleId: string): Promise<void> {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    const response = await fetch(`/api/admin/catalog-examples/${encodeURIComponent(exampleId)}/complete`, {
-      method: "POST",
-    });
-    const body = await safeJson(response);
-    if (response.ok && body.ok === true) return;
-    if (response.status !== 202) throw new Error(message(body, "Could not finish video processing."));
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-  }
-  throw new Error("The video is still processing. It remains hidden; use Check processing again shortly.");
-}
-
-async function safeJson(response: Response): Promise<Record<string, unknown>> {
-  try {
-    const value: unknown = await response.json();
-    return value && typeof value === "object" && !Array.isArray(value)
-      ? value as Record<string, unknown>
-      : {};
-  } catch {
-    return {};
-  }
-}
-
-function message(body: Record<string, unknown>, fallback: string): string {
-  return typeof body.error === "string" ? body.error : fallback;
 }

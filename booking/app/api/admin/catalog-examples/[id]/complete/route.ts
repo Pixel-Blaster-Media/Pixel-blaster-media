@@ -1,7 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { AdminAccessError, requireAdmin } from "@/lib/auth/require-admin";
 import { getStreamVideoDetails } from "@/lib/booking/catalog-examples-core";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
@@ -12,8 +12,8 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const admin = await requireAdmin();
   try {
+    const admin = await requireAdmin("json");
     const { id } = await params;
     const supabase = getServiceSupabase();
     const { data: example, error } = await supabase
@@ -23,7 +23,8 @@ export async function POST(
       .eq("organization_id", admin.organizationId)
       .eq("source_type", "cloudflare_stream")
       .maybeSingle();
-    if (error || !example?.stream_uid) return jsonError("Video example not found.", 404);
+    if (error) return verificationPending("Could not read the video status yet.");
+    if (!example?.stream_uid) return jsonError("Video example not found.", 404);
     if (example.status === "failed") return jsonError("Cloudflare could not process that video.", 422);
     if (example.status !== "uploading" && example.status !== "ready") {
       return jsonError("Video example is no longer processing.", 409);
@@ -45,7 +46,8 @@ export async function POST(
             p_outcome: "failed",
           },
         );
-        if (finalizeError || finalized !== true) {
+        if (finalizeError) return verificationPending("Could not confirm the video status yet.");
+        if (finalized !== true) {
           return jsonError("Could not safely finalize the video example.", 409);
         }
       }
@@ -54,7 +56,7 @@ export async function POST(
       return jsonError("Cloudflare could not process that video.", 422);
     }
     if (details.width === null || details.height === null) {
-      return jsonError("Cloudflare did not return usable video dimensions.", 503);
+      return verificationPending("Cloudflare has not returned usable video dimensions yet.");
     }
 
     const operation = example.status === "uploading"
@@ -70,20 +72,39 @@ export async function POST(
         p_video_height: details.height,
       },
     );
-    if (recordError || recorded !== true) {
+    if (recordError) return verificationPending("Could not confirm the video details yet.");
+    if (recorded !== true) {
       return jsonError("Could not safely record the video dimensions.", 409);
     }
 
     revalidatePath("/admin/settings/pricing");
     revalidatePath("/book");
     return NextResponse.json({ ok: true, status: "ready" }, { headers: noStoreHeaders() });
-  } catch {
-    return jsonError("Could not check the video yet.", 503);
+  } catch (error) {
+    if (error instanceof AdminAccessError) {
+      if (error.kind === "unavailable") {
+        return verificationPending("Could not verify your access yet.", "authentication_unavailable");
+      }
+      return jsonError(
+        error.kind === "unauthenticated"
+          ? "Sign in again, then check this video's status. You do not need to upload it again."
+          : "You do not have permission to check this video.",
+        error.kind === "unauthenticated" ? 401 : 403,
+      );
+    }
+    return verificationPending("Could not check the video yet.");
   }
 }
 
 function jsonError(error: string, status: number) {
-  return NextResponse.json({ error }, { status, headers: noStoreHeaders() });
+  return NextResponse.json({ error, retryable: false }, { status, headers: noStoreHeaders() });
+}
+
+function verificationPending(error: string, code = "verification_unavailable") {
+  return NextResponse.json(
+    { status: "verification_pending", error, code, retryable: true },
+    { status: 503, headers: { ...noStoreHeaders(), "Retry-After": "3" } },
+  );
 }
 
 function noStoreHeaders() {

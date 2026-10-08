@@ -32,6 +32,7 @@ test('admin editor exposes configurable empty photo gallery and submits explicit
  const Editor=loadSource('app/admin/settings/pricing/CatalogExamplesEditor.tsx',{
   react:React,'react/jsx-runtime':jsxRuntime,'./CatalogVideoUploader':{default:MockUploader},'next/navigation':{useRouter:()=>({refresh(){}})},
   '@/lib/booking/catalog-sample-groups':groups,
+  '@/lib/booking/catalog-video-completion':{waitForCatalogVideoCompletion:async()=>{throw Error('Photo editing must not check videos');}},
   './example-actions':{attachCatalogExample:async f=>{sent.push(Object.fromEntries(f));return {ok:true};},attachSharedCatalogVideo:async()=>({ok:true}),deleteCatalogExample:async()=>({ok:true}),removeSharedCatalogVideoPlacement:async()=>({ok:true})},
  },{FormData}).default;let tree;
  try{
