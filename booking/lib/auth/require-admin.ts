@@ -22,35 +22,51 @@ interface AdminMembershipRow {
   role: "owner" | "admin";
 }
 
+export class AdminAccessError extends Error {
+  constructor(readonly kind: "unauthenticated" | "forbidden" | "unavailable") {
+    super("Admin access could not be verified.");
+    this.name = "AdminAccessError";
+  }
+}
+
+function rejectApiAccess(mode: "json" | undefined, kind: AdminAccessError["kind"]) {
+  if (mode === "json") throw new AdminAccessError(kind);
+}
+
 /**
  * Verifies authoritative identity, active profile, and privileged membership.
  * React request caching keeps layout and page guards present while collapsing
  * their repeated verification and tenant-membership reads.
  */
-export const requireAdmin = cache(async function requireAdmin(): Promise<AdminContext> {
+export const requireAdmin = cache(async function requireAdmin(mode?: "json"): Promise<AdminContext> {
   const inherited = getVerifiedAdminActionContext();
   if (inherited) return inherited;
 
   const current = await getCurrentUserResult();
 
   if (current.kind === "missing") {
+    rejectApiAccess(mode, "unauthenticated");
     redirect(await adminAuthPath("/auth/sign-in"));
   }
   if (current.kind === "invalid") {
+    rejectApiAccess(mode, "unauthenticated");
     redirect(await adminAuthPath("/auth/session-invalid"));
   }
   if (current.kind === "unavailable") {
     console.error("[auth] admin verification unavailable");
+    rejectApiAccess(mode, "unavailable");
     redirect("/auth/access-unavailable");
   }
   if (current.kind === "no_workspace") {
     console.warn("[auth] no active profile for authenticated user");
+    rejectApiAccess(mode, "forbidden");
     redirect("/auth/no-workspace");
   }
 
   const profile = current.profile;
   if (profile.archivedAt) {
     console.warn("[auth] archived user tried to access the admin workspace", profile.userId);
+    rejectApiAccess(mode, "forbidden");
     redirect("/auth/no-workspace");
   }
 
@@ -65,9 +81,11 @@ export const requireAdmin = cache(async function requireAdmin(): Promise<AdminCo
 
   if (membershipError) {
     console.error("[auth] admin membership lookup failed", membershipError.code);
+    rejectApiAccess(mode, "unavailable");
     redirect("/auth/access-unavailable");
   }
   if (!membership) {
+    rejectApiAccess(mode, "forbidden");
     redirect(profile.role === "realtor" ? "/portal" : "/auth/no-workspace");
   }
 
