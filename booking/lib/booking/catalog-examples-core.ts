@@ -323,7 +323,9 @@ export async function createStreamTusUpload(input: {
   const fetchImpl = input.fetchImpl ?? fetch;
   const metadata = Object.entries({
     name, maxDurationSeconds: String(CATALOG_VIDEO_MAX_SECONDS), expiry: input.expiresAt,
-    allowedorigins: JSON.stringify([config.allowedOrigin]), catalogUploadClaimId: input.operationId,
+    // TUS encodes a comma-separated domain list, not the JSON API's array syntax.
+    // There is exactly one configured hostname; keep provider readback strict below.
+    allowedorigins: config.allowedOrigin, catalogUploadClaimId: input.operationId,
   }).map(([key, value]) => `${key} ${Buffer.from(value).toString("base64")}`).join(",");
   let response: Response;
   try {
