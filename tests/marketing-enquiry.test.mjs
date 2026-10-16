@@ -10,6 +10,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const source = fs.readFileSync(path.join(__dirname, '../enquiry.js'), 'utf8');
 const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
 
+test('corporate and brand enquiries have a selectable project type', () => {
+  const select = html.match(/<select name="type"[^>]*>([\s\S]*?)<\/select>/)[1];
+  const options = [...select.matchAll(/<option\b[^>]*>([^<]*)<\/option>/g)].map(match => match[1]);
+  assert.ok(options.includes('Corporate &amp; brand'));
+  assert.equal(options.length, 6, 'placeholder plus five supported project types');
+});
+
 class Element {
   constructor() { this.events = {}; this.dataset = {}; this.hidden = false; this.disabled = false; this.textContent = ''; this.attributes = {}; this.focusCount = 0; }
   addEventListener(event, fn) { (this.events[event] ||= []).push(fn); }
