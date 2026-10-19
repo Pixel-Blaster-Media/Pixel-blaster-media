@@ -59,8 +59,8 @@ path created the reported appointment. The finding is from the code path.
 
 ## Activation after review
 
-1. Review this local candidate before publishing. No branch has been pushed or PR
-   created during this task. Any eventual PR should remain draft until approved.
+1. Review the candidate and publish it through the repository's normal PR and
+   CI process. Obtain release and activation authorization before live changes.
 2. Follow `DEPLOYMENT.md` and `docs/PRODUCTION_RELEASE_EVIDENCE.md`. Verify the live
    schema and migration ledger with read-only checks. The linked dry run must
    name only `20261019130903_customer_booking_notice.sql`; do not use
