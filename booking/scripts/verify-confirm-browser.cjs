@@ -205,6 +205,7 @@ async function run() {
           id: org,
           slug: "fixture",
           name: "Fixture company",
+          require_24_hour_notice: false,
           primary_color: null,
           accent_color: null,
           logo_url: null,

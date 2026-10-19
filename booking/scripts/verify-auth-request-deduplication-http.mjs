@@ -240,6 +240,7 @@ const fakeSupabase = http.createServer(async (request, response) => {
         id: actors.primary.organizationId,
         name: "Runtime Probe Organization",
         slug: "runtime-probe",
+        require_24_hour_notice: false,
         primary_color: null,
         accent_color: null,
         logo_url: null,
