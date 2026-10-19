@@ -74,7 +74,7 @@ test("an expired lease cannot start a provider send", async () => {
   assert.equal(h.emails.length, 0);
 });
 
-function actionsHarness({ row = booking, commit = { ok: true, noticeIds: ["notice-a"] }, calendar = true, delivery = { realtorNotified: false, warning: "Email pending." }, free = true } = {}) {
+function actionsHarness({ noticeError = null, row = booking, commit = { ok: true, noticeIds: ["notice-a"] }, calendar = true, delivery = { realtorNotified: false, warning: "Email pending." }, free = true } = {}) {
   const calls = [], queries = [];
   const lifecycle = {
     lifecycleNotice: (recipient, _settings, message) => ({ recipient, payload: message }),
@@ -82,6 +82,8 @@ function actionsHarness({ row = booking, commit = { ok: true, noticeIds: ["notic
     deliverChangedBookingNotices: async (args) => { calls.push(["delivery", args]); return delivery; },
   };
   const dependencies = {
+    "@/lib/booking/notice-settings": { customerBookingNoticeError: async () => noticeError },
+    "@/lib/booking/notice-policy": loadSource("lib/booking/notice-policy.ts"),
     "@/lib/booking/availability": { BUSINESS_TZ: "America/Toronto", isSlotAvailable: async (...args) => { calls.push(["availability", ...args]); return free; } },
     "@/lib/booking/booking-status": { isCancellable },
     "@/lib/booking/calendar-event-service": { syncStoredBookingGoogleCalendarEvent: async () => { calls.push(["calendar"]); return { ok: calendar }; } },
@@ -174,4 +176,19 @@ test("admin notice status is tenant-scoped, private and honest about provider ac
   assert.match(html, /Accepted by email provider/);
   assert.match(html, /Delivery unconfirmed/);
   assert.match(html, /Check the email provider for a receipt/);
+});
+
+test('customer reschedule notice rejection leaves booking and providers untouched', async () => {
+  const h = actionsHarness({ noticeError: 'Please choose a shoot time at least 24 hours from now.' });
+  const result = await h.manage.rescheduleManagedBooking('signed', '2090-01-02T15:00:00Z');
+  assert.equal(result.ok, false);
+  assert.match(result.error, /24 hours/);
+  assert.equal(h.calls.length, 0);
+});
+test('customer reschedule database cutoff rejection has a clear message and no provider work', async () => {
+  const h = actionsHarness({ commit: { ok: false, code: 'PB006' } });
+  const result = await h.manage.rescheduleManagedBooking('signed', '2090-01-02T15:00:00Z');
+  assert.equal(result.ok, false);
+  assert.match(result.error, /at least 24 hours from now/);
+  assert.equal(h.calls.some(([name]) => ['delivery', 'calendar', 'push'].includes(name)), false);
 });

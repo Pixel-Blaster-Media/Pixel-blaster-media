@@ -22,6 +22,8 @@ import {
 import { getActiveCatalog } from "@/lib/booking/catalog";
 import { isAddonEligible } from "@/lib/booking/catalog-rules";
 import { createManageToken } from "@/lib/booking/manage-token";
+import { customerBookingNoticeError } from "@/lib/booking/notice-settings";
+import { BOOKING_AVAILABILITY_ERROR, CUSTOMER_BOOKING_NOTICE_MESSAGE } from "@/lib/booking/notice-policy";
 
 const isCatalogAddonEligible = isAddonEligible;
 import { getAdminNotificationEmail } from "@/lib/email/settings";
@@ -312,15 +314,23 @@ export async function createPublicBooking(
   );
 
   if (!existingRequest) {
-    const stillFree = await isSlotAvailable(slotStart, duration, {
-      organizationId: organization.id,
-    });
+    const noticeError = await customerBookingNoticeError(slotStart, organization.id);
+    if (noticeError) return { ok: false, errors: { _form: noticeError } };
+    let stillFree: boolean;
+    try {
+      stillFree = await isSlotAvailable(slotStart, duration, {
+        organizationId: organization.id,
+      });
+    } catch {
+      return { ok: false, errors: { _form: BOOKING_AVAILABILITY_ERROR } };
+    }
     if (!stillFree) {
+      const latestNoticeError = await customerBookingNoticeError(slotStart, organization.id);
       return {
         ok: false,
         errors: {
           _form:
-            "That slot was just taken. Please pick another — the calendar has been refreshed.",
+            latestNoticeError ?? "That slot was just taken. Please pick another — the calendar has been refreshed.",
         },
       };
     }
@@ -403,6 +413,9 @@ export async function createPublicBooking(
     }
     if (bookErr?.code === "PB005") {
       return { ok: false, errors: { _form: BOOKING_QUOTE_CHANGED_MESSAGE } };
+    }
+    if (bookErr?.code === "PB006") {
+      return { ok: false, errors: { _form: CUSTOMER_BOOKING_NOTICE_MESSAGE } };
     }
     if (bookErr?.code === "23P01") {
       return {

@@ -2,6 +2,7 @@ import { BUSINESS_TZ } from "@/lib/booking/availability";
 import { isCancellable } from "@/lib/booking/booking-status";
 import { verifyManageToken } from "@/lib/booking/manage-token";
 import { loadSlotsForNextDays } from "@/lib/booking/slot-display";
+import { requiresCustomerBookingNotice } from "@/lib/booking/notice-settings";
 import { getOrganizationEmailSettings } from "@/lib/email/settings";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { BookingStatus } from "@/lib/supabase/database.types";
@@ -146,6 +147,7 @@ export default async function ManageBookingPage({
     SLOT_WINDOW_DAYS,
     { organizationId: booking.organization_id },
   );
+  const noticeRequired = await requiresCustomerBookingNotice(booking.organization_id);
 
   return (
     <main className="realtor-theme space-y-6">
@@ -173,6 +175,10 @@ export default async function ManageBookingPage({
           .
         </p>
       </header>
+
+      {noticeRequired ? <p className="text-sm text-realtor-muted">
+        New shoot times must be at least 24 hours from now. Your current appointment stays booked until you confirm a change.
+      </p> : null}
 
       <ManageBookingClient
         token={token}

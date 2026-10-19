@@ -10,6 +10,8 @@ import { loadSource, resultQuery } from './helpers/source-module.mjs';
 const require = createRequire(import.meta.url);
 require('tsx/cjs');
 const pure = name => name === 'booking/availability' ? loadSource('lib/booking/availability.ts', {
+  './notice-settings': { requiresCustomerBookingNotice() { throw Error('No settings I/O'); } },
+  './notice-policy': loadSource('lib/booking/notice-policy.ts'),
   '@/lib/integrations/google-calendar/client': { getGoogleCalendarClients() { throw Error('No provider I/O'); } },
   '@/lib/organizations/default': {}, '@/lib/supabase/server': { getServiceSupabase() { throw Error('No database I/O'); } },
   './services': require('../lib/booking/services.ts'), '@/lib/booking/timezone': require('../lib/booking/timezone.ts'),

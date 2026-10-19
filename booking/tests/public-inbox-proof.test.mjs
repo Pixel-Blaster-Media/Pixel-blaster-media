@@ -54,6 +54,7 @@ function fixture() {
     '@/lib/auth/provision-realtor': { provisionRealtorAuthUser: async () => { effects.push('identity'); existing = true; return { ok: true, userId: profile.id, provisioningId: 'provision-1' }; } },
     '@/lib/auth/rollback-provisioned-realtor': { rollbackProvisionedRealtor: async () => { effects.push('rollback'); return { status: 'deleted' }; } },
     '@/lib/auth/set-session-cookie': { signInWithPasswordREST: async () => { effects.push('password'); return { ok: true, tokens: { access_token: 'fake', refresh_token: 'fake' } }; }, setSupabaseSessionCookie: async () => { effects.push('cookie'); } },
+    '@/lib/booking/notice-settings': { customerBookingNoticeError: async () => null },
     '@/lib/booking/availability': { BUSINESS_TZ: 'America/Toronto', isSlotAvailable: async () => true },
     '@/lib/booking/catalog': { getActiveCatalog: async () => ({ bundles: [{ id: 'catalog-1', slug: 'blue-print', name: 'Blue Print', kind: 'bundle', duration_minutes: 60 }], addons: [], aLaCarte: [] }) },
     '@/lib/booking/catalog-rules': { isAddonEligible: () => true },
@@ -196,4 +197,52 @@ test('expired anonymous draft fails before password sign-in, session, email or b
   assert.equal(result.ok, false);
   assert.match(result.errors._form, /private booking draft expired/);
   assert.deepEqual(f.effects, []); assert.deepEqual(f.inbox, []);
+});
+
+// Notice checks execute the real booking action with only in-memory dependencies.
+for (const [label, error] of [
+  ['inside 24 hours', 'Please choose a shoot time at least 24 hours from now. Contact the studio if you need an earlier appointment.'],
+  ['settings unavailable', 'Availability is temporarily unavailable. Please try again.'],
+]) test(`public booking ${label} stops before inbox proof, auth, booking or provider work`, async () => {
+  const f = fixture();
+  f.mocks['@/lib/booking/notice-settings'].customerBookingNoticeError = async () => error;
+  const result = await f.action(null, f.form);
+  assert.equal(result.ok, false);
+  assert.equal(result.errors._form, error);
+  assert.deepEqual(f.effects, []);
+  assert.deepEqual(f.inbox, []);
+});
+
+test('database cutoff rejection after preflight returns the 24-hour explanation without dispatch', async () => {
+  const f = fixture();
+  const service = f.mocks['@/lib/supabase/server'].getServiceSupabase();
+  f.mocks['@/lib/supabase/server'].getServerSupabase = async () => service;
+  service.rpc = async name => {
+    assert.equal(name, 'create_public_booking_with_jobs_v2');
+    return { data: null, error: { code: 'PB006' } };
+  };
+  const result = await f.action(null, f.form);
+  assert.equal(result.ok, false);
+  assert.match(result.errors._form, /at least 24 hours from now/);
+  assert.equal(f.effects.includes('dispatch'), false);
+  assert.equal(f.effects.includes('identity'), false);
+  assert.deepEqual(f.inbox, []);
+});
+
+test('a slot aging out during the availability read gets the notice message', async () => {
+  const f = fixture(); let checks = 0;
+  f.mocks['@/lib/booking/notice-settings'].customerBookingNoticeError = async () => ++checks === 1 ? null : 'Please choose a shoot time at least 24 hours from now.';
+  f.mocks['@/lib/booking/availability'].isSlotAvailable = async () => false;
+  const result = await f.action(null, f.form);
+  assert.match(result.errors._form, /24 hours/);
+  assert.deepEqual(f.effects, []);
+  assert.deepEqual(f.inbox, []);
+});
+test('an unavailable settings/calendar read returns a retryable explanation without side effects', async () => {
+  const f = fixture();
+  f.mocks['@/lib/booking/availability'].isSlotAvailable = async () => { throw Error('offline'); };
+  const result = await f.action(null, f.form);
+  assert.match(result.errors._form, /temporarily unavailable/);
+  assert.deepEqual(f.effects, []);
+  assert.deepEqual(f.inbox, []);
 });

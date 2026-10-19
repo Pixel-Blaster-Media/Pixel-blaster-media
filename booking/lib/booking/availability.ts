@@ -4,6 +4,8 @@ import { getGoogleCalendarClients } from "@/lib/integrations/google-calendar/cli
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/default";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { totalDurationMinutes } from "./services";
+import { requiresCustomerBookingNotice } from "./notice-settings";
+import { CUSTOMER_BOOKING_NOTICE_MS } from "./notice-policy";
 
 /**
  * Slot computation for the private calendar.
@@ -98,6 +100,11 @@ export async function listAvailableSlots({
 
   const supabase = getServiceSupabase();
   const orgId = availabilityOrganizationId({ organizationId });
+  const noticeRequired = await requiresCustomerBookingNotice(orgId);
+  if (noticeRequired) {
+    from = new Date(Math.max(from.getTime(), Date.now() + CUSTOMER_BOOKING_NOTICE_MS));
+  }
+  if (from >= to) return [];
 
   let bookingsQuery = supabase
     .from("bookings")
@@ -176,6 +183,12 @@ export async function listAvailableSlots({
   }
 
   const slots: Slot[] = [];
+
+  // Calendar/provider reads can take time. Do not offer a boundary slot that
+  // has already aged out while those inputs were loading.
+  if (noticeRequired) {
+    from = new Date(Math.max(from.getTime(), Date.now() + CUSTOMER_BOOKING_NOTICE_MS));
+  }
 
   // Iterate one business-tz day at a time.
   let day = startOfLocalDay(from);

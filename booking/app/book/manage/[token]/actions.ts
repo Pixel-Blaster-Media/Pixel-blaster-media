@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import { BUSINESS_TZ, isSlotAvailable } from "@/lib/booking/availability";
+import { customerBookingNoticeError } from "@/lib/booking/notice-settings";
+import { BOOKING_AVAILABILITY_ERROR, CUSTOMER_BOOKING_NOTICE_MESSAGE } from "@/lib/booking/notice-policy";
 import { isCancellable } from "@/lib/booking/booking-status";
 import { syncStoredBookingGoogleCalendarEvent } from "@/lib/booking/calendar-event-service";
 import { cancelBooking } from "@/lib/booking/cancel";
@@ -135,6 +137,8 @@ export async function rescheduleManagedBooking(
   if (newStart.getTime() <= Date.now()) {
     return { ok: false, error: "Pick a time in the future." };
   }
+  const noticeError = await customerBookingNoticeError(newStart, booking.organization_id);
+  if (noticeError) return { ok: false, error: noticeError };
 
   // Keep the same shoot length: end - start of the existing booking,
   // falling back to a safe floor if the end was never set.
@@ -156,15 +160,21 @@ export async function rescheduleManagedBooking(
   // windows (the slot list shown client-side is only a convenience; the
   // server must not trust the submitted time). The booking being moved is
   // excluded so it can shift within its own current window.
-  const stillFree = await isSlotAvailable(newStart, durationMinutes, {
-    organizationId: booking.organization_id,
-    excludeBookingId: booking.id,
-    excludeGoogleEventId: booking.google_calendar_event_id ?? undefined,
-  });
+  let stillFree: boolean;
+  try {
+    stillFree = await isSlotAvailable(newStart, durationMinutes, {
+      organizationId: booking.organization_id,
+      excludeBookingId: booking.id,
+      excludeGoogleEventId: booking.google_calendar_event_id ?? undefined,
+    });
+  } catch {
+    return { ok: false, error: BOOKING_AVAILABILITY_ERROR };
+  }
   if (!stillFree) {
     return {
       ok: false,
-      error: "That time was just taken. Please pick another slot.",
+      error: await customerBookingNoticeError(newStart, booking.organization_id)
+        ?? "That time was just taken. Please pick another slot.",
     };
   }
 
@@ -203,7 +213,9 @@ export async function rescheduleManagedBooking(
     scheduledAt: newStart.toISOString(), scheduledEndsAt: newEnd.toISOString(),
   });
   if (!changed.ok) {
-    return { ok: false, error: changed.code === "23P01"
+    return { ok: false, error: changed.code === "PB006"
+      ? CUSTOMER_BOOKING_NOTICE_MESSAGE
+      : changed.code === "23P01"
       ? "That time was just taken. Please pick another slot."
       : "Could not reschedule booking. Refresh and try again." };
   }

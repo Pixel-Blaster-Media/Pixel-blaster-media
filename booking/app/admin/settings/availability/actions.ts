@@ -11,6 +11,22 @@ export interface ActionResult {
   error?: string;
 }
 
+export async function saveBookingNotice(formData: FormData): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  const value = formData.get("require_24_hour_notice");
+  if (value !== null && value !== "on") return { ok: false, error: "Invalid notice setting." };
+  const { data, error } = await getServiceSupabase()
+    .from("organizations")
+    .update({ require_24_hour_notice: value === "on" })
+    .eq("id", admin.organizationId)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+  if (error || !data) return { ok: false, error: "Could not save the booking notice setting. Please try again." };
+  revalidatePath("/admin/settings/availability");
+  revalidatePath("/book/schedule");
+  return { ok: true };
+}
+
 /**
  * Update one day's working hours. The admin UI edits a single row at
  * a time so the action is small; there's no whole-week save button.

@@ -6,8 +6,9 @@ import {beforeBookingDesignUi,bookingDesignUiPaths} from './helpers/booking-desi
 import {beforeFinalsUi} from './helpers/photo-finals-ui-boundary.mjs';
 import {beforeBookingAuditUi,bookingAuditUiPaths} from './helpers/booking-audit-ui-boundary.mjs';
 import {beforeStudioWorkspace,studioWorkspacePaths} from './helpers/studio-workspace-boundary.mjs';
+import {beforeCustomerBookingNoticeUi,customerBookingNoticeUiPaths} from './helpers/customer-booking-notice-ui-boundary.mjs';
 const base = '3039dbc357f78b3c9a97d5dbe1d5c0c54785f85f';
-const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+const read = p => beforeCustomerBookingNoticeUi(p,readFileSync(new URL(`../${p}`, import.meta.url), 'utf8'));
 const changes = {
   'app/admin/bookings/[id]/BookingWorkspaceTabs.tsx': [['precision-panel ', ''], ['precision-shoot-tabs ', '']],
   'app/admin/bookings/[id]/MediaWorkflow.tsx': [['precision-shoot-planned ', '']],
@@ -46,6 +47,7 @@ test('historical skin changes remain exact after bounded finals UI and OTP lifec
   // Finals UI and ConfirmForm's separately tested OTP lifecycle fix are not
   // part of the earlier presentation-only release.
   const presentationFiles = files.map(f => f.replace(/^booking\//, ''))
+    .filter(f => !customerBookingNoticeUiPaths.includes(f))
     // The resumable uploader is a new functional component, covered by its
     // dedicated lifecycle, route, protocol and real browser mock regressions.
     .filter(f => f !== 'app/admin/settings/pricing/CatalogVideoUploader.tsx')
@@ -90,4 +92,12 @@ test('booking design presentation preserves the exact released source outside it
  for(const file of bookingDesignUiPaths) assert.equal(
   beforeBookingDesignUi(file,beforeStudioWorkspace(file,read(file))),
   execFileSync('git',['show',`203f138d9f4347e1c201b18082d2cea61a72ce3f:booking/${file}`],{cwd:new URL('..',import.meta.url),encoding:'utf8'}),file);
+});
+
+// The notice feature is a bounded functional slice; all other UI bytes still
+// compare against the exact marketing-launch baseline and older design guards.
+test('notice controls preserve the released UI outside their exact functional hunks',()=>{
+ for(const file of customerBookingNoticeUiPaths.filter(f=>!f.endsWith('BookingNoticeEditor.tsx'))) {
+  assert.equal(read(file),execFileSync('git',['show',`148c38ab01ad3151062eebfc31385d40067b2795:booking/${file}`],{cwd:new URL('..',import.meta.url),encoding:'utf8'}),file);
+ }
 });
