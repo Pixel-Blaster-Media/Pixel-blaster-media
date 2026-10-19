@@ -30,5 +30,6 @@ test('full generated fresh setup executes on PostgreSQL 17 and passes tenant/gra
   assert.match(result.stdout, /CLEAN_BOOTSTRAP_BEHAVIOR_PASSED/);
   assert.match(result.stdout, /BOOKING_AUDIT_BEHAVIOR_PASSED/);
   assert.match(result.stdout, /BOOKING_QUOTE_POLICY_PASSED/);
+  assert.match(result.stdout, /CUSTOMER_BOOKING_NOTICE_PASSED/);
   assert.match(result.stdout, /BOOKING_QUOTE_CUTOVER_PASSED/);
 });

@@ -1,0 +1,52 @@
+{
+  "app/admin/settings/availability/page.tsx": [
+    [
+      "\nimport { requireAdmin } from \"@/lib/auth/require-admin\";\nimport { getServerSupabase } from \"@/lib/supabase/server\";\nimport { requiresCustomerBookingNotice } from \"@/lib/booking/notice-settings\";\n\nimport BlocksManager from \"./BlocksManager\";\nimport HoursEditor from \"./HoursEditor\";\nimport BookingNoticeEditor from \"./BookingNoticeEditor\";\n\nexport const metadata: Metadata = { title: \"Availability\" };\nexport const dynamic = \"force-dynamic\";\n",
+      "\nimport { requireAdmin } from \"@/lib/auth/require-admin\";\nimport { getServerSupabase } from \"@/lib/supabase/server\";\n\nimport BlocksManager from \"./BlocksManager\";\nimport HoursEditor from \"./HoursEditor\";\n\nexport const metadata: Metadata = { title: \"Availability\" };\nexport const dynamic = \"force-dynamic\";\n"
+    ],
+    [
+      "  const admin = await requireAdmin();\n  const supabase = await getServerSupabase();\n\n  const [hoursRes, blocksRes, noticeRequired] = await Promise.all([\n    supabase\n      .from(\"business_hours\")\n      .select(\"day_of_week, start_time, end_time, enabled\")\n",
+      "  const admin = await requireAdmin();\n  const supabase = await getServerSupabase();\n\n  const [hoursRes, blocksRes] = await Promise.all([\n    supabase\n      .from(\"business_hours\")\n      .select(\"day_of_week, start_time, end_time, enabled\")\n"
+    ],
+    [
+      "      .gte(\"ends_at\", new Date().toISOString())\n      .order(\"starts_at\")\n      .returns<CalendarBlockRow[]>(),\n    requiresCustomerBookingNotice(admin.organizationId),\n  ]);\n\n  const hours: BusinessHoursRow[] = [];\n",
+      "      .gte(\"ends_at\", new Date().toISOString())\n      .order(\"starts_at\")\n      .returns<CalendarBlockRow[]>(),\n  ]);\n\n  const hours: BusinessHoursRow[] = [];\n"
+    ],
+    [
+      "          booking slots \u2014 never your private labels.\n        </p>\n      </header>\n\n      <BookingNoticeEditor enabled={noticeRequired} />\n\n      <section className=\"space-y-3\">\n        <div>\n",
+      "          booking slots \u2014 never your private labels.\n        </p>\n      </header>\n\n      <section className=\"space-y-3\">\n        <div>\n"
+    ]
+  ],
+  "app/book/schedule/page.tsx": [
+    [
+      "\nimport { getActiveCatalog } from \"@/lib/booking/catalog\";\nimport { loadSlotsForNextDays } from \"@/lib/booking/slot-display\";\nimport { requiresCustomerBookingNotice } from \"@/lib/booking/notice-settings\";\nimport {\n  parseWizardState,\n  serializeWizardState,\n",
+      "\nimport { getActiveCatalog } from \"@/lib/booking/catalog\";\nimport { loadSlotsForNextDays } from \"@/lib/booking/slot-display\";\nimport {\n  parseWizardState,\n  serializeWizardState,\n"
+    ],
+    [
+      "  const daysOfSlots = await loadSlotsForNextDays(duration, 28, {\n    organizationId: organization.id,\n  });\n  const noticeRequired = await requiresCustomerBookingNotice(organization.id);\n  const selectedSlot = daysOfSlots.some((day) => day.slots.some((slot) => slot.start === scopedState.slot))\n    ? scopedState.slot : null;\n\n  return (\n    <BookingBrandFrame organization={organization}>\n",
+      "  const daysOfSlots = await loadSlotsForNextDays(duration, 28, {\n    organizationId: organization.id,\n  });\n\n  return (\n    <BookingBrandFrame organization={organization}>\n"
+    ],
+    [
+      "          Days with a green dot have openings. Pick a day to see its open\n          times, then pick a time to move on.\n        </p>\n        {noticeRequired ? <p className=\"mt-2 text-sm text-realtor-muted\">\n          Please book at least 24 hours ahead. Times are shown in Eastern Time.\n          Contact the studio if you need an earlier appointment.\n        </p> : null}\n      </section>\n\n      <CalendarPicker\n        daysOfSlots={daysOfSlots}\n        selectedSlot={selectedSlot}\n      />\n\n      <BookingTotalBar\n",
+      "          Days with a green dot have openings. Pick a day to see its open\n          times, then pick a time to move on.\n        </p>\n      </section>\n\n      <CalendarPicker\n        daysOfSlots={daysOfSlots}\n        selectedSlot={scopedState.slot}\n      />\n\n      <BookingTotalBar\n"
+    ],
+    [
+      "        squareFootage={scopedState.squareFootage}\n        includeBasement={scopedState.includeBasement}\n        href={\n          selectedSlot\n            ? `/book/confirm?${serializeForRedirect(scopedState)}`\n            : undefined\n        }\n        disabled={!selectedSlot}\n        ctaLabel={selectedSlot ? \"Continue\" : \"Pick a time\"}\n      />\n    </BookingBrandFrame>\n  );\n",
+      "        squareFootage={scopedState.squareFootage}\n        includeBasement={scopedState.includeBasement}\n        href={\n          scopedState.slot\n            ? `/book/confirm?${serializeForRedirect(scopedState)}`\n            : undefined\n        }\n        disabled={!scopedState.slot}\n        ctaLabel={scopedState.slot ? \"Continue\" : \"Pick a time\"}\n      />\n    </BookingBrandFrame>\n  );\n"
+    ]
+  ],
+  "app/book/manage/[token]/page.tsx": [
+    [
+      "import { isCancellable } from \"@/lib/booking/booking-status\";\nimport { verifyManageToken } from \"@/lib/booking/manage-token\";\nimport { loadSlotsForNextDays } from \"@/lib/booking/slot-display\";\nimport { requiresCustomerBookingNotice } from \"@/lib/booking/notice-settings\";\nimport { getOrganizationEmailSettings } from \"@/lib/email/settings\";\nimport { getServiceSupabase } from \"@/lib/supabase/server\";\nimport type { BookingStatus } from \"@/lib/supabase/database.types\";\n",
+      "import { isCancellable } from \"@/lib/booking/booking-status\";\nimport { verifyManageToken } from \"@/lib/booking/manage-token\";\nimport { loadSlotsForNextDays } from \"@/lib/booking/slot-display\";\nimport { getOrganizationEmailSettings } from \"@/lib/email/settings\";\nimport { getServiceSupabase } from \"@/lib/supabase/server\";\nimport type { BookingStatus } from \"@/lib/supabase/database.types\";\n"
+    ],
+    [
+      "    SLOT_WINDOW_DAYS,\n    { organizationId: booking.organization_id },\n  );\n  const noticeRequired = await requiresCustomerBookingNotice(booking.organization_id);\n\n  return (\n    <main className=\"realtor-theme space-y-6\">\n",
+      "    SLOT_WINDOW_DAYS,\n    { organizationId: booking.organization_id },\n  );\n\n  return (\n    <main className=\"realtor-theme space-y-6\">\n"
+    ],
+    [
+      "          .\n        </p>\n      </header>\n\n      {noticeRequired ? <p className=\"text-sm text-realtor-muted\">\n        New shoot times must be at least 24 hours from now. Your current appointment stays booked until you confirm a change.\n      </p> : null}\n\n      <ManageBookingClient\n        token={token}\n",
+      "          .\n        </p>\n      </header>\n\n      <ManageBookingClient\n        token={token}\n"
+    ]
+  ]
+}

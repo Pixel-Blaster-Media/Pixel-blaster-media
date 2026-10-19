@@ -3,9 +3,11 @@ import Link from "next/link";
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getServerSupabase } from "@/lib/supabase/server";
+import { requiresCustomerBookingNotice } from "@/lib/booking/notice-settings";
 
 import BlocksManager from "./BlocksManager";
 import HoursEditor from "./HoursEditor";
+import BookingNoticeEditor from "./BookingNoticeEditor";
 
 export const metadata: Metadata = { title: "Availability" };
 export const dynamic = "force-dynamic";
@@ -38,7 +40,7 @@ export default async function AvailabilityPage() {
   const admin = await requireAdmin();
   const supabase = await getServerSupabase();
 
-  const [hoursRes, blocksRes] = await Promise.all([
+  const [hoursRes, blocksRes, noticeRequired] = await Promise.all([
     supabase
       .from("business_hours")
       .select("day_of_week, start_time, end_time, enabled")
@@ -52,6 +54,7 @@ export default async function AvailabilityPage() {
       .gte("ends_at", new Date().toISOString())
       .order("starts_at")
       .returns<CalendarBlockRow[]>(),
+    requiresCustomerBookingNotice(admin.organizationId),
   ]);
 
   const hours: BusinessHoursRow[] = [];
@@ -86,6 +89,8 @@ export default async function AvailabilityPage() {
           booking slots — never your private labels.
         </p>
       </header>
+
+      <BookingNoticeEditor enabled={noticeRequired} />
 
       <section className="space-y-3">
         <div>

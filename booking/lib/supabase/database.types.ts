@@ -332,6 +332,7 @@ interface OrganizationsTable {
     reply_to_email: string | null;
     admin_notification_email: string | null;
     invoice_timing: string;
+    require_24_hour_notice: boolean;
     lifecycle_status: "onboarding" | "active" | "suspended";
     beta_invitation_id: string | null;
     created_at: string;
@@ -350,6 +351,7 @@ interface OrganizationsTable {
     reply_to_email?: string | null;
     admin_notification_email?: string | null;
     invoice_timing?: string;
+    require_24_hour_notice?: boolean;
     lifecycle_status?: "onboarding" | "active" | "suspended";
     beta_invitation_id?: string | null;
   };

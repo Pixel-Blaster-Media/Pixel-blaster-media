@@ -15,6 +15,8 @@ function load(failure, googleFailure = false) {
   const code = ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   vm.runInNewContext(code,{exports, console, Date, Intl, require(name) {
     if(name==='server-only') return {};
+      if(name==='./notice-settings') return {requiresCustomerBookingNotice:async()=>false};
+      if(name==='./notice-policy') return {CUSTOMER_BOOKING_NOTICE_MS:86_400_000};
     if(name.includes('google-calendar/client')) return {getGoogleCalendarClients: async () => {if(googleFailure) throw Error('offline');return [];}};
     if(name.includes('supabase/server')) return {getServiceSupabase:()=>db};
     if(name.includes('organizations/default')) return {DEFAULT_ORGANIZATION_ID:'org'};

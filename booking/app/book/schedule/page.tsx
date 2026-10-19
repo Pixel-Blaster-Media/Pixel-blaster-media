@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { getActiveCatalog } from "@/lib/booking/catalog";
 import { loadSlotsForNextDays } from "@/lib/booking/slot-display";
+import { requiresCustomerBookingNotice } from "@/lib/booking/notice-settings";
 import {
   parseWizardState,
   serializeWizardState,
@@ -62,6 +63,9 @@ export default async function BookStep3Page({
   const daysOfSlots = await loadSlotsForNextDays(duration, 28, {
     organizationId: organization.id,
   });
+  const noticeRequired = await requiresCustomerBookingNotice(organization.id);
+  const selectedSlot = daysOfSlots.some((day) => day.slots.some((slot) => slot.start === scopedState.slot))
+    ? scopedState.slot : null;
 
   return (
     <BookingBrandFrame organization={organization}>
@@ -76,11 +80,15 @@ export default async function BookStep3Page({
           Days with a green dot have openings. Pick a day to see its open
           times, then pick a time to move on.
         </p>
+        {noticeRequired ? <p className="mt-2 text-sm text-realtor-muted">
+          Please book at least 24 hours ahead. Times are shown in Eastern Time.
+          Contact the studio if you need an earlier appointment.
+        </p> : null}
       </section>
 
       <CalendarPicker
         daysOfSlots={daysOfSlots}
-        selectedSlot={scopedState.slot}
+        selectedSlot={selectedSlot}
       />
 
       <BookingTotalBar
@@ -103,12 +111,12 @@ export default async function BookStep3Page({
         squareFootage={scopedState.squareFootage}
         includeBasement={scopedState.includeBasement}
         href={
-          scopedState.slot
+          selectedSlot
             ? `/book/confirm?${serializeForRedirect(scopedState)}`
             : undefined
         }
-        disabled={!scopedState.slot}
-        ctaLabel={scopedState.slot ? "Continue" : "Pick a time"}
+        disabled={!selectedSlot}
+        ctaLabel={selectedSlot ? "Continue" : "Pick a time"}
       />
     </BookingBrandFrame>
   );
