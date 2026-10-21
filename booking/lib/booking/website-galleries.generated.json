@@ -1,0 +1,928 @@
+{
+  "brand-product": {
+    "slug": "brand-product",
+    "label": "Brand & Product",
+    "title": "Product. Place. Personality.",
+    "description": "Products in context, with a sense of the places and people around them.",
+    "url": "https://pixelblastermedia.com/#gallery/brand-product",
+    "count": 2,
+    "sections": [
+      {
+        "title": "Products & places",
+        "photos": [
+          {
+            "id": "4",
+            "alt": "Colourful bitters bottles lined up on a wooden counter",
+            "width": 6000,
+            "height": 4000,
+            "src": "https://pixelblastermedia.com/assets/portfolio/bitters-bottles-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/bitters-bottles-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/bitters-bottles-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/bitters-bottles-1800.webp 1800w"
+          },
+          {
+            "id": "3",
+            "alt": "Two people talking at a bright hospitality counter",
+            "width": 6000,
+            "height": 3803,
+            "src": "https://pixelblastermedia.com/assets/portfolio/hospitality-counter-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/hospitality-counter-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/hospitality-counter-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/hospitality-counter-1800.webp 1800w"
+          }
+        ]
+      }
+    ]
+  },
+  "portraits-people": {
+    "slug": "portraits-people",
+    "label": "Portraits & People",
+    "title": "People with presence.",
+    "description": "Portraits, teams and celebrations, with each part of the collection kept together.",
+    "url": "https://pixelblastermedia.com/#gallery/portraits-people",
+    "count": 16,
+    "sections": [
+      {
+        "title": "Portraits & teams",
+        "photos": [
+          {
+            "id": "63",
+            "alt": "A seated professional portrait beside a window",
+            "width": 4160,
+            "height": 6240,
+            "src": "https://pixelblastermedia.com/assets/portfolio/portrait-window-light-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/portrait-window-light-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/portrait-window-light-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/portrait-window-light-1800.webp 1800w"
+          },
+          {
+            "id": "60",
+            "alt": "A man standing at a desk in a warm, textured workspace",
+            "width": 6048,
+            "height": 4024,
+            "src": "https://pixelblastermedia.com/assets/portfolio/portrait-workspace-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/portrait-workspace-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/portrait-workspace-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/portrait-workspace-1800.webp 1800w"
+          },
+          {
+            "id": "49",
+            "alt": "A business team arranged across an outdoor terrace",
+            "width": 3144,
+            "height": 2096,
+            "src": "https://pixelblastermedia.com/assets/portfolio/team-outdoors-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/team-outdoors-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/team-outdoors-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/team-outdoors-1800.webp 1800w"
+          },
+          {
+            "id": "64",
+            "alt": "Two women seated together against a timber wall",
+            "width": 7008,
+            "height": 4672,
+            "src": "https://pixelblastermedia.com/assets/portfolio/portrait-pair-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/portrait-pair-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/portrait-pair-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/portrait-pair-1800.webp 1800w"
+          },
+          {
+            "id": "59",
+            "alt": "Two people standing together in a softly lit interior",
+            "width": 3783,
+            "height": 5674,
+            "src": "https://pixelblastermedia.com/assets/portfolio/portrait-standing-pair-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/portrait-standing-pair-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/portrait-standing-pair-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/portrait-standing-pair-1800.webp 1800w"
+          },
+          {
+            "id": "61",
+            "alt": "A seated portrait of a smiling man in a dark cardigan",
+            "width": 3907,
+            "height": 5860,
+            "src": "https://pixelblastermedia.com/assets/portfolio/portrait-seated-smile-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/portrait-seated-smile-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/portrait-seated-smile-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/portrait-seated-smile-1800.webp 1800w"
+          },
+          {
+            "id": "62",
+            "alt": "A studio portrait of a man in a grey jacket",
+            "width": 3925,
+            "height": 5899,
+            "src": "https://pixelblastermedia.com/assets/portfolio/portrait-studio-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/portrait-studio-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/portrait-studio-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/portrait-studio-1800.webp 1800w"
+          },
+          {
+            "id": "58",
+            "alt": "A black-and-white portrait with soft directional light",
+            "width": 5539,
+            "height": 4016,
+            "src": "https://pixelblastermedia.com/assets/portfolio/portrait-monochrome-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/portrait-monochrome-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/portrait-monochrome-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/portrait-monochrome-1800.webp 1800w"
+          }
+        ]
+      },
+      {
+        "title": "Celebrations",
+        "photos": [
+          {
+            "id": "50",
+            "alt": "A wedding couple walking along a tree-lined garden path",
+            "width": 4114,
+            "height": 2747,
+            "src": "https://pixelblastermedia.com/assets/portfolio/celebration-garden-path-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/celebration-garden-path-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/celebration-garden-path-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/celebration-garden-path-1800.webp 1800w"
+          },
+          {
+            "id": "57",
+            "alt": "A wedding couple dancing beneath tall woodland trees",
+            "width": 2500,
+            "height": 1668,
+            "src": "https://pixelblastermedia.com/assets/portfolio/celebration-woodland-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/celebration-woodland-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/celebration-woodland-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/celebration-woodland-1800.webp 1800w"
+          },
+          {
+            "id": "51",
+            "alt": "A group gathered around a groom beneath a patterned cloth",
+            "width": 4473,
+            "height": 2984,
+            "src": "https://pixelblastermedia.com/assets/portfolio/celebration-gathering-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/celebration-gathering-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/celebration-gathering-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/celebration-gathering-1800.webp 1800w"
+          },
+          {
+            "id": "52",
+            "alt": "A wedding couple embracing beside a white garden fence",
+            "width": 4283,
+            "height": 2855,
+            "src": "https://pixelblastermedia.com/assets/portfolio/celebration-white-fence-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/celebration-white-fence-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/celebration-white-fence-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/celebration-white-fence-1800.webp 1800w"
+          },
+          {
+            "id": "53",
+            "alt": "A wedding couple standing beside a weathered stone wall",
+            "width": 4512,
+            "height": 3012,
+            "src": "https://pixelblastermedia.com/assets/portfolio/celebration-stone-wall-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/celebration-stone-wall-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/celebration-stone-wall-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/celebration-stone-wall-1800.webp 1800w"
+          },
+          {
+            "id": "54",
+            "alt": "A wedding couple embracing in front of evergreen trees",
+            "width": 4536,
+            "height": 3018,
+            "src": "https://pixelblastermedia.com/assets/portfolio/celebration-evergreens-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/celebration-evergreens-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/celebration-evergreens-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/celebration-evergreens-1800.webp 1800w"
+          },
+          {
+            "id": "55",
+            "alt": "A black-and-white portrait of a wedding couple in a meadow",
+            "width": 4334,
+            "height": 2884,
+            "src": "https://pixelblastermedia.com/assets/portfolio/celebration-meadow-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/celebration-meadow-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/celebration-meadow-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/celebration-meadow-1800.webp 1800w"
+          },
+          {
+            "id": "56",
+            "alt": "A black-and-white close portrait of a wedding couple",
+            "width": 4500,
+            "height": 3000,
+            "src": "https://pixelblastermedia.com/assets/portfolio/celebration-close-portrait-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/celebration-close-portrait-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/celebration-close-portrait-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/celebration-close-portrait-1800.webp 1800w"
+          }
+        ]
+      }
+    ]
+  },
+  "interiors-architecture": {
+    "slug": "interiors-architecture",
+    "label": "Interiors & Architecture",
+    "title": "Spaces with character.",
+    "description": "Rooms, materials and architectural details. Explore the stone-and-timber series, garden home and wider editorial collection.",
+    "url": "https://pixelblastermedia.com/#gallery/interiors-architecture",
+    "count": 36,
+    "sections": [
+      {
+        "title": "Stone & timber · New work",
+        "photos": [
+          {
+            "id": "80",
+            "alt": "A fireplace framed by tall windows, timber beams and stone-textured walls",
+            "width": 7001,
+            "height": 4665,
+            "src": "https://pixelblastermedia.com/assets/portfolio/stone-timber-fireplace-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/stone-timber-fireplace-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/stone-timber-fireplace-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/stone-timber-fireplace-1800.webp 1800w"
+          },
+          {
+            "id": "79",
+            "alt": "A veined stone kitchen counter with a brass tap and pale cabinetry",
+            "width": 4665,
+            "height": 7001,
+            "src": "https://pixelblastermedia.com/assets/portfolio/stone-timber-kitchen-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/stone-timber-kitchen-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/stone-timber-kitchen-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/stone-timber-kitchen-1800.webp 1800w"
+          },
+          {
+            "id": "85",
+            "alt": "An arched opening framing a sitting room, timber beams and a fireplace",
+            "width": 4660,
+            "height": 6993,
+            "src": "https://pixelblastermedia.com/assets/portfolio/stone-timber-archway-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/stone-timber-archway-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/stone-timber-archway-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/stone-timber-archway-1800.webp 1800w"
+          },
+          {
+            "id": "86",
+            "alt": "A sunlit sitting room with timber ceiling beams and a dark coffee table",
+            "width": 4658,
+            "height": 6988,
+            "src": "https://pixelblastermedia.com/assets/portfolio/stone-timber-sitting-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/stone-timber-sitting-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/stone-timber-sitting-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/stone-timber-sitting-1800.webp 1800w"
+          },
+          {
+            "id": "81",
+            "alt": "A freestanding bath beside a timber vanity and brass wall lights",
+            "width": 6993,
+            "height": 4657,
+            "src": "https://pixelblastermedia.com/assets/portfolio/stone-timber-bathroom-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/stone-timber-bathroom-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/stone-timber-bathroom-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/stone-timber-bathroom-1800.webp 1800w"
+          },
+          {
+            "id": "82",
+            "alt": "A glazed shower beside a freestanding bath beneath exposed beams",
+            "width": 6998,
+            "height": 4662,
+            "src": "https://pixelblastermedia.com/assets/portfolio/stone-timber-shower-wide-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/stone-timber-shower-wide-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/stone-timber-shower-wide-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/stone-timber-shower-wide-1800.webp 1800w"
+          },
+          {
+            "id": "83",
+            "alt": "Stone tile and brass fittings inside a glazed shower",
+            "width": 4664,
+            "height": 6998,
+            "src": "https://pixelblastermedia.com/assets/portfolio/stone-timber-shower-detail-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/stone-timber-shower-detail-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/stone-timber-shower-detail-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/stone-timber-shower-detail-1800.webp 1800w"
+          },
+          {
+            "id": "84",
+            "alt": "A freestanding bath, brass tap and timber vanity beside a bright window",
+            "width": 4667,
+            "height": 7003,
+            "src": "https://pixelblastermedia.com/assets/portfolio/stone-timber-bath-detail-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/stone-timber-bath-detail-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/stone-timber-bath-detail-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/stone-timber-bath-detail-1800.webp 1800w"
+          }
+        ]
+      },
+      {
+        "title": "Timber interiors",
+        "photos": [
+          {
+            "id": "24",
+            "alt": "A black spiral staircase within an exposed-timber interior",
+            "width": 4657,
+            "height": 6993,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-spiral-stair-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-spiral-stair-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-spiral-stair-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-spiral-stair-1800.webp 1800w"
+          },
+          {
+            "id": "33",
+            "alt": "A bedroom beneath exposed timber rafters and a skylight",
+            "width": 4661,
+            "height": 6997,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-timber-bedroom-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-timber-bedroom-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-timber-bedroom-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-timber-bedroom-1800.webp 1800w"
+          },
+          {
+            "id": "35",
+            "alt": "A timber-framed upper landing leading towards a bedroom",
+            "width": 4652,
+            "height": 6988,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-timber-landing-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-timber-landing-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-timber-landing-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-timber-landing-1800.webp 1800w"
+          },
+          {
+            "id": "42",
+            "alt": "Exposed beams and warm timber framing an open interior",
+            "width": 4656,
+            "height": 6991,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-timber-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-timber-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-timber-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-timber-1800.webp 1800w"
+          },
+          {
+            "id": "44",
+            "alt": "A sitting area with exposed timber beams, plants and glazed doors",
+            "width": 1366,
+            "height": 2048,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-timber-sitting-room-1200.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-timber-sitting-room-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-timber-sitting-room-1200.webp 1200w"
+          }
+        ]
+      },
+      {
+        "title": "Rooms & details",
+        "photos": [
+          {
+            "id": "37",
+            "alt": "A broad kitchen island with pale cabinetry and dark pendant lights",
+            "width": 6995,
+            "height": 4659,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-kitchen-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-kitchen-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-kitchen-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-kitchen-1800.webp 1800w"
+          },
+          {
+            "id": "28",
+            "alt": "A dining room with a dark coffered ceiling and upholstered chairs",
+            "width": 4652,
+            "height": 6987,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-dining-room-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-dining-room-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-dining-room-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-dining-room-1800.webp 1800w"
+          },
+          {
+            "id": "29",
+            "alt": "A living room with French doors, neutral furnishings and layered textures",
+            "width": 6967,
+            "height": 4640,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-french-doors-2400.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-french-doors-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-french-doors-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-french-doors-1800.webp 1800w, https://pixelblastermedia.com/assets/portfolio/interior-french-doors-2400.webp 2400w"
+          },
+          {
+            "id": "46",
+            "alt": "A wide view of a layered living room and its French doors",
+            "width": 2048,
+            "height": 1366,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-living-wide-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-living-wide-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-living-wide-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-living-wide-1800.webp 1800w"
+          },
+          {
+            "id": "39",
+            "alt": "A marble coffee table and carefully arranged objects beside a window seat",
+            "width": 4647,
+            "height": 6983,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-table-detail-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-table-detail-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-table-detail-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-table-detail-1800.webp 1800w"
+          },
+          {
+            "id": "41",
+            "alt": "A light-filled entrance with a patterned stone floor and staircase",
+            "width": 7004,
+            "height": 4668,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-entry-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-entry-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-entry-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-entry-1800.webp 1800w"
+          },
+          {
+            "id": "45",
+            "alt": "A pale bedroom with tall windows, a reading chair and a television",
+            "width": 2048,
+            "height": 1366,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-light-bedroom-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-light-bedroom-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-light-bedroom-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-light-bedroom-1800.webp 1800w"
+          },
+          {
+            "id": "25",
+            "alt": "A sunroom filled with plants, rich wood and soft daylight",
+            "width": 4640,
+            "height": 6977,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-sunroom-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-sunroom-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-sunroom-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-sunroom-1800.webp 1800w"
+          },
+          {
+            "id": "26",
+            "alt": "A red-walled reading room with a chandelier, fireplace and writing table",
+            "width": 4648,
+            "height": 6984,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-reading-room-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-reading-room-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-reading-room-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-reading-room-1800.webp 1800w"
+          },
+          {
+            "id": "36",
+            "alt": "A view through a doorway into a softly lit sitting room",
+            "width": 4650,
+            "height": 6986,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-framed-view-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-framed-view-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-framed-view-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-framed-view-1800.webp 1800w"
+          },
+          {
+            "id": "38",
+            "alt": "A carved fireplace and mirror with a fire burning in the grate",
+            "width": 4664,
+            "height": 6997,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-fireplace-detail-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-fireplace-detail-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-fireplace-detail-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-fireplace-detail-1800.webp 1800w"
+          },
+          {
+            "id": "34",
+            "alt": "A patterned powder room with an oval mirror and pedestal sink",
+            "width": 4646,
+            "height": 6974,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-powder-room-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-powder-room-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-powder-room-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-powder-room-1800.webp 1800w"
+          },
+          {
+            "id": "47",
+            "alt": "A gilt mirror above a fireplace beside illustrated wallpaper",
+            "width": 1366,
+            "height": 2048,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-wallpaper-fireplace-1200.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-wallpaper-fireplace-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-wallpaper-fireplace-1200.webp 1200w"
+          },
+          {
+            "id": "27",
+            "alt": "A bathroom with a dark ceiling, patterned walls and a freestanding bath",
+            "width": 4641,
+            "height": 6978,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-dark-bath-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-dark-bath-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-dark-bath-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-dark-bath-1800.webp 1800w"
+          },
+          {
+            "id": "40",
+            "alt": "A view through a doorway towards a bath beneath a dark ceiling",
+            "width": 4647,
+            "height": 6983,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-bath-doorway-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-bath-doorway-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-bath-doorway-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-bath-doorway-1800.webp 1800w"
+          }
+        ]
+      },
+      {
+        "title": "Pool & terrace",
+        "photos": [
+          {
+            "id": "31",
+            "alt": "A pool and furnished terrace outside a shingled house",
+            "width": 6995,
+            "height": 4659,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-pool-terrace-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-pool-terrace-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-pool-terrace-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-pool-terrace-1800.webp 1800w"
+          },
+          {
+            "id": "30",
+            "alt": "A swimming pool, shaded seating and garden terrace",
+            "width": 6984,
+            "height": 4648,
+            "src": "https://pixelblastermedia.com/assets/portfolio/interior-pool-garden-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/interior-pool-garden-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/interior-pool-garden-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/interior-pool-garden-1800.webp 1800w"
+          }
+        ]
+      },
+      {
+        "title": "Garden home · New work",
+        "photos": [
+          {
+            "id": "87",
+            "alt": "A shingled home framed by a curved driveway, mature trees and flowering garden beds",
+            "width": 6000,
+            "height": 3993,
+            "src": "https://pixelblastermedia.com/assets/portfolio/editorial-garden-home-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/editorial-garden-home-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/editorial-garden-home-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/editorial-garden-home-1800.webp 1800w"
+          },
+          {
+            "id": "88",
+            "alt": "A lantern and house-number plaque beside hydrangeas at a garden entrance",
+            "width": 3991,
+            "height": 6000,
+            "src": "https://pixelblastermedia.com/assets/portfolio/editorial-garden-lantern-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/editorial-garden-lantern-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/editorial-garden-lantern-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/editorial-garden-lantern-1800.webp 1800w"
+          },
+          {
+            "id": "89",
+            "alt": "A softly lit sitting-room corner with a fireplace, built-in shelves and a glass coffee table",
+            "width": 3992,
+            "height": 6000,
+            "src": "https://pixelblastermedia.com/assets/portfolio/editorial-fireplace-corner-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/editorial-fireplace-corner-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/editorial-fireplace-corner-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/editorial-fireplace-corner-1800.webp 1800w"
+          },
+          {
+            "id": "90",
+            "alt": "A kitchen with rich wood cabinetry, a central island and pale upholstered stools",
+            "width": 6000,
+            "height": 3997,
+            "src": "https://pixelblastermedia.com/assets/portfolio/editorial-cherry-kitchen-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/editorial-cherry-kitchen-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/editorial-cherry-kitchen-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/editorial-cherry-kitchen-1800.webp 1800w"
+          },
+          {
+            "id": "91",
+            "alt": "A bright bedroom with a window seat, white bedding and a soft mauve throw",
+            "width": 6000,
+            "height": 4000,
+            "src": "https://pixelblastermedia.com/assets/portfolio/editorial-window-bedroom-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/editorial-window-bedroom-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/editorial-window-bedroom-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/editorial-window-bedroom-1800.webp 1800w"
+          },
+          {
+            "id": "92",
+            "alt": "A view through a doorway into a light bedroom with layered bedding and tall windows",
+            "width": 3995,
+            "height": 6000,
+            "src": "https://pixelblastermedia.com/assets/portfolio/editorial-bedroom-doorway-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/editorial-bedroom-doorway-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/editorial-bedroom-doorway-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/editorial-bedroom-doorway-1800.webp 1800w"
+          }
+        ]
+      }
+    ]
+  },
+  "commercial-lifestyle": {
+    "slug": "commercial-lifestyle",
+    "label": "Commercial & Lifestyle",
+    "title": "In everyday life.",
+    "description": "Products in use, expressive portraits and movement in everyday environments.",
+    "url": "https://pixelblastermedia.com/#gallery/commercial-lifestyle",
+    "count": 5,
+    "sections": [
+      {
+        "title": "Products in use",
+        "photos": [
+          {
+            "id": "5",
+            "alt": "A man seated on a mattress in a softly lit bedroom",
+            "width": 6048,
+            "height": 4024,
+            "src": "https://pixelblastermedia.com/assets/portfolio/lifestyle-bedroom-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/lifestyle-bedroom-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/lifestyle-bedroom-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/lifestyle-bedroom-1800.webp 1800w"
+          },
+          {
+            "id": "2",
+            "alt": "A man demonstrating a mattress beside a bedroom window",
+            "width": 3018,
+            "height": 4536,
+            "src": "https://pixelblastermedia.com/assets/portfolio/lifestyle-product-detail-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/lifestyle-product-detail-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/lifestyle-product-detail-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/lifestyle-product-detail-1800.webp 1800w"
+          }
+        ]
+      },
+      {
+        "title": "Sport & movement",
+        "photos": [
+          {
+            "id": "17",
+            "alt": "An ice-hockey player photographed against a red brick wall",
+            "width": 6048,
+            "height": 4024,
+            "src": "https://pixelblastermedia.com/assets/portfolio/sport-portrait-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/sport-portrait-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/sport-portrait-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/sport-portrait-1800.webp 1800w"
+          },
+          {
+            "id": "19",
+            "alt": "An ice-hockey player viewed from behind on a rink",
+            "width": 6048,
+            "height": 4024,
+            "src": "https://pixelblastermedia.com/assets/portfolio/sport-on-ice-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/sport-on-ice-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/sport-on-ice-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/sport-on-ice-1800.webp 1800w"
+          },
+          {
+            "id": "18",
+            "alt": "An athlete training on rings in a gym",
+            "width": 6048,
+            "height": 3402,
+            "src": "https://pixelblastermedia.com/assets/portfolio/sport-training-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/sport-training-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/sport-training-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/sport-training-1800.webp 1800w"
+          }
+        ]
+      }
+    ]
+  },
+  "food-hospitality": {
+    "slug": "food-hospitality",
+    "label": "Food & Hospitality",
+    "title": "A place at the table.",
+    "description": "Food, atmosphere and the moments that make a table feel inviting.",
+    "url": "https://pixelblastermedia.com/#gallery/food-hospitality",
+    "count": 10,
+    "sections": [
+      {
+        "title": "Around the table",
+        "photos": [
+          {
+            "id": "14",
+            "alt": "An overhead view of food, drinks and hands around a restaurant table",
+            "width": 2500,
+            "height": 1667,
+            "src": "https://pixelblastermedia.com/assets/portfolio/food-at-the-table-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/food-at-the-table-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/food-at-the-table-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/food-at-the-table-1800.webp 1800w"
+          },
+          {
+            "id": "15",
+            "alt": "An overhead view of shared plates, crackers and wine on a wooden table",
+            "width": 2500,
+            "height": 1668,
+            "src": "https://pixelblastermedia.com/assets/portfolio/food-shared-plates-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/food-shared-plates-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/food-shared-plates-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/food-shared-plates-1800.webp 1800w"
+          },
+          {
+            "id": "7",
+            "alt": "A charcuterie platter on a dark wooden table",
+            "width": 5760,
+            "height": 3840,
+            "src": "https://pixelblastermedia.com/assets/portfolio/food-charcuterie-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/food-charcuterie-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/food-charcuterie-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/food-charcuterie-1800.webp 1800w"
+          },
+          {
+            "id": "11",
+            "alt": "A flatbread topped with cured meat and greens",
+            "width": 3932,
+            "height": 3932,
+            "src": "https://pixelblastermedia.com/assets/portfolio/food-flatbread-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/food-flatbread-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/food-flatbread-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/food-flatbread-1800.webp 1800w"
+          },
+          {
+            "id": "9",
+            "alt": "A close view of flatbread topped with sliced pear and herbs",
+            "width": 6016,
+            "height": 4016,
+            "src": "https://pixelblastermedia.com/assets/portfolio/food-pear-flatbread-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/food-pear-flatbread-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/food-pear-flatbread-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/food-pear-flatbread-1800.webp 1800w"
+          },
+          {
+            "id": "12",
+            "alt": "A baked dish served in a cast-iron skillet on a wooden table",
+            "width": 6000,
+            "height": 4000,
+            "src": "https://pixelblastermedia.com/assets/portfolio/food-skillet-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/food-skillet-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/food-skillet-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/food-skillet-1800.webp 1800w"
+          },
+          {
+            "id": "1",
+            "alt": "An overhead close-up of a pecan pie beside pumpkins and autumn leaves",
+            "width": 2048,
+            "height": 1365,
+            "src": "https://pixelblastermedia.com/assets/portfolio/food-pecan-pie-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/food-pecan-pie-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/food-pecan-pie-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/food-pecan-pie-1800.webp 1800w"
+          },
+          {
+            "id": "8",
+            "alt": "A plated dessert centred on a rustic round table",
+            "width": 7355,
+            "height": 5304,
+            "src": "https://pixelblastermedia.com/assets/portfolio/food-dessert-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/food-dessert-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/food-dessert-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/food-dessert-1800.webp 1800w"
+          },
+          {
+            "id": "6",
+            "alt": "A drink being poured from taps at a bar",
+            "width": 6000,
+            "height": 4000,
+            "src": "https://pixelblastermedia.com/assets/portfolio/hospitality-pour-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/hospitality-pour-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/hospitality-pour-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/hospitality-pour-1800.webp 1800w"
+          },
+          {
+            "id": "10",
+            "alt": "People sharing wine and food at an outdoor table",
+            "width": 2997,
+            "height": 4495,
+            "src": "https://pixelblastermedia.com/assets/portfolio/food-outdoors-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/food-outdoors-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/food-outdoors-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/food-outdoors-1800.webp 1800w"
+          }
+        ]
+      }
+    ]
+  },
+  "real-estate-aerial": {
+    "slug": "real-estate-aerial",
+    "label": "Real Estate & Aerial",
+    "title": "Property & perspective.",
+    "description": "Listing interiors, exteriors and aerial views, grouped by subject. These photographs span different properties and locations.",
+    "url": "https://pixelblastermedia.com/#gallery/real-estate-aerial",
+    "count": 28,
+    "sections": [
+      {
+        "title": "Bright living spaces",
+        "photos": [
+          {
+            "id": "69",
+            "alt": "A bright living room with a fireplace, warm leather sofa and garden views",
+            "width": 7008,
+            "height": 4672,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-living-room-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-living-room-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-living-room-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-living-room-1800.webp 1800w"
+          },
+          {
+            "id": "68",
+            "alt": "An entrance with a staircase, pale storage cabinets and a round mirror",
+            "width": 7008,
+            "height": 4672,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-entrance-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-entrance-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-entrance-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-entrance-1800.webp 1800w"
+          },
+          {
+            "id": "70",
+            "alt": "An open living and dining space with garden views and pale cabinetry",
+            "width": 7008,
+            "height": 4672,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-living-dining-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-living-dining-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-living-dining-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-living-dining-1800.webp 1800w"
+          }
+        ]
+      },
+      {
+        "title": "Kitchen views",
+        "photos": [
+          {
+            "id": "65",
+            "alt": "A white kitchen with a broad island and pale wooden floor",
+            "width": 6996,
+            "height": 4656,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-white-kitchen-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-white-kitchen-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-white-kitchen-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-white-kitchen-1800.webp 1800w"
+          },
+          {
+            "id": "66",
+            "alt": "A vertical view of a white kitchen island and pendant lights",
+            "width": 4676,
+            "height": 7016,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-kitchen-portrait-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-kitchen-portrait-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-kitchen-portrait-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-kitchen-portrait-1800.webp 1800w"
+          },
+          {
+            "id": "67",
+            "alt": "A kitchen with warm wood cabinetry and a veined stone backsplash",
+            "width": 7008,
+            "height": 4672,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-wood-kitchen-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-wood-kitchen-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-wood-kitchen-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-wood-kitchen-1800.webp 1800w"
+          }
+        ]
+      },
+      {
+        "title": "Listing interiors",
+        "photos": [
+          {
+            "id": "75",
+            "alt": "An open-plan living space with a double-height ceiling and timber staircase",
+            "width": 4096,
+            "height": 2722,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-open-plan-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-open-plan-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-open-plan-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-open-plan-1800.webp 1800w"
+          },
+          {
+            "id": "74",
+            "alt": "A living room with a fireplace, dark rug and adjoining dining space",
+            "width": 4096,
+            "height": 2726,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-fireplace-room-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-fireplace-room-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-fireplace-room-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-fireplace-room-1800.webp 1800w"
+          },
+          {
+            "id": "73",
+            "alt": "A white kitchen with dark island cabinetry and pendant lights",
+            "width": 4096,
+            "height": 2728,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-classic-kitchen-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-classic-kitchen-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-classic-kitchen-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-classic-kitchen-1800.webp 1800w"
+          },
+          {
+            "id": "76",
+            "alt": "A loft sitting area with a sloped ceiling and timber balustrade",
+            "width": 4096,
+            "height": 2724,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-loft-sitting-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-loft-sitting-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-loft-sitting-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-loft-sitting-1800.webp 1800w"
+          },
+          {
+            "id": "72",
+            "alt": "A basement recreation room with seating, a bar and a pool table",
+            "width": 4096,
+            "height": 2726,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-recreation-room-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-recreation-room-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-recreation-room-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-recreation-room-1800.webp 1800w"
+          }
+        ]
+      },
+      {
+        "title": "Twilight exteriors",
+        "photos": [
+          {
+            "id": "71",
+            "alt": "A contemporary house with illuminated windows at twilight",
+            "width": 2500,
+            "height": 1666,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-twilight-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-twilight-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-twilight-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-twilight-1800.webp 1800w"
+          },
+          {
+            "id": "77",
+            "alt": "A warmly lit house framed by snow and a sunset sky",
+            "width": 4096,
+            "height": 2730,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-winter-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-winter-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-winter-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-winter-1800.webp 1800w"
+          }
+        ]
+      },
+      {
+        "title": "Aerial perspectives",
+        "photos": [
+          {
+            "id": "21",
+            "alt": "A waterfront, pier and surrounding city viewed from above",
+            "width": 2048,
+            "height": 1365,
+            "src": "https://pixelblastermedia.com/assets/portfolio/aerial-waterfront-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/aerial-waterfront-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/aerial-waterfront-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/aerial-waterfront-1800.webp 1800w"
+          },
+          {
+            "id": "20",
+            "alt": "A shoreline, harbour entrance and parkland viewed from above",
+            "width": 3200,
+            "height": 2400,
+            "src": "https://pixelblastermedia.com/assets/portfolio/aerial-shoreline-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/aerial-shoreline-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/aerial-shoreline-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/aerial-shoreline-1800.webp 1800w"
+          },
+          {
+            "id": "22",
+            "alt": "A waterfall, river and surrounding parkland viewed from above",
+            "width": 2048,
+            "height": 1365,
+            "src": "https://pixelblastermedia.com/assets/portfolio/aerial-falls-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/aerial-falls-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/aerial-falls-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/aerial-falls-1800.webp 1800w"
+          }
+        ]
+      },
+      {
+        "title": "Recent listing interiors",
+        "photos": [
+          {
+            "id": "95",
+            "alt": "A bright white kitchen with a dark island, wood flooring and a geometric pendant light",
+            "width": 4096,
+            "height": 2724,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-white-kitchen-island-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-white-kitchen-island-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-white-kitchen-island-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-white-kitchen-island-1800.webp 1800w"
+          },
+          {
+            "id": "96",
+            "alt": "An open kitchen and dining space with oak cabinetry, a dark island and woven pendant lights",
+            "width": 4096,
+            "height": 2722,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-oak-kitchen-wide-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-oak-kitchen-wide-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-oak-kitchen-wide-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-oak-kitchen-wide-1800.webp 1800w"
+          },
+          {
+            "id": "97",
+            "alt": "White kitchen cabinetry and marble-patterned counters beneath a garden-facing window",
+            "width": 4096,
+            "height": 2728,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-white-kitchen-window-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-white-kitchen-window-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-white-kitchen-window-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-white-kitchen-window-1800.webp 1800w"
+          },
+          {
+            "id": "98",
+            "alt": "A wide island with black stools beneath woven pendant lights in an oak and charcoal kitchen",
+            "width": 4096,
+            "height": 2726,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-oak-kitchen-island-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-oak-kitchen-island-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-oak-kitchen-island-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-oak-kitchen-island-1800.webp 1800w"
+          },
+          {
+            "id": "99",
+            "alt": "A panelled living room with a lit fireplace, pale sectional sofa and upholstered coffee table",
+            "width": 4096,
+            "height": 2724,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-panelled-living-room-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-panelled-living-room-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-panelled-living-room-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-panelled-living-room-1800.webp 1800w"
+          },
+          {
+            "id": "100",
+            "alt": "A light living room opening toward a dining area, with a sectional sofa and broad windows",
+            "width": 4096,
+            "height": 2728,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-living-dining-view-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-living-dining-view-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-living-dining-view-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-living-dining-view-1800.webp 1800w"
+          },
+          {
+            "id": "101",
+            "alt": "Oak kitchen cabinets, a black range and a waterfall island beneath a timber ceiling inset",
+            "width": 4096,
+            "height": 2728,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-oak-kitchen-detail-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-oak-kitchen-detail-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-oak-kitchen-detail-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-oak-kitchen-detail-1800.webp 1800w"
+          },
+          {
+            "id": "102",
+            "alt": "An open living room and kitchen with built-in shelving, a long fireplace and round coffee tables",
+            "width": 4096,
+            "height": 2714,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-open-living-kitchen-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-open-living-kitchen-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-open-living-kitchen-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-open-living-kitchen-1800.webp 1800w"
+          },
+          {
+            "id": "103",
+            "alt": "A linear fireplace beneath a round mirror, framed by oak shelves and ribbed wall panelling",
+            "width": 4096,
+            "height": 2724,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-oak-fireplace-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-oak-fireplace-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-oak-fireplace-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-oak-fireplace-1800.webp 1800w"
+          },
+          {
+            "id": "104",
+            "alt": "A bright bedroom with a blue upholstered headboard, white bedside tables and garden views",
+            "width": 4096,
+            "height": 2728,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-blue-headboard-bedroom-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-blue-headboard-bedroom-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-blue-headboard-bedroom-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-blue-headboard-bedroom-1800.webp 1800w"
+          }
+        ]
+      },
+      {
+        "title": "Daylight exteriors",
+        "photos": [
+          {
+            "id": "93",
+            "alt": "A split-level home with a garage, shaded front lawn and a wide driveway",
+            "width": 4096,
+            "height": 2733,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-daylight-split-level-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-daylight-split-level-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-daylight-split-level-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-daylight-split-level-1800.webp 1800w"
+          },
+          {
+            "id": "94",
+            "alt": "A white gabled home with a curved front path and mature garden trees",
+            "width": 4096,
+            "height": 2720,
+            "src": "https://pixelblastermedia.com/assets/portfolio/property-daylight-gabled-home-1800.webp",
+            "srcSet": "https://pixelblastermedia.com/assets/portfolio/property-daylight-gabled-home-640.webp 640w, https://pixelblastermedia.com/assets/portfolio/property-daylight-gabled-home-1200.webp 1200w, https://pixelblastermedia.com/assets/portfolio/property-daylight-gabled-home-1800.webp 1800w"
+          }
+        ]
+      }
+    ]
+  }
+}

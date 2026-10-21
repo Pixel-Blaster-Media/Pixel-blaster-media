@@ -5,6 +5,7 @@ import React from 'react';
 import * as jsxRuntime from 'react/jsx-runtime';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { loadSource } from './helpers/source-module.mjs';
+import {galleryDependencies} from './helpers/website-gallery-source.mjs';
 
 const quote = loadSource('lib/booking/quote.ts');
 const wizard = loadSource('lib/booking/wizard-state.ts');
@@ -99,6 +100,7 @@ test('changing a package keeps the private draft but invalidates the old time sl
   let destination;
   const draft = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const Picker = loadSource('app/book/_components/PackageAccordion.tsx', {
+    ...galleryDependencies,
     'react/jsx-runtime': jsxRuntime,
     react: { useMemo: fn=>fn(), useState: initial=>[initial===null?null:true,()=>{}], useEffect:()=>{}, useRef:()=>({current:null}) },
     'next/navigation': {useRouter:()=>({replace:url=>{destination=url;}}),useSearchParams:()=>new URLSearchParams(`services=social_media_special&draft=${draft}&slot=2090-01-01T15:00:00Z&shoot_notes=private`)},

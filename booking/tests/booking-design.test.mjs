@@ -4,6 +4,7 @@ import React from 'react';
 import * as jsxRuntime from 'react/jsx-runtime';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { loadSource } from './helpers/source-module.mjs';
+import {galleryDependencies} from './helpers/website-gallery-source.mjs';
 
 const quote = loadSource('lib/booking/quote.ts');
 const wizard = loadSource('lib/booking/wizard-state.ts');
@@ -25,6 +26,7 @@ const sample = (extra = {}) => ({
   embed_url: 'https://player.example.invalid/existing-video', ...extra,
 });
 const Picker = loadSource('app/book/_components/PackageAccordion.tsx', {
+  ...galleryDependencies,
   react: React, 'react/jsx-runtime': jsxRuntime,
   'next/navigation': {useRouter: () => ({replace() { throw Error('render must not change selection'); }}), useSearchParams: () => new URLSearchParams('services=bundle')},
   '@/lib/booking/quote': quote, '@/lib/booking/wizard-state': wizard,

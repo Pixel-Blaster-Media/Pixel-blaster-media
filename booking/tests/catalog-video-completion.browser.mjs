@@ -22,7 +22,7 @@ const bundle = await build({
     window.transfers=0;window.aborts=0;window.completions=0;
     createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>);
   ` },
-  bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic',
+  bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic', loader: { '.css': 'empty' },
   tsconfig: path.join(root, 'tsconfig.json'), logLevel: 'warning',
   plugins: [{ name: 'local-only-boundaries', setup(b) {
     b.onResolve({ filter: /^next\/navigation$/ }, () => ({ path: 'navigation', namespace: 'mock' }));

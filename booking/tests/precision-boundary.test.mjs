@@ -7,8 +7,9 @@ import {beforeFinalsUi} from './helpers/photo-finals-ui-boundary.mjs';
 import {beforeBookingAuditUi,bookingAuditUiPaths} from './helpers/booking-audit-ui-boundary.mjs';
 import {beforeStudioWorkspace,studioWorkspacePaths} from './helpers/studio-workspace-boundary.mjs';
 import {beforeCustomerBookingNoticeUi,customerBookingNoticeUiPaths} from './helpers/customer-booking-notice-ui-boundary.mjs';
+import {beforeWebsiteGalleryUi,websiteGalleryUiPaths} from './helpers/website-gallery-ui-boundary.mjs';
 const base = '3039dbc357f78b3c9a97d5dbe1d5c0c54785f85f';
-const read = p => beforeCustomerBookingNoticeUi(p,readFileSync(new URL(`../${p}`, import.meta.url), 'utf8'));
+const read = p => beforeCustomerBookingNoticeUi(p,beforeWebsiteGalleryUi(p,readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')));
 const changes = {
   'app/admin/bookings/[id]/BookingWorkspaceTabs.tsx': [['precision-panel ', ''], ['precision-shoot-tabs ', '']],
   'app/admin/bookings/[id]/MediaWorkflow.tsx': [['precision-shoot-planned ', '']],
@@ -47,6 +48,8 @@ test('historical skin changes remain exact after bounded finals UI and OTP lifec
   // Finals UI and ConfirmForm's separately tested OTP lifecycle fix are not
   // part of the earlier presentation-only release.
   const presentationFiles = files.map(f => f.replace(/^booking\//, ''))
+    // New functional gallery viewer has dedicated URL, validation and browser coverage.
+    .filter(f => f !== 'components/WebsiteGalleryDialog.tsx')
     .filter(f => !customerBookingNoticeUiPaths.includes(f))
     // The resumable uploader is a new functional component, covered by its
     // dedicated lifecycle, route, protocol and real browser mock regressions.
@@ -69,6 +72,12 @@ test('historical skin changes remain exact after bounded finals UI and OTP lifec
     }
     assert.equal(candidate, execFileSync('git', ['show', `${base}:booking/${file}`], { cwd, encoding: 'utf8' }), file);
   }
+});
+
+test('website gallery integration preserves every other released editor and booking byte',()=>{
+ for(const file of websiteGalleryUiPaths) assert.equal(
+  beforeWebsiteGalleryUi(file,readFileSync(new URL(`../${file}`,import.meta.url),'utf8')),
+  execFileSync('git',['show',`c23e96dbd71ed2ac8ff71fe01c90b09f6ba71c1b:booking/${file}`],{cwd:new URL('..',import.meta.url),encoding:'utf8'}),file);
 });
 test('functional booking audit UI slice preserves every other byte at the canonical source snapshot',()=>{
  for(const file of bookingAuditUiPaths) assert.equal(

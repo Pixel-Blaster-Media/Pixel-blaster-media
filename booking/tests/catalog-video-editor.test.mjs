@@ -4,12 +4,14 @@ import React from 'react';
 import * as jsxRuntime from 'react/jsx-runtime';
 import Renderer, { act } from 'react-test-renderer';
 import { loadSource } from './helpers/source-module.mjs';
+import {galleryDependencies} from './helpers/website-gallery-source.mjs';
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const completion = loadSource('lib/booking/catalog-video-completion.ts', {}, { AbortController, setTimeout, clearTimeout });
 
 async function setup(reply, status = 'uploading') {
   const requests = []; let refreshes = 0;
   const Editor = loadSource('app/admin/settings/pricing/CatalogExamplesEditor.tsx', {
+    ...galleryDependencies,
     react: React, 'react/jsx-runtime': jsxRuntime,
     'next/navigation': { useRouter: () => ({ refresh: () => { refreshes++; } }) },
     '@/lib/booking/catalog-video-completion': { waitForCatalogVideoCompletion: (id, opts) => completion.waitForCatalogVideoCompletion(id, {
