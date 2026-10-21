@@ -7,6 +7,7 @@ import {
   parseExampleUrl,
 } from "@/lib/booking/catalog-examples-core";
 import { photoSampleHref } from "@/lib/booking/catalog-sample-viewer";
+import { websiteGallery } from "@/lib/booking/website-galleries";
 import { normalizeCatalogSampleGroupInput } from "@/lib/booking/catalog-sample-groups";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getServiceSupabase } from "@/lib/supabase/server";
@@ -36,6 +37,13 @@ export async function attachCatalogExample(formData: FormData): Promise<ExampleA
   if (!KINDS.has(kind)) return { ok: false, error: "Choose a valid example type." };
   if (!sampleGroup) return { ok: false, error: "Choose where this sample should appear." };
   if (!externalUrl) return { ok: false, error: "Enter a valid HTTPS example URL." };
+  const gallery = websiteGallery(externalUrl);
+  if (text(formData, "photo_sample") === "true" && gallery) {
+    return { ok: false, error: "This link is a website gallery. Choose Add website gallery to show the whole collection inside the booking page." };
+  }
+  if (text(formData, "gallery_sample") === "true" && (
+    !gallery || kind !== "link" || !["photos", "aerial"].includes(sampleGroup.key)
+  )) return { ok: false, error: "Choose one of the six website galleries and show it under Photos or Drone." };
   if (text(formData, "photo_sample") === "true" && (
     kind !== "link" || !["photos", "aerial"].includes(sampleGroup.key) || !photoSampleHref(externalUrl)
     || text(formData, "photo_public_ack") !== "true"

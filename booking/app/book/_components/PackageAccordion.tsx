@@ -8,6 +8,8 @@ import { useId, useMemo, useRef, useState } from "react";
 
 import type { CatalogItemDTO } from "@/lib/booking/catalog-dto";
 import { sampleHref, photoSampleHref, iGuideSampleHref, streamSampleHref } from "@/lib/booking/catalog-sample-viewer";
+import { websiteGallery, type WebsiteGallery } from "@/lib/booking/website-galleries";
+import WebsiteGalleryDialog from "@/components/WebsiteGalleryDialog";
 import { getCatalogSampleGroups } from "@/lib/booking/catalog-sample-groups";
 import { isAddonEligible } from "@/lib/booking/catalog-rules";
 import BookingTotalBar from "./BookingTotalBar";
@@ -275,6 +277,7 @@ function PackageDetails({ item, label = "Package details", desktopDefaultOpen = 
   const playerTitle = useId();
   const [view, setView] = useState<SampleView | null>(null);
   const [photoFailed, setPhotoFailed] = useState(false);
+  const [galleryView, setGalleryView] = useState<{ gallery: WebsiteGallery; opener: HTMLElement } | null>(null);
   const lines = packageDescriptionLines(item.description);
   const groups = getCatalogSampleGroups(item);
   const rule = sqftRuleText(item);
@@ -328,6 +331,12 @@ function PackageDetails({ item, label = "Package details", desktopDefaultOpen = 
                     </div> : null}
                     {examples.filter(example => !photos.some(photo => photo.id === example.id)).map((example) => {
                       const actionLabel = examples.length > 1 ? example.title : example.kind === "video" ? "Watch sample" : group.key === "iguide" ? "Explore iGUIDE" : "View example";
+                      const gallery = example.kind !== "video" ? websiteGallery(example.external_url) : undefined;
+                      if (gallery) return <button key={example.id} type="button" data-booking-example={example.id} aria-haspopup="dialog"
+                        aria-label={`${actionLabel}${examples.length === 1 ? `: ${example.title}` : ""} — ${group.label} for ${item.name} (opens website gallery)`}
+                        onClick={event => setGalleryView({ gallery, opener: event.currentTarget })}>
+                        <span>{actionLabel}</span>
+                      </button>;
                       const streamSrc = example.kind === "video" ? streamSampleHref(example.embed_url) : undefined;
                       const tourSrc = example.kind !== "video" ? iGuideSampleHref(example.embed_url ?? example.external_url) : undefined;
                       if (streamSrc || tourSrc) return (
@@ -413,6 +422,8 @@ function PackageDetails({ item, label = "Package details", desktopDefaultOpen = 
         </> : null}
       </div>
     </dialog>
+    {galleryView ? <WebsiteGalleryDialog gallery={galleryView.gallery} returnFocus={galleryView.opener}
+      onClose={() => setGalleryView(null)} contextLabel={`Example for ${item.name}`} /> : null}
   </>;
 }
 

@@ -95,6 +95,8 @@ jobs:
         run: npx --no-install playwright install --with-deps chromium
       - name: Probe catalog video completion recovery with local fixtures
         run: node tests/catalog-video-completion.browser.mjs
+      - name: Probe gallery editor and booking overlays with local fixtures
+        run: node tests/website-galleries.browser.mjs
       - name: Probe real booking POST, receipt reload and duplicate replay
         run: npm run test:http-booking-confirmation
       - name: Probe request-scoped authenticated rendering

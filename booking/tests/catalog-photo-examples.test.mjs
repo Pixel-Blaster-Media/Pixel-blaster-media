@@ -4,6 +4,7 @@ import React from 'react';
 import * as jsxRuntime from 'react/jsx-runtime';
 import Renderer,{act} from 'react-test-renderer';
 import {loadSource} from './helpers/source-module.mjs';
+import {galleryDependencies} from './helpers/website-gallery-source.mjs';
 const policy=loadSource('lib/booking/catalog-upload-policy.ts');
 const core=loadSource('lib/booking/catalog-examples-core.ts',{'./catalog-upload-policy.ts':policy});
 const groups=loadSource('lib/booking/catalog-sample-groups.ts');
@@ -11,6 +12,7 @@ const viewer=loadSource('lib/booking/catalog-sample-viewer.ts');
 function actions(){
  const writes=[],paths=[];
  const loaded=loadSource('app/admin/settings/pricing/example-actions.ts',{
+  ...galleryDependencies,
   'next/cache':{revalidatePath:path=>paths.push(path)},
   '@/lib/booking/catalog-examples-core':core,
   '@/lib/booking/catalog-sample-viewer':viewer,
@@ -30,6 +32,7 @@ test('photo-specific form rejects unsafe/indirect URLs and missing public permis
 test('admin editor exposes configurable empty photo gallery and submits explicit public photo fields',async()=>{
  globalThis.IS_REACT_ACT_ENVIRONMENT=true;const sent=[];const MockUploader=()=>null;
  const Editor=loadSource('app/admin/settings/pricing/CatalogExamplesEditor.tsx',{
+  ...galleryDependencies,
   react:React,'react/jsx-runtime':jsxRuntime,'./CatalogVideoUploader':{default:MockUploader},'next/navigation':{useRouter:()=>({refresh(){}})},
   '@/lib/booking/catalog-sample-groups':groups,
   '@/lib/booking/catalog-video-completion':{waitForCatalogVideoCompletion:async()=>{throw Error('Photo editing must not check videos');}},
