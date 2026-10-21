@@ -17,8 +17,22 @@ function filterWork(category) {
 filters.forEach(button => button.addEventListener('click', () => filterWork(button.dataset.filter)));
 document.querySelectorAll('[data-filter-link]').forEach(link => link.addEventListener('click', () => filterWork(link.dataset.filterLink)));
 const collections = portfolio.collections;
-document.querySelectorAll('[data-collection]').forEach(button => button.addEventListener('click', () => {
-  const item=collections[button.dataset.collection];
+const collectionDialog = document.querySelector('#collection-dialog');
+const galleryPrefix = '#gallery/';
+const galleryKeys = new Map(Object.entries(collections).map(([key, item]) => [item.slug, key]));
+let activeCollection = null;
+let galleryTrigger = null;
+
+function galleryRoute() {
+  if (!location.hash.startsWith(galleryPrefix)) return null;
+  return galleryKeys.get(location.hash.slice(galleryPrefix.length)) || null;
+}
+
+function renderCollection(key) {
+  if (activeCollection === key && collectionDialog.open) return;
+  const item=collections[key];
+  activeCollection = key;
+  galleryTrigger = document.querySelector(`[data-collection="${key}"]`);
   document.querySelector('#collection-title').textContent=item.title;
   document.querySelector('#collection-description').textContent=item.description;
   const grid=document.querySelector('#collection-images'); grid.replaceChildren();
@@ -50,9 +64,60 @@ document.querySelectorAll('[data-collection]').forEach(button => button.addEvent
     });
     group.append(heading,count,sectionGrid); grid.append(group);
   });
-  const dialog=document.querySelector('#collection-dialog');
-  dialog.showModal(); dialog.scrollTop=0;
+  if (!collectionDialog.open) collectionDialog.showModal();
+  collectionDialog.scrollTop=0;
+}
+
+function syncGalleryRoute() {
+  const key = galleryRoute();
+  if (key) {
+    renderCollection(key);
+    return;
+  }
+  // Unknown gallery links return to selected work without breaking other anchors.
+  if (location.hash.startsWith(galleryPrefix)) {
+    const url = new URL(location.href);
+    url.hash = 'work';
+    history.replaceState(null, '', url);
+    document.querySelector('#work').scrollIntoView({block:'start'});
+  }
+  activeCollection = null;
+  if (collectionDialog.open) collectionDialog.close();
+}
+
+document.querySelectorAll('[data-collection]').forEach(button => button.addEventListener('click', () => {
+  const key = button.dataset.collection;
+  const url = new URL(location.href);
+  url.hash = `${galleryPrefix}${collections[key].slug}`;
+  if (location.hash !== url.hash) {
+    // Closing a gallery opened on this page returns to the exact prior URL.
+    history.pushState({galleryReturn: location.href}, '', url);
+  }
+  renderCollection(key);
 }));
+
+collectionDialog.addEventListener('close', () => {
+  // A route change may have closed this dialog, or reopened it before this event.
+  if (collectionDialog.open) return;
+  const closedCollection = activeCollection;
+  activeCollection = null;
+  if (galleryRoute() !== closedCollection || !closedCollection) return;
+  if (galleryTrigger && !galleryTrigger.closest('[data-category]').hidden) {
+    galleryTrigger.focus({preventScroll:true});
+  }
+  if (history.state?.galleryReturn) {
+    history.back();
+  } else {
+    // A direct link has no local opener history; closing must keep visitors here.
+    const url = new URL(location.href);
+    url.hash = 'work';
+    history.replaceState(null, '', url);
+    document.querySelector('#work').scrollIntoView({block:'start'});
+  }
+});
+window.addEventListener('popstate', syncGalleryRoute);
+window.addEventListener('hashchange', syncGalleryRoute);
+syncGalleryRoute();
 document.querySelector('#open-reel').addEventListener('click', () => {
   const dialog=document.querySelector('#reel-dialog');
   const video=dialog.querySelector('video');

@@ -1968,6 +1968,456 @@ const portfolio = {
           "bytes": 304072
         }
       ]
+    },
+    "87": {
+      "alt": "A shingled home framed by a curved driveway, mature trees and flowering garden beds",
+      "width": 6000,
+      "height": 3993,
+      "variants": [
+        {
+          "src": "assets/portfolio/editorial-garden-home-640.webp",
+          "width": 640,
+          "height": 426,
+          "bytes": 117272
+        },
+        {
+          "src": "assets/portfolio/editorial-garden-home-1200.webp",
+          "width": 1200,
+          "height": 799,
+          "bytes": 401912
+        },
+        {
+          "src": "assets/portfolio/editorial-garden-home-1800.webp",
+          "width": 1800,
+          "height": 1198,
+          "bytes": 846774
+        }
+      ]
+    },
+    "88": {
+      "alt": "A lantern and house-number plaque beside hydrangeas at a garden entrance",
+      "width": 3991,
+      "height": 6000,
+      "variants": [
+        {
+          "src": "assets/portfolio/editorial-garden-lantern-640.webp",
+          "width": 640,
+          "height": 962,
+          "bytes": 202194
+        },
+        {
+          "src": "assets/portfolio/editorial-garden-lantern-1200.webp",
+          "width": 1200,
+          "height": 1804,
+          "bytes": 515416
+        },
+        {
+          "src": "assets/portfolio/editorial-garden-lantern-1800.webp",
+          "width": 1800,
+          "height": 2706,
+          "bytes": 887524
+        }
+      ]
+    },
+    "89": {
+      "alt": "A softly lit sitting-room corner with a fireplace, built-in shelves and a glass coffee table",
+      "width": 3992,
+      "height": 6000,
+      "variants": [
+        {
+          "src": "assets/portfolio/editorial-fireplace-corner-640.webp",
+          "width": 640,
+          "height": 962,
+          "bytes": 91918
+        },
+        {
+          "src": "assets/portfolio/editorial-fireplace-corner-1200.webp",
+          "width": 1200,
+          "height": 1804,
+          "bytes": 272064
+        },
+        {
+          "src": "assets/portfolio/editorial-fireplace-corner-1800.webp",
+          "width": 1800,
+          "height": 2705,
+          "bytes": 495012
+        }
+      ]
+    },
+    "90": {
+      "alt": "A kitchen with rich wood cabinetry, a central island and pale upholstered stools",
+      "width": 6000,
+      "height": 3997,
+      "variants": [
+        {
+          "src": "assets/portfolio/editorial-cherry-kitchen-640.webp",
+          "width": 640,
+          "height": 426,
+          "bytes": 43254
+        },
+        {
+          "src": "assets/portfolio/editorial-cherry-kitchen-1200.webp",
+          "width": 1200,
+          "height": 799,
+          "bytes": 116048
+        },
+        {
+          "src": "assets/portfolio/editorial-cherry-kitchen-1800.webp",
+          "width": 1800,
+          "height": 1199,
+          "bytes": 220878
+        }
+      ]
+    },
+    "91": {
+      "alt": "A bright bedroom with a window seat, white bedding and a soft mauve throw",
+      "width": 6000,
+      "height": 4000,
+      "variants": [
+        {
+          "src": "assets/portfolio/editorial-window-bedroom-640.webp",
+          "width": 640,
+          "height": 427,
+          "bytes": 36854
+        },
+        {
+          "src": "assets/portfolio/editorial-window-bedroom-1200.webp",
+          "width": 1200,
+          "height": 800,
+          "bytes": 120834
+        },
+        {
+          "src": "assets/portfolio/editorial-window-bedroom-1800.webp",
+          "width": 1800,
+          "height": 1200,
+          "bytes": 248746
+        }
+      ]
+    },
+    "92": {
+      "alt": "A view through a doorway into a light bedroom with layered bedding and tall windows",
+      "width": 3995,
+      "height": 6000,
+      "variants": [
+        {
+          "src": "assets/portfolio/editorial-bedroom-doorway-640.webp",
+          "width": 640,
+          "height": 961,
+          "bytes": 66996
+        },
+        {
+          "src": "assets/portfolio/editorial-bedroom-doorway-1200.webp",
+          "width": 1200,
+          "height": 1802,
+          "bytes": 205382
+        },
+        {
+          "src": "assets/portfolio/editorial-bedroom-doorway-1800.webp",
+          "width": 1800,
+          "height": 2703,
+          "bytes": 377194
+        }
+      ]
+    },
+    "93": {
+      "alt": "A split-level home with a garage, shaded front lawn and a wide driveway",
+      "width": 4096,
+      "height": 2733,
+      "variants": [
+        {
+          "src": "assets/portfolio/property-daylight-split-level-640.webp",
+          "width": 640,
+          "height": 427,
+          "bytes": 91608
+        },
+        {
+          "src": "assets/portfolio/property-daylight-split-level-1200.webp",
+          "width": 1200,
+          "height": 801,
+          "bytes": 307014
+        },
+        {
+          "src": "assets/portfolio/property-daylight-split-level-1800.webp",
+          "width": 1800,
+          "height": 1201,
+          "bytes": 668424
+        }
+      ]
+    },
+    "94": {
+      "alt": "A white gabled home with a curved front path and mature garden trees",
+      "width": 4096,
+      "height": 2720,
+      "variants": [
+        {
+          "src": "assets/portfolio/property-daylight-gabled-home-640.webp",
+          "width": 640,
+          "height": 425,
+          "bytes": 102336
+        },
+        {
+          "src": "assets/portfolio/property-daylight-gabled-home-1200.webp",
+          "width": 1200,
+          "height": 797,
+          "bytes": 346746
+        },
+        {
+          "src": "assets/portfolio/property-daylight-gabled-home-1800.webp",
+          "width": 1800,
+          "height": 1195,
+          "bytes": 739342
+        }
+      ]
+    },
+    "95": {
+      "alt": "A bright white kitchen with a dark island, wood flooring and a geometric pendant light",
+      "width": 4096,
+      "height": 2724,
+      "variants": [
+        {
+          "src": "assets/portfolio/property-white-kitchen-island-640.webp",
+          "width": 640,
+          "height": 426,
+          "bytes": 40100
+        },
+        {
+          "src": "assets/portfolio/property-white-kitchen-island-1200.webp",
+          "width": 1200,
+          "height": 798,
+          "bytes": 104254
+        },
+        {
+          "src": "assets/portfolio/property-white-kitchen-island-1800.webp",
+          "width": 1800,
+          "height": 1197,
+          "bytes": 194652
+        }
+      ]
+    },
+    "96": {
+      "alt": "An open kitchen and dining space with oak cabinetry, a dark island and woven pendant lights",
+      "width": 4096,
+      "height": 2722,
+      "variants": [
+        {
+          "src": "assets/portfolio/property-oak-kitchen-wide-640.webp",
+          "width": 640,
+          "height": 425,
+          "bytes": 38390
+        },
+        {
+          "src": "assets/portfolio/property-oak-kitchen-wide-1200.webp",
+          "width": 1200,
+          "height": 797,
+          "bytes": 100218
+        },
+        {
+          "src": "assets/portfolio/property-oak-kitchen-wide-1800.webp",
+          "width": 1800,
+          "height": 1196,
+          "bytes": 190610
+        }
+      ]
+    },
+    "97": {
+      "alt": "White kitchen cabinetry and marble-patterned counters beneath a garden-facing window",
+      "width": 4096,
+      "height": 2728,
+      "variants": [
+        {
+          "src": "assets/portfolio/property-white-kitchen-window-640.webp",
+          "width": 640,
+          "height": 426,
+          "bytes": 39418
+        },
+        {
+          "src": "assets/portfolio/property-white-kitchen-window-1200.webp",
+          "width": 1200,
+          "height": 799,
+          "bytes": 99940
+        },
+        {
+          "src": "assets/portfolio/property-white-kitchen-window-1800.webp",
+          "width": 1800,
+          "height": 1199,
+          "bytes": 173354
+        }
+      ]
+    },
+    "98": {
+      "alt": "A wide island with black stools beneath woven pendant lights in an oak and charcoal kitchen",
+      "width": 4096,
+      "height": 2726,
+      "variants": [
+        {
+          "src": "assets/portfolio/property-oak-kitchen-island-640.webp",
+          "width": 640,
+          "height": 426,
+          "bytes": 29466
+        },
+        {
+          "src": "assets/portfolio/property-oak-kitchen-island-1200.webp",
+          "width": 1200,
+          "height": 799,
+          "bytes": 76428
+        },
+        {
+          "src": "assets/portfolio/property-oak-kitchen-island-1800.webp",
+          "width": 1800,
+          "height": 1198,
+          "bytes": 143450
+        }
+      ]
+    },
+    "99": {
+      "alt": "A panelled living room with a lit fireplace, pale sectional sofa and upholstered coffee table",
+      "width": 4096,
+      "height": 2724,
+      "variants": [
+        {
+          "src": "assets/portfolio/property-panelled-living-room-640.webp",
+          "width": 640,
+          "height": 426,
+          "bytes": 41068
+        },
+        {
+          "src": "assets/portfolio/property-panelled-living-room-1200.webp",
+          "width": 1200,
+          "height": 798,
+          "bytes": 120340
+        },
+        {
+          "src": "assets/portfolio/property-panelled-living-room-1800.webp",
+          "width": 1800,
+          "height": 1197,
+          "bytes": 252960
+        }
+      ]
+    },
+    "100": {
+      "alt": "A light living room opening toward a dining area, with a sectional sofa and broad windows",
+      "width": 4096,
+      "height": 2728,
+      "variants": [
+        {
+          "src": "assets/portfolio/property-living-dining-view-640.webp",
+          "width": 640,
+          "height": 426,
+          "bytes": 51724
+        },
+        {
+          "src": "assets/portfolio/property-living-dining-view-1200.webp",
+          "width": 1200,
+          "height": 799,
+          "bytes": 159496
+        },
+        {
+          "src": "assets/portfolio/property-living-dining-view-1800.webp",
+          "width": 1800,
+          "height": 1199,
+          "bytes": 333042
+        }
+      ]
+    },
+    "101": {
+      "alt": "Oak kitchen cabinets, a black range and a waterfall island beneath a timber ceiling inset",
+      "width": 4096,
+      "height": 2728,
+      "variants": [
+        {
+          "src": "assets/portfolio/property-oak-kitchen-detail-640.webp",
+          "width": 640,
+          "height": 426,
+          "bytes": 32110
+        },
+        {
+          "src": "assets/portfolio/property-oak-kitchen-detail-1200.webp",
+          "width": 1200,
+          "height": 799,
+          "bytes": 80718
+        },
+        {
+          "src": "assets/portfolio/property-oak-kitchen-detail-1800.webp",
+          "width": 1800,
+          "height": 1199,
+          "bytes": 148470
+        }
+      ]
+    },
+    "102": {
+      "alt": "An open living room and kitchen with built-in shelving, a long fireplace and round coffee tables",
+      "width": 4096,
+      "height": 2714,
+      "variants": [
+        {
+          "src": "assets/portfolio/property-open-living-kitchen-640.webp",
+          "width": 640,
+          "height": 424,
+          "bytes": 46784
+        },
+        {
+          "src": "assets/portfolio/property-open-living-kitchen-1200.webp",
+          "width": 1200,
+          "height": 795,
+          "bytes": 138186
+        },
+        {
+          "src": "assets/portfolio/property-open-living-kitchen-1800.webp",
+          "width": 1800,
+          "height": 1193,
+          "bytes": 261018
+        }
+      ]
+    },
+    "103": {
+      "alt": "A linear fireplace beneath a round mirror, framed by oak shelves and ribbed wall panelling",
+      "width": 4096,
+      "height": 2724,
+      "variants": [
+        {
+          "src": "assets/portfolio/property-oak-fireplace-640.webp",
+          "width": 640,
+          "height": 426,
+          "bytes": 32530
+        },
+        {
+          "src": "assets/portfolio/property-oak-fireplace-1200.webp",
+          "width": 1200,
+          "height": 798,
+          "bytes": 87544
+        },
+        {
+          "src": "assets/portfolio/property-oak-fireplace-1800.webp",
+          "width": 1800,
+          "height": 1197,
+          "bytes": 171612
+        }
+      ]
+    },
+    "104": {
+      "alt": "A bright bedroom with a blue upholstered headboard, white bedside tables and garden views",
+      "width": 4096,
+      "height": 2728,
+      "variants": [
+        {
+          "src": "assets/portfolio/property-blue-headboard-bedroom-640.webp",
+          "width": 640,
+          "height": 426,
+          "bytes": 43358
+        },
+        {
+          "src": "assets/portfolio/property-blue-headboard-bedroom-1200.webp",
+          "width": 1200,
+          "height": 799,
+          "bytes": 153264
+        },
+        {
+          "src": "assets/portfolio/property-blue-headboard-bedroom-1800.webp",
+          "width": 1800,
+          "height": 1199,
+          "bytes": 317024
+        }
+      ]
     }
   },
   "collections": {
@@ -1986,7 +2436,8 @@ const portfolio = {
             3
           ]
         }
-      ]
+      ],
+      "slug": "brand-product"
     },
     "people": {
       "title": "People with presence.",
@@ -2036,7 +2487,8 @@ const portfolio = {
             56
           ]
         }
-      ]
+      ],
+      "slug": "portraits-people"
     },
     "spaces": {
       "title": "Spaces with character.",
@@ -2070,9 +2522,15 @@ const portfolio = {
         27,
         40,
         31,
-        30
+        30,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92
       ],
-      "description": "Rooms, materials and architectural details. Explore the new stone-and-timber series and the wider editorial collection.",
+      "description": "Rooms, materials and architectural details. Explore the stone-and-timber series, garden home and wider editorial collection.",
       "sections": [
         {
           "title": "Stone & timber · New work",
@@ -2123,8 +2581,20 @@ const portfolio = {
             31,
             30
           ]
+        },
+        {
+          "title": "Garden home · New work",
+          "photos": [
+            87,
+            88,
+            89,
+            90,
+            91,
+            92
+          ]
         }
-      ]
+      ],
+      "slug": "interiors-architecture"
     },
     "lifestyle": {
       "title": "In everyday life.",
@@ -2152,7 +2622,8 @@ const portfolio = {
             18
           ]
         }
-      ]
+      ],
+      "slug": "commercial-lifestyle"
     },
     "hospitality": {
       "title": "A place at the table.",
@@ -2185,7 +2656,8 @@ const portfolio = {
             10
           ]
         }
-      ]
+      ],
+      "slug": "food-hospitality"
     },
     "property": {
       "title": "Property & perspective.",
@@ -2205,7 +2677,19 @@ const portfolio = {
         77,
         21,
         20,
-        22
+        22,
+        95,
+        96,
+        97,
+        98,
+        99,
+        100,
+        101,
+        102,
+        103,
+        104,
+        93,
+        94
       ],
       "description": "Listing interiors, exteriors and aerial views, grouped by subject. These photographs span different properties and locations.",
       "sections": [
@@ -2249,8 +2733,31 @@ const portfolio = {
             20,
             22
           ]
+        },
+        {
+          "title": "Recent listing interiors",
+          "photos": [
+            95,
+            96,
+            97,
+            98,
+            99,
+            100,
+            101,
+            102,
+            103,
+            104
+          ]
+        },
+        {
+          "title": "Daylight exteriors",
+          "photos": [
+            93,
+            94
+          ]
         }
-      ]
+      ],
+      "slug": "real-estate-aerial"
     }
   }
 };
