@@ -807,7 +807,15 @@ export default function CalendarWeekView({
   };
 
   return (
-    <div className="max-w-full space-y-3 px-0.5">
+    <div className="max-w-full space-y-3 px-0.5" onClickCapture={event => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (!(event.target instanceof Element) || !event.target.closest("[data-calendar-today]")) return;
+      // The server-rendered calendar menu shares the same local scroll action.
+      event.preventDefault();
+      jumpToday();
+      setMobileToolsOpen(false);
+      event.target.closest("details")?.removeAttribute("open");
+    }}>
       <section className="sticky top-2 z-[80] overflow-visible rounded-3xl border border-realtor-primary/15 bg-realtor-surface/95 p-2 shadow-lg shadow-realtor-text/10 backdrop-blur-xl">
         <div className="md:hidden">
           <div className="flex items-center gap-2">
@@ -826,7 +834,7 @@ export default function CalendarWeekView({
               </Link>
               <Link
                 href={navigation.todayHref}
-                onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); jumpToday(); } }}
+                data-calendar-today
                 className="inline-flex h-11 items-center justify-center rounded-full border border-realtor-primary/25 bg-white px-3 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/45"
               >
                 Today
@@ -952,7 +960,7 @@ export default function CalendarWeekView({
             </Link>
             <Link
               href={navigation.todayHref}
-                onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); jumpToday(); } }}
+              data-calendar-today
               className="inline-flex h-10 items-center justify-center rounded-full border border-realtor-primary/25 bg-white px-4 text-sm font-semibold text-realtor-primary transition hover:border-realtor-primary/45"
             >
               Today

@@ -101,6 +101,7 @@ export function useContinuousCalendar({ initialDays, initialItems, search, scrol
     for (const controller of requests.current.values()) controller.abort();
     requests.current.clear();
     if (frame.current !== null) cancelAnimationFrame(frame.current);
+    frame.current = null;
   }, []);
 
   useEffect(() => {
@@ -114,19 +115,6 @@ export function useContinuousCalendar({ initialDays, initialItems, search, scrol
     };
     scroller.addEventListener("wheel", wheel, { passive: false });
     return () => scroller.removeEventListener("wheel", wheel);
-  });
-
-  useLayoutEffect(() => {
-    const scroller = scrollerRef.current;
-    if (!scroller || scroller.clientWidth === 0) return;
-    const date = focusDate.current ?? anchor.current?.date;
-    if (!date) return;
-    const node = scroller.querySelector<HTMLElement>(`[data-calendar-day-header="${date}"]`);
-    if (!node) return;
-    const offset = node.getBoundingClientRect().left - scroller.getBoundingClientRect().left;
-    scroller.scrollLeft += offset - (focusDate.current ? 64 : anchor.current!.left);
-    if (anchor.current) scroller.scrollTop = anchor.current.top;
-    focusDate.current = null; anchor.current = null;
   });
 
   const grow = useCallback((direction: -1 | 1) => {
@@ -143,6 +131,26 @@ export function useContinuousCalendar({ initialDays, initialItems, search, scrol
       return bounded;
     });
   }, [captureAnchor, placeholder]);
+
+  useLayoutEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller || scroller.clientWidth === 0) return;
+    const date = focusDate.current ?? anchor.current?.date;
+    if (!date) return;
+    const node = scroller.querySelector<HTMLElement>(`[data-calendar-day-header="${date}"]`);
+    if (!node) return;
+    const offset = node.getBoundingClientRect().left - scroller.getBoundingClientRect().left;
+    const target = scroller.scrollLeft + offset - (focusDate.current ? 64 : anchor.current!.left);
+    scroller.scrollLeft = target;
+    if (anchor.current) scroller.scrollTop = anchor.current.top;
+    // Wide viewports can hit the loaded range's right edge before the requested
+    // date reaches the time gutter. Keep the request until another week renders.
+    if (focusDate.current && target > scroller.scrollLeft + 1) {
+      grow(1);
+      return;
+    }
+    focusDate.current = null; anchor.current = null;
+  });
 
   const onScroll = useCallback(() => {
     if (frame.current !== null) return;
