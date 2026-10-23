@@ -512,6 +512,7 @@ export function CalendarSidebar({
             </p>
             <Link
               href={calendarHref()}
+              data-calendar-today
               className="text-[11px] font-semibold text-realtor-primary"
             >
               Today
