@@ -27,7 +27,8 @@ export function useContinuousCalendar({ initialDays, initialItems, search, scrol
     return key === initialWeek ? { weekStart: key, days: initialDays, items: initialItems, state: "ready" } : placeholder(key);
   }), [initialDays, initialItems, initialWeek, placeholder]);
   const [weeks, setWeeks] = useState<Week[]>(() => seed(initialWeek));
-  const [visibleWeek, setVisibleWeek] = useState(initialWeek);
+  const [visibleDate, setVisibleDate] = useState(initialWeek);
+  const visibleWeek = calendarWeekStart(visibleDate);
   const weeksRef = useRef(weeks);
   weeksRef.current = weeks;
   const requests = useRef(new Map<string, AbortController>());
@@ -80,7 +81,7 @@ export function useContinuousCalendar({ initialDays, initialItems, search, scrol
       requests.current.clear();
       if (navigated) {
         focusDate.current = initialWeek; anchor.current = null;
-        setVisibleWeek(initialWeek); setWeeks(seed(initialWeek)); return;
+        setVisibleDate(initialWeek); setWeeks(seed(initialWeek)); return;
       }
       captureAnchor();
       // A mutation refresh invalidates the other windows too: a moved booking
@@ -160,7 +161,9 @@ export function useContinuousCalendar({ initialDays, initialItems, search, scrol
       if (!scroller || scroller.clientWidth === 0) return;
       const left = scroller.getBoundingClientRect().left;
       const node = [...scroller.querySelectorAll<HTMLElement>("[data-calendar-day-header]")].find(el => el.getBoundingClientRect().right > left + 65);
-      if (node?.dataset.calendarDayHeader) setVisibleWeek(calendarWeekStart(node.dataset.calendarDayHeader));
+      // Follow the first date beside the sticky time gutter as the user pans.
+      // A pending jump owns the date until its target has finished rendering.
+      if (node?.dataset.calendarDayHeader && !focusDate.current) setVisibleDate(node.dataset.calendarDayHeader);
       if (scroller.scrollLeft < 240) grow(-1);
       else if (scroller.scrollWidth - scroller.clientWidth - scroller.scrollLeft < 360) grow(1);
     });
@@ -169,7 +172,7 @@ export function useContinuousCalendar({ initialDays, initialItems, search, scrol
   const jumpToDate = useCallback((date: string) => {
     const key = calendarWeekStart(date);
     focusDate.current = date; anchor.current = null;
-    setVisibleWeek(key);
+    setVisibleDate(date);
     if (!weeksRef.current.some(week => week.weekStart === key)) {
       for (const controller of requests.current.values()) controller.abort();
       requests.current.clear();
@@ -186,7 +189,7 @@ export function useContinuousCalendar({ initialDays, initialItems, search, scrol
     }
     return [...unique.values()];
   }, [weeks]);
-  return { days, items, visibleWeek, jumpToDate, onScroll,
+  return { days, items, visibleDate, visibleWeek, jumpToDate, onScroll,
     activeDays: days.filter(day => calendarWeekStart(day.dateInput) === visibleWeek),
     stateForDay: (date: string) => weeks.find(week => week.weekStart === calendarWeekStart(date))?.state ?? "loading",
     failedWeeks: weeks.filter(week => week.state === "error"),

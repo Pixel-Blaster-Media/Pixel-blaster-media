@@ -89,8 +89,8 @@ if (evidence) fs.writeFileSync(path.join(evidence, 'module-manifest.json'), JSON
 const browser = await chromium.launch({ headless: true });
 const results = [];
 try {
-  for (const width of [1440, 390, 320, 768, 2560]) {
-    const context = await browser.newContext({ viewport: { width, height: 900 }, timezoneId: 'Asia/Tokyo',
+  for (const width of process.env.CALENDAR_WIDTHS?.split(',').map(Number) ?? [1440, 390, 320, 768, 2560]) {
+    const context = await browser.newContext({ viewport: { width, height: Number(process.env.CALENDAR_HEIGHT || 900) }, timezoneId: 'Asia/Tokyo',
       isMobile: width < 768, hasTouch: width < 768 });
     const errors = [], requests = [], unexpected = [];
     let delay = 0;
@@ -125,10 +125,23 @@ try {
     }, date);
     const before = await position('2026-10-23');
     const activateToday = () => width < 768 ? today.tap() : today.click();
+    const assertVisibleDate = async date => {
+      const label = page.locator('[data-calendar-visible-date]');
+      await expect(label).toHaveAttribute('data-calendar-visible-date', date);
+      await expect(label.locator('time')).toHaveText(new Intl.DateTimeFormat('en-US', {
+        timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+      }).format(new Date(`${date}T12:00:00Z`)));
+      await expect(page.locator('[data-calendar-day-button][aria-pressed="true"]')).toHaveCount(1);
+      await expect(page.locator('[data-calendar-day-button][aria-pressed="true"]')).toHaveAttribute('data-calendar-day-button', date);
+      await expect(label).toBeInViewport();
+    };
+    const leadingDate = () => timeline.evaluate(el => [...el.querySelectorAll('[data-calendar-day-header]')]
+      .find(node => node.getBoundingClientRect().right > el.getBoundingClientRect().left + 65)?.dataset.calendarDayHeader);
     const assertSnap = async (date, top) => {
       await expect.poll(async () => (await position(date)).left).toBeCloseTo(64, 0);
       if (top !== undefined) assert.equal((await position(date)).scrollTop, top, 'keep the chosen time of day');
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'no document overflow');
+      if (width < 768 && process.env.CALENDAR_CASE !== 'date-strip') await assertVisibleDate(date);
     };
     if (process.env.CALENDAR_CASE !== 'menu') {
       await activateToday();
@@ -157,6 +170,73 @@ try {
       await expect.poll(async () => (await position('2026-10-23')).left).toBeLessThan(0);
       await activateToday();
       await assertSnap('2026-10-23', 355);
+    }
+    if (width < 768) {
+      // Choosing a day must move the continuous grid, not just highlight a button.
+      const dayStrip = page.locator('.grid-cols-7').filter({ visible: true });
+      await dayStrip.getByRole('button').nth(2).tap();
+      await assertSnap('2026-10-20', 355);
+      if (process.env.CALENDAR_CASE === 'date-strip') { await context.close(); continue; }
+      // Partial columns and natural panning keep the date strip honest.
+      await timeline.evaluate(el => { el.scrollLeft += 75; });
+      await assertVisibleDate('2026-10-20');
+      await timeline.evaluate(el => { el.scrollLeft += 60; });
+      await assertVisibleDate('2026-10-21');
+      const view = name => page.getByRole('button', { name, exact: true }).filter({ visible: true });
+      await view('day').tap();
+      await assertVisibleDate('2026-10-21');
+      await view('week').tap();
+      await assertSnap('2026-10-21');
+      const cdp = await context.newCDPSession(page);
+      const swipe = async (dx, dy) => {
+        const box = await timeline.boundingBox();
+        const x = dx < 0 ? box.x + box.width - 25 : box.x + 90;
+        const y = box.y + Math.min(160, box.height / 2);
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+        for (let step = 1; step <= 12; step++) {
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + dx * step / 12, y: y + dy * step / 12 }] });
+          await page.waitForTimeout(20);
+        }
+        await page.waitForTimeout(120);
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await expect.poll(async () => {
+          const first = await timeline.evaluate(el => [el.scrollLeft, el.scrollTop]);
+          await page.waitForTimeout(100);
+          return timeline.evaluate((el, first) => Math.abs(el.scrollLeft - first[0]) + Math.abs(el.scrollTop - first[1]), first);
+        }).toBeLessThan(1);
+      };
+      for (const dx of [-140, 140]) {
+        const left = (await position('2026-10-21')).scrollLeft;
+        await swipe(dx, 0);
+        const movement = (await position('2026-10-21')).scrollLeft - left;
+        assert.ok(dx < 0 ? movement > 50 : movement < -50, 'native touch pans the continuous calendar in both directions');
+        await assertVisibleDate(await leadingDate());
+      }
+      const top = (await position('2026-10-21')).scrollTop;
+      await swipe(0, -120);
+      assert.ok((await position('2026-10-21')).scrollTop > top + 50, 'native touch scrolls through hours');
+      const visibleDate = await leadingDate();
+      await assertVisibleDate(visibleDate);
+      await expect.poll(() => timeline.locator(`[data-calendar-day-header="${visibleDate}"]`).evaluate(el =>
+        el.getBoundingClientRect().top - el.closest('[role="region"]').getBoundingClientRect().top)).toBeCloseTo(1, 0);
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      await assertVisibleDate(visibleDate);
+      await expect(today).toBeInViewport();
+      if (evidence) await page.screenshot({ path: path.join(evidence, `mobile-scrolled-${width}.png`) });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await cdp.detach();
+      await activateToday(); await assertSnap('2026-10-23');
+      for (const [direction, dates] of [
+        ['Next week', ['2026-10-25', '2026-11-01', '2026-11-08']],
+        ['Previous week', ['2026-11-01', '2026-10-25', '2026-10-18']],
+      ]) {
+        for (const date of dates) {
+          await page.getByRole('link', { name: direction, exact: true }).filter({ visible: true }).tap();
+          await assertSnap(date);
+        }
+      }
+      await timeline.evaluate(el => { el.scrollTop = 355; });
+      await activateToday(); await assertSnap('2026-10-23', 355);
     }
     // Grow beyond the bounded window, then return to a date no longer in the DOM.
     for (let i = 0; i < 8; i++) {
@@ -189,6 +269,7 @@ try {
         ['2027-01-01T04:59:59Z', '2026-12-31'], ['2027-01-01T05:00:00Z', '2027-01-01'],
         ['2026-03-08T06:59:59Z', '2026-03-08'], ['2026-03-08T07:00:00Z', '2026-03-08'],
         ['2026-11-01T05:59:59Z', '2026-11-01'], ['2026-11-01T06:00:00Z', '2026-11-01'],
+        ['2026-11-03T04:59:59Z', '2026-11-02'], ['2026-11-03T05:00:00Z', '2026-11-03'],
       ]) {
         await page.clock.setFixedTime(new Date(instant));
         await activateToday(); await assertSnap(date, 355);
@@ -207,13 +288,15 @@ try {
         await activateToday(); await assertSnap('2026-10-23');
       }
     }
+    await page.clock.setFixedTime(new Date('2026-11-03T12:00:00Z'));
+    await activateToday(); await assertSnap('2026-11-03');
     if (evidence) await page.screenshot({ path: path.join(evidence, `today-${width}.png`) });
     results.push({ width, before, after, requests, errors, unexpected });
     assert.equal(await page.evaluate(() => window.mutationAttempts), 0);
     assert.deepEqual(errors, []);
     assert.deepEqual(unexpected, []);
     await context.close();
-    console.log(`${width}px: toolbar/menu Today, repeated clicks, scroll away/back, evicted date, slow reads, bounded continuous scroll, Home/PageUp/PageDown, vertical position and search passed`);
+    console.log(`${width}px: toolbar/menu Today, repeated clicks, scroll away/back, evicted date, slow reads, bounded continuous scroll, Home/PageUp/PageDown, vertical position and search passed${width < 768 ? '; date taps, date context, native horizontal/vertical touch, week/month navigation passed' : ''}`);
   }
 } catch (error) {
   if (evidence) {
