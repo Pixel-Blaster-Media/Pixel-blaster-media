@@ -5,6 +5,7 @@ import React from "react";
 
 const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const packageLock = JSON.parse(readFileSync(new URL("../package-lock.json", import.meta.url), "utf8"));
+const proxyPackageLock = JSON.parse(readFileSync(new URL("../../package-lock.json", import.meta.url), "utf8"));
 const eslintConfig = readFileSync(new URL("../eslint.config.mjs", import.meta.url), "utf8");
 
 function resolvedVersion(packageName) {
@@ -28,19 +29,19 @@ test("the Next 16 security baseline declares its required runtime and lint entry
   assert.equal(resolvedVersion("@noble/hashes"), "2.4.0");
   assert.equal(packageLock.packages[""].engines.node, packageJson.engines.node);
   assert.equal(packageJson.scripts.lint, "eslint .");
-  assert.equal(packageJson.dependencies.next, "16.3.8");
+  assert.equal(packageJson.dependencies.next, "16.4.4");
   assert.equal(packageJson.dependencies.react, "^19.2.8");
   assert.equal(packageJson.dependencies["react-dom"], "^19.2.8");
   assert.equal(packageJson.devDependencies["@types/react"], "^19.2.18");
   assert.equal(packageJson.devDependencies["@types/react-dom"], "^19.2.4");
-  assert.equal(packageJson.devDependencies["eslint-config-next"], "16.3.8");
+  assert.equal(packageJson.devDependencies["eslint-config-next"], "16.4.4");
   assert.equal(packageJson.devDependencies.postcss, "^8.5.26");
   assert.equal(packageJson.overrides.postcss, "^8.5.26");
 });
 
 test("the lockfile resolves patched production and development dependency versions", () => {
   const minimumVersions = {
-    next: "16.3.8",
+    next: "16.4.1",
     "baseline-browser-mapping": "2.11.0",
     sharp: "0.35.4",
     postcss: "8.5.26",
@@ -52,6 +53,16 @@ test("the lockfile resolves patched production and development dependency versio
     const actual = resolvedVersion(packageName);
     assert.ok(actual, `${packageName} must be present in the lockfile`);
     assert.equal(versionAtLeast(actual, minimum), true, `${packageName} ${actual} must be at least ${minimum}`);
+  }
+});
+
+test("the proxy and booking toolchain contain only patched Zod resolutions", () => {
+  for (const [name, lock] of [["proxy", proxyPackageLock], ["booking", packageLock]]) {
+    const resolutions = Object.entries(lock.packages).filter(([path]) => path.endsWith("node_modules/zod"));
+    assert.ok(resolutions.length, `${name} Zod resolution must be present`);
+    for (const [path, entry] of resolutions) {
+      assert.equal(versionAtLeast(entry.version, "4.6.6"), true, `${name} ${path} must be patched for GHSA-mrhx-c7xc-m3w5`);
+    }
   }
 });
 
