@@ -184,6 +184,12 @@ const DESKTOP_LANE_WIDTH = 120;
 // TODO(SaaS): pass this from the organization once company timezones are
 // configurable. Calendar positioning must never depend on the browser locale.
 const CALENDAR_TIME_ZONE = "America/Toronto";
+// These keys already represent Toronto calendar dates; format without converting
+// them into a different day in the browser's timezone.
+const visibleDateFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: "UTC", weekday: "long", month: "long", day: "numeric", year: "numeric",
+});
+const visibleDateLabel = (date: string) => visibleDateFormatter.format(new Date(`${date}T12:00:00Z`));
 const calendarPartsFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: CALENDAR_TIME_ZONE,
   year: "numeric",
@@ -276,6 +282,7 @@ export default function CalendarWeekView({
   const calendar = useContinuousCalendar({ initialDays, initialItems, search: navigation.search, scrollerRef: desktopTimelineScrollRef });
   const { days, items, activeDays } = calendar;
   const timelineView = compact ? mobileView : desktopView;
+  const selectedDayKey = timelineView === "week" ? calendar.visibleDate : mobileDayKey;
   const focusedTimeline = useRef("");
   const focusedMobileDay = useRef("");
   useEffect(() => {
@@ -284,6 +291,12 @@ export default function CalendarWeekView({
   const weekHref = (week: string) => `/admin/calendar?${new URLSearchParams({ week, q: navigation.search })}`;
   const jumpWeek = (offset: number) => calendar.jumpToDate(shiftCalendarDate(calendar.visibleWeek, offset * 7));
   const jumpToday = () => { const today = dateInputForLocalDate(); setMobileDayKey(today); calendar.jumpToDate(today); };
+  const selectView = (view: MobileCalendarView) => {
+    setMobileDayKey(selectedDayKey);
+    if (view === "week") calendar.jumpToDate(selectedDayKey);
+    if (compact) setMobileView(view);
+    else setDesktopView(view);
+  };
 
 
   const itemsByDay = useMemo(() => {
@@ -299,7 +312,7 @@ export default function CalendarWeekView({
     [items],
   );
   const mobileDay =
-    days.find((day) => day.dateInput === mobileDayKey) ?? days[0] ?? null;
+    days.find((day) => day.dateInput === selectedDayKey) ?? days[0] ?? null;
   const displayedDesktopDays = useMemo(
     () => (timelineView === "day" && mobileDay ? [mobileDay] : days),
     [days, timelineView, mobileDay],
@@ -807,7 +820,15 @@ export default function CalendarWeekView({
   };
 
   return (
-    <div className="max-w-full space-y-3 px-0.5">
+    <div className="max-w-full space-y-3 px-0.5" onClickCapture={event => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (!(event.target instanceof Element) || !event.target.closest("[data-calendar-today]")) return;
+      // The server-rendered calendar menu shares the same local scroll action.
+      event.preventDefault();
+      jumpToday();
+      setMobileToolsOpen(false);
+      event.target.closest("details")?.removeAttribute("open");
+    }}>
       <section className="sticky top-2 z-[80] overflow-visible rounded-3xl border border-realtor-primary/15 bg-realtor-surface/95 p-2 shadow-lg shadow-realtor-text/10 backdrop-blur-xl">
         <div className="md:hidden">
           <div className="flex items-center gap-2">
@@ -826,7 +847,7 @@ export default function CalendarWeekView({
               </Link>
               <Link
                 href={navigation.todayHref}
-                onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); jumpToday(); } }}
+                data-calendar-today
                 className="inline-flex h-11 items-center justify-center rounded-full border border-realtor-primary/25 bg-white px-3 text-xs font-semibold text-realtor-primary transition hover:border-realtor-primary/45"
               >
                 Today
@@ -873,7 +894,7 @@ export default function CalendarWeekView({
               <button
                 key={view}
                 type="button"
-                onClick={() => setMobileView(view)}
+                onClick={() => selectView(view)}
                 aria-pressed={mobileView === view}
                 className={`min-h-11 rounded-lg text-xs font-semibold capitalize outline-none transition focus-visible:ring-2 focus-visible:ring-realtor-primary/40 focus-visible:ring-offset-1 ${
                   mobileView === view
@@ -886,6 +907,12 @@ export default function CalendarWeekView({
             ))}
           </div>
 
+          {mobileDay ? (
+            <p className="mt-2 px-1 text-sm font-semibold text-realtor-text" aria-live="polite" aria-atomic="true" data-calendar-visible-date={mobileDay.dateInput}>
+              <span className="block text-[10px] font-medium uppercase tracking-wide text-realtor-muted">{timelineView === "week" ? "Visible dates from" : "Selected day"}</span>
+              <time dateTime={mobileDay.dateInput}>{visibleDateLabel(mobileDay.dateInput)}</time>
+            </p>
+          ) : null}
           <div className="mt-2 grid max-w-full grid-cols-7 gap-1 border-t border-realtor-primary/10 pt-2">
             {activeDays.map((day) => {
               const isSelected = day.dateInput === mobileDay?.dateInput;
@@ -894,7 +921,12 @@ export default function CalendarWeekView({
                 <button
                   key={day.key}
                   type="button"
-                  onClick={() => setMobileDayKey(day.dateInput)}
+                  onClick={() => {
+                    setMobileDayKey(day.dateInput);
+                    if (mobileView === "week") calendar.jumpToDate(day.dateInput);
+                  }}
+                  data-calendar-day-button={day.dateInput}
+                  aria-label={visibleDateLabel(day.dateInput)}
                   aria-pressed={isSelected}
                   className={`min-w-0 rounded-lg border px-1 py-1 text-center transition ${
                     isSelected
@@ -952,7 +984,7 @@ export default function CalendarWeekView({
             </Link>
             <Link
               href={navigation.todayHref}
-                onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); jumpToday(); } }}
+              data-calendar-today
               className="inline-flex h-10 items-center justify-center rounded-full border border-realtor-primary/25 bg-white px-4 text-sm font-semibold text-realtor-primary transition hover:border-realtor-primary/45"
             >
               Today
@@ -972,7 +1004,7 @@ export default function CalendarWeekView({
               <button
                 key={view}
                 type="button"
-                onClick={() => setDesktopView(view)}
+                onClick={() => selectView(view)}
                 aria-pressed={desktopView === view}
                 className={`min-h-9 rounded-full px-4 text-xs font-semibold capitalize transition ${
                   desktopView === view

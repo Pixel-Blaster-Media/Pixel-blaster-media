@@ -93,6 +93,8 @@ jobs:
         run: npm run build
       - name: Install matching Chromium for booking confirmation regression
         run: npx --no-install playwright install --with-deps chromium
+      - name: Probe calendar Today scrolling with read-only local fixtures
+        run: node tests/calendar-today.browser.mjs
       - name: Probe catalog video completion recovery with local fixtures
         run: node tests/catalog-video-completion.browser.mjs
       - name: Probe gallery editor and booking overlays with local fixtures
