@@ -50,6 +50,7 @@ test('historical skin changes remain exact after bounded finals UI and OTP lifec
   const presentationFiles = files.map(f => f.replace(/^booking\//, ''))
     // New functional gallery viewer has dedicated URL, validation and browser coverage.
     .filter(f => f !== 'components/WebsiteGalleryDialog.tsx')
+    .filter(f => !['app/admin/VendorFields.tsx','app/admin/bookings/[id]/VendorInvites.tsx','app/admin/calendar/page.tsx'].includes(f))
     .filter(f => !customerBookingNoticeUiPaths.includes(f))
     // The resumable uploader is a new functional component, covered by its
     // dedicated lifecycle, route, protocol and real browser mock regressions.

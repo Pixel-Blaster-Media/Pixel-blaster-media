@@ -769,7 +769,7 @@ async function fetchGoogleEventsBestEffort({
     const settledGroups = await Promise.allSettled(
       clients.map(async (client) => {
         const events = await client.getEvents(from, to);
-        return events.map((event) => ({
+        return events.filter((event) => !/^pbv[0-9a-f]{64}$/.test(event.id)).map((event) => ({
           ...event,
           sourceId: client.connectionId,
           sourceName: client.displayName,

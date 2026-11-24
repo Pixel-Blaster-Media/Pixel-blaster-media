@@ -59,6 +59,7 @@ function quickView(action) {
     'next/link': ({ children }) => React.createElement('a', null, children),
     'next/navigation': { useRouter: () => ({ refresh() {} }) },
     '@/app/_components/AddressAutocomplete': () => null,
+    '@/app/admin/VendorFields': () => null,
     '@/app/admin/bookings/[id]/actions': { updateBookingServicesFromCalendar: action },
     '@/lib/booking/catalog-rules': { isAddonEligible: () => true },
     './useContinuousCalendar': {},

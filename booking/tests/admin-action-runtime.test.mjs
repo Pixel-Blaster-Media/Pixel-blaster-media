@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import {readVendorInput} from '../lib/booking/vendor-invite-core.ts';
 import {BOOKING_QUOTE_POLICY_VERSION, BOOKING_QUOTE_CHANGED_MESSAGE} from '../lib/booking/quote.ts';
 const source=fs.readFileSync(new URL('../app/admin/calendar/actions.ts',import.meta.url),'utf8');
 const ast=ts.createSourceFile('actions.ts',source,ts.ScriptTarget.Latest,true);
@@ -12,6 +13,7 @@ function harness(result,{committedRequest=null,requestError=null}={}){
  const calls=[],lookups=[],realtors=[];
  const query=table=>({select(){return this},eq(key,value){lookups.push([table,key,value]);return this},async maybeSingle(){return table==='admin_booking_requests'?{data:committedRequest,error:requestError}:{data:{full_name:'Realtor',phone:'',brokerage:''}}}});
  const context={BOOKING_QUOTE_POLICY_VERSION,BOOKING_QUOTE_CHANGED_MESSAGE,exports:{},process:{env:{}},console,crypto:globalThis.crypto,
+  readVendorInput, attachVendor:async()=>{throw Error("replay must not invite")},
   requireAdmin:async()=>({organizationId:'tenant',userId:'actor'}),
   str:(f,k)=>String(f.get(k)??'').trim(),businessDateTimeLocalToUtc:()=>new Date('2030-01-01T15:00Z'),parseOptionalInt:()=>3000,
   getActiveCatalog:async()=>({bundles:[],aLaCarte:[],addons:[]}),findOrCreateRealtor:async args=>{realtors.push(args);return {userId:'owner',newlyCreated:false}},
@@ -71,4 +73,10 @@ test('the actual realtor helper cannot provision a missing account during replay
  const ctx={exports:{},getServiceSupabase:()=>({from:()=>query}),provisionRealtorAuthUser:async()=>{throw Error('Replay must not provision')}};
  vm.runInNewContext(compiled+'\nexports.helper=findOrCreateRealtor;',ctx);
  assert.equal(await ctx.exports.helper({organizationId:'tenant',email:'new@example.invalid',fullName:'New',allowCreate:false}),null);
+});
+
+test('replaying a saved request with new vendor fields never sends an invitation',async()=>{
+ const h=harness({data:{booking_id:'booking',replayed:true}});const f=form();
+ f.set('vendor_email','test-vendor@example.invalid');
+ const result=await h.action(f);assert.equal(result.bookingId,'booking');assert.equal(result.warningCode,'vendor_invite_pending');
 });
