@@ -93,7 +93,7 @@ export function buildStoredBookingGoogleCalendarEventInput({
         },
   });
   return booking.vendor_only
-    ? { ...input, summary: `Vendor only · ${input.summary}`, showAsFree: true, colorId: "3" }
+    ? { ...input, showAsFree: true, colorId: "3" }
     : input;
 }
 

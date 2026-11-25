@@ -147,10 +147,11 @@ test("vendor-only shoots stay free in Google without changing the normal client 
   const body = buildGoogleCalendarEventBody(input);
   assert.equal(body.transparency, "transparent");
   assert.equal(body.colorId, "3");
-  assert.match(body.summary, /^Vendor only/);
   assert.equal(body.attendees[0].email, booking.profiles.email);
   assert.notEqual(storedBookingCalendarPayloadFingerprint(vendorOnly, items), storedBookingCalendarPayloadFingerprint(booking, items));
   const normal = buildGoogleCalendarEventBody(buildStoredBookingGoogleCalendarEventInput({ booking, items }));
+  assert.equal(body.summary, normal.summary);
+  assert.doesNotMatch(body.summary, /vendor only/i);
   assert.equal(normal.transparency, undefined);
   assert.equal(normal.colorId, undefined);
 });
