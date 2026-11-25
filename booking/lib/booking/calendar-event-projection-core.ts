@@ -10,6 +10,7 @@ export interface StoredBookingCalendarProjectionRow {
   status: string;
   scheduled_at: string | null;
   scheduled_ends_at: string | null;
+  vendor_only?: boolean;
   services: string[];
   add_ons: string[];
   square_footage: number | null;
@@ -55,7 +56,7 @@ export function buildStoredBookingGoogleCalendarEventInput({
         ? "Occupied"
         : null;
 
-  return buildBookingGoogleCalendarEventInput({
+  const input = buildBookingGoogleCalendarEventInput({
     bookingId: booking.id,
     organizationId: booking.organization_id,
     realtorName:
@@ -91,6 +92,9 @@ export function buildStoredBookingGoogleCalendarEventInput({
           name: booking.profiles?.full_name,
         },
   });
+  return booking.vendor_only
+    ? { ...input, summary: `Vendor only · ${input.summary}`, showAsFree: true, colorId: "3" }
+    : input;
 }
 
 /** Calendar-visible state only; linkage and timestamps do not alter payload. */
@@ -104,6 +108,7 @@ export function storedBookingCalendarPayloadFingerprint(
     booking.status,
     booking.scheduled_at,
     booking.scheduled_ends_at,
+    Boolean(booking.vendor_only),
     booking.services,
     booking.add_ons,
     items.map((item) => [item.name.trim(), item.kind]),

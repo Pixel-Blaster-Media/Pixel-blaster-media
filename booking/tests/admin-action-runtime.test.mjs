@@ -80,3 +80,17 @@ test('replaying a saved request with new vendor fields never sends an invitation
  f.set('vendor_email','test-vendor@example.invalid');
  const result=await h.action(f);assert.equal(result.bookingId,'booking');assert.equal(result.warningCode,'vendor_invite_pending');
 });
+
+test('vendor-only manual bookings require a vendor and persist the attendance flag through the aggregate', async () => {
+ const h=harness({data:{booking_id:'vendor-only',replayed:true}});const f=form();
+ f.set('vendor_only','on');
+ assert.equal((await h.action(f)).ok,false);
+ assert.equal(h.calls.length,0);
+ f.set('vendor_email','vendor@example.invalid');
+ assert.equal((await h.action(f)).bookingId,'vendor-only');
+ assert.equal(h.calls[0].input.p_input.vendor_only,true);
+ assert.equal(h.calls[0].input.p_input.vendor_assignment.email,'vendor@example.invalid');
+ const normal=harness({data:{booking_id:'normal',replayed:true}});
+ await normal.action(form());
+ assert.equal('vendor_only' in normal.calls[0].input.p_input,false);
+});

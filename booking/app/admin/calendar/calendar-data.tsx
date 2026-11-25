@@ -35,6 +35,7 @@ interface BookingRow {
   status: BookingStatus;
   scheduled_at: string;
   scheduled_ends_at: string | null;
+  vendor_only: boolean;
   google_calendar_event_id: string | null;
   quickbooks_invoice_id: string | null;
   suppress_realtor_notifications: boolean;
@@ -91,6 +92,7 @@ interface CalendarItem {
   syncWarning?: string;
   sourceName?: string;
   sourceColor?: string;
+  vendorOnly?: boolean;
   bookingDetails?: {
     lifecycleVersion: number;
     fullAddress: string;
@@ -165,7 +167,7 @@ export async function loadCalendarWeek(params: { week?: string; q?: string }) {
     supabase
       .from("bookings")
       .select(
-        "id, lifecycle_version, status, scheduled_at, scheduled_ends_at, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, services, add_ons, square_footage, unit_number, is_vacant, include_basement, basement_duration_minutes, booking_line_items(catalog_item_id,unit_price_cents,unit_duration_minutes,quantity), client_notes, properties(street_address, city, province, postal_code, notes), profiles(full_name, email, phone, brokerage, internal_notes)",
+        "id, lifecycle_version, status, scheduled_at, scheduled_ends_at, vendor_only, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, services, add_ons, square_footage, unit_number, is_vacant, include_basement, basement_duration_minutes, booking_line_items(catalog_item_id,unit_price_cents,unit_duration_minutes,quantity), client_notes, properties(street_address, city, province, postal_code, notes), profiles(full_name, email, phone, brokerage, internal_notes)",
       )
       .eq("organization_id", admin.organizationId)
       .not("scheduled_at", "is", null)
@@ -300,7 +302,10 @@ export async function loadCalendarWeek(params: { week?: string; q?: string }) {
     items.push({
       id: booking.id,
       kind: "booking",
-      title: booking.properties?.street_address ?? "Shoot",
+      vendorOnly: booking.vendor_only,
+      title: booking.vendor_only
+        ? `Vendor only · ${booking.properties?.street_address ?? "Shoot"}`
+        : booking.properties?.street_address ?? "Shoot",
       subtitle: [
         realtorName,
         services.join(", "),
@@ -443,7 +448,8 @@ export function CalendarSidebar({
     year: "numeric",
   }).format(monthDate);
   const monthGrid = buildMonthGrid(weekStart);
-  const bookingItems = visibleItems.filter((item) => item.kind === "booking");
+  const bookingItems = visibleItems.filter((item) => item.kind === "booking" && !item.vendorOnly);
+  const vendorOnlyItems = visibleItems.filter((item) => item.kind === "booking" && item.vendorOnly);
   const blockItems = visibleItems.filter((item) => item.kind === "block");
 
   return (
@@ -460,6 +466,10 @@ export function CalendarSidebar({
             detail="Bookings created in this workspace"
             defaultOpen
           />
+          {vendorOnlyItems.length > 0 && <CalendarSourceSummary
+            label="Vendor only" color="#7c3aed" items={vendorOnlyItems}
+            detail="Vendor-covered shoots that keep your time free" defaultOpen
+          />}
           <CalendarSourceSummary
             label="Manual blocks"
             color="#a69d8d"

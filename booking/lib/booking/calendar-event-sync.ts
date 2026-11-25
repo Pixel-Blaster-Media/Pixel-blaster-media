@@ -11,6 +11,8 @@ export interface BookingGoogleCalendarEventInput {
   location?: string;
   startISO: string;
   endISO: string;
+  showAsFree?: boolean;
+  colorId?: string;
   attendeeEmail?: string;
   attendeeName?: string;
   clearAttendees: boolean;

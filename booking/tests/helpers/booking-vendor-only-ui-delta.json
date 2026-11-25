@@ -1,0 +1,50 @@
+{
+  "app/admin/calendar/CalendarWeekView.tsx": [
+    [
+      "  syncWarning?: string;\n  sourceColor?: string;\n  vendorOnly?: boolean;\n  bookingDetails?: {\n    lifecycleVersion: number;\n",
+      "  syncWarning?: string;\n  sourceColor?: string;\n  bookingDetails?: {\n    lifecycleVersion: number;\n"
+    ],
+    [
+      "              </FormSection>\n\n              {vendorContacts !== null && <>\n                <VendorFields contacts={vendorContacts} />\n                <label className=\"flex cursor-pointer gap-3 rounded-2xl border border-violet-200 bg-violet-50 p-4 text-violet-950\">\n                  <input type=\"checkbox\" name=\"vendor_only\" className=\"mt-0.5 h-4 w-4 shrink-0\" />\n                  <span>\n                    <span className=\"block text-sm font-semibold\">Vendor only · I won’t be there</span>\n                    <span className=\"block text-xs\">Shows in purple on the calendar and leaves this time available for other shoots.</span>\n                  </span>\n                </label>\n              </>}\n\n              <label className=\"flex cursor-pointer gap-3 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4\">\n",
+      "              </FormSection>\n\n              {vendorContacts !== null && <VendorFields contacts={vendorContacts} />}\n\n              <label className=\"flex cursor-pointer gap-3 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4\">\n"
+    ],
+    [
+      "    new Date(item.startsAt).getTime() + proposedDurationMinutes * 60_000,\n  );\n  const proposedOverlaps = selectionChanged && !item.vendorOnly\n    ? calendarItems.filter((candidate) => {\n        if (candidate.vendorOnly || (candidate.kind === \"booking\" && candidate.id === item.id)) return false;\n        return (\n          new Date(candidate.startsAt).getTime() < proposedEnd.getTime() &&\n",
+      "    new Date(item.startsAt).getTime() + proposedDurationMinutes * 60_000,\n  );\n  const proposedOverlaps = selectionChanged\n    ? calendarItems.filter((candidate) => {\n        if (candidate.kind === \"booking\" && candidate.id === item.id) return false;\n        return (\n          new Date(candidate.startsAt).getTime() < proposedEnd.getTime() &&\n"
+    ],
+    [
+      "\nfunction calendarItemPillClass(item: CalendarItem): string {\n  if (item.vendorOnly) return \"border-violet-200 bg-violet-50 text-violet-900\";\n  if (item.kind === \"google\") return \"border-sky-200 bg-sky-50 text-sky-800\";\n  if (item.kind === \"block\") return \"border-stone-300 bg-stone-100 text-stone-700\";\n",
+      "\nfunction calendarItemPillClass(item: CalendarItem): string {\n  if (item.kind === \"google\") return \"border-sky-200 bg-sky-50 text-sky-800\";\n  if (item.kind === \"block\") return \"border-stone-300 bg-stone-100 text-stone-700\";\n"
+    ],
+    [
+      "\nfunction calendarEventSurfaceClass(item: CalendarItem): string {\n  if (item.vendorOnly) return \"border-violet-300 bg-violet-100 text-violet-950 hover:bg-violet-200\";\n  switch (item.statusLabel?.toLowerCase()) {\n    case \"confirmed\":\n",
+      "\nfunction calendarEventSurfaceClass(item: CalendarItem): string {\n  switch (item.statusLabel?.toLowerCase()) {\n    case \"confirmed\":\n"
+    ]
+  ],
+  "app/admin/calendar/calendar-data.tsx": [
+    [
+      "  scheduled_at: string;\n  scheduled_ends_at: string | null;\n  vendor_only: boolean;\n  google_calendar_event_id: string | null;\n  quickbooks_invoice_id: string | null;\n",
+      "  scheduled_at: string;\n  scheduled_ends_at: string | null;\n  google_calendar_event_id: string | null;\n  quickbooks_invoice_id: string | null;\n"
+    ],
+    [
+      "  sourceName?: string;\n  sourceColor?: string;\n  vendorOnly?: boolean;\n  bookingDetails?: {\n    lifecycleVersion: number;\n",
+      "  sourceName?: string;\n  sourceColor?: string;\n  bookingDetails?: {\n    lifecycleVersion: number;\n"
+    ],
+    [
+      "      .from(\"bookings\")\n      .select(\n        \"id, lifecycle_version, status, scheduled_at, scheduled_ends_at, vendor_only, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, services, add_ons, square_footage, unit_number, is_vacant, include_basement, basement_duration_minutes, booking_line_items(catalog_item_id,unit_price_cents,unit_duration_minutes,quantity), client_notes, properties(street_address, city, province, postal_code, notes), profiles(full_name, email, phone, brokerage, internal_notes)\",\n      )\n      .eq(\"organization_id\", admin.organizationId)\n",
+      "      .from(\"bookings\")\n      .select(\n        \"id, lifecycle_version, status, scheduled_at, scheduled_ends_at, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, services, add_ons, square_footage, unit_number, is_vacant, include_basement, basement_duration_minutes, booking_line_items(catalog_item_id,unit_price_cents,unit_duration_minutes,quantity), client_notes, properties(street_address, city, province, postal_code, notes), profiles(full_name, email, phone, brokerage, internal_notes)\",\n      )\n      .eq(\"organization_id\", admin.organizationId)\n"
+    ],
+    [
+      "      id: booking.id,\n      kind: \"booking\",\n      vendorOnly: booking.vendor_only,\n      title: booking.vendor_only\n        ? `Vendor only · ${booking.properties?.street_address ?? \"Shoot\"}`\n        : booking.properties?.street_address ?? \"Shoot\",\n      subtitle: [\n        realtorName,\n",
+      "      id: booking.id,\n      kind: \"booking\",\n      title: booking.properties?.street_address ?? \"Shoot\",\n      subtitle: [\n        realtorName,\n"
+    ],
+    [
+      "  }).format(monthDate);\n  const monthGrid = buildMonthGrid(weekStart);\n  const bookingItems = visibleItems.filter((item) => item.kind === \"booking\" && !item.vendorOnly);\n  const vendorOnlyItems = visibleItems.filter((item) => item.kind === \"booking\" && item.vendorOnly);\n  const blockItems = visibleItems.filter((item) => item.kind === \"block\");\n\n",
+      "  }).format(monthDate);\n  const monthGrid = buildMonthGrid(weekStart);\n  const bookingItems = visibleItems.filter((item) => item.kind === \"booking\");\n  const blockItems = visibleItems.filter((item) => item.kind === \"block\");\n\n"
+    ],
+    [
+      "            defaultOpen\n          />\n          {vendorOnlyItems.length > 0 && <CalendarSourceSummary\n            label=\"Vendor only\" color=\"#7c3aed\" items={vendorOnlyItems}\n            detail=\"Vendor-covered shoots that keep your time free\" defaultOpen\n          />}\n          <CalendarSourceSummary\n            label=\"Manual blocks\"\n",
+      "            defaultOpen\n          />\n          <CalendarSourceSummary\n            label=\"Manual blocks\"\n"
+    ]
+  ]
+}

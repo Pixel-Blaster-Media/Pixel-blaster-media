@@ -8,6 +8,8 @@ export interface GoogleCalendarMutationInput {
   endISO: string;
   attendeeEmail?: string;
   vendorInvite?: boolean;
+  showAsFree?: boolean;
+  colorId?: string;
   attendeeName?: string;
   /** Explicitly remove every attendee when this event is updated. */
   clearAttendees?: boolean;
@@ -141,8 +143,9 @@ export function buildGoogleCalendarEventBody(
     end: { dateTime: input.endISO },
   };
 
+  if (input.showAsFree || input.vendorInvite) body.transparency = "transparent";
+  if (input.colorId) body.colorId = input.colorId;
   if (input.vendorInvite) {
-    body.transparency = "transparent";
     body.visibility = "private";
     body.guestsCanInviteOthers = false;
     body.guestsCanModify = false;

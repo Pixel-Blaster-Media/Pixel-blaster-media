@@ -22,3 +22,17 @@ production release and review gate. Validate the admin Calendar and booking
 detail entry points in staging with a controlled test calendar and recipient;
 verify create, move and cancellation and confirm the regular client invite is
 unchanged. Do not use real client or vendor addresses in release smoke tests.
+
+## Vendor-only shoots
+
+On a new manual shoot, choose the vendor and check **Vendor only · I won’t
+be there**. A covered shoot stays in the booking calendar in purple. It
+does not reserve the organization’s time in the public booking engine, and
+the main Google Calendar copy is marked Free and coloured purple. The
+ordinary realtor notification choice is unchanged. The checkbox is off by
+default; normal shoots still reserve time.
+
+Before release, exercise a covered shoot and a regular shoot at the same
+time, then verify a second overlapping regular booking is rejected. Check the
+Free flag in the organizer's Google Calendar; do not use real vendor or client
+email addresses for that check.

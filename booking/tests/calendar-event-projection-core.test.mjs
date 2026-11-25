@@ -139,3 +139,18 @@ test("payload fingerprint changes for every Calendar-visible field but not linka
     original,
   );
 });
+
+test("vendor-only shoots stay free in Google without changing the normal client invite", async () => {
+  const { buildGoogleCalendarEventBody } = await import("../lib/integrations/google-calendar/event-mutation-core.ts");
+  const vendorOnly = { ...booking, vendor_only: true };
+  const input = buildStoredBookingGoogleCalendarEventInput({ booking: vendorOnly, items });
+  const body = buildGoogleCalendarEventBody(input);
+  assert.equal(body.transparency, "transparent");
+  assert.equal(body.colorId, "3");
+  assert.match(body.summary, /^Vendor only/);
+  assert.equal(body.attendees[0].email, booking.profiles.email);
+  assert.notEqual(storedBookingCalendarPayloadFingerprint(vendorOnly, items), storedBookingCalendarPayloadFingerprint(booking, items));
+  const normal = buildGoogleCalendarEventBody(buildStoredBookingGoogleCalendarEventInput({ booking, items }));
+  assert.equal(normal.transparency, undefined);
+  assert.equal(normal.colorId, undefined);
+});

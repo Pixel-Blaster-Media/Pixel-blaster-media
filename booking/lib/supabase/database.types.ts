@@ -194,6 +194,7 @@ interface BookingsTable {
     scheduled_at: string | null;
     scheduled_ends_at: string | null;
     allow_schedule_overlap: boolean;
+    vendor_only: boolean;
     services: string[];
     add_ons: string[];
     square_footage: number | null;
@@ -230,6 +231,7 @@ interface BookingsTable {
     scheduled_at?: string | null;
     scheduled_ends_at?: string | null;
     allow_schedule_overlap?: boolean;
+    vendor_only?: boolean;
     services?: string[];
     add_ons?: string[];
     square_footage?: number | null;
