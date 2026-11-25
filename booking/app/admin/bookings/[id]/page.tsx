@@ -1,3 +1,5 @@
+import VendorInvites from "./VendorInvites";
+import { getVendorInvitePanelData, loadVendorContacts } from "@/lib/booking/vendor-invite-server";
 import Link from "next/link";
 import LifecycleNotices from "./LifecycleNotices";
 import { notFound } from "next/navigation";
@@ -163,6 +165,7 @@ function followUpWarningMessage(value: string | undefined): string | null {
   if (value === "calendar_and_email_failed") {
     return "The booking was saved, but Google Calendar did not sync and the confirmation email was not sent. Check both before the shoot.";
   }
+  if (value === "vendor_invite_pending") return "The shoot was saved. Check Vendor invites to confirm the vendor was attached and the invitation synced.";
   if (value === "follow_up_failed") {
     return "The booking was saved, but follow-up work needs attention. Review the booking before the shoot.";
   }
@@ -315,6 +318,11 @@ export default async function BookingDetailPage({
       .filter((url): url is string => Boolean(url)),
   );
 
+  const [vendorContacts, vendorInvites] = await Promise.all([
+    loadVendorContacts(admin.organizationId),
+    getVendorInvitePanelData({ organizationId: admin.organizationId, bookingId: booking.id }).catch(() => null),
+  ]);
+
   return (
     <div className="precision-shoot-workspace space-y-6">
       {followUpWarning ? (
@@ -421,6 +429,8 @@ export default async function BookingDetailPage({
       </header>
 
       <LifecycleNotices bookingId={booking.id} />
+      {vendorInvites !== null && <VendorInvites bookingId={booking.id} contacts={vendorContacts ?? []}
+        invites={vendorInvites} canAdd={booking.status !== "cancelled" && Boolean(booking.scheduled_at && booking.scheduled_ends_at)} />}
       <BookingWorkspaceTabs
         activeTabId={activeTabId}
         baseHref={`/admin/bookings/${booking.id}`}

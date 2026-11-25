@@ -17,6 +17,8 @@ import { sendEmail } from "@/lib/email/resend";
 import { getOrganizationEmailSettings } from "@/lib/email/settings";
 import { dispatchBookingIntegrationJobs } from "@/lib/integrations/dispatcher";
 
+import { attachVendor } from "@/lib/booking/vendor-invite-server";
+import { readVendorInput } from "@/lib/booking/vendor-invite-core";
 import { sendPushBestEffort } from "@/lib/notifications/push";
 import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
 import type { BookingStatus } from "@/lib/supabase/database.types";
@@ -28,7 +30,8 @@ interface ActionResult {
   warningCode?:
     | "calendar_sync_failed"
     | "confirmation_email_failed"
-    | "calendar_and_email_failed";
+    | "calendar_and_email_failed"
+    | "vendor_invite_pending";
   bookingId?: string;
 }
 
@@ -147,6 +150,10 @@ export async function createAdminShoot(
 ): Promise<ActionResult> {
   const admin = await requireAdmin();
 
+  let vendor;
+  try { vendor = readVendorInput(formData); } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Check the vendor details." };
+  }
   const scheduledRaw = str(formData, "scheduled_at");
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str(formData, "admin_request_id"))) {
     return { ok: false, error: "Refresh the booking form before submitting." };
@@ -257,7 +264,11 @@ export async function createAdminShoot(
     },
   });
   const booking = saved ? { id: String(saved.booking_id) } : null;
-  if (saved?.replayed) return { ok: true, bookingId: String(saved.booking_id) };
+  if (saved?.replayed) {
+    // Never replay an external invite from request fields. Existing pending
+    // vendor assignments are visible and retryable on the booking itself.
+    return { ok: true, bookingId: String(saved.booking_id), ...(vendor ? { warningCode: "vendor_invite_pending" } : {}) };
+  }
 
   if (bookingError || !booking) {
     console.error("[admin-calendar] booking insert failed");
@@ -303,6 +314,9 @@ export async function createAdminShoot(
     ? "Booking saved, but one or more other shoots for this realtor did not sync to Google Calendar."
     : undefined;
 
+  const vendorOperation = vendor ? attachVendor({ organizationId: admin.organizationId, bookingId: booking.id }, vendor)
+    .then((result) => result.synced && result.contactSaved).catch(() => false) : Promise.resolve(true);
+
   const dispatchResults = await dispatchBookingIntegrationJobs({
     organizationId: admin.organizationId,
     bookingId: booking.id,
@@ -313,6 +327,7 @@ export async function createAdminShoot(
     ? "Booking saved; confirmation is pending or needs integration review."
     : undefined;
 
+  const vendorSynced = await vendorOperation;
   revalidatePath("/admin/calendar");
   revalidatePath("/admin/bookings");
   return {
@@ -326,6 +341,7 @@ export async function createAdminShoot(
         ? undefined
         : "Booking saved, but Google Calendar did not sync. Check the event before the shoot.",
       confirmationWarning,
+      vendorSynced ? undefined : "Vendor invite or contact needs attention. Check Vendor invites on this booking.",
     ),
     warningCode:
       !calendarSynced && confirmationWarning
@@ -334,7 +350,7 @@ export async function createAdminShoot(
           ? "calendar_sync_failed"
           : confirmationWarning
             ? "confirmation_email_failed"
-            : undefined,
+            : !vendorSynced ? "vendor_invite_pending" : undefined,
   };
 }
 

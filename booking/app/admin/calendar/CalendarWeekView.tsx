@@ -1,4 +1,6 @@
 "use client";
+import VendorFields from "@/app/admin/VendorFields";
+import type { VendorContact } from "@/lib/booking/vendor-invite-core";
 import { useContinuousCalendar } from "./useContinuousCalendar";
 import { calendarWeekStart, shiftCalendarDate } from "@/lib/booking/calendar-week-range";
 import { BOOKING_QUOTE_POLICY_VERSION } from "@/lib/booking/quote";
@@ -204,12 +206,14 @@ export default function CalendarWeekView({
   days: initialDays,
   items: initialItems,
   catalogItems,
+  vendorContacts = null,
   navigation,
   calendarMenu,
 }: {
   days: DayColumn[];
   items: CalendarItem[];
   catalogItems: CatalogItemOption[];
+  vendorContacts?: VendorContact[] | null;
   navigation: CalendarNavigation;
   calendarMenu: ReactNode;
 }) {
@@ -1934,6 +1938,8 @@ export default function CalendarWeekView({
                   />
                 </div>
               </FormSection>
+
+              {vendorContacts !== null && <VendorFields contacts={vendorContacts} />}
 
               <label className="flex cursor-pointer gap-3 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
                 <input

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import AdminPageHeading from "../AdminPageHeading";
+import { requireAdmin } from "@/lib/auth/require-admin";
+import { loadVendorContacts } from "@/lib/booking/vendor-invite-server";
 import CalendarWeekView from "./CalendarWeekView";
 import { CalendarSidebar, loadCalendarWeek } from "./calendar-data";
 
@@ -7,7 +9,8 @@ export const metadata: Metadata = { title: "Calendar" };
 export const dynamic = "force-dynamic";
 
 export default async function AdminCalendarPage({ searchParams }: { searchParams: Promise<{ week?: string; q?: string }> }) {
-  const data = await loadCalendarWeek(await searchParams);
+  const admin = await requireAdmin();
+  const [data, vendors] = await Promise.all([loadCalendarWeek(await searchParams), loadVendorContacts(admin.organizationId)]);
   return <div className="studio-calendar-page space-y-3">
     <AdminPageHeading eyebrow="Schedule" title="Calendar" />
     {data.databaseLoadFailed || data.googleLoadFailed ? <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
@@ -15,6 +18,7 @@ export default async function AdminCalendarPage({ searchParams }: { searchParams
       <p>{data.databaseLoadFailed ? "Some booking or availability data could not be loaded. Refresh before relying on this schedule." : "One Google Calendar could not be loaded. Pixel Blaster bookings are still shown from the booking database."}</p>
     </div> : null}
     <CalendarWeekView days={data.days} items={data.items} catalogItems={data.catalogItems} navigation={data.navigation}
+      vendorContacts={vendors}
       calendarMenu={<CalendarSidebar sources={data.calendarSources} weekStart={data.weekStart} todayKey={data.todayKey} visibleItems={data.items} />} />
   </div>;
 }

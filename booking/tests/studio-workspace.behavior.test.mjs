@@ -96,6 +96,8 @@ function detailHarness({ denied = false, missing = false } = {}) {
   const calls = [];
   const db = { from(table) { calls.push(table); return resultQuery({ data: table === 'bookings' ? (missing ? null : booking) : table === 'deliverables' ? [] : null }); } };
   const dependencies = {
+    './VendorInvites': { default: Empty },
+    '@/lib/booking/vendor-invite-server': { loadVendorContacts: async () => [], getVendorInvitePanelData: async () => [] },
     'react/jsx-runtime': jsx, 'next/link': { default: Link }, 'next/navigation': { notFound() { throw Error('not_found'); } },
     '@/lib/auth/require-admin': { requireAdmin: async () => { calls.push('auth'); if (denied) throw Error('denied'); return { organizationId: 'tenant', userId: 'actor' }; } },
     '@/lib/supabase/server': { getServerSupabase: async () => db, getServiceSupabase: () => { calls.push('service'); return db; } },

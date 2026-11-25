@@ -178,6 +178,8 @@ test("AST inventory classifies every real Calendar event mutation", () => {
       "app/admin/settings/integrations/actions.ts#createEvent": 1,
       "lib/booking/calendar-event-sync.ts#createEvent": 1,
       "lib/booking/calendar-event-sync.ts#updateEvent": 1,
+      "lib/booking/vendor-invite-server.ts#createEvent": 1,
+      "lib/booking/vendor-invite-server.ts#updateEvent": 1,
     },
   );
 });
@@ -186,6 +188,7 @@ test("AST inventory classifies every destructive Calendar event mutation", () =>
   assert.deepEqual(realCallCounts(new Set(["deleteEvent"])), {
     "lib/booking/calendar-event-service.ts#deleteEvent": 1,
     "lib/booking/calendar-event-sync.ts#deleteEvent": 1,
+    "lib/booking/vendor-invite-server.ts#deleteEvent": 1,
   });
 });
 

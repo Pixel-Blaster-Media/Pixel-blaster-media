@@ -7,6 +7,7 @@ export interface GoogleCalendarMutationInput {
   startISO: string;
   endISO: string;
   attendeeEmail?: string;
+  vendorInvite?: boolean;
   attendeeName?: string;
   /** Explicitly remove every attendee when this event is updated. */
   clearAttendees?: boolean;
@@ -139,6 +140,14 @@ export function buildGoogleCalendarEventBody(
     start: { dateTime: input.startISO },
     end: { dateTime: input.endISO },
   };
+
+  if (input.vendorInvite) {
+    body.transparency = "transparent";
+    body.visibility = "private";
+    body.guestsCanInviteOthers = false;
+    body.guestsCanModify = false;
+    body.guestsCanSeeOtherGuests = false;
+  }
 
   if (input.attendeeEmail) {
     body.attendees = [
@@ -308,6 +317,10 @@ export async function updateGoogleCalendarEvent({
       410,
       "gone",
     );
+  }
+
+  if (input.vendorInvite && !hasOwnershipMarkers) {
+    throw new GoogleCalendarIdentityCollisionError("Vendor event ownership could not be verified");
   }
 
   // Legacy linked events predate ownership markers. The tenant-scoped stored

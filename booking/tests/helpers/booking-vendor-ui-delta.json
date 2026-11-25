@@ -1,0 +1,58 @@
+{
+  "app/admin/calendar/CalendarWeekView.tsx": [
+    [
+      "\"use client\";\nimport VendorFields from \"@/app/admin/VendorFields\";\nimport type { VendorContact } from \"@/lib/booking/vendor-invite-core\";\nimport { useContinuousCalendar } from \"./useContinuousCalendar\";\n",
+      "\"use client\";\nimport { useContinuousCalendar } from \"./useContinuousCalendar\";\n"
+    ],
+    [
+      "  catalogItems,\n  vendorContacts = null,\n  navigation,\n",
+      "  catalogItems,\n  navigation,\n"
+    ],
+    [
+      "  catalogItems: CatalogItemOption[];\n  vendorContacts?: VendorContact[] | null;\n  navigation: CalendarNavigation;\n",
+      "  catalogItems: CatalogItemOption[];\n  navigation: CalendarNavigation;\n"
+    ],
+    [
+      "              </FormSection>\n\n              {vendorContacts !== null && <VendorFields contacts={vendorContacts} />}\n\n",
+      "              </FormSection>\n\n"
+    ]
+  ],
+  "app/admin/calendar/calendar-data.tsx": [
+    [
+      "        const events = await client.getEvents(from, to);\n        return events.filter((event) => !/^pbv[0-9a-f]{64}$/.test(event.id)).map((event) => ({\n          ...event,\n",
+      "        const events = await client.getEvents(from, to);\n        return events.map((event) => ({\n          ...event,\n"
+    ]
+  ],
+  "app/admin/bookings/[id]/page.tsx": [
+    [
+      "import VendorInvites from \"./VendorInvites\";\nimport { getVendorInvitePanelData, loadVendorContacts } from \"@/lib/booking/vendor-invite-server\";\nimport Link from \"next/link\";\n",
+      "import Link from \"next/link\";\n"
+    ],
+    [
+      "  }\n  if (value === \"vendor_invite_pending\") return \"The shoot was saved. Check Vendor invites to confirm the vendor was attached and the invitation synced.\";\n  if (value === \"follow_up_failed\") {\n",
+      "  }\n  if (value === \"follow_up_failed\") {\n"
+    ],
+    [
+      "\n  const [vendorContacts, vendorInvites] = await Promise.all([\n    loadVendorContacts(admin.organizationId),\n    getVendorInvitePanelData({ organizationId: admin.organizationId, bookingId: booking.id }).catch(() => null),\n  ]);\n\n  return (\n",
+      "\n  return (\n"
+    ],
+    [
+      "      <LifecycleNotices bookingId={booking.id} />\n      {vendorInvites !== null && <VendorInvites bookingId={booking.id} contacts={vendorContacts ?? []}\n        invites={vendorInvites} canAdd={booking.status !== \"cancelled\" && Boolean(booking.scheduled_at && booking.scheduled_ends_at)} />}\n      <BookingWorkspaceTabs\n",
+      "      <LifecycleNotices bookingId={booking.id} />\n      <BookingWorkspaceTabs\n"
+    ]
+  ],
+  "app/admin/calendar/page.tsx": [
+    [
+      "import AdminPageHeading from \"../AdminPageHeading\";\nimport { requireAdmin } from \"@/lib/auth/require-admin\";\nimport { loadVendorContacts } from \"@/lib/booking/vendor-invite-server\";\nimport CalendarWeekView from \"./CalendarWeekView\";\n",
+      "import AdminPageHeading from \"../AdminPageHeading\";\nimport CalendarWeekView from \"./CalendarWeekView\";\n"
+    ],
+    [
+      "export default async function AdminCalendarPage({ searchParams }: { searchParams: Promise<{ week?: string; q?: string }> }) {\n  const admin = await requireAdmin();\n  const [data, vendors] = await Promise.all([loadCalendarWeek(await searchParams), loadVendorContacts(admin.organizationId)]);\n  return <div className=\"studio-calendar-page space-y-3\">\n",
+      "export default async function AdminCalendarPage({ searchParams }: { searchParams: Promise<{ week?: string; q?: string }> }) {\n  const data = await loadCalendarWeek(await searchParams);\n  return <div className=\"studio-calendar-page space-y-3\">\n"
+    ],
+    [
+      "    <CalendarWeekView days={data.days} items={data.items} catalogItems={data.catalogItems} navigation={data.navigation}\n      vendorContacts={vendors}\n      calendarMenu={<CalendarSidebar sources={data.calendarSources} weekStart={data.weekStart} todayKey={data.todayKey} visibleItems={data.items} />} />\n",
+      "    <CalendarWeekView days={data.days} items={data.items} catalogItems={data.catalogItems} navigation={data.navigation}\n      calendarMenu={<CalendarSidebar sources={data.calendarSources} weekStart={data.weekStart} todayKey={data.todayKey} visibleItems={data.items} />} />\n"
+    ]
+  ]
+}

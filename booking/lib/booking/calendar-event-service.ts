@@ -1,5 +1,7 @@
 import "server-only";
 
+import { syncBookingVendorInvites } from "@/lib/booking/vendor-invite-server";
+
 import { loadBookingCalendarSelectionItems } from "@/lib/booking/calendar-event-items";
 import {
   buildStoredBookingGoogleCalendarEventInput,
@@ -37,6 +39,19 @@ const BOOKING_PROJECTION_SELECT =
   "id, organization_id, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, suppress_realtor_notifications, google_calendar_event_id, updated_at, properties(street_address, city, postal_code), profiles(email, full_name, phone, brokerage)";
 
 export async function syncStoredBookingGoogleCalendarEvent(args: {
+  organizationId: string;
+  bookingId: string;
+}): Promise<StoredBookingGoogleCalendarSyncResult> {
+  const [bookingResult, vendorsSynced] = await Promise.all([
+    syncPrimaryBookingGoogleCalendarEvent(args),
+    syncBookingVendorInvites(args),
+  ]);
+  return bookingResult.ok && !vendorsSynced
+    ? { ok: false, status: "vendor_invite_pending" }
+    : bookingResult;
+}
+
+async function syncPrimaryBookingGoogleCalendarEvent(args: {
   organizationId: string;
   bookingId: string;
 }): Promise<StoredBookingGoogleCalendarSyncResult> {

@@ -1287,6 +1287,19 @@ type ListingGalleryItemsTable = CanonicalMediaTable<{
 export interface Database {
   public: {
     Tables: {
+      vendor_contacts: {
+        Row: { organization_id: string; email: string; name: string; logo_url: string | null };
+        Insert: { organization_id: string; email: string; name: string; logo_url?: string | null };
+        Update: { name?: string; logo_url?: string | null };
+        Relationships: [];
+      };
+      booking_vendor_invites: {
+        Row: BookingVendorInviteRow;
+        Insert: Pick<BookingVendorInviteRow, "organization_id" | "booking_id" | "email" | "name"> &
+          Partial<Omit<BookingVendorInviteRow, "organization_id" | "booking_id" | "email" | "name">>;
+        Update: Partial<BookingVendorInviteRow>;
+        Relationships: [];
+      };
       profiles: ProfilesTable;
       organizations: OrganizationsTable;
       organization_members: OrganizationMembersTable;
@@ -1782,3 +1795,20 @@ export interface Database {
     CompositeTypes: Record<string, never>;
   };
 }
+
+
+export type BookingVendorInviteRow = {
+  id: string;
+  organization_id: string;
+  booking_id: string;
+  email: string;
+  name: string;
+  logo_url: string | null;
+  instructions: string;
+  removed: boolean;
+  calendar_connection_id: number | null;
+  calendar_id: string | null;
+  google_event_id: string | null;
+  sent_fingerprint: string | null;
+  lease_until: string | null;
+};
