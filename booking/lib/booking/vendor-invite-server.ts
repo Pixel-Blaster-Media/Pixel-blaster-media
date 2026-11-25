@@ -67,6 +67,7 @@ export async function attachVendor(scope: Scope, vendor: VendorInput) {
 export async function removeVendor(scope: Scope, id: string) {
   const { error, data } = await getServiceSupabase().from("booking_vendor_invites").update({ removed: true })
     .eq("organization_id", scope.organizationId).eq("booking_id", scope.bookingId).eq("id", id).select("id").maybeSingle();
+  if (error?.code === "PB006") throw new Error("Add a replacement vendor before removing the last vendor on a vendor-only shoot.");
   if (error || !data) throw new Error("Could not remove the vendor.");
   return syncVendorInvite(scope, id);
 }

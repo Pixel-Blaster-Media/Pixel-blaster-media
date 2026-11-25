@@ -17,7 +17,7 @@ import { sendEmail } from "@/lib/email/resend";
 import { getOrganizationEmailSettings } from "@/lib/email/settings";
 import { dispatchBookingIntegrationJobs } from "@/lib/integrations/dispatcher";
 
-import { attachVendor } from "@/lib/booking/vendor-invite-server";
+import { attachVendor, syncBookingVendorInvites } from "@/lib/booking/vendor-invite-server";
 import { readVendorInput } from "@/lib/booking/vendor-invite-core";
 import { sendPushBestEffort } from "@/lib/notifications/push";
 import { getServerSupabase, getServiceSupabase } from "@/lib/supabase/server";
@@ -261,7 +261,7 @@ export async function createAdminShoot(
       postal_code: postalCode, scheduled_at: scheduledAt.toISOString(),
       square_footage: squareFootage, unit_number: unitNumber, client_notes: notes,
       suppress_realtor_notifications: suppressRealtorNotifications,
-      ...(vendorOnly ? { vendor_only: true } : {}),
+      ...(vendorOnly && vendor ? { vendor_only: true, vendor_assignment: { ...vendor } } : {}),
       ...(formData.get("include_basement") === "on" ? { include_basement: true } : {}),
       catalog_item_ids: selectedCatalogIds,
     },
@@ -317,7 +317,7 @@ export async function createAdminShoot(
     ? "Booking saved, but one or more other shoots for this realtor did not sync to Google Calendar."
     : undefined;
 
-  const vendorOperation = vendor ? attachVendor({ organizationId: admin.organizationId, bookingId: booking.id }, vendor)
+  const vendorOperation = vendor && !vendorOnly ? attachVendor({ organizationId: admin.organizationId, bookingId: booking.id }, vendor)
     .then((result) => result.synced && result.contactSaved).catch(() => false) : Promise.resolve(true);
 
   const dispatchResults = await dispatchBookingIntegrationJobs({
@@ -330,7 +330,9 @@ export async function createAdminShoot(
     ? "Booking saved; confirmation is pending or needs integration review."
     : undefined;
 
-  const vendorSynced = await vendorOperation;
+  const vendorSynced = vendorOnly
+    ? await syncBookingVendorInvites({ organizationId: admin.organizationId, bookingId: booking.id })
+    : await vendorOperation;
   revalidatePath("/admin/calendar");
   revalidatePath("/admin/bookings");
   return {

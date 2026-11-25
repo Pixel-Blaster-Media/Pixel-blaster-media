@@ -14344,6 +14344,9 @@ declare
   v_duration integer; v_services text[]; v_addons text[];
   v_old public.bookings%rowtype; v_request public.admin_booking_requests%rowtype;
   v_fingerprint jsonb; v_result jsonb; v_retained boolean := false; v_version bigint;
+  v_vendor_only boolean := p_booking_id is null and coalesce((p_input->>'vendor_only')::boolean,false);
+  v_vendor jsonb := p_input->'vendor_assignment';
+  v_vendor_email text;
   previous_quote_policy text;
 begin
   if not exists(select 1 from public.profiles p join public.organization_members m on m.profile_id=p.id and m.organization_id=p_organization_id where p.id=p_actor_id and p.organization_id=p_organization_id and p.archived_at is null and m.role in ('owner','admin'))
@@ -14351,6 +14354,13 @@ begin
     raise exception 'Not authorized' using errcode='PB001';
   end if;
   if p_request_id is null then raise exception 'Request key required' using errcode='PB002'; end if;
+  if v_vendor_only then
+    v_vendor_email := lower(btrim(v_vendor->>'email'));
+    if coalesce(length(v_vendor_email),0) not between 3 and 254
+      or v_vendor_email !~ '^[^[:space:]@<>,;]+@[^[:space:]@<>,;.]+([.][^[:space:]@<>,;.]+)+$' then
+      raise exception 'A vendor email is required for a vendor-only shoot' using errcode='PB002';
+    end if;
+  end if;
   select array_agg(value::uuid order by value::uuid) into v_ids from jsonb_array_elements_text(p_input->'catalog_item_ids');
   -- Consent version gates new quotes below; it must not invalidate an already
   -- committed business request. Normalize both sides without rewriting history.
@@ -14403,7 +14413,16 @@ begin
   end if;
   if p_booking_id is null then
   insert into public.bookings(organization_id,owner_id,property_id,status,scheduled_at,scheduled_ends_at,allow_schedule_overlap,services,add_ons,square_footage,unit_number,client_notes,suppress_realtor_notifications,include_basement,basement_duration_minutes,vendor_only)
-  values(p_organization_id,v_owner,v_property,'confirmed',v_start,v_start+make_interval(mins=>v_duration),true,v_services,v_addons,v_sqft,nullif(p_input->>'unit_number',''),nullif(p_input->>'client_notes',''),coalesce((p_input->>'suppress_realtor_notifications')::boolean,false),(p_input->>'include_basement')::boolean,v_basement_minutes,coalesce((p_input->>'vendor_only')::boolean,false)) returning id,lifecycle_version into v_booking,v_version;
+  values(p_organization_id,v_owner,v_property,'confirmed',v_start,v_start+make_interval(mins=>v_duration),true,v_services,v_addons,v_sqft,nullif(p_input->>'unit_number',''),nullif(p_input->>'client_notes',''),coalesce((p_input->>'suppress_realtor_notifications')::boolean,false),(p_input->>'include_basement')::boolean,v_basement_minutes,v_vendor_only) returning id,lifecycle_version into v_booking,v_version;
+  if v_vendor_only then
+    insert into public.booking_vendor_invites(organization_id,booking_id,email,name,logo_url,instructions)
+    values(p_organization_id,v_booking,v_vendor_email,coalesce(v_vendor->>'name',''),v_vendor->>'logo_url',coalesce(v_vendor->>'instructions',''));
+    if (v_vendor->>'save')::boolean is true then
+      insert into public.vendor_contacts(organization_id,email,name,logo_url)
+      values(p_organization_id,v_vendor_email,coalesce(v_vendor->>'name',''),v_vendor->>'logo_url')
+      on conflict (organization_id,email) do update set name=excluded.name,logo_url=excluded.logo_url;
+    end if;
+  end if;
   else
     update public.bookings set property_id=v_property,scheduled_at=v_start,scheduled_ends_at=case when v_retained and v_old.scheduled_at is not null and v_old.scheduled_ends_at is not null then v_start+(v_old.scheduled_ends_at-v_old.scheduled_at) else v_start+make_interval(mins=>v_duration) end,allow_schedule_overlap=true,services=v_services,add_ons=v_addons,square_footage=v_sqft,unit_number=nullif(p_input->>'unit_number',''),client_notes=nullif(p_input->>'client_notes','') where id=p_booking_id returning id,lifecycle_version into v_booking,v_version;
   end if;
@@ -14458,6 +14477,37 @@ create or replace function public.current_booking_quote_policy()
 returns text language sql stable security invoker set search_path = '' as $$ select '2026-09-30-v1'::text $$;
 revoke all on function public.current_booking_quote_policy() from public,anon,authenticated;
 grant execute on function public.current_booking_quote_policy() to service_role;
+
+-- Require replacement coverage before the last active vendor is removed.
+-- A row lock serializes removals for the same shoot, including separate admins.
+create function public.guard_vendor_only_coverage()
+returns trigger language plpgsql set search_path='' as $$
+declare must_keep_vendor boolean;
+begin
+  if old.removed then
+    if TG_OP = 'DELETE' then return old; end if;
+    return new;
+  end if;
+  if TG_OP = 'UPDATE' then
+    if not new.removed then return new; end if;
+  end if;
+  select b.vendor_only and b.status <> 'cancelled' into must_keep_vendor
+    from public.bookings b
+    where b.organization_id=old.organization_id and b.id=old.booking_id for update;
+  if must_keep_vendor and not exists(
+    select 1 from public.booking_vendor_invites i
+    where i.organization_id=old.organization_id and i.booking_id=old.booking_id
+      and i.id<>old.id and not i.removed
+  ) then
+    raise exception 'Add a replacement vendor before removing the last vendor' using errcode='PB006';
+  end if;
+  if TG_OP = 'DELETE' then return old; end if;
+  return new;
+end $$;
+create trigger booking_vendor_only_coverage_guard
+  before delete or update of removed on public.booking_vendor_invites
+  for each row execute function public.guard_vendor_only_coverage();
+revoke all on function public.guard_vendor_only_coverage() from public, anon, authenticated;
 
 -- ============================================================================
 -- End supabase/migrations/20261125004100_vendor_only_booking.sql

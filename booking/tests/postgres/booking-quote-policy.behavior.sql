@@ -121,9 +121,28 @@ begin
  -- regular public booking in that slot still hits the atomic guard.
  result := public.save_admin_booking_aggregate(org_id,actor_id,gen_random_uuid(),null,null,
   jsonb_build_object('quote_policy_version','2026-09-30-v1','owner_id',owner_id,'street_address','50 Vendor Street','city','Toronto',
-   'scheduled_at',base_slot+interval '50 days','vendor_only',true,'catalog_item_ids',jsonb_build_array(video_id)));
+   'scheduled_at',base_slot+interval '50 days','vendor_only',true,'vendor_assignment',jsonb_build_object('email','vendor@quote.invalid'),'catalog_item_ids',jsonb_build_array(video_id)));
  if not exists(select 1 from public.bookings b where b.id=(result->>'booking_id')::uuid and b.vendor_only) then
   raise exception 'Manual vendor-only booking did not store its availability setting';
+ end if;
+ if not exists(select 1 from public.booking_vendor_invites i where i.booking_id=(result->>'booking_id')::uuid and i.email='vendor@quote.invalid' and not i.removed) then
+  raise exception 'Vendor-only booking did not commit its assignment';
+ end if;
+ begin
+  update public.booking_vendor_invites set removed=true where booking_id=(result->>'booking_id')::uuid;
+  raise exception 'A vendor-only shoot lost its last vendor';
+ exception when sqlstate 'PB006' then null;
+ end;
+ saved_count := (select count(*) from public.bookings);
+ begin
+  perform public.save_admin_booking_aggregate(org_id,actor_id,gen_random_uuid(),null,null,
+   jsonb_build_object('quote_policy_version','2026-09-30-v1','owner_id',owner_id,'street_address','Failure Vendor Street','city','Toronto',
+    'scheduled_at',base_slot+interval '51 days','vendor_only',true,'vendor_assignment',jsonb_build_object('email','vendor@quote.invalid','name',repeat('x',101)),'catalog_item_ids',jsonb_build_array(video_id)));
+  raise exception 'The broken assignment should fail';
+ exception when check_violation then null;
+ end;
+ if (select count(*) from public.bookings) <> saved_count then
+  raise exception 'Failed vendor assignment committed a booking';
  end if;
  result := public.create_public_booking_with_jobs_v2('2026-09-30-v1',gen_random_uuid(),org_id,owner_id,
   '51 Vendor Street','Toronto','M1M1M1','',base_slot+interval '50 days',2500,'vacant',false,'',array[video_id],'{}'::uuid[]);

@@ -89,6 +89,7 @@ test('vendor-only manual bookings require a vendor and persist the attendance fl
  f.set('vendor_email','vendor@example.invalid');
  assert.equal((await h.action(f)).bookingId,'vendor-only');
  assert.equal(h.calls[0].input.p_input.vendor_only,true);
+ assert.equal(h.calls[0].input.p_input.vendor_assignment.email,'vendor@example.invalid');
  const normal=harness({data:{booking_id:'normal',replayed:true}});
  await normal.action(form());
  assert.equal('vendor_only' in normal.calls[0].input.p_input,false);
