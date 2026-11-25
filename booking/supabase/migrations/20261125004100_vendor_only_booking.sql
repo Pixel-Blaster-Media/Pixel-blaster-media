@@ -67,7 +67,9 @@ create policy "bookings: owner or org admin insert"
   on public.bookings for insert to authenticated with check (
     (owner_id = (select auth.uid())
       and organization_id = public.current_organization_id()
-      and not allow_schedule_overlap and not vendor_only)
+      and allow_schedule_overlap = false
+      and internal_notes is null
+      and vendor_only = false)
     or public.is_organization_admin(organization_id)
   );
 

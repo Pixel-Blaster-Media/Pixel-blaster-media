@@ -27,6 +27,11 @@ do $$ begin
   or has_function_privilege('authenticated','public.catalog_booking_price_cents(public.catalog_items,integer)','EXECUTE') then
   raise exception 'Browser can execute pricing RPC';
  end if;
+ if not exists(select 1 from pg_policies where schemaname='public' and tablename='bookings'
+  and policyname='bookings: owner or org admin insert'
+  and with_check like '%internal_notes IS NULL%' and with_check like '%vendor_only = false%') then
+  raise exception 'Booking insert policy lost the private notes or vendor-only guard';
+ end if;
 end $$;
 set local role service_role;
 do $$
