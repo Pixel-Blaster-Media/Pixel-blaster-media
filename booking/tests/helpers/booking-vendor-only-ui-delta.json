@@ -35,7 +35,7 @@
       "      .from(\"bookings\")\n      .select(\n        \"id, lifecycle_version, status, scheduled_at, scheduled_ends_at, google_calendar_event_id, quickbooks_invoice_id, suppress_realtor_notifications, services, add_ons, square_footage, unit_number, is_vacant, include_basement, basement_duration_minutes, booking_line_items(catalog_item_id,unit_price_cents,unit_duration_minutes,quantity), client_notes, properties(street_address, city, province, postal_code, notes), profiles(full_name, email, phone, brokerage, internal_notes)\",\n      )\n      .eq(\"organization_id\", admin.organizationId)\n"
     ],
     [
-      "      id: booking.id,\n      kind: \"booking\",\n      vendorOnly: booking.vendor_only,\n      title: booking.vendor_only\n        ? `Vendor only · ${booking.properties?.street_address ?? \"Shoot\"}`\n        : booking.properties?.street_address ?? \"Shoot\",\n      subtitle: [\n        realtorName,\n",
+      "      id: booking.id,\n      kind: \"booking\",\n      vendorOnly: booking.vendor_only,\n      title: booking.properties?.street_address ?? \"Shoot\",\n      subtitle: [\n        realtorName,\n",
       "      id: booking.id,\n      kind: \"booking\",\n      title: booking.properties?.street_address ?? \"Shoot\",\n      subtitle: [\n        realtorName,\n"
     ],
     [

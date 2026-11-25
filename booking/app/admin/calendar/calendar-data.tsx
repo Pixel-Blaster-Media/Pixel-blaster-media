@@ -303,9 +303,7 @@ export async function loadCalendarWeek(params: { week?: string; q?: string }) {
       id: booking.id,
       kind: "booking",
       vendorOnly: booking.vendor_only,
-      title: booking.vendor_only
-        ? `Vendor only · ${booking.properties?.street_address ?? "Shoot"}`
-        : booking.properties?.street_address ?? "Shoot",
+      title: booking.properties?.street_address ?? "Shoot",
       subtitle: [
         realtorName,
         services.join(", "),
