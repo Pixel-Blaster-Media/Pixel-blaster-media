@@ -67,6 +67,51 @@ test("vendor create, reschedule and cancel use one isolated Calendar event and n
   assert.equal(calls.filter(({ url }) => url.endsWith("sendUpdates=all")).length, 3);
 });
 
+test("vendor retry repairs the existing event after a lost create response and reschedule", async () => {
+  const eventId = vendorEventId(vendor.id);
+  let event;
+  const calls = [];
+  let patchFails = true;
+  const fetchImpl = async (url, init) => {
+    calls.push(init.method);
+    switch (init.method) {
+      case "POST":
+        assert.equal(JSON.parse(init.body).id, eventId);
+        if (event) return new Response(null, { status: 409 });
+        event = { ...JSON.parse(init.body), htmlLink: "https://calendar.example.invalid/event" };
+        throw new Error("Calendar committed the insert but its response was lost");
+      case "GET":
+        assert.ok(url.endsWith("/" + eventId));
+        return Response.json(event);
+      case "PATCH":
+        assert.ok(url.endsWith("/" + eventId + "?sendUpdates=all"));
+        if (patchFails) return new Response(null, { status: 503 });
+        event = { ...event, ...JSON.parse(init.body) };
+        return Response.json(event);
+      default:
+        assert.fail("Unexpected Google Calendar operation " + init.method);
+    }
+  };
+  const args = { fetchImpl, accessToken: "test-only", calendarId: "test-calendar", eventId };
+  const initial = vendorEventInput(booking, vendor);
+  await assert.rejects(insertGoogleCalendarEvent({ ...args, input: initial }), /response was lost/);
+  assert.equal(event.start.dateTime, initial.startISO);
+
+  const moved = vendorEventInput({
+    ...booking, scheduled_at: "2026-12-01T18:00:00Z", scheduled_ends_at: "2026-12-01T19:00:00Z",
+  }, vendor);
+  await assert.rejects(insertGoogleCalendarEvent({ ...args, input: moved }), /503/);
+  assert.equal(event.start.dateTime, initial.startISO);
+
+  patchFails = false;
+  const recovered = await insertGoogleCalendarEvent({ ...args, input: moved });
+  assert.equal(recovered.id, eventId);
+  assert.equal(event.start.dateTime, moved.startISO);
+  assert.equal(event.end.dateTime, moved.endISO);
+  assert.equal(event.attendees[0].email, vendor.email);
+  assert.deepEqual(calls, ["POST", "POST", "GET", "PATCH", "POST", "GET", "PATCH"]);
+});
+
 test("the admin forms and lifecycle service use the isolated vendor workflow", () => {
   const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
   assert.match(source("../app/admin/calendar/CalendarWeekView.tsx"), /<VendorFields contacts=\{vendorContacts\}/);
