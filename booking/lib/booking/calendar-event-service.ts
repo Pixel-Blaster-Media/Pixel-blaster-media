@@ -36,7 +36,7 @@ export type StoredBookingGoogleCalendarSyncResult =
   | { ok: true; status: "not_scheduled" };
 
 const BOOKING_PROJECTION_SELECT =
-  "id, organization_id, status, scheduled_at, scheduled_ends_at, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, suppress_realtor_notifications, google_calendar_event_id, updated_at, properties(street_address, city, postal_code), profiles(email, full_name, phone, brokerage)";
+  "id, organization_id, status, scheduled_at, scheduled_ends_at, vendor_only, services, add_ons, square_footage, unit_number, is_vacant, include_basement, client_notes, suppress_realtor_notifications, google_calendar_event_id, updated_at, properties(street_address, city, postal_code), profiles(email, full_name, phone, brokerage)";
 
 export async function syncStoredBookingGoogleCalendarEvent(args: {
   organizationId: string;

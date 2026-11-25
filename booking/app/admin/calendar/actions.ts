@@ -154,6 +154,8 @@ export async function createAdminShoot(
   try { vendor = readVendorInput(formData); } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Check the vendor details." };
   }
+  const vendorOnly = formData.get("vendor_only") === "on";
+  if (vendorOnly && !vendor) return { ok: false, error: "Add the vendor who will cover this shoot." };
   const scheduledRaw = str(formData, "scheduled_at");
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str(formData, "admin_request_id"))) {
     return { ok: false, error: "Refresh the booking form before submitting." };
@@ -259,6 +261,7 @@ export async function createAdminShoot(
       postal_code: postalCode, scheduled_at: scheduledAt.toISOString(),
       square_footage: squareFootage, unit_number: unitNumber, client_notes: notes,
       suppress_realtor_notifications: suppressRealtorNotifications,
+      ...(vendorOnly ? { vendor_only: true } : {}),
       ...(formData.get("include_basement") === "on" ? { include_basement: true } : {}),
       catalog_item_ids: selectedCatalogIds,
     },

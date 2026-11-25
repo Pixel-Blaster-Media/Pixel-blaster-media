@@ -112,6 +112,25 @@ begin
  if current_setting('pixel_booking.quote_policy',true) is distinct from 'caller-context' then
   raise exception 'Admin creation did not restore caller context';
  end if;
+ -- Vendor-only and regular shoots may share a slot, but a second
+ -- regular public booking in that slot still hits the atomic guard.
+ result := public.save_admin_booking_aggregate(org_id,actor_id,gen_random_uuid(),null,null,
+  jsonb_build_object('quote_policy_version','2026-09-30-v1','owner_id',owner_id,'street_address','50 Vendor Street','city','Toronto',
+   'scheduled_at',base_slot+interval '50 days','vendor_only',true,'catalog_item_ids',jsonb_build_array(video_id)));
+ if not exists(select 1 from public.bookings b where b.id=(result->>'booking_id')::uuid and b.vendor_only) then
+  raise exception 'Manual vendor-only booking did not store its availability setting';
+ end if;
+ result := public.create_public_booking_with_jobs_v2('2026-09-30-v1',gen_random_uuid(),org_id,owner_id,
+  '51 Vendor Street','Toronto','M1M1M1','',base_slot+interval '50 days',2500,'vacant',false,'',array[video_id],'{}'::uuid[]);
+ if not exists(select 1 from public.bookings b where b.id=(result->>'booking_id')::uuid and not b.vendor_only) then
+  raise exception 'Normal booking was not accepted alongside a vendor-only shoot';
+ end if;
+ begin
+  perform public.create_public_booking_with_jobs_v2('2026-09-30-v1',gen_random_uuid(),org_id,owner_id,
+   '52 Vendor Street','Toronto','M1M1M1','',base_slot+interval '50 days',2500,'vacant',false,'',array[video_id],'{}'::uuid[]);
+  raise exception 'An overlapping normal booking should still be rejected';
+ exception when exclusion_violation then null;
+ end;
  saved_count := (select count(*) from public.bookings);
  begin
   perform public.save_admin_booking_aggregate_pre_policy(org_id,actor_id,gen_random_uuid(),null,null,

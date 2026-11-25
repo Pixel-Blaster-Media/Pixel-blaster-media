@@ -6,7 +6,12 @@ import { readFileSync } from 'node:fs';
 const delta = JSON.parse(readFileSync(new URL('./calendar-today-ui-delta.json', import.meta.url), 'utf8'));
 export const calendarTodayUiPaths = Object.keys(delta);
 const vendorDelta = JSON.parse(readFileSync(new URL('./booking-vendor-ui-delta.json', import.meta.url), 'utf8'));
+const vendorOnlyDelta = JSON.parse(readFileSync(new URL('./booking-vendor-only-ui-delta.json', import.meta.url), 'utf8'));
 export function beforeCalendarTodayUi(path, source) {
+  for (const [candidate, prior] of vendorOnlyDelta[path] ?? []) {
+    assert.equal(source.split(candidate).length - 1, 1, 'exact vendor-only UI change: ' + path);
+    source = source.replace(candidate, () => prior);
+  }
   for (const [candidate, prior] of vendorDelta[path] ?? []) {
     assert.equal(source.split(candidate).length - 1, 1, 'exact vendor invite UI change: ' + path);
     source = source.replace(candidate, () => prior);

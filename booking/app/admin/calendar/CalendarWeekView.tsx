@@ -65,6 +65,7 @@ export interface CalendarItem {
   statusClass?: string;
   syncWarning?: string;
   sourceColor?: string;
+  vendorOnly?: boolean;
   bookingDetails?: {
     lifecycleVersion: number;
     fullAddress: string;
@@ -1939,7 +1940,16 @@ export default function CalendarWeekView({
                 </div>
               </FormSection>
 
-              {vendorContacts !== null && <VendorFields contacts={vendorContacts} />}
+              {vendorContacts !== null && <>
+                <VendorFields contacts={vendorContacts} />
+                <label className="flex cursor-pointer gap-3 rounded-2xl border border-violet-200 bg-violet-50 p-4 text-violet-950">
+                  <input type="checkbox" name="vendor_only" className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    <span className="block text-sm font-semibold">Vendor only · I won’t be there</span>
+                    <span className="block text-xs">Shows in purple on the calendar and leaves this time available for other shoots.</span>
+                  </span>
+                </label>
+              </>}
 
               <label className="flex cursor-pointer gap-3 rounded-2xl border border-realtor-primary/15 bg-realtor-primary/5 p-4">
                 <input
@@ -2307,9 +2317,9 @@ function CalendarQuickView({
   const proposedEnd = new Date(
     new Date(item.startsAt).getTime() + proposedDurationMinutes * 60_000,
   );
-  const proposedOverlaps = selectionChanged
+  const proposedOverlaps = selectionChanged && !item.vendorOnly
     ? calendarItems.filter((candidate) => {
-        if (candidate.kind === "booking" && candidate.id === item.id) return false;
+        if (candidate.vendorOnly || (candidate.kind === "booking" && candidate.id === item.id)) return false;
         return (
           new Date(candidate.startsAt).getTime() < proposedEnd.getTime() &&
           new Date(candidate.endsAt).getTime() > new Date(item.startsAt).getTime()
@@ -3098,12 +3108,14 @@ function calendarItemKindLabel(item: CalendarItem): string {
 }
 
 function calendarItemPillClass(item: CalendarItem): string {
+  if (item.vendorOnly) return "border-violet-200 bg-violet-50 text-violet-900";
   if (item.kind === "google") return "border-sky-200 bg-sky-50 text-sky-800";
   if (item.kind === "block") return "border-stone-300 bg-stone-100 text-stone-700";
   return "border-emerald-200 bg-emerald-50 text-emerald-800";
 }
 
 function calendarEventSurfaceClass(item: CalendarItem): string {
+  if (item.vendorOnly) return "border-violet-300 bg-violet-100 text-violet-950 hover:bg-violet-200";
   switch (item.statusLabel?.toLowerCase()) {
     case "confirmed":
       return "precision-calendar-confirmed border-[#8ba98f] bg-[#dce9dc] text-realtor-text hover:bg-[#d2e1d2]";

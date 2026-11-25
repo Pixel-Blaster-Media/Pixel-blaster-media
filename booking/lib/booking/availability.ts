@@ -110,6 +110,7 @@ export async function listAvailableSlots({
     .from("bookings")
     .select("scheduled_at, scheduled_ends_at, services, add_ons, status")
     .eq("organization_id", orgId)
+    .eq("vendor_only", false)
     .in("status", ["requested", "confirmed", "shot", "editing", "delivered"])
     .not("scheduled_at", "is", null)
     // Fetch intervals that can overlap, including long/overnight bookings.
