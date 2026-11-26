@@ -383,6 +383,125 @@ export async function resolveIGuideDeliveryCoverUrl(tourUrl: string, savedCoverU
   }
 }
 
+
+type MeasurementGroup = { label: string; rows: Array<[string, string]> };
+type IGuideDeliveryMeasurements = { buildings: MeasurementGroup[][] };
+
+const objectRecord = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown> : null;
+const measurementLabel = (value: unknown) =>
+  typeof value === "string" ? value.trim().slice(0, 100) : "";
+const finiteMeasurement = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0;
+const sqFeet = (mm2: number, digits: number) =>
+  `${(mm2 / 92_903.04).toLocaleString("en-CA", { minimumFractionDigits: digits, maximumFractionDigits: digits })} sq ft`;
+const feetAndInches = (mm: number) => {
+  const inches = Math.round(mm / 25.4);
+  return `${Math.floor(inches / 12)}′ ${inches % 12}″`;
+};
+
+/** Map documented View API units (mm and mm²); never infer room area from dimensions. */
+export function parseIGuideDeliveryMeasurements(payload: unknown): IGuideDeliveryMeasurements | null {
+  const response = objectRecord(payload);
+  const buildings = objectRecord(response?.summary)?.buildings;
+  if (response?.status !== "ready" || !Array.isArray(buildings) || !buildings.length || buildings.length > 12) return null;
+  const output: MeasurementGroup[][] = [];
+  let rowCount = 0;
+  const areaRows = (fields: Array<[string, unknown]>): Array<[string, string]> =>
+    fields.flatMap(([label, value]): Array<[string, string]> =>
+      finiteMeasurement(value) ? [[label, sqFeet(value, 2)]] : []);
+  for (const rawBuilding of buildings) {
+    const building = objectRecord(rawBuilding);
+    if (!building || !Array.isArray(building.floors) || building.floors.length > 24) return null;
+    const name = measurementLabel(building.name) || "Building";
+    const groups: MeasurementGroup[] = [];
+    const aboveGrade = areaRows([
+      ["Interior area", building.intAreaAboveGrade],
+      ["Exterior area", building.extAreaAboveGrade],
+      ["Excluded area", building.excludedAreaAboveGrade],
+    ]);
+    if (aboveGrade.length) groups.push({ label: name + " · Above-grade totals", rows: aboveGrade });
+    rowCount += aboveGrade.length;
+    for (const rawFloor of building.floors) {
+      const floor = objectRecord(rawFloor);
+      if (!floor || floor.notComputed === true) continue;
+      const floorName = measurementLabel(floor.name) || "Floor";
+      const title = name + " · " + floorName + (floor.isBelowGrade === true ? " (below grade)" : "");
+      const areas = areaRows([
+        ["Interior area", floor.interiorArea],
+        ["Exterior area", floor.exteriorArea],
+        ["Excluded area", floor.excludedArea],
+      ]);
+      if (finiteMeasurement(floor.wallThickness)) {
+        areas.push(["Perimeter wall thickness", `${(floor.wallThickness / 25.4).toFixed(1)} in`]);
+      }
+      if (areas.length) groups.push({ label: title + " · Floor area", rows: areas });
+      const rooms: MeasurementGroup["rows"] = [];
+      if (Array.isArray(floor.rooms)) {
+        if (floor.rooms.length > 100) return null;
+        for (const rawRoom of floor.rooms) {
+          const room = objectRecord(rawRoom);
+          const label = measurementLabel(room?.name);
+          const dims = room?.dims;
+          const dimensions = Array.isArray(dims) && dims.length === 2 &&
+            dims.every((value) => finiteMeasurement(value) && value > 0)
+            ? dims.map(feetAndInches).join(" × ") : "";
+          const value = [dimensions, finiteMeasurement(room?.area) ? sqFeet(room.area, 0) : ""].filter(Boolean).join(" · ");
+          if (label && value) rooms.push([label, value]);
+        }
+      }
+      if (rooms.length) groups.push({ label: title + " · Rooms", rows: rooms });
+      rowCount += areas.length + rooms.length;
+      if (rowCount > 140) return null;
+    }
+    if (groups.length) output.push(groups);
+  }
+  return output.length ? { buildings: output } : null;
+}
+
+/** Best-effort measurements from the exact, already-linked public view. */
+export async function resolveIGuideDeliveryMeasurements(tourUrl: string): Promise<IGuideDeliveryMeasurements | null> {
+  const alias = iGuidePublicTourAlias(tourUrl);
+  if (!alias) return null;
+  try {
+    const res = await fetch(`https://youriguide.com/${alias}/data/summary`, {
+      redirect: "error", cache: "no-store", signal: AbortSignal.timeout(4_000),
+    });
+    if (!res.ok || !/^application\/json\b/i.test(res.headers.get("content-type") ?? "") || !res.body) return null;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let bytes = 0;
+    let raw = "";
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > 1024 * 1024) {
+          void reader.cancel().catch(() => {});
+          return null;
+        }
+        raw += decoder.decode(value, { stream: true });
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    return parseIGuideDeliveryMeasurements(JSON.parse(raw + decoder.decode()));
+  } catch {
+    // A locked, unavailable or malformed view must not stop a media delivery.
+    return null;
+  }
+}
+
+function renderIGuideDeliveryMeasurements(measurements: IGuideDeliveryMeasurements | null | undefined): string {
+  if (!measurements) return "";
+  const groups = measurements.buildings.flat().map(({ label, rows }) =>
+    `<h3 style="margin:15px 0 4px;color:#126e73;font-size:14px;line-height:20px;">${escape(label)}</h3><table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${rows.map(([name, value]) =>
+      `<tr><th scope="row" align="left" style="padding:5px 8px 5px 0;border-bottom:1px solid #e3edeb;color:#152c2d;font-size:13px;">${escape(name)}</th><td align="right" style="padding:5px 0;border-bottom:1px solid #e3edeb;color:#445b5b;font-size:13px;">${escape(value)}</td></tr>`).join("")}</table>`).join("");
+  return `<tr><td style="padding:0 26px 24px;"><h2 style="margin:0;color:#152c2d;font-size:18px;line-height:24px;">Property details</h2><p style="margin:6px 0;color:#526868;font-size:13px;">Measurements supplied by iGUIDE.</p>${groups}<p style="margin:12px 0 0;color:#526868;font-size:12px;line-height:18px;">Room dimensions are the maximum length and width, not a calculation of room area. Some rooms may be excluded from interior floor area. Totals are calculated before rounding. See <a href="https://youriguide.com/measure/" style="color:#126e73;">iGUIDE’s measurement method</a>.</p></td></tr>`;
+}
+
 export function deliveryReadyEmail({
   contactName,
   streetAddress,
@@ -390,6 +509,7 @@ export function deliveryReadyEmail({
   deliverables,
   invoiceUrl,
   coverUrl,
+  measurements,
 }: {
   contactName: string;
   streetAddress: string;
@@ -401,6 +521,7 @@ export function deliveryReadyEmail({
   }>;
   /** Optional verified public iGUIDE cover for this booking. */
   coverUrl?: string | null;
+  measurements?: IGuideDeliveryMeasurements | null;
   /** Optional QuickBooks payment link — renders a "Pay your invoice" button. */
   invoiceUrl?: string | null;
 }) {
@@ -440,6 +561,7 @@ export function deliveryReadyEmail({
               <h2 style="margin:0 0 12px;color:#152c2d;font-size:18px;line-height:24px;">Included media</h2>
               ${groupedLinks}
             </td></tr>` : ""}
+            ${renderIGuideDeliveryMeasurements(measurements)}
             ${invoiceUrl ? `<tr><td style="padding:0 26px 24px;">
               <h2 style="margin:0 0 6px;color:#152c2d;font-size:16px;line-height:22px;">Billing</h2>
               <a href="${escape(invoiceUrl)}" style="color:#126e73;font-size:14px;line-height:22px;font-weight:bold;text-decoration:underline;">Pay your invoice →</a>
