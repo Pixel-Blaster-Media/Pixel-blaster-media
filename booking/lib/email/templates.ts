@@ -329,21 +329,56 @@ export function shootReminderEmail({
   };
 }
 
-/** Use only the public front photo of the specific tour in this booking. */
-export function iGuideDeliveryCoverUrl(tourUrl: string, coverUrl: string | null): string | null {
-  if (!coverUrl) return null;
+function iGuidePublicTourAlias(tourUrl: string): string | null {
   try {
     const tour = new URL(tourUrl);
+    const allowedHost = tour.hostname === "youriguide.com" || tour.hostname === "unbranded.youriguide.com";
+    if (!allowedHost || tour.protocol !== "https:" || tour.username || tour.password || tour.port) return null;
+    return /^\/([a-z0-9_-]{1,200})\/?$/i.exec(tour.pathname)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Use only the public front photo of the specific tour in this booking. */
+export function iGuideDeliveryCoverUrl(tourUrl: string, coverUrl: string | null): string | null {
+  const alias = iGuidePublicTourAlias(tourUrl);
+  if (!alias || !coverUrl) return null;
+  try {
     const cover = new URL(coverUrl);
-    const allowedTourHost = tour.hostname === "youriguide.com" || tour.hostname === "unbranded.youriguide.com";
-    const match = /^\/([a-z0-9_-]+)\/?$/i.exec(tour.pathname);
     if (
-      !allowedTourHost || tour.protocol !== "https:" || tour.username || tour.password || tour.port || !match ||
       cover.origin !== "https://youriguide.com" || cover.username || cover.password || cover.search || cover.hash ||
-      cover.pathname !== `/${match[1]}/doc/front.image`
+      cover.pathname !== `/${alias}/doc/front.image`
     ) return null;
     return cover.href;
   } catch {
+    return null;
+  }
+}
+
+/** Resolve an email-only cover for alias-linked tours without a saved image. */
+export async function resolveIGuideDeliveryCoverUrl(tourUrl: string, savedCoverUrl: string | null): Promise<string | null> {
+  const saved = iGuideDeliveryCoverUrl(tourUrl, savedCoverUrl);
+  if (saved) return saved;
+  const alias = iGuidePublicTourAlias(tourUrl);
+  if (!alias) return null;
+  const candidate = `https://youriguide.com/${alias}/doc/front.image`;
+  try {
+    const options = { method: "HEAD", redirect: "manual", cache: "no-store", signal: AbortSignal.timeout(8000) } as const;
+    const first = await fetch(candidate, options);
+    const isImage = (response: Response) =>
+      response.status === 200 && /^image\/(jpeg|png)(?:;|$)/i.test(response.headers.get("content-type") ?? "");
+    if (isImage(first)) return candidate;
+    if (![301, 302, 303, 307, 308].includes(first.status)) return null;
+    const location = first.headers.get("location");
+    if (!location) return null;
+    const next = new URL(location, candidate);
+    if (next.origin !== "https://youriguide.com" || next.username || next.password || next.search || next.hash) return null;
+    const p = next.pathname.split("/");
+    if (p[0] !== "" || p[1] !== alias || !/^(?:\/)?f\/[a-z0-9_-]+\.(?:jpe?g|png)$/i.test(p.slice(2).join("/"))) return null;
+    return isImage(await fetch(next.href, options)) ? next.href : null;
+  } catch {
+    // A slow or unavailable third-party image must not block delivery.
     return null;
   }
 }
