@@ -1121,7 +1121,7 @@ export async function sendDeliveryReadyEmail(
     if(dto.gallery)dto.gallery.downloads=dto.gallery.downloads.map(link=>({...link,url:appUrl.replace(/\/+$/, '')+link.url}));
     return dto;
   };
-  const incumbentLinks=buildDeliveryLinks(ready,appUrl);
+  const incumbentLinks = buildDeliveryLinks(ready, appUrl, { iGuidePhotoLinks: "provider" });
   if ((await resolveFinalsDelivery(incumbentLinks,readFinals)).length === 0) {
     return {
       ok: false,

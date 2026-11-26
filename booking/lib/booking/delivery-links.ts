@@ -44,6 +44,7 @@ export interface DeliveryLink {
 export function buildDeliveryLinks(
   deliverables: DeliveryLinkInput[],
   appUrl: string,
+  options: { iGuidePhotoLinks?: "portal" | "provider" } = {},
 ): DeliveryLink[] {
   const links: DeliveryLink[] = [];
   const seen = new Set<string>();
@@ -59,6 +60,15 @@ export function buildDeliveryLinks(
     seen.add(`${label}:${url}`);
     links.push({ category, label, url, source, ...(slot ? { slot } : {}) });
   }
+
+  // Delivery emails can use iGUIDE’s existing share links. Other callers keep
+  // the authenticated proxy, especially publicly viewable listing pages.
+  const linkPhotoZip = (url: string | null) => {
+    if (options.iGuidePhotoLinks !== "provider") return proxiedIGuideDownloadUrl(appUrl, url);
+    if (!url) return null;
+    const parsed = new URL(url); // Already validated as an HTTPS iGUIDE photo ZIP.
+    return parsed.username || parsed.password || parsed.port ? null : url;
+  };
 
   const iGuideAlias = findIGuideAlias(deliverables);
   for (const deliverable of deliverables) {
@@ -76,20 +86,14 @@ export function buildDeliveryLinks(
       add(
         "photos",
         "MLS / low-res photos download",
-        proxiedIGuideDownloadUrl(
-          appUrl,
-          photoDownloadUrlForDeliverable(deliverable, "mls"),
-        ),
+        linkPhotoZip(photoDownloadUrlForDeliverable(deliverable, "mls")),
         "iguide",
         "photos_mls",
       );
       add(
         "photos",
         "High-res photos download",
-        proxiedIGuideDownloadUrl(
-          appUrl,
-          photoDownloadUrlForDeliverable(deliverable, "high_res"),
-        ),
+        linkPhotoZip(photoDownloadUrlForDeliverable(deliverable, "high_res")),
         "iguide",
         "photos_full_res",
       );
