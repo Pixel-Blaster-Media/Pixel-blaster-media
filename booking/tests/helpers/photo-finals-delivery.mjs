@@ -13,7 +13,7 @@ export async function deliveryProof({db,storage,env,scope,actorId,sql,state}){
  const real=new Set(['@/lib/booking/delivery-links','@/lib/media/finals/delivery','@/lib/media/finals/application','@/lib/email/templates']);
  const sent=[];let withdraw=false,reads=0,disabled=false;
  const video={id:randomUUID(),type:'video',source:'manual',url:'https://example.invalid/video',metadata:null,ready_at:'2026-01-01'};
- const iguide={id:randomUUID(),type:'photo_gallery',source:'iguide',url:'https://youriguide.com/synthetic',metadata:{mls_photo_zip_url:'https://youriguide.com/synthetic/doc/gallery-low-res.zip'},ready_at:'2026-01-01'};
+ const iguide={id:randomUUID(),type:'photo_gallery',source:'iguide',url:'https://youriguide.com/synthetic',metadata:{mls_photo_zip_url:'https://youriguide.com/synthetic/doc/gallery-low-res.zip?authtoken=fixture%2Fmls&download=1'},ready_at:'2026-01-01'};
  let deliverables=[video];
  const booking={id:scope.bookingId,property_id:scope.propertyId,quickbooks_invoice_url:'https://example.invalid/invoice',properties:{street_address:'Synthetic shoot'},profiles:{email:'realtor@example.invalid',full_name:'Synthetic Realtor',delivery_cc_emails:[]}};
  const service={from(table){const q={select(){return q},eq(){return q},not(){return q},async single(){return {data:booking,error:null}},async maybeSingle(){return {data:table==='bookings'?booking:null,error:null}},async returns(){return {data:deliverables,error:null}},async upsert(){return {error:null}}};return q;}};
@@ -30,7 +30,7 @@ export async function deliveryProof({db,storage,env,scope,actorId,sql,state}){
   assert.ok(sent[0].html.includes(video.url));assert.ok(sent[0].html.includes(booking.quickbooks_invoice_url));
   disabled=true;assert.equal((await sendDeliveryReadyEmail(scope.bookingId)).ok,true);assert.ok(!sent[1].html.includes('/api/photo-finals/'),'nonactivating factory preserves video-only delivery');
   disabled=false;deliverables=[iguide,video];assert.equal((await sendDeliveryReadyEmail(scope.bookingId)).ok,true);
-  assert.ok(sent[2].html.includes(encodeURIComponent(iguide.metadata.mls_photo_zip_url)));assert.ok(!sent[2].html.includes(state.gallery.downloads.find(d=>d.slot==='photos_mls').url));assert.ok(sent[2].html.includes(state.gallery.downloads.find(d=>d.slot==='photos_full_res').url));
+  assert.ok(sent[2].html.includes('href="'+iguide.metadata.mls_photo_zip_url.replaceAll('&','&amp;')+'"'),'email has the exact signed provider URL, HTML-escaped but not rewritten');assert.ok(!sent[2].html.includes('/api/iguide/download?'),'recipient links never go through the signed-in portal');assert.ok(!sent[2].html.includes(state.gallery.downloads.find(d=>d.slot==='photos_mls').url));assert.ok(sent[2].html.includes(state.gallery.downloads.find(d=>d.slot==='photos_full_res').url));
   withdraw=true;assert.equal((await sendDeliveryReadyEmail(scope.bookingId)).ok,true);assert.ok(!sent[3].html.includes('/api/photo-finals/'),'withdrawal during billing is excluded by second fresh SQL read');assert.ok(sent[3].html.includes(video.url));
   return {actualActionAndTemplate:true,actualCurrentStatePG:true,mockedEmailCount:sent.length,noRealEmails:true,freshAfterBillingWithdrawal:true,videoOnlyAndInvoicePreserved:true};
  }finally{if(old===undefined)delete process.env.NEXT_PUBLIC_APP_URL;else process.env.NEXT_PUBLIC_APP_URL=old;delete globalThis[name];await rm(directory,{recursive:true,force:true});}
