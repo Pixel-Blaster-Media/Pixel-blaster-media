@@ -63,3 +63,43 @@ test('explicit accepted retry starts a new finite observation session',async t=>
   await act(async()=>button.props.onClick());await act(async()=>{t.mock.timers.tick(2000);});assert.equal(reads,before+1);
  }finally{if(view)await act(async()=>view.unmount());t.mock.timers.reset();Object.assign(globalThis,original);}
 });
+
+test('Edits folder previews the names, stages only its JPEGs and never approves or sends', async () => {
+ const original={fetch:globalThis.fetch,document:globalThis.document,window:globalThis.window};
+ const locks=Object.getOwnPropertyDescriptor(navigator,'locks');
+ Object.defineProperty(navigator,'locks',{configurable:true,value:{request:async(_name,fn)=>fn()}});
+ globalThis.document=new EventTarget();document.hidden=false;globalThis.window=new EventTarget();
+ const existing={id:'previous',status:'accepted',previewUrl:null}, uploads=[], operations=[];
+ let view;
+ globalThis.fetch=async(url,options)=>{
+  if(options.method!=='POST'){
+   const result=snapshot();result.release=null;result.versions=[existing,...uploads.map(id=>({id,status:'accepted',previewUrl:null}))];
+   return Response.json(result);
+  }
+  const request=JSON.parse(options.body);operations.push(request.op);
+  assert.equal(request.op,'intent');assert.equal(url,'/api/photo-finals/A');
+  uploads.push('new-'+uploads.length);
+  return Response.json({status:'accepted',versionId:uploads.at(-1)});
+ };
+ function file(name, body, relativePath='Edits/'+name){
+  return Object.assign(new File([body],name,{type:'image/jpeg'}),{webkitRelativePath:relativePath});
+ }
+ try{
+  await act(async()=>{view=Renderer.create(React.createElement(Workspace,{bookingId:'A',operator:true}));});
+  const input=view.root.findByProps({'aria-label':'Choose Edits folder'});
+  await act(async()=>input.props.onChange({target:{files:[file('10.jpg','10'),file('2.jpg','2'),file('1.jpg','nested','Edits/RAW/1.jpg')]}}));
+  assert.deepEqual(view.root.findAllByType('li').filter(n=>typeof n.children[0]==='string').map(n=>n.children[0]),['2.jpg','10.jpg']);
+  assert.deepEqual(operations,[]);
+  const stage=view.root.findAllByType('button').find(b=>b.children.includes('Stage folder JPEGs for review'));
+  await act(async()=>await stage.props.onClick());
+  assert.deepEqual(operations,['intent','intent']);
+  assert.equal(view.root.findByProps({'aria-label':'Select photo 1'}).props.checked,false);
+  assert.equal(view.root.findByProps({'aria-label':'Select photo 2'}).props.checked,true);
+  assert.equal(view.root.findByProps({'aria-label':'Select photo 3'}).props.checked,true);
+  assert.ok(JSON.stringify(view.toJSON()).includes('Nothing was approved or sent'));
+ }finally{
+  if(view) await act(async()=>view.unmount());
+  if(locks) Object.defineProperty(navigator,'locks',locks); else delete navigator.locks;
+  Object.assign(globalThis,original);
+ }
+});

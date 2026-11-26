@@ -6,6 +6,7 @@ import {startFinalsPolling} from '@/lib/media/finals/operator-polling';
 import ResumableDownload from './ResumableDownload';
 import FinalsGallery from './FinalsGallery';
 import {useFinalsDirty} from './FinalsNavigationOwner';
+import {selectEditsFolder} from '@/lib/media/finals/edits-folder';
 import {rememberUpload} from '@/lib/media/finals/upload-journal';
 import {selectDeliverySources,type DeliverySourceCandidate} from '@/lib/booking/delivery-source-policy';
 
@@ -18,6 +19,7 @@ function Workspace({bookingId,operator=false,incumbent=[]}:{bookingId:string;ope
  const endpoint='/api/photo-finals/'+bookingId;
  const [state,setState]=useState<State|null>(null),[selected,setSelected]=useState<string[]>([]),[receipt,setReceipt]=useState<Receipt|null>(null);
  const [busy,setBusy]=useState(false),[message,setMessage]=useState('Checking private photo availability…'),[disabled,setDisabled]=useState(false);
+ const [folderDraft,setFolderDraft]=useState<ReturnType<typeof selectEditsFolder<File>>|null>(null);
  const [pollGeneration,setPollGeneration]=useState(0);
  const live=useRef(true),identityKey=useRef<string|null>(null),readSequence=useRef(0);
  const readPending=useRef<Promise<State|undefined>|null>(null);
@@ -31,7 +33,7 @@ function Workspace({bookingId,operator=false,incumbent=[]}:{bookingId:string;ope
   if(!live.current||signal?.aborted||sequence!==readSequence.current)return;
   if(!response.ok){setState(null);setReceipt(null);setDisabled(value.status==='disabled');throw new Error(value.message||'Photo availability could not be confirmed.');}
   if(value.status!=='enabled'||!Array.isArray(value.versions))throw new Error('Photo response could not be confirmed.');
-  if(identityKey.current!==value.recoveryKey){setSelected([]);setReceipt(null);}identityKey.current=value.recoveryKey;
+  if(identityKey.current!==value.recoveryKey){setSelected([]);setReceipt(null);setFolderDraft(null);}identityKey.current=value.recoveryKey;
   setState(value);setDisabled(false);setMessage(value.gallery?'Approved photos are ready.':value.packageJob?.status==='needs_attention'?'Package preparation needs operator attention. No ready release has been confirmed.':value.packageJob?.status==='retryable'?'Package preparation is paused. Use Prepare private packages to retry the saved approved job.':value.release?.state==='packaging'?'The approved job is retained. Checking package status does not prove a worker is running. You may leave; this stops checking, not the saved job.':'Photos remain private until approval and all packages are verified.');
   return value as State;
   };
@@ -48,22 +50,32 @@ function Workspace({bookingId,operator=false,incumbent=[]}:{bookingId:string;ope
    return !!value&&value.recoveryKey===pollIdentity&&value.release?.id===pollRelease&&value.release?.state==='packaging'&&['pending','running'].includes(value.packageJob?.status??'');
   },onStop:reason=>{if(live.current&&reason!=='terminal')setMessage('Automatic status checking paused. Refresh to check again. The approved job is retained; leaving this page does not cancel it.');}});
  },[polling,pollIdentity,pollRelease,pollGeneration,refresh]);
- useFinalsDirty(selected.length>0||busy);
+ useFinalsDirty(selected.length>0||busy||!!folderDraft);
  async function post(body:unknown){const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-Finals-Identity':state?.recoveryKey??''},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw new Error(data.error||'Operation could not be confirmed.');return data;}
  async function run(fn:()=>Promise<unknown>){setBusy(true);setReceipt(null);try{await fn();}catch{if(live.current){setState(null);setMessage('Photo finals could not be confirmed. Refresh, then reselect the same JPEGs to resume their saved upload intents; do not clear browser storage. If retry remains unavailable, operator reconciliation is required.');}}finally{if(live.current)setBusy(false);}}
- async function upload(files:FileList|null){if(!files?.length)return;
-  const inputs=Array.from(files);if(inputs.length>32||inputs.some(f=>f.type!=='image/jpeg'||f.size<1||f.size>33554432)){setMessage('Choose up to 32 finished JPEGs, no larger than 32 MiB each.');return;}
-  await run(async()=>{if(!state?.recoveryKey)throw new Error('Upload identity unavailable');
+ function chooseFolder(files:FileList|null) {
+  if(!files?.length)return;
+  try{setFolderDraft(selectEditsFolder(files));}
+  catch(e){setFolderDraft(null);setMessage(e instanceof Error?e.message:'Could not read the export folder.');}
+ }
+ async function upload(files:FileList|File[]|null,fromFolder=false){if(!files?.length||busy)return;
+  const inputs=Array.from(files);if(!fromFolder&&(inputs.length>32||inputs.some(f=>f.type!=='image/jpeg'||f.size<1||f.size>33554432))){setMessage('Choose up to 32 finished JPEGs, no larger than 32 MiB each.');return;}
+  await run(async()=>{const owner=state?.recoveryKey;if(!owner)throw new Error('Upload identity unavailable');
+   const acceptedIds:string[]=[];
+   function rememberAccepted(result:{status?:string;versionId?:string}){
+    if(result.status!=='accepted'||(fromFolder&&!result.versionId))throw new Error('Acceptance pending');
+    if(result.versionId)acceptedIds.push(result.versionId);
+   }
    const locked=async()=>{
-   for(const file of inputs){if(!live.current)return;setMessage('Uploading and verifying '+file.name+'…');const bytes=await file.arrayBuffer();const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+   for(const file of inputs){if(!live.current||identityKey.current!==owner)return;setMessage('Uploading and verifying '+file.name+'…');const bytes=await file.arrayBuffer();const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
     if(!live.current)return;
     let saved;
     try{saved=rememberUpload(localStorage,state.recoveryKey!,{sha256,byteSize:file.size});}
     catch{saved={requestId:crypto.randomUUID(),intentId:crypto.randomUUID(),sha256,byteSize:file.size};} // Server inventory remains authoritative when storage is unavailable.
     const intent=await post({op:'intent',...saved});
-    if(intent.status==='accepted')continue;
+    if(intent.status==='accepted'){rememberAccepted(intent);continue;}
     if(!live.current)return;
-    if(intent.status==='uploaded'){const accepted=await post({op:'complete',jobId:intent.jobId});if(accepted.status!=='accepted')throw new Error('Acceptance pending');continue;}
+    if(intent.status==='uploaded'){const accepted=await post({op:'complete',jobId:intent.jobId});rememberAccepted(accepted);continue;}
     const capability=new URL(intent.upload.url,location.origin);
     // Only an explicit server-issued capability is used; never accept a file URL.
     if(capability.origin!==location.origin||Date.parse(intent.upload.expiresAt)<=Date.now())throw new Error('Unsupported upload capability');
@@ -71,11 +83,18 @@ function Workspace({bookingId,operator=false,incumbent=[]}:{bookingId:string;ope
     // can attest acceptance; it also rejects missing or mismatched bytes.
     await fetch(capability,{method:'PUT',headers:intent.upload.headers,body:bytes}).catch(()=>null);
     if(!live.current)return;
-    const accepted=await post({op:'complete',jobId:intent.jobId});if(accepted.status!=='accepted')throw new Error('Acceptance pending');
+    const accepted=await post({op:'complete',jobId:intent.jobId});rememberAccepted(accepted);
    }};
    if(!navigator.locks)throw new Error('Cross-tab upload locking unavailable');
    await navigator.locks.request('pixel-finals:'+state.recoveryKey,locked);
-   await refresh();});
+   const current=await refresh();
+   if(fromFolder&&live.current&&current?.recoveryKey===owner){
+    const verified=new Set(current.versions.filter(v=>v.status==='accepted').map(v=>v.id));
+    const unique=[...new Set(acceptedIds)];
+    if(acceptedIds.length!==inputs.length||unique.some(id=>!verified.has(id)))throw new Error('Folder verification incomplete');
+    setSelected(unique);setFolderDraft(null);
+    setMessage(unique.length+' finished photos staged for review. Nothing was approved or sent.');
+   }});
  }
  function change(next:string[]){setSelected(next);setReceipt(null);}
  const downloads=selectDeliverySources([...incumbent,...(state?.gallery?.downloads??[])],{pixelFallbackEnabled:!!state?.gallery,pixelPackageSetComplete:!!state?.gallery});
@@ -87,6 +106,13 @@ function Workspace({bookingId,operator=false,incumbent=[]}:{bookingId:string;ope
    <button className={button} disabled={busy} onClick={()=>void run(async()=>{const inventory=await post({op:'inventory'});if(!Array.isArray(inventory.items)||inventory.hasMore)throw new Error('Inventory requires operator support');const pending=inventory.items.filter((item:{completedAt:string|null})=>!item.completedAt);const expired=pending.filter((item:{expiresAt:string})=>Date.parse(item.expiresAt)<=Date.now());setMessage(`Authorized inventory: ${inventory.items.length} retained uploads, ${pending.length} incomplete, ${expired.length} expired. Reselect the same JPEGs to resume unexpired uploads. Expired intents remain retained; no replacement or deletion was performed.`);})}>Check retained uploads</button>
    <button className={button} disabled={busy} onClick={()=>{if(window.confirm('Reconcile expired uploads? Original objects and intent identities are retained; nothing is deleted or uploaded.'))void run(async()=>{const result=await post({op:'reconcile'});await refresh();if(live.current)setMessage(`${result.settled} expired intents settled and retained. No objects were deleted or uploaded.`);});}}>Reconcile expired uploads</button>
    <label className="block text-sm font-medium">Upload finished JPEGs<input aria-label="Upload finished JPEGs" className="mt-2 block min-h-11 w-full min-w-0 max-w-full text-sm" type="file" accept="image/jpeg,.jpg,.jpeg" multiple disabled={busy} onChange={e=>{void upload(e.target.files);e.target.value='';}}/></label>
+   <label className="block text-sm font-medium">Choose Edits folder<input aria-label="Choose Edits folder" className="mt-2 block min-h-11 w-full min-w-0 max-w-full text-sm" type="file" {...{webkitdirectory:''}} multiple disabled={busy} onChange={e=>{chooseFolder(e.target.files);e.target.value='';}}/></label>
+   <p className="text-xs text-slate-600">Choose the folder containing only the finished JPEGs for this booking. No subfolders are imported.</p>
+   {folderDraft&&<div className="rounded-md border border-slate-200 p-3 text-sm">
+    <p>{folderDraft.folder}: {folderDraft.files.length} JPEGs{folderDraft.skipped>0?' · '+folderDraft.skipped+' other files skipped':''}</p>
+    <details><summary>Review filenames</summary><ul className="max-h-48 overflow-y-auto break-all">{folderDraft.files.map(f=><li key={f.webkitRelativePath}>{f.name}</li>)}</ul></details>
+    <div className="mt-2 flex flex-wrap gap-2"><button className={button} disabled={busy} onClick={()=>void upload(folderDraft.files,true)}>Stage folder JPEGs for review</button><button className={button} disabled={busy} onClick={()=>setFolderDraft(null)}>Cancel folder selection</button></div>
+   </div>}
    <p className="text-xs text-slate-600">Private originals retain EXIF. Approval confirms permission to share. MLS export is provisional; verify destination requirements.</p>
    {state.release&&<p className="text-sm">Release {state.release.revision}: <strong>{state.release.state}</strong></p>}
    <ol className="space-y-2" aria-label="Review uploaded photos">{state.versions.map((v,index)=><li key={v.id} className="flex min-w-0 flex-wrap items-center gap-3 rounded-md border border-slate-200 p-2">
