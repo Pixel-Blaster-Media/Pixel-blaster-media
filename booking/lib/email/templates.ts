@@ -409,82 +409,47 @@ export function deliveryReadyEmail({
 
   const html = `
     <!doctype html>
-    <html><head><meta charset="utf-8"><style>${baseStyles}
-      .cta {
-        display: inline-block;
-        padding: 12px 20px;
-        margin: 20px 0;
-        background: ${BRAND_TEAL};
-        color: #fff !important;
-        text-decoration: none;
-        border-radius: 6px;
-        font-weight: 600;
-      }
-      .link-card {
-        border: 1px solid #2b454b;
-        border-radius: 8px;
-        padding: 14px;
-        margin: 12px 0;
-        background: #102124;
-      }
-      .link-card h2 {
-        margin: 0 0 8px;
-        font-size: 16px;
-        color: #ffffff !important;
-      }
-      .link-card ul {
-        margin: 0;
-        padding-left: 18px;
-        color: #cfd6d8;
-      }
-      .link-card li {
-        margin: 6px 0;
-        color: #cfd6d8;
-      }
-      .link-card a {
-        color: #3dd5e8 !important;
-      }
-      .cta-pay {
-        display: inline-block;
-        padding: 12px 20px;
-        margin: 8px 0 20px;
-        background: #1b6f3c;
-        color: #fff !important;
-        text-decoration: none;
-        border-radius: 6px;
-        font-weight: 600;
-      }
-      a { color:${BRAND_TEAL}; }
-    </style></head>
-    <body><div class="wrap">
-      <p><span class="pill">Media ready</span></p>
-      <h1>Your listing media is ready, ${escape(firstName)}.</h1>
-      <p>The media for <strong>${escape(streetAddress)}</strong> is now available in your portal.</p>
-
-      ${coverUrl
-        ? `<p style="margin:18px 0 4px;"><img src="${escape(coverUrl)}" alt="Cover photo for ${escape(streetAddress)}" width="560" style="display:block;width:100%;max-width:560px;height:auto;border:0;border-radius:8px;" /></p>`
-        : ""}
-
-      <p><a href="${escape(portalLink)}" class="cta">Open your media →</a></p>
-
-      ${
-        groupedLinks
-          ? `<h2>Included media</h2>${groupedLinks}`
-          : ""
-      }
-
-      ${
-        invoiceUrl
-          ? `<h2>Billing</h2>
-      <p>Your invoice for this shoot is ready whenever you are.</p>
-      <p><a href="${escape(invoiceUrl)}" class="cta-pay">Pay your invoice →</a></p>`
-          : ""
-      }
-
-      <p class="meta">Reply to this email if anything needs attention or if you'd like changes.</p>
-    </div></body></html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="color-scheme" content="light">
+      <meta name="supported-color-schemes" content="light">
+      <title>Listing media ready</title>
+    </head>
+    <body style="margin:0;padding:0;background-color:#f3f6f5;color:#152c2d;font-family:Arial,Helvetica,sans-serif;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#f3f6f5">
+        <tr><td align="center" style="padding:28px 12px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#ffffff" style="max-width:600px;background-color:#ffffff;border:1px solid #dce8e6;border-radius:16px;">
+            <tr><td style="padding:28px 26px 20px;border-top:4px solid #126e73;border-radius:16px 16px 0 0;">
+              <p style="margin:0 0 12px;color:#126e73;font-size:11px;font-weight:bold;letter-spacing:2px;line-height:16px;">LISTING MEDIA READY</p>
+              <h1 style="margin:0 0 12px;color:#152c2d;font-size:30px;line-height:36px;letter-spacing:-.4px;">${escape(streetAddress)}</h1>
+              <p style="margin:0;color:#445b5b;font-size:15px;line-height:23px;">Hi ${escape(firstName)}, your listing media is ready to view and download.</p>
+            </td></tr>
+            ${coverUrl
+              ? `<tr><td style="padding:0 26px 18px;"><img src="${escape(coverUrl)}" alt="Cover photo for ${escape(streetAddress)}" width="546" style="display:block;width:100%;max-width:546px;height:auto;border:0;border-radius:10px;" /></td></tr>`
+              : ""}
+            <tr><td style="padding:0 26px 24px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
+                <td bgcolor="#126e73" style="border-radius:8px;">
+                  <a href="${escape(portalLink)}" style="display:inline-block;padding:13px 20px;border:1px solid #126e73;border-radius:8px;color:#ffffff;font-size:15px;line-height:20px;font-weight:bold;text-decoration:none;">Open your media →</a>
+                </td>
+              </tr></table>
+            </td></tr>
+            ${groupedLinks ? `<tr><td style="padding:0 26px 20px;">
+              <h2 style="margin:0 0 12px;color:#152c2d;font-size:18px;line-height:24px;">Included media</h2>
+              ${groupedLinks}
+            </td></tr>` : ""}
+            ${invoiceUrl ? `<tr><td style="padding:0 26px 24px;">
+              <h2 style="margin:0 0 6px;color:#152c2d;font-size:16px;line-height:22px;">Billing</h2>
+              <a href="${escape(invoiceUrl)}" style="color:#126e73;font-size:14px;line-height:22px;font-weight:bold;text-decoration:underline;">Pay your invoice →</a>
+            </td></tr>` : ""}
+            <tr><td style="padding:17px 26px;border-top:1px solid #e3edeb;color:#526868;font-size:13px;line-height:20px;">Need a change or have a question? Just reply to this email.</td></tr>
+          </table>
+        </td></tr>
+      </table>
+    </body></html>
   `;
-
   return {
     subject: `Your listing media is ready — ${streetAddress}`,
     html,
@@ -524,12 +489,12 @@ function renderDeliveryLinkGroups(
       const items = links
         .map(
           (deliverable) =>
-            `<li><a href="${escape(deliverable.url)}">${escape(
+            `<li style="margin:0 0 5px;line-height:21px;"><a href="${escape(deliverable.url)}" style="color:#126e73;font-size:14px;text-decoration:underline;">${escape(
               deliverable.label,
             )}</a></li>`,
         )
         .join("");
-      return `<div class="link-card"><h2>${escape(titles[category])}</h2><ul>${items}</ul></div>`;
+      return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 8px;"><tr><td bgcolor="#f4f8f7" style="padding:11px 14px;border:1px solid #e0ebe8;border-radius:8px;"><h3 style="margin:0 0 5px;color:#152c2d;font-size:14px;line-height:20px;">${escape(titles[category])}</h3><ul style="margin:0;padding-left:19px;color:#445b5b;">${items}</ul></td></tr></table>`;
     })
     .join("");
 }
