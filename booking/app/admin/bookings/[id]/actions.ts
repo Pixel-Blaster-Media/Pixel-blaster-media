@@ -39,6 +39,7 @@ import {
   bookingIcsCalendarLink,
   deliveryReadyEmail,
   resolveIGuideDeliveryCoverUrl,
+  resolveIGuideDeliveryMeasurements,
   shootConfirmedEmail,
 } from "@/lib/email/templates";
 import {
@@ -1166,9 +1167,12 @@ export async function sendDeliveryReadyEmail(
   }
 
   const linkedTours = ready.filter((asset) => asset.source === "iguide" && asset.type === "virtual_tour");
-  const coverUrl = linkedTours.length === 1
-    ? await resolveIGuideDeliveryCoverUrl(linkedTours[0].url, linkedTours[0].thumbnail_url)
-    : null;
+  const [coverUrl, measurements] = linkedTours.length === 1
+    ? await Promise.all([
+        resolveIGuideDeliveryCoverUrl(linkedTours[0].url, linkedTours[0].thumbnail_url),
+        resolveIGuideDeliveryMeasurements(linkedTours[0].url),
+      ])
+    : [null, null];
 
   // Re-read after awaited billing and cover lookup, immediately before constructing the email.
   const deliveryLinks=await resolveFinalsDelivery(incumbentLinks,readFinals);
@@ -1183,6 +1187,7 @@ export async function sendDeliveryReadyEmail(
     deliverables: deliveryLinks,
     invoiceUrl,
     coverUrl,
+    measurements,
   });
 
   const sent = await sendEmail({
