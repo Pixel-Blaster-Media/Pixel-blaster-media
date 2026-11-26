@@ -38,7 +38,7 @@ import {
   bookingGoogleCalendarLink,
   bookingIcsCalendarLink,
   deliveryReadyEmail,
-  iGuideDeliveryCoverUrl,
+  resolveIGuideDeliveryCoverUrl,
   shootConfirmedEmail,
 } from "@/lib/email/templates";
 import {
@@ -1165,16 +1165,17 @@ export async function sendDeliveryReadyEmail(
     }
   }
 
-  // Re-read after awaited billing work, immediately before constructing the email.
+  const linkedTours = ready.filter((asset) => asset.source === "iguide" && asset.type === "virtual_tour");
+  const coverUrl = linkedTours.length === 1
+    ? await resolveIGuideDeliveryCoverUrl(linkedTours[0].url, linkedTours[0].thumbnail_url)
+    : null;
+
+  // Re-read after awaited billing and cover lookup, immediately before constructing the email.
   const deliveryLinks=await resolveFinalsDelivery(incumbentLinks,readFinals);
   if(!deliveryLinks.length)return {ok:false,error:'No currently confirmed media is available for delivery.',billingWarning};
   const portalLink = appUrl
     ? `${appUrl}/portal/${booking.property_id}`
     : `/portal/${booking.property_id}`;
-  const linkedTours = ready.filter((asset) => asset.source === "iguide" && asset.type === "virtual_tour");
-  const coverUrl = linkedTours.length === 1
-    ? iGuideDeliveryCoverUrl(linkedTours[0].url, linkedTours[0].thumbnail_url)
-    : null;
   const email = deliveryReadyEmail({
     contactName: booking.profiles.full_name ?? booking.profiles.email,
     streetAddress: booking.properties.street_address,
