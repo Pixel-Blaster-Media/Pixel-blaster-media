@@ -6,7 +6,7 @@ import {startFinalsPolling} from '@/lib/media/finals/operator-polling';
 import ResumableDownload from './ResumableDownload';
 import FinalsGallery from './FinalsGallery';
 import {useFinalsDirty} from './FinalsNavigationOwner';
-import {selectEditsFolder} from '@/lib/media/finals/edits-folder.mjs';
+import {selectEditsFolder} from '@/lib/media/finals/edits-folder';
 import {rememberUpload} from '@/lib/media/finals/upload-journal';
 import {selectDeliverySources,type DeliverySourceCandidate} from '@/lib/booking/delivery-source-policy';
 

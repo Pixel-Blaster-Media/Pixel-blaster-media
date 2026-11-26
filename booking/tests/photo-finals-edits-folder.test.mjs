@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {selectEditsFolder} from '../lib/media/finals/edits-folder.mts';
+import {selectEditsFolder} from '../lib/media/finals/edits-folder.ts';
 
 const entry = (name, props={}) => ({name, type:'image/jpeg', size:1024, webkitRelativePath:'Edits/'+name, ...props});
 test('Edits folder stages only direct JPEG exports in natural filename order', () => {
