@@ -38,6 +38,7 @@ import {
   bookingGoogleCalendarLink,
   bookingIcsCalendarLink,
   deliveryReadyEmail,
+  iGuideDeliveryCoverUrl,
   shootConfirmedEmail,
 } from "@/lib/email/templates";
 import {
@@ -173,6 +174,7 @@ interface ReadyDeliverableRow {
   type: DeliverableType;
   url: string;
   source: string;
+  thumbnail_url: string | null;
   metadata: Json | null;
   ready_at: string | null;
 }
@@ -1099,7 +1101,7 @@ export async function sendDeliveryReadyEmail(
 
   const { data: deliverables } = await service
     .from("deliverables")
-    .select("id, type, url, source, metadata, ready_at")
+    .select("id, type, url, source, thumbnail_url, metadata, ready_at")
     .eq("booking_id", booking.id)
     .not("ready_at", "is", null)
     .returns<ReadyDeliverableRow[]>();
@@ -1169,12 +1171,17 @@ export async function sendDeliveryReadyEmail(
   const portalLink = appUrl
     ? `${appUrl}/portal/${booking.property_id}`
     : `/portal/${booking.property_id}`;
+  const linkedTours = ready.filter((asset) => asset.source === "iguide" && asset.type === "virtual_tour");
+  const coverUrl = linkedTours.length === 1
+    ? iGuideDeliveryCoverUrl(linkedTours[0].url, linkedTours[0].thumbnail_url)
+    : null;
   const email = deliveryReadyEmail({
     contactName: booking.profiles.full_name ?? booking.profiles.email,
     streetAddress: booking.properties.street_address,
     portalLink,
     deliverables: deliveryLinks,
     invoiceUrl,
+    coverUrl,
   });
 
   const sent = await sendEmail({
