@@ -329,12 +329,32 @@ export function shootReminderEmail({
   };
 }
 
+/** Use only the public front photo of the specific tour in this booking. */
+export function iGuideDeliveryCoverUrl(tourUrl: string, coverUrl: string | null): string | null {
+  if (!coverUrl) return null;
+  try {
+    const tour = new URL(tourUrl);
+    const cover = new URL(coverUrl);
+    const allowedTourHost = tour.hostname === "youriguide.com" || tour.hostname === "unbranded.youriguide.com";
+    const match = /^\/([a-z0-9_-]+)\/?$/i.exec(tour.pathname);
+    if (
+      !allowedTourHost || tour.protocol !== "https:" || tour.username || tour.password || tour.port || !match ||
+      cover.origin !== "https://youriguide.com" || cover.username || cover.password || cover.search || cover.hash ||
+      cover.pathname !== `/${match[1]}/doc/front.image`
+    ) return null;
+    return cover.href;
+  } catch {
+    return null;
+  }
+}
+
 export function deliveryReadyEmail({
   contactName,
   streetAddress,
   portalLink,
   deliverables,
   invoiceUrl,
+  coverUrl,
 }: {
   contactName: string;
   streetAddress: string;
@@ -344,6 +364,8 @@ export function deliveryReadyEmail({
     url: string;
     category?: DeliveryLinkCategory;
   }>;
+  /** Optional verified public iGUIDE cover for this booking. */
+  coverUrl?: string | null;
   /** Optional QuickBooks payment link — renders a "Pay your invoice" button. */
   invoiceUrl?: string | null;
 }) {
@@ -403,6 +425,10 @@ export function deliveryReadyEmail({
       <p><span class="pill">Media ready</span></p>
       <h1>Your listing media is ready, ${escape(firstName)}.</h1>
       <p>The media for <strong>${escape(streetAddress)}</strong> is now available in your portal.</p>
+
+      ${coverUrl
+        ? `<p style="margin:18px 0 4px;"><img src="${escape(coverUrl)}" alt="Cover photo for ${escape(streetAddress)}" width="560" style="display:block;width:100%;max-width:560px;height:auto;border:0;border-radius:8px;" /></p>`
+        : ""}
 
       <p><a href="${escape(portalLink)}" class="cta">Open your media →</a></p>
 
