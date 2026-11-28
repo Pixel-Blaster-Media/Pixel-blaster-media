@@ -50,6 +50,8 @@ test('historical skin changes remain exact after bounded finals UI and OTP lifec
   const presentationFiles = files.map(f => f.replace(/^booking\//, ''))
     // New functional gallery viewer has dedicated URL, validation and browser coverage.
     .filter(f => f !== 'components/WebsiteGalleryDialog.tsx')
+    // The exact post-shoot functional hunks are guarded separately below.
+    .filter(f => f !== 'app/admin/bookings/[id]/IGuideSection.tsx')
     .filter(f => !['app/admin/VendorFields.tsx','app/admin/bookings/[id]/VendorInvites.tsx','app/admin/calendar/page.tsx'].includes(f))
     .filter(f => !customerBookingNoticeUiPaths.includes(f))
     // The resumable uploader is a new functional component, covered by its
@@ -110,4 +112,36 @@ test('notice controls preserve the released UI outside their exact functional hu
  for(const file of customerBookingNoticeUiPaths.filter(f=>!f.endsWith('BookingNoticeEditor.tsx'))) {
   assert.equal(read(file),execFileSync('git',['show',`148c38ab01ad3151062eebfc31385d40067b2795:booking/${file}`],{cwd:new URL('..',import.meta.url),encoding:'utf8'}),file);
  }
+});
+
+// Do not broaden the presentation exception: all other bytes must remain
+// exactly at the pre-trigger version of the shipping iGUIDE section.
+test('iGUIDE discovery preserves UI outside its exact functional hunks', () => {
+  const file = 'app/admin/bookings/[id]/IGuideSection.tsx';
+  let candidate = read(file);
+  const hunks = [
+  [
+    "import { useEffect, useMemo, useState, useTransition }",
+    "import { useMemo, useState, useTransition }"
+  ],
+  [
+    "import { readPostShootIGuideStage } from \"./iguide-discovery-action\";\n",
+    ""
+  ],
+  [
+    "  const [discoveredStage, setDiscoveredStage] = useState<Awaited<ReturnType<typeof readPostShootIGuideStage>>>(null);\n  useEffect(() => {\n    if (!portalApiConfigured || savedId || portalId) return;\n    let cancelled = false;\n    void readPostShootIGuideStage(bookingId).then((stage) => {\n      if (!cancelled) setDiscoveredStage(stage);\n    }).catch(() => { /* Keep the booking page usable if discovery is unavailable. */ });\n    return () => { cancelled = true; };\n  }, [bookingId, portalApiConfigured, savedId, portalId]);\n  const discoveryText = discoveredStage === \"processing\" ? \"iGUIDE is processing.\"\n    : discoveredStage === \"awaiting_upload\" ? \"iGUIDE found. Still awaiting upload.\"\n      : discoveredStage === \"published\" ? \"iGUIDE published. Booking link not confirmed yet.\"\n        : discoveredStage === \"found\" ? \"iGUIDE found. Upload status unconfirmed.\" : null;\n\n",
+    ""
+  ],
+  [
+    "        {!savedId && !portalId && discoveryText && <p className=\"mt-2 text-sm\" role=\"status\">{discoveryText}</p>}\n",
+    ""
+  ]
+];
+  for (const [addition, original] of hunks) {
+    assert.equal(candidate.split(addition).length, 2, 'expected exactly one discovery hunk');
+    candidate = candidate.replace(addition, original);
+  }
+  assert.equal(candidate, execFileSync('git', ['show', 'ce0f668b4a458ce3a7f3896c755a242f98f393f9:booking/' + file], {
+    cwd: new URL('..', import.meta.url), encoding: 'utf8',
+  }));
 });
