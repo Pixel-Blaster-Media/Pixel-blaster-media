@@ -7,7 +7,7 @@ export const eligibleIGuideServices = [
   "blue_print", "social_media_special", "social_media_plus", "ultimate",
   "signature_property_campaign", "iguide_tour", "iguide_measurements", "floor_plan",
 ];
-export const discoveryBookingStatuses = ["confirmed", "shot", "editing"];
+export const discoveryBookingStatuses = ["confirmed", "shot", "editing"] as const;
 
 export type DiscoveryBooking = {
   id: string;
@@ -30,7 +30,7 @@ export type DiscoveryTour = {
 export function discoveryDue(booking: DiscoveryBooking, now: number): boolean {
   const start = Date.parse(booking.scheduled_at ?? "");
   const end = Date.parse(booking.scheduled_ends_at ?? "");
-  return discoveryBookingStatuses.includes(booking.status) &&
+  return discoveryBookingStatuses.some((status) => status === booking.status) &&
     !booking.iguide_id && !booking.iguide_portal_id &&
     Number.isFinite(start) && start <= end && end <= now &&
     end > now - DISCOVERY_WINDOW_MS;
