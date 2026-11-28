@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 import {
   createIGuideForBooking,
@@ -10,6 +10,7 @@ import {
   syncIGuide,
   type ExistingIGuideOption,
 } from "./actions";
+import { readPostShootIGuideStage } from "./iguide-discovery-action";
 
 export default function IGuideSection({
   bookingId,
@@ -54,6 +55,20 @@ export default function IGuideSection({
   const [portalTours, setPortalTours] = useState<
     ExistingIGuideOption[] | null
   >(null);
+
+  const [discoveredStage, setDiscoveredStage] = useState<Awaited<ReturnType<typeof readPostShootIGuideStage>>>(null);
+  useEffect(() => {
+    if (!portalApiConfigured || savedId || portalId) return;
+    let cancelled = false;
+    void readPostShootIGuideStage(bookingId).then((stage) => {
+      if (!cancelled) setDiscoveredStage(stage);
+    }).catch(() => { /* Keep the booking page usable if discovery is unavailable. */ });
+    return () => { cancelled = true; };
+  }, [bookingId, portalApiConfigured, savedId, portalId]);
+  const discoveryText = discoveredStage === "processing" ? "iGUIDE is processing."
+    : discoveredStage === "awaiting_upload" ? "iGUIDE found. Still awaiting upload."
+      : discoveredStage === "published" ? "iGUIDE published. Booking link not confirmed yet."
+        : discoveredStage === "found" ? "iGUIDE found. Upload status unconfirmed." : null;
 
   function onSave() {
     setError(null);
@@ -222,6 +237,7 @@ export default function IGuideSection({
         <h2 className="text-sm font-semibold uppercase tracking-wider text-realtor-primary">
           iGuide
         </h2>
+        {!savedId && !portalId && discoveryText && <p className="mt-2 text-sm" role="status">{discoveryText}</p>}
         <p className="mt-1 text-xs text-realtor-muted">
           Create an iGUIDE from this booking, choose an existing tour from your
           portal, or paste a tour URL as a fallback. Sync refreshes the tour,

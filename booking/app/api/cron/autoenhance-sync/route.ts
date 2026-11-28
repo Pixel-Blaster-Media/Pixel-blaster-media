@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { syncPendingAutoenhanceBatches } from "@/lib/integrations/autoenhance/workflow";
 
+import { runPostShootIGuideDiscovery } from "@/lib/integrations/iguide/post-shoot-discovery";
+
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
@@ -25,7 +27,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await syncPendingAutoenhanceBatches({ limit: 8 });
+    // Reuse this ten-minute cadence. Discovery is read-only and must not change
+    // the Autoenhance result, even if the iGUIDE Portal is unavailable.
+    const discovery = process.env.IGUIDE_POST_SHOOT_DISCOVERY_ENABLED === "true"
+      ? runPostShootIGuideDiscovery().catch(() => { console.warn("[iguide-post-shoot] discovery unavailable"); })
+      : Promise.resolve();
+    const [result] = await Promise.all([syncPendingAutoenhanceBatches({ limit: 8 }), discovery]);
     return NextResponse.json(result);
   } catch (err) {
     console.warn("[autoenhance-sync] failed", err);
