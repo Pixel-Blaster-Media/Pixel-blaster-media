@@ -1103,19 +1103,13 @@ async function findSingleBookingByAddress(
   property: IGuideReadyEvent["property"],
   scope: Required<IGuideOrganizationScope>,
 ): Promise<{ booking: BookingTarget | null; error?: string }> {
-  const target = normalizeAddress(
-    [
-      property?.streetNumber,
-      property?.streetName,
-      property?.unit,
-      property?.city,
-      property?.postalCode,
-    ]
-      .filter(Boolean)
-      .join(" "),
+  const target = readyAddressKey(
+    [property?.streetNumber, property?.streetName].filter(Boolean).join(" "),
+    property?.unit,
+    property?.city,
+    property?.postalCode,
   );
-  const postal = normalizePostalCode(property?.postalCode);
-  if (!target || !postal) return { booking: null };
+  if (!property?.streetNumber || !property?.streetName || !target) return { booking: null };
 
   const { data, error } = await getServiceSupabase()
     .from("bookings")
@@ -1135,21 +1129,12 @@ async function findSingleBookingByAddress(
     };
   }
 
-  const matches = data.filter((booking) => {
-    const dbPostal = normalizePostalCode(booking.properties?.postal_code);
-    if (dbPostal !== postal) return false;
-    const dbAddress = normalizeAddress(
-      [
-        booking.properties?.street_address,
-        booking.unit_number,
-        booking.properties?.city,
-        booking.properties?.postal_code,
-      ]
-        .filter(Boolean)
-        .join(" "),
-    );
-    return dbAddress === target || dbAddress.includes(target) || target.includes(dbAddress);
-  });
+  const matches = data.filter((booking) => readyAddressKey(
+    booking.properties?.street_address,
+    booking.unit_number,
+    booking.properties?.city,
+    booking.properties?.postal_code,
+  ) === target);
 
   if (matches.length !== 1) return { booking: null };
   const match = matches[0];
@@ -1242,6 +1227,41 @@ function asJsonObject(value: unknown): Json {
     return value as Json;
   }
   return {};
+}
+
+// Unit numbers are identity, not optional text: never match across units or
+// infer a missing unit from a booking. Reject conflicting representations.
+export function readyAddressKey(
+  rawStreet: string | null | undefined,
+  rawUnit: string | null | undefined,
+  rawCity: string | null | undefined,
+  rawPostal: string | null | undefined,
+): string | null {
+  let street = rawStreet?.trim() ?? "";
+  let embeddedUnit = "";
+  const prefix = street.match(/^([a-z]*\d+[a-z]*)\s*-\s*(\d+\s+\S.*)$/i);
+  if (prefix) {
+    embeddedUnit = prefix[1];
+    street = prefix[2];
+  }
+
+  const suffix = street.match(/(?:,\s*|\s+)(?:(?:unit|apt|apartment|suite)\s+|#\s*)+([a-z]*\d+[a-z]*)$/i);
+  if (suffix) {
+    if (embeddedUnit && normalizeAddress(embeddedUnit) !== normalizeAddress(suffix[1])) return null;
+    embeddedUnit = suffix[1];
+    street = street.slice(0, suffix.index).trim();
+  }
+
+  const explicitUnit = rawUnit?.trim().replace(/^(?:(?:unit|apt|apartment|suite)\b[\s.#-]*|#[\s]*)+/i, "") ?? "";
+  if (rawUnit?.trim() && !/^[a-z]*\d+[a-z]*$/i.test(explicitUnit)) return null;
+  const unit = normalizeAddress(explicitUnit || embeddedUnit);
+  if (embeddedUnit && normalizeAddress(embeddedUnit) !== unit) return null;
+
+  const streetKey = normalizeAddress(street);
+  const city = normalizeAddress(rawCity);
+  const postal = normalizePostalCode(rawPostal);
+  if (!streetKey || !city || !postal) return null;
+  return JSON.stringify([streetKey, unit, city, postal]);
 }
 
 function normalizePostalCode(value: string | null | undefined): string {
