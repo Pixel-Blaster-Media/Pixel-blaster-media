@@ -35,6 +35,7 @@ import {
   type IGuidePhotoZipKind,
 } from "@/lib/integrations/iguide/photo-downloads";
 import { hasPortalCredentials } from "@/lib/integrations/iguide/portal-client";
+import { getPostShootIGuideStage } from "@/lib/integrations/iguide/post-shoot-discovery";
 import { listBookingAutoenhanceBatches } from "@/lib/integrations/autoenhance/workflow";
 import { isPhotoEditingProviderEnabled } from "@/lib/integrations/provider-enablement";
 import {
@@ -243,6 +244,14 @@ export default async function BookingDetailPage({
     ]);
 
   if (bookErr || !booking) notFound();
+  const earlyIGuideStage = activeTabId === "media" && !booking.iguide_id && !booking.iguide_portal_id &&
+    booking.scheduled_ends_at && Date.parse(booking.scheduled_ends_at) <= Date.now()
+    ? await getPostShootIGuideStage(admin.organizationId, booking.id) : null;
+  const earlyIGuideText = earlyIGuideStage === "processing" ? "iGUIDE is processing."
+    : earlyIGuideStage === "awaiting_upload" ? "iGUIDE found. Still awaiting upload."
+      : earlyIGuideStage === "published" ? "iGUIDE published. Booking link not confirmed yet."
+        : earlyIGuideStage === "found" ? "iGUIDE found. Upload status unconfirmed." : null;
+
 
   const privateShootNotes = activeTabId === "details" ? await loadBookingInternalNote({
     organizationId: admin.organizationId,
@@ -441,6 +450,7 @@ export default async function BookingDetailPage({
               title="Prepare the finished media"
               body="Use the primary source, review the files, and prepare one complete delivery."
             />
+            {earlyIGuideText && <p className="mb-3 rounded-lg border px-3 py-2 text-sm">{earlyIGuideText} This is visible only in your workspace.</p>}
             <MediaWorkflow
               bookingId={booking.id}
               incumbent={[
